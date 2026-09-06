@@ -46,6 +46,17 @@ class PngWriteError(ArmatureError):
     measure. A bare-message refusal from this class now reads `"evidence": null`, which is
     the honest record; a refusal that passes a dict is unchanged in both directions, and the
     dict the raising line passed is the object the halt handler reads.
+
+    **EVERY refusal names the file** (F-08eaf630, wave 28). Five of the six carried no
+    `path` at all and none of the six opened its message with one, while the sixth
+    (`zero_dimension`) already carried the key — the file's own convention, unfinished.
+    Measured on the call side: `stage_render.run_export` calls `write_png` three times
+    inside its per-frame loop, writing `depth_perframe`, `depth_pershot` and `p3_diff`, so
+    `"bit_depth=8 needs uint8, got float64"` identified neither the frame nor the channel
+    nor the file among 3xN writes and the operator could not tell what was on disk without
+    listing the output tree by hand. Every message now opens `f"{path}: "` and
+    every evidence dict carries `"path": str(path)`, which is the convention `glb.py`
+    already applies to all sixteen of its `MalformedGLB` messages.
     """
 
 
@@ -107,14 +118,14 @@ def write_png(path, arr, bit_depth=8):
         channels, color_type = 3, COLOR_RGB
     else:
         raise PngWriteError(
-            f"unsupported array shape {arr.shape}",
+            f"{path}: unsupported array shape {arr.shape}",
             {"gate": None, "andon": "PngWriteError", "clause": "unsupported_shape",
-             "shape": list(arr.shape)})
+             "shape": list(arr.shape), "path": str(path)})
 
     if arr.shape[0] == 0 or arr.shape[1] == 0:
         raise PngWriteError(
-            f"array shape {arr.shape} has a zero dimension, and IHDR requires both width "
-            f"and height to be greater than zero. Writing it produces a structurally "
+            f"{path}: array shape {arr.shape} has a zero dimension, and IHDR requires both "
+            f"width and height to be greater than zero. Writing it produces a structurally "
             f"invalid PNG that this function would report as a successful byte count, and "
             f"that every reader — PIL included — refuses to open",
             {"gate": None, "andon": "PngWriteError", "clause": "zero_dimension",
@@ -124,25 +135,28 @@ def write_png(path, arr, bit_depth=8):
     if bit_depth == 1:
         if color_type != COLOR_GRAY:
             raise PngWriteError(
-                "bit_depth=1 is grayscale only",
+                f"{path}: bit_depth=1 is grayscale only, and this array is shape "
+                f"{arr.shape}",
                 {"gate": None, "andon": "PngWriteError", "clause": "bit1_not_grayscale",
-                 "shape": list(arr.shape)})
+                 "shape": list(arr.shape), "path": str(path)})
         if not np.isin(np.unique(arr), (0, 1)).all():
+            _distinct = [int(v) for v in np.unique(arr)[:8]]
             raise PngWriteError(
-                "bit_depth=1 needs an array of only 0 and 1",
+                f"{path}: bit_depth=1 needs an array of only 0 and 1, and this one carries "
+                f"{_distinct}",
                 {"gate": None, "andon": "PngWriteError", "clause": "bit1_values",
-                 "distinct_values": [int(v) for v in np.unique(arr)[:8]]})
+                 "distinct_values": _distinct, "path": str(path)})
     elif bit_depth == 8:
         if arr.dtype != np.uint8:
             raise PngWriteError(
-                f"bit_depth=8 needs uint8, got {arr.dtype}",
+                f"{path}: bit_depth=8 needs uint8, got {arr.dtype}",
                 {"gate": None, "andon": "PngWriteError", "clause": "bit8_dtype",
-                 "dtype": str(arr.dtype)})
+                 "dtype": str(arr.dtype), "path": str(path)})
     else:
         raise PngWriteError(
-            f"unsupported bit depth {bit_depth}",
+            f"{path}: unsupported bit depth {bit_depth}",
             {"gate": None, "andon": "PngWriteError", "clause": "unsupported_bit_depth",
-             "bit_depth": bit_depth})
+             "bit_depth": bit_depth, "path": str(path)})
 
     height, width = arr.shape[0], arr.shape[1]
     ihdr = struct.pack(">IIBBBBB", width, height, bit_depth, color_type, 0, 0, 0)

@@ -1583,6 +1583,18 @@ import _census_nodes as _CN_CLAUSES  # noqa: E402
 TESTS_DIR = TESTS
 
 #: DERIVED 2026-09-05 by `_census_nodes.clause_literals()`. Equality.
+#:
+#: WAVE 28 (core-solvers, `F-f7449bc9`): 638 -> 677, RE-DERIVED on this branch with the
+#: module's own derivation, never summed. The 39 are the clause words the 28 clause-less
+#: named-andon raises in `armature_core` gained — `startframe.gate_alpha` (3) and
+#: `gate_backdrop` (4), `turnaround.gate_view_crop` (2) and `gate_view_alpha` (2),
+#: `glb.gate_atlas_untouched` (4 problem records) and `compare_signatures` (3),
+#: `lift_solve.gate_round_trip` (2), `parts.gate_parts_accounting` (6),
+#: `gate_rigid_arrival` (4), `gate_parts_determinism` (6) and `require_finite` (1), and
+#: `resample.monotonic` (2). None vanished. Every one of the 39 is named by a fixture in
+#: `tests/test_amend_w28_core_solvers.py`, so none of them JOINS
+#: `CLAUSES_NAMED_BY_NO_FIXTURE` — that table moves 136 -> 130 in the other direction, six
+#: rows LEAVING because the same wave gave them fixtures. Its own docstring carries the six.
 RECORDED_CLAUSES = [
     'above_one',
     'adjacent_pair_shapes_differ',
@@ -1607,6 +1619,8 @@ RECORDED_CLAUSES = [
     'asset_missing',
     'asset_sha256_absent',
     'asset_sha256_mismatch',
+    'assigned_total_is_not_the_face_count',
+    'assignment_count_is_not_the_face_count',
     'atlas_has_no_pixels',
     'attribution_cannot_reach_the_gate_that_checks_it',
     'attribution_for_unconditional_row',
@@ -1697,6 +1711,7 @@ RECORDED_CLAUSES = [
     'composite_colour_carries_a_non_number',
     'composite_colour_not_linear_unit_floats',
     'composite_colour_not_three_floats',
+    'composite_reason_not_given',
     'composition_puts_points_behind_the_camera',
     'composition_unreachable',
     'compositor_link_count',
@@ -1747,6 +1762,7 @@ RECORDED_CLAUSES = [
     'duplicate_subgraph_id',
     'duplicate_subgraph_label',
     'edge_normal_angle_out_of_domain',
+    'embedded_image_count_differs',
     'empty_expectation',
     'empty_gradient_band',
     'empty_graph',
@@ -1775,6 +1791,8 @@ RECORDED_CLAUSES = [
     'export_incomplete',
     'extent_over_zero_points',
     'extraction_left_no_faces',
+    'face_assigned_outside_the_registered_list',
+    'face_assigned_to_nothing',
     'ffmpeg_binary_not_found',
     'ffmpeg_refused_the_decode',
     'ffmpeg_refused_the_encode',
@@ -1793,6 +1811,7 @@ RECORDED_CLAUSES = [
     'frame_array_shape_is_unsupported',
     'frame_carries_an_alpha_channel',
     'frame_count_changed_through_the_bridge',
+    'frame_counts_differ',
     'frame_dtype_is_not_uint8',
     'frame_form',
     'frame_hints_are_parallel',
@@ -1878,6 +1897,9 @@ RECORDED_CLAUSES = [
     'mask_bbox_is_empty',
     'mask_disagrees_with_projection',
     'masked_geometry_is_all_background_depth',
+    'master_carries_no_transparent_pixel',
+    'master_carries_no_transparent_region_for_a_plate',
+    'master_entirely_transparent',
     'measurement_dated_in_the_future',
     'measurement_not_positive',
     'meta_path_equals_graph_path',
@@ -1924,6 +1946,7 @@ RECORDED_CLAUSES = [
     'no_numbered_frames_to_invert',
     'no_numbered_frames_to_measure',
     'no_out_or_no_glb',
+    'no_parts_observed',
     'no_parts_to_assign_to',
     'no_points_given',
     'no_positive_joint_radius',
@@ -1966,9 +1989,12 @@ RECORDED_CLAUSES = [
     'not_an_api_format_graph',
     'not_api_format',
     'not_object',
+    'nothing_to_partition',
     'nothing_was_measured',
     'numpy_unavailable',
     'observed_sites_missing',
+    'one_build_carries_no_parts',
+    'one_clip_carries_no_frames',
     'openpose_convention_mismatch',
     'operator_status',
     'orbit radius',
@@ -1994,7 +2020,13 @@ RECORDED_CLAUSES = [
     'panels_document_is_not_an_object',
     'panels_document_is_not_on_disk',
     'panels_document_not_named',
+    'part_deformed_under_the_pose',
+    'part_did_not_land_on_its_bone_transform',
     'part_radius_not_positive',
+    'part_sets_differ',
+    'part_topology_differs_between_builds',
+    'part_vertices_differ_between_builds',
+    'part_with_no_geometry_to_compare',
     'payload_is_not_the_ruling_it_describes',
     'performance_clause_does_not_dominate',
     'performance_is_incomplete',
@@ -2008,8 +2040,10 @@ RECORDED_CLAUSES = [
     'plan_paths_collide',
     'plate_component_not_an_integer',
     'plate_component_out_of_range',
+    'plate_indistinguishable_from_the_flat_fallback',
     'plate_is_not_a_file',
     'plate_not_three_components',
+    'plate_reason_not_given',
     'plate_size_does_not_match_the_frame',
     'plate_source_missing',
     'playback_rate_not_finite',
@@ -2047,6 +2081,7 @@ RECORDED_CLAUSES = [
     'reference_import_is_not_one_render_visible_mesh',
     'reference_not_a_file',
     'reference_unreadable',
+    'registered_part_with_no_faces',
     'registration_inconsistent',
     'registry_is_empty',
     'reimport_is_not_one_render_visible_mesh',
@@ -2059,6 +2094,7 @@ RECORDED_CLAUSES = [
     'request_overruns_the_performance',
     'required_landmark_missing',
     'resolution_is_not_a_frame_size',
+    'resolved_lift_diverges_from_the_pinned_glb',
     'rest_landmarks_missing',
     'retired_gates_block',
     'retired_gates_key',
@@ -2068,7 +2104,9 @@ RECORDED_CLAUSES = [
     'round_trip_moved_the_surface',
     'round_trip_not_lossless',
     'round_trip_over_zero_frames',
+    'round_trip_population_incomplete',
     'round_trip_probe_window_too_small',
+    'round_trip_residual_over_tolerance',
     'ruled_name_with_unknown_suffix',
     'run_manifest_is_missing_a_key',
     'run_manifest_is_not_on_disk',
@@ -2104,8 +2142,11 @@ RECORDED_CLAUSES = [
     'slot_does_not_hold_its_frame',
     'slot_plan_does_not_cover_the_clip',
     'snappable_site_is_not_a_landmark',
+    'source_carries_no_embedded_image',
     'source_has_no_faces',
+    'source_image_cannot_be_hashed',
     'source_image_has_a_zero_dimension',
+    'source_image_not_byte_identical_in_the_export',
     'source_rate_not_positive',
     'spec_is_not_an_object',
     'spec_or_asset_path_unreadable',
@@ -2139,13 +2180,19 @@ RECORDED_CLAUSES = [
     'subject_never_moved',
     'subject_not_in_the_canon_census',
     'subject_panel_is_not_on_disk',
+    'subject_reaches_the_frame_border',
     'subject_stats_sidecar_is_not_on_disk',
+    'submitted_composite_is_not_the_plate',
     'supplied_frame_contradicts_graph',
     'survey_panel_is_not_on_disk',
     'sweep_revisits_an_azimuth',
     'target_not_a_3_vector',
+    'the_figure_did_not_move_at_all',
+    'the_two_builds_share_no_part_name',
     'tier_is_not_in_the_lora_name',
     'tier_matched_pair_is_crossed',
+    'timeline_does_not_span_the_source',
+    'timeline_not_strictly_increasing',
     'tolerance_not_finite',
     'too_few_bands_for_a_centreline',
     'too_few_destination_samples',
@@ -2199,14 +2246,18 @@ RECORDED_CLAUSES = [
     'unsupported_version',
     'upload_count_is_not_the_shot_length',
     'uploads_carry_no_start_frame',
+    'value_not_finite',
     'vector_has_zero_length',
     'verify_receipt_missing_its_facts',
     'vertex_array_is_empty',
     'vertex_arrays_do_not_correspond',
     'vertices_not_n_by_3',
     'video_nodes_empty',
+    'view_carries_no_opaque_pixel',
+    'view_carries_no_transparent_pixel',
     'view_count_not_positive',
     'view_direction_parallel_to_up',
+    'view_has_no_subject_pixels',
     'view_without_a_digest',
     'views_byte_identical',
     'views_identical_in_pixels',
@@ -2318,9 +2369,6 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'band_too_narrow',
     'batch_node_is_not_a_batch',
     'batch_node_over_the_slot_ceiling',
-    'bit1_not_grayscale',
-    'bit1_values',
-    'bit8_dtype',
     'body_keypoints_wrong_shape',
     'bone_has_an_unknown_rule',
     'bone_has_no_model_rule',
@@ -2388,7 +2436,6 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'landmark_list_is_partial',
     'landmarks_missing',
     'licence_map_ruling',
-    'measurement_not_positive',
     'mitten_hand_wrong_point_count',
     'no_batch_node_to_measure',
     'no_composite_colour_named',
@@ -2434,8 +2481,6 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'too_few_source_samples',
     'two_answers',
     'unknown_pose_arc',
-    'unsupported_bit_depth',
-    'unsupported_shape',
     'vector_has_zero_length',
     'view_direction_parallel_to_up',
     'view_without_a_digest',
@@ -2561,6 +2606,17 @@ def test_every_clause_word_is_named_by_a_fixture_or_listed_with_a_reason():
     A clause nothing names is a receipt word no test would notice changing. The listed ones
     are the state of the tree on 2026-09-05, dated; the table may not grow, and a clause
     that gains a fixture leaves it in the commit that adds the fixture.
+
+    WAVE 28 (core-solvers): 136 -> 130, RE-DERIVED with `==` on this branch. SIX LEAVE and
+    none joins — `bit1_not_grayscale`, `bit1_values`, `bit8_dtype`, `unsupported_shape` and
+    `unsupported_bit_depth` are named by `PNG_REFUSALS` in
+    `tests/test_amend_w28_core_solvers.py` (`F-08eaf630` gave all six `pngio` refusals a
+    fixture that drives each one by clause), and `measurement_not_positive` by the
+    disjunction test there (`F-9dbfdf8f`). The wave's 39 NEW clause words all arrive named,
+    so none of them joins: `NEW_CLAUSE_WORDS` in that file spells all 39 and drives 31 of
+    them inline; the other EIGHT — Gate SOLVE's two, Gate ATLAS's four and `monotonic`'s two
+    — need a substituted report, image reader or `positions`, and are driven by their own
+    fixtures beside it. The table may not grow; it may shrink exactly this way.
 
     WAVE 26 (F-15e155cd): 129 -> 136 on the merged tree, RE-DERIVED with `==`. `fixture_text()`
     reads CODE now — comments and docstrings stripped by `code_only` above — so a clause word

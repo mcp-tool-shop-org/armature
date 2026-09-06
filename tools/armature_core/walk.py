@@ -447,7 +447,9 @@ class GaitParams:
 
         if min(self.n_walk, self.n_decel, self.n_gesture, self.n_hold) < 1:
             raise WalkError(
-                "every phase must be at least one frame long",
+                f"every phase must be at least one frame long, and this gait was given "
+                f"n_walk={self.n_walk} n_decel={self.n_decel} "
+                f"n_gesture={self.n_gesture} n_hold={self.n_hold}",
                 {"gate": None, "andon": "WalkError", "clause": "phase_shorter_than_a_frame",
                  "n_walk": self.n_walk, "n_decel": self.n_decel,
                  "n_gesture": self.n_gesture, "n_hold": self.n_hold})
@@ -516,10 +518,21 @@ class Performer:
         zs = [p[2] for p in self.landmarks.values()]
         self.height = max(zs) - min(zs)
         if self.leg_length <= 0.0 or self.height <= 0.0:
+            # F-9dbfdf8f, wave 28. The evidence held BOTH numbers and the sentence named
+            # NEITHER — and because the condition is a DISJUNCTION the operator was not
+            # even told which of the two failed, on the authored ground truth every
+            # downstream measurement is graded against. The sentence now carries both
+            # values and says which side fired.
+            _failed = ([n for n, v in (("leg_length", self.leg_length),
+                                       ("height", self.height)) if v <= 0.0])
             raise WalkError(
-                "the measured leg length or height is not positive",
+                f"the measured {' and '.join(_failed)} is not positive "
+                f"(leg_length={self.leg_length}, height={self.height}); the gait scales "
+                f"itself against this character's own measurements and both must be "
+                f"greater than zero",
                 {"gate": None, "andon": "WalkError", "clause": "measurement_not_positive",
-                 "leg_length": self.leg_length, "height": self.height})
+                 "leg_length": self.leg_length, "height": self.height,
+                 "not_positive": _failed})
 
     def as_dict(self):
         return {
@@ -551,7 +564,8 @@ def _phase_schedule(p):
     effective = sum(speed[:moving_frames])
     if effective <= 0.0:
         raise WalkError(
-            "the deceleration envelope leaves no moving frames",
+            f"the deceleration envelope leaves no moving frames: it sums to "
+            f"{effective} over {moving_frames} frame(s)",
             {"gate": None, "andon": "WalkError", "clause": "no_moving_frames",
              "effective": effective, "moving_frames": moving_frames})
     omega = (p.steps + 0.5) * math.pi / effective

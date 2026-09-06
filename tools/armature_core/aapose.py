@@ -456,8 +456,8 @@ def hand_frame(wrist, hand_end, elbow):
     length = float(np.linalg.norm(v))
     if length <= 0.0:
         raise ArmatureError(
-            "wrist and hand end are the same point; this hand has no length and no "
-            "direction",
+            f"wrist and hand end are the same point (length={length}); this hand has no "
+            f"length and no direction",
             {"gate": None, "andon": "ArmatureError", "clause": "hand_has_no_length",
              "length": length})
     d = v / length
@@ -469,7 +469,8 @@ def hand_frame(wrist, hand_end, elbow):
             s = np.cross(n, d)
             return d, s / np.linalg.norm(s), length
     raise ArmatureError(
-        "could not build a palm plane; every reference was collinear",
+        f"could not build a palm plane over a hand of length {length}; all 3 references "
+        f"were collinear with it",
         {"gate": None, "andon": "ArmatureError", "clause": "palm_plane_degenerate",
          "hand_length": length, "references_tried": 3})
 
@@ -824,7 +825,8 @@ def mitten_hand(wrist, palm_dir, palm_side, hand_length):
     L = float(hand_length)
     if L <= 0:
         raise ArmatureError(
-            "a hand needs a positive length to lay finger points along",
+            f"a hand needs a positive length to lay finger points along, and this one is "
+            f"{L}",
             {"gate": None, "andon": "ArmatureError", "clause": "hand_length_not_positive",
              "hand_length": L})
 

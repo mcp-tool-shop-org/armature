@@ -84,6 +84,52 @@ def _as_float(frame):
     return np.asarray(frame, dtype=np.float64)
 
 
+def scale_of(frames):
+    """The population's own scale, as FACTS: dtype, observed range, frame count.
+
+    F-af6b12ed, wave 28. Every number this module reports is "in the frame's own units"
+    (`luma`'s docstring) because `_as_float` is a bare `np.asarray(..., dtype=float64)` and
+    inherits whatever the caller decoded. MEASURED on the repo venv over the same six
+    16x16x3 frames, once as uint8 0..255 and once as float64 0..1: `frame_deltas` returned
+    a median of 83.9167 against 0.3291 and `luma_series` a `mean_luma_over_clip` of 127.81
+    against 0.5012 — a factor of 255 — and NEITHER record carried a key naming the scale,
+    the input dtype or the value range. `frame_deltas`' own docstring quotes E08's
+    2.55 / 3.95 / 6.16 and E10's 4.91 / 15.95 / 69.85 "so a third clip is comparable to
+    them", which is exactly the comparison a missing scale breaks: the number reaches the
+    Director as the tile "d(frame) med" (`make_startframe_sheet.main`) with no unit on it
+    and none in the record, so a float-decoded run and a byte-decoded run differ by 255x
+    while both look like healthy small numbers next to a banked 3.95.
+
+    **Facts, never a verdict, and never a coercion.** This does not label a range "byte" or
+    "unit" and does not rescale anything — rescaling would silently move numbers the reports
+    have already banked. It reports what the array WAS: `input_dtype`, `observed_min`,
+    `observed_max`, `n_frames`. Two runs whose scales differ then differ visibly in the
+    record itself.
+
+    The shape is `similarity_to_first`'s `measures` sentence, which is the only public
+    reader in this module that already declared what it was measuring.
+    """
+    seq = list(frames) if frames is not None else []
+    if not len(seq):
+        return {"input_dtype": None, "observed_min": None, "observed_max": None,
+                "n_frames": 0}
+    dtypes = sorted({str(np.asarray(f).dtype) for f in seq})
+    # Over the FINITE values only, and `None` when there are none: a NaN reaching here
+    # would otherwise be written into the report as the bare token `NaN`, which is not
+    # JSON — the defect `parts.halt_keysafe` exists to stop on the halt line, and this
+    # record is read from `measure_clip.py`'s file rather than from a halt.
+    lo, hi = None, None
+    for f in seq:
+        v = _as_float(f).ravel()
+        v = v[np.isfinite(v)]
+        if not v.size:
+            continue
+        lo = float(v.min()) if lo is None else min(lo, float(v.min()))
+        hi = float(v.max()) if hi is None else max(hi, float(v.max()))
+    return {"input_dtype": dtypes[0] if len(dtypes) == 1 else dtypes,
+            "observed_min": lo, "observed_max": hi, "n_frames": len(seq)}
+
+
 def luma(frame):
     """Rec.709 luminance of an `(H, W, 3)` frame, in the frame's own units."""
     a = _as_float(frame)
@@ -154,7 +200,13 @@ def frame_deltas(frames):
     """
     per = [float(np.abs(_as_float(b) - _as_float(a)).mean())
            for a, b in zip(frames, frames[1:])]
-    return {"per_frame": per, "stats": _stats(per)}
+    return {"per_frame": per, "stats": _stats(per),
+            "scale": scale_of(frames),
+            "measures": ("mean absolute difference between consecutive frames, over the "
+                         "whole image and all three channels, in the frames' own units — "
+                         "see `scale`. It moves with the background and the exposure as "
+                         "much as with the figure and separates none of them; a byte "
+                         "decode and a float decode of one clip differ by 255x here")}
 
 
 def luma_series(frames):
@@ -176,7 +228,12 @@ def luma_series(frames):
             "mean_luma_over_clip": float(np.mean(means)) if means else None,
             "luma_range_over_clip": float(max(means) - min(means)) if means else None,
             "abs_delta_luma": deltas, "stats": _stats(deltas),
-            "segment_medians": segments}
+            "segment_medians": segments,
+            "scale": scale_of(frames),
+            "measures": ("Rec.709 mean luminance per frame and its frame-to-frame absolute "
+                         "change, in the frames' own units — see `scale`. It is a whole-"
+                         "image statistic: a light coming up, an exposure drift and the "
+                         "figure moving across a bright wall all move it alike")}
 
 
 def similarity_to_first(frames):
@@ -279,7 +336,12 @@ def horizon_row(frame, band=None, tolerance=3, min_agreement=0.5):
     has_edge = (peak - mid) > EDGE_RTOL * np.maximum(np.abs(peak), np.abs(mid))
     n_edge = int(has_edge.sum())
     out = {"tolerance": tolerance, "min_agreement": min_agreement,
-           "n_columns": int(w), "n_columns_with_an_edge": n_edge}
+           "n_columns": int(w), "n_columns_with_an_edge": n_edge,
+           "scale": scale_of([frame]),
+           "measures": ("the row of the room's strongest horizontal luminance edge, in "
+                        "PIXEL ROWS — the one quantity here a moving subject cannot move. "
+                        "`edge_strength` is a luminance gradient in the frame's own units "
+                        "(see `scale`); `row`, `tolerance` and `agreement` are not")}
     if not n_edge:
         out.update({"row": None, "agreement": 0.0, "edge_strength": 0.0,
                     "verdict": ("NOT FOUND — no column carries a horizontal edge; every "
@@ -389,4 +451,11 @@ def distinct_frames(frames):
             "pairs_non_finite": non_finite[:12],
             "min_pair_mean_abs_difference": (min(distances) if distances else None),
             "n_samples_per_frame": int(len(sampled[0])) if sampled else 0,
-            "pixel_stride": stride}
+            "pixel_stride": stride,
+            "scale": scale_of(frames),
+            "measures": ("two counts of the same clip: `n_distinct` counts sha256 digests "
+                         "and `n_pixel_distinct` counts frames not pixel-identical to an "
+                         "earlier one. `min_pair_mean_abs_difference` is a mean absolute "
+                         "difference in the frames' own units — see `scale` — so a byte "
+                         "decode and a float decode of one clip differ by 255x in it while "
+                         "both counts are unchanged")}

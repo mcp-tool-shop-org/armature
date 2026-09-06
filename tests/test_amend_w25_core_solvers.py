@@ -174,9 +174,19 @@ def test_every_number_derive_edge_compares_against_now_has_a_clause():
     `depth_extent` / `normalize_depth` upstream (`z`); `mask` is a selector and is
     booleanised. The two SCALARS are the population this finding names, and both are
     covered now.
+
+    WAVE 28 (F-98b9b966): `extra` joins the signature and leaves this population, and the
+    exclusion is a property rather than a name — it is the only parameter of this function
+    that is never COMPARED AGAINST. It is a caller's location mapping (`{"frame": i,
+    "path": ..., "channel": ...}`) merged into the evidence and rendered into the front of
+    the message; no value of it changes what is refused, which is the same rule
+    `encode_u8`'s `where` label already states of itself. A refusal is checked for it
+    below by `test_every_channels_refusal_carries_the_callers_frame_and_file` in
+    `tests/test_amend_w28_core_solvers.py`.
     """
     sig = inspect.signature(channels.derive_edge)
-    scalars = [p for p in sig.parameters if p not in ("z", "n_cam", "mask")]
+    scalars = [p for p in sig.parameters
+               if p not in ("z", "n_cam", "mask", "extra")]
     assert scalars == ["depth_rel_threshold", "normal_angle_deg"]
     src = inspect.getsource(channels.derive_edge)
     for name in scalars:

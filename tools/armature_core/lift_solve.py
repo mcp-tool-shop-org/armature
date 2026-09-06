@@ -830,6 +830,9 @@ def gate_round_trip(rest, obs, solved, diagonal, tol_frac=None):
     tol_frac = tightened("tol_frac", tol_frac, ROUND_TRIP_TOL_FRAC, SolveGate, guard)
     ev = round_trip_report(rest, obs, solved, diagonal, tol_frac)
     if not ev["population_complete"]:
+        # F-f7449bc9, wave 28 — the two raises shared one `ev` with no `clause`, so an
+        # incomplete population and an inexact inversion wrote the same receipt shape.
+        ev["clause"] = "round_trip_population_incomplete"
         raise SolveGate(
             f"the round trip covered {ev['n_sites']} of {ev['n_sites_expected']} "
             f"registered sites, so a PASS would certify exactness over a subset without "
@@ -843,6 +846,7 @@ def gate_round_trip(rest, obs, solved, diagonal, tol_frac=None):
                        positive=False)
     require_finite("worst_residual", ev["worst"]["d"], SolveGate, ev, positive=False)
     if ev["worst"]["d"] > ev["tolerance"]:
+        ev["clause"] = "round_trip_residual_over_tolerance"
         raise SolveGate(
             f"the solve does not reproduce the positions it was solved from: "
             f"{ev['worst']['d']:.12f} at site {ev['worst']['site']!r} against a tolerance "
@@ -891,7 +895,7 @@ def validate_motion_record(frames):
     the stutter reads as the lift being noisy rather than as a frame that never arrived.
     """
     if not frames:
-        raise SolveGate("the motion record carries no frames",
+        raise SolveGate(f"the motion record carries no frames (n={len(frames)})",
                         {"clause": "motion_record_has_no_frames",
              "gate": "SOLVE", "andon": "SolveGate", "n": 0})
     for i, fr in enumerate(frames):

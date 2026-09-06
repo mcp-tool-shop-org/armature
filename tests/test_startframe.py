@@ -58,7 +58,8 @@ def test_a_cloud_under_the_cap_is_returned_whole():
 
 def test_an_empty_cloud_raises_rather_than_framing_the_origin():
     with pytest.raises(SF.StartFrameGate,
-                       match=r"\[WHOLE\] no vertices to frame; a camera solved against"):
+                       match=r"\[WHOLE\] no vertices to frame \(n_points=0\); a camera "
+                             r"solved against"):
         SF.framing_cloud([])
 
 
