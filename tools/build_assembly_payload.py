@@ -364,8 +364,8 @@ def gate_output_not_overwritten(paths, out, overwrite, exc, gate="PAYLOAD"):
         ev["clause"] = "output_already_exists"
         subject = ", ".join(f"{p['name']} (sha256 {p['sha256'][:12]}…)" for p in present)
         raise exc(
-            f"{subject} already exists from an earlier run and this run would replace it; "
-            f"pass --overwrite to replace it, or point --out at a directory of its own. The "
+            f"{subject}: already on disk from an earlier run; this run would replace what is there. "
+            f"Pass --overwrite to replace it, or point --out at a directory of its own. The "
             f"payload record is the only tie between a submitted graph and the inputs it was "
             f"built from — its `payload_sha256` is what `gate_saved_graph.route_facts` "
             f"compares — so replacing one silently leaves a receipt that describes a graph "

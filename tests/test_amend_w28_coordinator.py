@@ -96,6 +96,18 @@ def test_the_wait_shape_has_one_clause_family_across_both_domains():
     assert words == {"downloader_exceeded_the_time_bound", "ffmpeg_exceeded_the_time_bound"}, words
 
 
+OVERWRITE_SENTENCE = "on disk from an earlier run; this run would replace what is there. "
+OVERWRITE_SENTENCE_HOMES = ("build_assembly_payload.py", "render_turnaround.py", "render_start_frame.py", "preview_glb.py")
+
+
+def test_the_overwrite_refusal_has_one_sentence_across_both_domains():
+    """SEAM 11's colon form is the one string (SEAM 12); builders' first wording was aligned after the jury."""
+    for name in OVERWRITE_SENTENCE_HOMES:
+        src = _source(name)
+        assert OVERWRITE_SENTENCE in src, name
+        assert "already exists from an earlier run" not in src, (name, "a second spelling of the overwrite sentence")
+
+
 def test_the_fetch_progress_line_is_the_lowercase_stderr_form():
     src = _source("fetch_run.py")
     assert "fetch_run download 0/" in src and "fetch_run download {len(planned)}/{len(planned)}" in src

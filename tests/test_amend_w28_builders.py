@@ -124,9 +124,9 @@ def test_a_rebuild_over_an_earlier_build_refuses_by_name_with_both_digests(tmp_p
         assert digest[:12] in halt["message"], (
             "the message quotes the digest its evidence carries", name)
     # the sentence, in the one spelling both domains agreed on
-    assert "already exists from an earlier run and this run would replace it" in \
+    assert "already on disk from an earlier run; this run would replace what is there" in \
         halt["message"]
-    assert "pass --overwrite to replace it" in halt["message"]
+    assert "Pass --overwrite to replace it" in halt["message"]
 
 
 def test_the_overwrite_flag_replaces_and_the_run_SAYS_so(tmp_path):
