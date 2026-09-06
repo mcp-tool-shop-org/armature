@@ -82,7 +82,8 @@ def test_blender_probe_is_not_counted_a_defect(monkeypatch):
 def test_modules_json_is_machine_readable(capsys):
     rows = json.loads(_run(["modules", "--json"], capsys))
     assert len(rows) == len(cli.SURFACE)
-    assert {"module", "purpose"} == set(rows[0])
+    assert {"module", "purpose", "gates"} == set(rows[0])
+    assert isinstance(rows[0]["gates"], list)
 
 
 def test_where_names_the_blender_invocation(capsys):
@@ -284,9 +285,30 @@ def test_every_gate_named_in_the_surface_exists_in_the_module_beside_it():
                 f"{sorted(g for g in carried if g)}")
 
 
+def test_every_gate_a_surface_module_carries_is_named_in_a_surface_row():
+    """The closing direction. Measured 2026-09-06: 19 of 32 package gate ids appeared in
+    no SURFACE row, so a halt's `"gate"` field could not be mapped back to a module from
+    the installed package. A row may only name a gate it carries (above); every gate a
+    module carries must also be named somewhere in a SURFACE row."""
+    named = set()
+    for _, description in cli.SURFACE:
+        named |= set(_gate_ids(description))
+    carried = set()
+    for name, _ in cli.SURFACE:
+        carried |= set(cli._gates_carried(name))
+    assert carried <= named, (
+        f"gate id(s) carried but named in no SURFACE row: {sorted(carried - named)}")
+
+
 def test_route_gates_is_described_by_what_it_defines():
     row = dict(cli.SURFACE)["route_gates"]
     assert "PAIR_TIER" not in row and "LEDGER" not in row
+
+def test_blender_scene_gate_ids_in_the_surface_match_its_source():
+    """`blender_scene` is skipped by the import-based one-direction pin; this pins the
+    COMPOSITOR/FRAME names against the source `_gates_carried` reads."""
+    wanted = _gate_ids(dict(cli.SURFACE)["blender_scene"])
+    assert wanted == cli._gates_carried("blender_scene") == ["COMPOSITOR", "FRAME"]
 
 
 def test_the_no_deps_install_state_the_wave_1_auditor_measured(block, capsys):

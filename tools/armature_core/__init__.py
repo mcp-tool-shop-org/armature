@@ -2,9 +2,11 @@
 
 Split by what changes together (DECOMPOSE_BY_SECRETS). **The module list lives in ONE
 place: `armature_core.cli.SURFACE`** — `armature modules` prints it, `armature modules
---json` hands it to a machine, and `tests/test_cli.py` pins it against the directory on
-disk in BOTH directions (no listed module without a file, no module on disk unlisted) plus
-a clause asserting that a row may only name a gate the module beside it carries.
+--json` hands it to a machine (with a mechanical `gates` list per row), and
+`tests/test_cli.py` pins it against the directory on disk in BOTH directions (no listed
+module without a file, no module on disk unlisted) plus both gate-id directions: a row may
+only name a gate the module beside it carries, and every gate a SURFACE module carries is
+named in a SURFACE row.
 
 ⚠ **This docstring used to enumerate seven modules and it had drifted.** Measured
 2026-09-05: it named `errors, gates, shotspec, pngio, channels, openpose, blender_scene` as
