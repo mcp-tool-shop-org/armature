@@ -1584,6 +1584,14 @@ TESTS_DIR = TESTS
 
 #: DERIVED 2026-09-05 by `_census_nodes.clause_literals()`. Equality.
 RECORDED_CLAUSES = [
+    # WAVE 28 (core-gates, 2026-09-05): 638 -> 650. TWELVE words JOIN, all in
+    # `canon.py` and all from F-a032cc84: the twelve `_raise` sites that carried an
+    # evidence dict with NO clause key, so neither the human half nor the machine half of
+    # the halt record could identify them. RE-DERIVED with `==` on this branch by this
+    # test's own `_clause_sites()`, never summed; BRANCH-LOCAL, the coordinator measures
+    # at the merge. Every one is named by a fixture in
+    # `tests/test_amend_w28_core_gates.py::MALFORMED`, so none joins
+    # `CLAUSES_NAMED_BY_NO_FIXTURE` — which SHRINKS by three in the same commit.
     'above_one',
     'adjacent_pair_shapes_differ',
     'allowlist_may_only_narrow',
@@ -1742,10 +1750,12 @@ RECORDED_CLAUSES = [
     'downloader_shell_not_found',
     'drawing_constant_outside_the_record',
     'drawing_convention_not_retrieved',
+    'duplicate_legal_clause_id',
     'duplicate_link_id',
     'duplicate_socket_name',
     'duplicate_subgraph_id',
     'duplicate_subgraph_label',
+    'duplicate_surface_id',
     'edge_normal_angle_out_of_domain',
     'empty_expectation',
     'empty_gradient_band',
@@ -1862,12 +1872,15 @@ RECORDED_CLAUSES = [
     'inserted_node_id_already_exists',
     'insertions_are_not_the_named_ones',
     'interior_sample_past_the_span',
+    'joint_is_not_an_object',
+    'joint_names_unknown_surface',
     'keying_produced_no_action',
     'keypoint_outside_the_frame',
     'keypoint_value_is_not_a_number',
     'landmark_list_is_partial',
     'landmark_table_renamed',
     'landmarks_missing',
+    'legal_clause_needs_id_and_phrase',
     'length_mismatch',
     'lens_mm_not_finite_and_positive',
     'licence_map_ruling',
@@ -1969,6 +1982,7 @@ RECORDED_CLAUSES = [
     'nothing_was_measured',
     'numpy_unavailable',
     'observed_sites_missing',
+    'occupant_is_not_an_object',
     'openpose_convention_mismatch',
     'operator_status',
     'orbit radius',
@@ -2107,6 +2121,8 @@ RECORDED_CLAUSES = [
     'source_has_no_faces',
     'source_image_has_a_zero_dimension',
     'source_rate_not_positive',
+    'spatial_is_not_an_object',
+    'spatial_needs_a_ref',
     'spec_is_not_an_object',
     'spec_or_asset_path_unreadable',
     'spec_value_not_finite',
@@ -2141,6 +2157,7 @@ RECORDED_CLAUSES = [
     'subject_panel_is_not_on_disk',
     'subject_stats_sidecar_is_not_on_disk',
     'supplied_frame_contradicts_graph',
+    'surface_needs_id',
     'survey_panel_is_not_on_disk',
     'sweep_revisits_an_azimuth',
     'target_not_a_3_vector',
@@ -2177,8 +2194,11 @@ RECORDED_CLAUSES = [
     'unknown_generator_family',
     'unknown_generator_profile',
     'unknown_hosted_tier',
+    'unknown_legal_clause_class',
     'unknown_mode',
+    'unknown_occupant_kind',
     'unknown_pose_arc',
+    'unknown_spatial_kind',
     'unknown_spec_key',
     'unknown_stickwidth_type',
     'unknown_subject',
@@ -2228,6 +2248,15 @@ RECORDED_CLAUSES = [
 #: CATEGORY, not an exemption — it may not grow, and a clause that gains a
 #: fixture leaves it in the commit that adds the fixture.
 CLAUSES_NAMED_BY_NO_FIXTURE = [
+    # WAVE 28 (core-gates, 2026-09-05): 136 -> 133. THREE rows LEAVE, in the commit that
+    # gives them fixtures — this table's own rule. `escape_unknown`, `no_surfaces` and
+    # `not_object` were unnamed only because the wave-26 fix made `fixture_text()` read
+    # CODE, and the sole place they appeared was the block comment above
+    # `RECORDED_CLAUSES`. `tests/test_amend_w28_core_gates.py` now names all three in code:
+    # `escape_unknown` in the `--no-canon` unknown-subject test, `no_surfaces` and
+    # `not_object` in `MALFORMED`, the parametrised census over every `canon.load`
+    # refusal. NONE join: all twelve clause words this wave adds are reached by that same
+    # parametrisation. RE-DERIVED with `==` on this branch; BRANCH-LOCAL.
     # WAVE-25 MERGE (coordinator, 2026-09-05): the entries below are REGENERATED from this test's own derivation on the merged tree
     # (five branches each read their table branch-local; their unions left duplicated rows, and the test
     # compares ordered lists). Every reason the table carried is kept here, in one block, as the record:
@@ -2357,7 +2386,6 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'degenerate_target_frame',
     'depth_buffer_is_not_the_frame_size',
     'drawing_convention_not_retrieved',
-    'escape_unknown',
     'every_imported_mesh_is_hidden_from_render',
     'expectation_carries_a_duplicated_frame',
     'expectation_is_not_the_frame_list',
@@ -2398,11 +2426,9 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'no_numbered_frames_in_the_directory',
     'no_parts_to_assign_to',
     'no_positive_joint_radius',
-    'no_surfaces',
     'no_trace_to_size_a_ball_against',
     'no_vertices_to_frame',
     'not_a_rotation',
-    'not_object',
     'numpy_unavailable',
     'observed_sites_missing',
     'orbit radius',

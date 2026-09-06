@@ -13,6 +13,8 @@ wrong in the specific way this check exists to catch* — which requires being a
 the gate a wrong input.
 """
 
+import time
+
 import numpy as np
 
 from .errors import GateDDeterminism, GateNNames, GatePRestPose
@@ -281,7 +283,8 @@ def gate_p_rest_pose(source_world, bound_world, bbox_diagonal):
     return ev
 
 
-def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=20000):
+def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=20000,
+                                progress=None):
     """Gate P, round-trip clause — the exported surface is the surface that went in.
 
     **Why this is a point-set comparison where the bind clause is index-wise.** The armature
@@ -314,6 +317,28 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
     stays because it no longer decides a verdict — exceeding it raises — and it is
     keyword-only so a caller that sets it is stating a choice rather than dropping a
     number into a threshold slot.
+
+    ⚠ **The comparison SAYS what it is about to walk, on both branches.** The nearest-
+    position search is a chunked brute force: for each position present on only one side,
+    the distance to every unique position on the other. Measured 2026-09-05 on synthetic
+    arrays with the identical loop — pts=500/ref=10,000 → 0.145 s; pts=1000/ref=20,000 →
+    0.547 s; pts=1000/ref=40,000 → 1.086 s — it is linear in `pts x ref`, so this
+    function's own documented live scale (`max_probe` 20,000 against a subject whose
+    record is 149,643 unique positions) extrapolates to about 81 s with a ~909 MB
+    transient per chunk, with nothing printed and no size in the receipt. Bounded
+    honestly: a clean export returns at the early exit above in milliseconds, so the long
+    path is only reached by an export that has ALREADY moved the surface — which is
+    exactly the run an operator is watching, and a run whose receipt used to record
+    `probe_population` on the REFUSAL branch alone, so a completed walk left no number
+    saying how much work it did.
+
+    `probe_population`, `probe_pairs` (the work bound, `pts x ref`) and `probe_elapsed_s`
+    now ride `ev` whichever way this ends. `progress` is the caller's seam and the reason
+    the printing is not here: `tools/rig_character.py` owns the operator's stdout, and a
+    library gate that printed would be a second home for a tool's own voice. It is called
+    once BEFORE the walk with the population and the bound, and once after with the
+    elapsed time — so "alive, and this is how big it is" is available to the tool without
+    this module deciding when a run is worth a line.
     """
     epsilon_frac = REST_POSE_EPSILON_FRAC
     raw_a = np.asarray(source, dtype=np.float32)
@@ -358,6 +383,14 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
     only_roundtrip = np.setdiff1d(vb, va)
     ev["positions_only_in_source"] = int(len(only_source))
     ev["positions_only_in_roundtrip"] = int(len(only_roundtrip))
+    # The population and the WORK, on EVERY receipt this function returns or raises —
+    # written here rather than only on the truncation refusal below, so a run that
+    # completed says how much was measured and the early exit says it measured nothing
+    # because there was nothing to measure. `probe_pairs` is the brute-force bound the
+    # loop will actually walk (`pts x ref`, both directions), which is the number that
+    # decides whether this takes milliseconds or a minute.
+    ev["probe_population"] = int(len(only_source) + len(only_roundtrip))
+    ev["probe_pairs"] = int(len(only_source) * len(b) + len(only_roundtrip) * len(a))
 
     if not len(only_source) and not len(only_roundtrip):
         ev["verdict"] = "the exported surface is the source surface, position for position"
@@ -368,6 +401,14 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
     # a last-bit rounding difference the format is entitled to.
     threshold = epsilon_frac * float(bbox_diagonal)
     worst = 0.0
+    # "Alive, and this is how big it is" — handed to the caller before the first chunk.
+    if progress is not None:
+        # `step`, not `clause`: a clause word is a REFUSAL's machine-readable key and
+        # joins the vocabulary census, and a progress event refuses nothing.
+        progress({"gate": "P", "step": "round_trip", "stage": "start",
+                  "probe_population": ev["probe_population"],
+                  "probe_pairs": ev["probe_pairs"], "max_probe": int(max_probe)})
+    started = time.time()
     for odd, against in ((only_source, b), (only_roundtrip, a)):
         if not len(odd):
             continue
@@ -377,8 +418,12 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
             # prefix measured is not a population measured, and the verdict below would
             # say "positions agree" about the entries nobody read.
             ev["probe_truncated_at"] = int(max_probe)
-            ev["probe_population"] = int(len(pts))
+            # This side's own population, beside the both-sides total written above the
+            # loop. Both are kept: the refusal is about THIS direction's overflow, and the
+            # receipt is about the whole walk.
+            ev["probe_population_this_side"] = int(len(pts))
             ev["probe_unexamined"] = int(len(pts) - max_probe)
+            ev["probe_elapsed_s"] = round(time.time() - started, 3)
             ev["clause"] = "round_trip_probe_window_too_small"
             raise GatePRestPose(
                 f"the round-trip probe cannot examine this population: {len(pts)} "
@@ -399,6 +444,12 @@ def gate_p_round_trip_positions(source, roundtrip, bbox_diagonal, *, max_probe=2
             # False), so the deviation never even reaches the `worst > threshold` test.
             _require_finite_measurement("deviation", d, GatePRestPose, ev)
             worst = max(worst, float(d.max()))
+    ev["probe_elapsed_s"] = round(time.time() - started, 3)
+    if progress is not None:
+        progress({"gate": "P", "step": "round_trip", "stage": "done",
+                  "probe_population": ev["probe_population"],
+                  "probe_pairs": ev["probe_pairs"],
+                  "elapsed_s": ev["probe_elapsed_s"]})
     ev.update({"threshold": threshold, "max_deviation": worst})
 
     if worst > threshold:

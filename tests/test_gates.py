@@ -138,10 +138,18 @@ def test_g2_red_on_a_zero_length_frame(tmp_path):
 
 
 def test_g2_red_on_a_missing_directory(tmp_path):
+    """CORRECTED IN PLACE, wave 28 (F-abf293d8). The pattern was
+    `\\[G2\\] export is incomplete: …` and the message now opens with the RUN DIRECTORY,
+    because every `problems` entry is channel-relative and `run_dir` sat in the evidence
+    and nowhere in the sentence — so a halt line read while comparing arms named no
+    particular export. The regex is no longer anchored on the token that moved, and the
+    directory is asserted separately rather than being absorbed into a loosened pattern."""
     names = [f"{i:05d}.png" for i in range(3)]
     with pytest.raises(G2Completeness,
-                       match=r"\[G2\] export is incomplete: edge: directory missing"):
+                       match=r"export is incomplete: edge: directory missing") as exc:
         gates.g2_completeness(str(tmp_path), {"edge": names}, 3)
+    assert str(tmp_path) in str(exc.value), str(exc.value)
+    assert str(exc.value).startswith(f"[G2] {tmp_path}: "), str(exc.value)
 
 
 # ------------------------------------------------------------------ G4 goes red

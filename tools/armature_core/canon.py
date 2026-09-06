@@ -103,28 +103,62 @@ def add_spend_flags(parser):
 
     --subject is optional at argparse so a missing flag is a GateCanon,
     not an argparse error — the same defect as ``if args.canon``.
+
+    ⚠ **The help text was written in this repo's private vocabulary and measured against
+    it 2026-09-05.** Rendered through a real ``ArgumentParser``, the three lines read
+    "census id this payload is of. Silence is a refuse.", "census-backed escape: only a
+    subject whose surfaces path is None" and "text the router checks; default is the
+    payload's positive" — no legal ``--subject`` value anywhere, "Silence is a refuse"
+    compressing the paragraph above into an idiom that reads as a typo, and the flag that
+    BYPASSES Gate CANON described as an "escape" without saying what it turns off. These
+    are the three flags at the spend boundary, so the ``--help`` an operator reads before
+    a paid run is the one that most has to be exact. The subject list is READ from
+    ``canon_census.gate_census_table()`` at help-build time rather than typed, so a census
+    row added or renamed cannot leave the text behind.
     """
+    known = ", ".join(sorted(canon_census.gate_census_table()))
     parser.add_argument(
         "--subject",
         default=None,
-        help="census id this payload is of. Silence is a refuse.",
+        help=(f"which character this payload is of, named by census id ({known}). "
+              f"Omitting this refuses at Gate CANON rather than at argparse, so the "
+              f"refusal names the gate a spend has to pass"),
     )
     parser.add_argument(
         "--no-canon",
         dest="no_canon",
         action="store_true",
-        help="census-backed escape: only a subject whose surfaces path is None",
+        help=("BYPASS Gate CANON for this spend: the prompt is then checked against no "
+              "surfaces file at all. Census-backed — permitted only on a subject whose "
+              "surfaces path is None, and REFUSED on a subject that has canon"),
     )
     parser.add_argument(
         "--canon-prompt",
         default=None,
-        help="text the router checks; default is the payload's positive",
+        help=("the text Gate CANON's router checks, when that differs from the text being "
+              "shipped; default is the payload's positive prompt. The two are "
+              "cross-checked, so this flag can refuse a build and cannot change what is "
+              "submitted"),
     )
     return parser
 
 
 def load(path):
-    """A surfaces file, or raise. Schema above SCHEMA_MAX is a stale consumer."""
+    """A surfaces file, or raise. Schema above SCHEMA_MAX is a stale consumer.
+
+    ⚠ **Every refusal here NAMES THE FILE IT READ, and every one carries a clause word.**
+    Measured 2026-09-05 by writing eight malformed canon files into a temp root and
+    calling this function on each: the first two refusals named the path
+    ("no canon file <path>", "could not read canon <path>: …") and every refusal below
+    them did not — "canon must be an object", "canon needs a surfaces list", "surface 0
+    needs id", "duplicate surface id torso", "joint j1 names unknown surfaces" — while
+    the evidence carried `path` at all of them. Twelve of this module's helper-raise
+    sites also carried a receipt with NO `clause` key, so neither the human half nor the
+    machine half of the halt record identified them. `resolve` searches SEVERAL roots, so
+    "canon must be an object" did not even say which root's file was read, and Gate CANON
+    fires inside the irreversible write. The sentence now catches up to the receipt, in
+    the shape `route_gates.load_graph` already uses for the same job (`f"{path}: …"`).
+    """
     if not os.path.isfile(path):
         _raise(f"no canon file {path}", {"path": path, "clause": "missing_file"})
     try:
@@ -134,66 +168,86 @@ def load(path):
         _raise(f"could not read canon {path}: {err}",
                {"path": path, "clause": "unreadable"})
     if not isinstance(doc, dict):
-        _raise("canon must be an object", {"path": path, "clause": "not_object"})
+        _raise(f"{path}: canon must be an object, got {type(doc).__name__}",
+               {"path": path, "clause": "not_object"})
     try:
         ver = int(doc.get("schema", -1))
     except (TypeError, ValueError):
         ver = -1
     if ver < SCHEMA_MIN:
-        _raise(f"canon schema {doc.get('schema')!r} is not >= {SCHEMA_MIN}",
+        _raise(f"{path}: canon schema {doc.get('schema')!r} is not >= {SCHEMA_MIN}",
                {"path": path, "schema": doc.get("schema"), "clause": "schema"})
     if ver > SCHEMA_MAX:
-        _raise(f"stale consumer: canon schema {ver} > {SCHEMA_MAX}",
+        _raise(f"{path}: stale consumer: canon schema {ver} > {SCHEMA_MAX}",
                {"path": path, "schema": ver, "clause": "stale_consumer"})
     if "surfaces" not in doc or not isinstance(doc["surfaces"], list):
-        _raise("canon needs a surfaces list", {"path": path, "clause": "no_surfaces"})
+        _raise(f"{path}: canon needs a surfaces list",
+               {"path": path, "clause": "no_surfaces"})
     if "legal_clauses" not in doc or not isinstance(doc["legal_clauses"], list):
         _raise(
-            "canon needs a legal_clauses list (reverse is unarmed without it, "
-            "and an unarmed reverse is no answer)",
+            f"{path}: canon needs a legal_clauses list (reverse is unarmed without it, "
+            f"and an unarmed reverse is no answer)",
             {"path": path, "clause": "no_legal_clauses"},
         )
     ids = []
     for i, s in enumerate(doc["surfaces"]):
         if not isinstance(s, dict) or "id" not in s:
-            _raise(f"surface {i} needs id", {"path": path, "index": i})
+            _raise(f"{path}: surface {i} needs id",
+                   {"path": path, "index": i, "clause": "surface_needs_id"})
         if s["id"] in ids:
-            _raise(f"duplicate surface id {s['id']}", {"path": path, "id": s["id"]})
+            _raise(f"{path}: duplicate surface id {s['id']}",
+                   {"path": path, "id": s["id"], "clause": "duplicate_surface_id"})
         ids.append(s["id"])
         occ = s.get("occupant")
         if occ is not None and not isinstance(occ, dict):
-            _raise(f"surface {s['id']} occupant must be object or null",
-                   {"path": path, "id": s["id"]})
+            _raise(f"{path}: surface {s['id']} occupant must be object or null",
+                   {"path": path, "id": s["id"],
+                    "clause": "occupant_is_not_an_object"})
         if occ is not None:
             kind = occ.get("kind", "prompt")
             if kind not in OCCUPANT_KINDS:
-                _raise(f"surface {s['id']} occupant.kind {kind!r} is not "
+                _raise(f"{path}: surface {s['id']} occupant.kind {kind!r} is not "
                        f"{OCCUPANT_KINDS}",
-                       {"path": path, "id": s["id"], "kind": kind})
+                       {"path": path, "id": s["id"], "kind": kind,
+                        "known": list(OCCUPANT_KINDS),
+                        "clause": "unknown_occupant_kind"})
             _check_forbidden(s["id"], occ, path)
         spatial = s.get("spatial")
         if spatial is not None:
             _check_spatial(s["id"], spatial, path)
     for j in doc.get("joints") or []:
         if not isinstance(j, dict):
-            _raise("joint must be an object", {"path": path})
-        if j.get("a") not in ids or j.get("b") not in ids:
-            _raise(f"joint {j.get('id')} names unknown surfaces",
-                   {"path": path, "joint": j})
+            _raise(f"{path}: joint must be an object, got {type(j).__name__}",
+                   {"path": path, "clause": "joint_is_not_an_object"})
+        # Which ENDPOINT is unknown, and the ids it could have named. The loop is holding
+        # `ids`; the sentence used to say only that "joint j1 names unknown surfaces",
+        # which leaves the operator to diff two lists by eye — and `resolve`'s
+        # unknown-subject refusal one function over already quotes its own census.
+        unknown = [end for end in ("a", "b") if j.get(end) not in ids]
+        if unknown:
+            _raise(
+                f"{path}: joint {j.get('id')!r} names unknown surface(s) "
+                + ", ".join(f"{end}={j.get(end)!r}" for end in unknown)
+                + f"; the surfaces in this file are {ids}",
+                {"path": path, "joint": j, "unknown_endpoints": unknown,
+                 "known": list(ids), "clause": "joint_names_unknown_surface"})
     cids = []
     for i, c in enumerate(doc["legal_clauses"]):
         if not isinstance(c, dict) or "id" not in c or "phrase" not in c:
-            _raise(f"legal_clause {i} needs id and phrase",
-                   {"path": path, "index": i})
+            _raise(f"{path}: legal_clause {i} needs id and phrase",
+                   {"path": path, "index": i,
+                    "clause": "legal_clause_needs_id_and_phrase"})
         if c["id"] in cids:
-            _raise(f"duplicate legal_clause id {c['id']}",
-                   {"path": path, "id": c["id"]})
+            _raise(f"{path}: duplicate legal_clause id {c['id']}",
+                   {"path": path, "id": c["id"],
+                    "clause": "duplicate_legal_clause_id"})
         cids.append(c["id"])
         cls = c.get("class", "style")
         if cls not in CLAUSE_CLASSES:
-            _raise(f"legal_clause {c['id']} class {cls!r} is not "
+            _raise(f"{path}: legal_clause {c['id']} class {cls!r} is not "
                    f"{CLAUSE_CLASSES}",
-                   {"path": path, "id": c["id"]})
+                   {"path": path, "id": c["id"], "known": list(CLAUSE_CLASSES),
+                    "clause": "unknown_legal_clause_class"})
     _check_blocked_additions(doc, path)
     return doc
 
@@ -226,24 +280,25 @@ def _check_blocked_additions(doc, path):
     if adds is None:
         return
     if not isinstance(adds, list):
-        _raise(f"blocked_additions must be a list, got {type(adds).__name__}",
+        _raise(f"{path}: blocked_additions must be a list, got {type(adds).__name__}",
                {"path": path, "clause": "blocked_additions_not_a_list",
                 "type": type(adds).__name__})
     for i, add in enumerate(adds):
         if isinstance(add, str):
             if not add.strip():
-                _raise(f"blocked_additions[{i}] is an empty string, which blocks nothing",
+                _raise(f"{path}: blocked_additions[{i}] is an empty string, which blocks "
+                       f"nothing",
                        {"path": path, "clause": "blocked_addition_empty", "index": i})
             continue
         if not isinstance(add, dict):
-            _raise(f"blocked_additions[{i}] must be a string or an object carrying a "
-                   f"phrase, got {type(add).__name__}",
+            _raise(f"{path}: blocked_additions[{i}] must be a string or an object "
+                   f"carrying a phrase, got {type(add).__name__}",
                    {"path": path, "clause": "blocked_addition_shape", "index": i,
                     "type": type(add).__name__})
         phrase = add.get("phrase")
         if not isinstance(phrase, str) or not phrase.strip():
             _raise(
-                f"blocked_additions[{i}] (id {add.get('id')!r}) carries no string "
+                f"{path}: blocked_additions[{i}] (id {add.get('id')!r}) carries no string "
                 f"`phrase`: keys {sorted(add)}. A refusal row the reader drops is a "
                 f"refusal the file declares and the gate never makes — this list is a "
                 f"REFUSAL list, and it is validated the way the obliging fields are",
@@ -265,7 +320,7 @@ def _check_forbidden(sid, occ, path):
     words = occ["forbidden"]
     if isinstance(words, str) or not isinstance(words, (list, tuple)):
         _raise(
-            f"surface {sid} occupant.forbidden must be a list of words, got "
+            f"{path}: surface {sid} occupant.forbidden must be a list of words, got "
             f"{type(words).__name__} ({words!r}). A bare string iterates as single "
             f"CHARACTERS, so every letter of it becomes a forbidden word",
             {"path": path, "id": sid, "clause": "forbidden_not_a_list",
@@ -273,7 +328,8 @@ def _check_forbidden(sid, occ, path):
     for i, w in enumerate(words):
         if not isinstance(w, str) or not w.strip():
             _raise(
-                f"surface {sid} occupant.forbidden[{i}] is {w!r}, not a word; a refusal "
+                f"{path}: surface {sid} occupant.forbidden[{i}] is {w!r}, not a word; "
+                f"a refusal "
                 f"nothing can match is a refusal the file declares and the gate never makes",
                 {"path": path, "id": sid, "clause": "forbidden_word", "index": i,
                  "value": repr(w)})
@@ -281,19 +337,23 @@ def _check_forbidden(sid, occ, path):
 
 def _check_spatial(sid, spatial, path):
     if not isinstance(spatial, dict):
-        _raise(f"surface {sid} spatial must be an object",
-               {"path": path, "id": sid})
+        _raise(f"{path}: surface {sid} spatial must be an object, got "
+               f"{type(spatial).__name__}",
+               {"path": path, "id": sid, "clause": "spatial_is_not_an_object"})
     kind = spatial.get("kind")
     ref = spatial.get("ref")
     if kind not in SPATIAL_KINDS:
-        _raise(f"surface {sid} spatial.kind {kind!r} is not {SPATIAL_KINDS}",
-               {"path": path, "id": sid, "kind": kind})
+        _raise(f"{path}: surface {sid} spatial.kind {kind!r} is not {SPATIAL_KINDS}",
+               {"path": path, "id": sid, "kind": kind,
+                "known": list(SPATIAL_KINDS), "clause": "unknown_spatial_kind"})
     if not ref or not isinstance(ref, str):
-        _raise(f"surface {sid} spatial needs a string ref",
-               {"path": path, "id": sid})
+        _raise(f"{path}: surface {sid} spatial needs a string ref, got {ref!r}",
+               {"path": path, "id": sid, "ref": ref,
+                "clause": "spatial_needs_a_ref"})
     if kind == "bone" and ref not in REGISTERED_BONES:
         _raise(
-            f"surface {sid} names bone {ref!r} which is not in sitelist.ALL_NAMES",
+            f"{path}: surface {sid} names bone {ref!r} which is not in "
+            f"sitelist.ALL_NAMES",
             {"path": path, "id": sid, "ref": ref, "clause": "unknown_bone"},
         )
 
@@ -301,9 +361,19 @@ def _check_spatial(sid, spatial, path):
 def resolve(subject, *, census=None, search_roots=None):
     """subject id -> loaded canon, or raise. No default subject."""
     if not subject:
+        # The valid set is READ here rather than named in prose — the same table this
+        # function reads one line below, and the same courtesy the `unknown_subject`
+        # refusal beneath it already pays. Five of this domain's six "that name is not one
+        # I know" refusals hand the operator the valid set; the two on the spend flags did
+        # not, and this is one of them. Reading the table first means a MALFORMED census
+        # refuses on its own clause before this sentence can be composed, which is the
+        # correct headline: a table that cannot be read is a table whose subjects cannot
+        # be listed.
+        known = sorted(canon_census.gate_census_table(census))
         _raise(
-            "no subject: a spend with no census id has no answer",
-            {"clause": "missing_subject"},
+            f"no subject: a spend with no census id has no answer. Pass "
+            f"--subject <id> (the census has {known})",
+            {"clause": "missing_subject", "flag": "--subject", "known": known},
         )
     # · ANDON — the table BEFORE any row is read off it. `canon_census.gate_census_table`
     # is the one implementation; see its docstring for the three readings measured on
@@ -810,9 +880,18 @@ def require_canon(
             )
         rec = table.get(subject)
         if rec is None:
+            # ⚠ The valid set, in the message AND in the receipt. This branch had just read
+            # the whole table one line above (`table = gate_census_table(census)`) and put
+            # the three ids nowhere, on the ONE flag that bypasses Gate CANON before a
+            # spend — while `resolve`'s `unknown_subject` sibling, reading the same table,
+            # quotes its census in both halves. A mistyped `--subject` under `--no-canon`
+            # refused correctly and cost the operator a trip into `canon_census.CENSUS` to
+            # learn a three-item list the gate was already holding.
             _raise(
-                f"--no-canon --subject {subject!r} but {subject!r} is not in the census",
-                {"subject": subject, "clause": "escape_unknown"},
+                f"--no-canon --subject {subject!r} but {subject!r} is not in the census "
+                f"(the census has {sorted(table)})",
+                {"subject": subject, "known": sorted(table),
+                 "clause": "escape_unknown"},
             )
         if rec.get("surfaces") is not None:
             _raise(
@@ -831,14 +910,28 @@ def require_canon(
             "subject": subject,
             "reason": rec.get("reason"),
             "clause": "escape",
-            "announcement": f"[canon] UNGATED: {subject}",
+            "tool_version": TOOL_VERSION,
+            # ⚠ **The REASON rides the announcement**, which is the loudest signal in the
+            # repo that a spend proceeded WITHOUT canon. It carried the subject alone until
+            # 2026-09-05 — measured for all three census rows as `[canon] UNGATED:
+            # BLACKGUARD` / `PERFORMER` / `WIRE` — so a reviewer scanning a build log could
+            # not tell a ratified-hole escape from a subject whose canon was never written,
+            # and the census field that exists to make that distinction reached no printed
+            # surface. `canon_census.gate_census_table`'s `hole_without_a_reason` refusal
+            # refuses a reason-less row on the stated ground that the reason "is quoted in
+            # `require_canon`'s UNGATED record AND IN THE SPEND IT ANNOUNCES": the record
+            # half held, the announcement half did not, and a repo that files this shape
+            # against itself does not ship it. `tools/canon_gate.canon_line` prints this
+            # string verbatim.
+            "announcement": f"[canon] UNGATED: {subject} — {rec.get('reason')}",
         }
 
     doc = resolve(subject, census=census, search_roots=search_roots)
     ev = coverage(doc)
     if ev["ratified"] == 0:
         _raise(
-            f"subject {subject!r} has a surfaces file and zero ratified prompt "
+            f"{doc.get('_path')}: subject {subject!r} has a surfaces file and zero "
+            f"ratified prompt "
             f"occupants CARRYING A PHRASE"
             + (f" ({ev['ratified_bare']} ratified occupant(s) are kind='bare' and carry "
                f"nothing the router can check: {ev['ratified_bare_ids']})"
@@ -854,6 +947,14 @@ def require_canon(
     covered["subject"] = subject
     covered["path"] = doc.get("_path")
     covered["verdict"] = "ARMED"
+    # ⚠ **The version that ruled, in the record that says a spend was gated.** Measured
+    # 2026-09-05: this module declares `TOOL_VERSION` and wrote it into nothing, while
+    # `donor_gate` (:458) and `lift_solve` (:627) write theirs into the record they emit
+    # and every payload builder records its own `tool_version`. Two Gate CANON records
+    # stored in `outputs/<experiment>/` from either side of a clause change were
+    # indistinguishable in the record, which is the reproducibility claim CLAUDE.md makes
+    # of every generation record. Written on BOTH verdicts — see the UNGATED literal above.
+    covered["tool_version"] = TOOL_VERSION
     return covered
 
 

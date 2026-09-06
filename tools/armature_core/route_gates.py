@@ -25,6 +25,8 @@ Nothing here spends anything, and nothing here is a matter of taste. It reports 
 graph contains; the rulings about what may run are the Director's and the advisor's.
 """
 
+import datetime
+import hashlib
 import json
 
 from .canon import GRAPH_WRAPPER_KEYS
@@ -45,14 +47,46 @@ GENERATOR_RULES = {
     "wan": {"dim_multiple": 16, "frame_form": "4n+1", "max_frames": 81},
 }
 
+#: How old a licence ruling may be before `docs/license-map.md`'s own rule calls it
+#: advisory. The map states the law in its header — "**Entries older than 90 days are
+#: advisory until re-fetched** — licenses in this space change" — and CLAUDE.md repeats it
+#: ("entries older than 90 days are advisory until re-fetched"). It is a NUMBER here, and
+#: `fetched` is a FIELD on every row below, because a rule expressed only in prose cannot
+#: be administered by the gate that applies the rulings.
+LICENCE_ADVISORY_DAYS = 90
+
 #: Components the repo has already ruled on, keyed by a substring of the file name. This is
 #: a MIRROR of `docs/license-map.md`, not a second authority: the map is the record and
 #: this is what lets a script fail on it. A component absent from this table is UNKNOWN,
 #: which is reported, never silently treated as clean.
+#:
+#: ⚠ **Every row carries `fetched` and `source`, the two fields the map's own governing
+#: rule is written in.** Measured 2026-09-05 before the fix: `verify()` on an API graph
+#: loading the smartphone-snapshot LoRA returned a 29-key receipt in which
+#: `json.dumps(ev)` contained none of `fetched`, `2026-08`, `stale`, `advisory` or `90`,
+#: and the BANNED refusal on `causvid_x.safetensors` quoted verdict, licence and reason
+#: and named no date and no document. The rows were fetched 2026-08-10 and 2026-08-13 and
+#: go advisory 2026-11-08 and 2026-11-11; on that day every receipt and every refusal
+#: would have read exactly as it did before, and neither the operator about to spend nor a
+#: later reader of a stored receipt could tell an in-date ruling from a lapsed one — on the
+#: gate CLAUDE.md calls non-negotiable. This module's own docstring sets the standard the
+#: omission missed ("This is a MIRROR of `docs/license-map.md`, not a second authority"):
+#: a mirror that omits the field the authority's rule is expressed in cannot administer
+#: that rule.
+#:
+#: `source` is the URL of the fetched licence DOCUMENT, and it is `None` — never a
+#: plausible-looking URL — on the three rows the map itself records as unretrieved
+#: (`causvid` "not independently retrieved", `dwpose` weights "not fetched",
+#: `vintage_film_grain` "source unlocated"). `fetched` on those three is the date the map
+#: recorded the NON-retrieval, which is what an UNVERIFIED verdict is dated by.
+#: **Whether a lapsed ruling also refuses is the Director's call, not this gate's** — the
+#: gate says so in the sentence and in the receipt.
 RULED_COMPONENTS = {
     "lightx2v": {
         "verdict": "EXCLUDED",
         "licence": "Apache-2.0 — commercially clean",
+        "fetched": "2026-08-10",
+        "source": "https://huggingface.co/lightx2v/Wan2.2-Lightning",
         "reason": ("excluded on METHODOLOGY grounds by the licence map, not on licence "
                    "grounds: a 4-step / cfg-1 distilled trajectory is a different sampler "
                    "trajectory from the one every other arm is measured on"),
@@ -60,12 +94,23 @@ RULED_COMPONENTS = {
     "causvid": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC",
-        "reason": "non-commercial; the map's ruling is delete, not bypass",
+        "fetched": "2026-08-10",
+        "source": None,
+        "reason": ("non-commercial; the map's ruling is delete, not bypass. Flagged by "
+                   "Comfy consult #1 and NOT independently retrieved — the map records "
+                   "the non-retrieval, and an unretrievable licence is treated as NO"),
     },
     "openpose": {"verdict": "BANNED", "licence": "CMU Academic / Non-Commercial",
+                 "fetched": "2026-08-10",
+                 "source": ("https://raw.githubusercontent.com/CMU-Perceptual-Computing-"
+                            "Lab/openpose/master/LICENSE"),
                  "reason": "non-commercial preprocessor tier"},
     "dwpose": {"verdict": "BANNED", "licence": "weights not fetched",
-               "reason": "UNVERIFIED weights tier — treated as NO"},
+               "fetched": "2026-08-10",
+               "source": None,
+               "reason": ("UNVERIFIED weights tier — treated as NO. The Apache row the "
+                          "map carries is the CODE's; the WEIGHTS are a separate grant "
+                          "and were never fetched")},
 
     # ---- the E14 style-LoRA field, mirrored from the licence map's 2026-08-13 fetch pass.
     # Four of these are kills. They are entered BECAUSE they are dead: an absent row reads
@@ -102,6 +147,8 @@ RULED_COMPONENTS = {
             "fetched": "2026-08-13",
             "text": "Technically Color LoRA by renderartist (CivitAI)",
         },
+        "fetched": "2026-08-13",
+        "source": "https://civitai.com/api/v1/models/2106471",
         "licence": "CivitAI grant matrix ['RentCivit', 'Rent', 'Image'], allowNoCredit false",
         "reason": ("E14 arm T. Third-party-service use and image-commercial both granted. "
                    "⚠ CREDIT REQUIRED: published footage from this LoRA credits renderartist. "
@@ -110,6 +157,8 @@ RULED_COMPONENTS = {
     },
     "smartphonesnapshot": {
         "verdict": "ALLOWED",
+        "fetched": "2026-08-13",
+        "source": "https://civitai.com/api/v1/models/1834338",
         "licence": ("CivitAI grant matrix ['Image', 'RentCivit', 'Rent', 'Sell'], "
                     "allowNoCredit true, allowDerivatives true"),
         "reason": ("E14 arm S — the most permissive grant in the field. Served as a "
@@ -118,6 +167,8 @@ RULED_COMPONENTS = {
     },
     "candid_photography": {
         "verdict": "BANNED",
+        "fetched": "2026-08-13",
+        "source": "https://civitai.com/api/v1/models/1925758",
         "licence": "CivitAI grant matrix ['RentCivit'] ONLY",
         "reason": ("withdrawn from E14 before it ran. No image-commercial right and no "
                    "third-party-service right — both rights this route needs are withheld. "
@@ -125,6 +176,8 @@ RULED_COMPONENTS = {
     },
     "80s_fantasy": {
         "verdict": "BANNED",
+        "fetched": "2026-08-13",
+        "source": "https://civitai.com/api/v1/models/789313",
         "licence": "CivitAI grant matrix ['RentCivit', 'Image'], allowDerivatives false",
         "reason": ("image-commercial granted but 'Rent' — third-party generation-service "
                    "use — is WITHHELD, and generation through Comfy Cloud is exactly that "
@@ -132,17 +185,25 @@ RULED_COMPONENTS = {
     },
     "instareal": {
         "verdict": "BANNED",
+        "fetched": "2026-08-13",
+        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/raw/main/"
+                   "LICENSE.txt"),
         "licence": "Instara Fair Use License",
         "reason": ("prohibits use on any image/video generation service, platform or API; "
                    "this route IS that use. `instagirl` is the same house and inherits it"),
     },
     "instagirl": {
         "verdict": "BANNED",
+        "fetched": "2026-08-13",
+        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/raw/main/"
+                   "LICENSE.txt"),
         "licence": "Instara Fair Use License (same house as instareal)",
         "reason": "inherits the instareal row's verdict per the licence map",
     },
     "vintage_film_grain": {
         "verdict": "BANNED",
+        "fetched": "2026-08-13",
+        "source": None,
         "licence": "source unlocated — NOT RETRIEVED",
         "reason": ("a licence that cannot be retrieved is treated as NO. Revivable only if "
                    "a source page is found and fetched"),
@@ -1346,6 +1407,134 @@ VERDICT_RANK = {"BANNED": 4, "EXCLUDED": 3, "CONDITIONAL": 2, "ALLOWED": 1,
 CONDITIONAL_VERDICTS = ("CONDITIONAL",)
 
 
+def _today():
+    """Today, as a `datetime.date`. One seam, so a test can state its own date.
+
+    Every age question below takes `today=` explicitly; this is only the default. It is a
+    function rather than a module constant because a constant would freeze at import and a
+    long-lived process would then age its rulings against the day it started.
+    """
+    return datetime.date.today()
+
+
+def licence_age_days(fetched, today=None):
+    """How many days ago `fetched` (an ISO date string) was retrieved, or None.
+
+    None for a row with no date at all — which is a different answer from "old", and the
+    caller says which it is rather than defaulting one into the other.
+    """
+    if not fetched:
+        return None
+    try:
+        when = datetime.date.fromisoformat(str(fetched))
+    except ValueError:
+        return None
+    return ((today or _today()) - when).days
+
+
+def licence_advisory_after(fetched):
+    """The ISO date on which `docs/license-map.md`'s 90-day rule makes this row advisory."""
+    if not fetched:
+        return None
+    try:
+        when = datetime.date.fromisoformat(str(fetched))
+    except ValueError:
+        return None
+    return (when + datetime.timedelta(days=LICENCE_ADVISORY_DAYS)).isoformat()
+
+
+def licence_fetch_reading(comp, today=None):
+    """What the APPLIED licence rulings say about their own age.
+
+    `comp` is a `components()` list. Reads the `fetched` date off every ruling the table
+    actually matched — the rows that DECIDED this graph, not the whole table — and answers
+    four things: the oldest applied fetch date, the date that row goes advisory, the rows
+    already past `LICENCE_ADVISORY_DAYS`, and the applied rows carrying no date at all.
+
+    It REPORTS and never raises. Whether a lapsed ruling refuses is the Director's call
+    (CLAUDE.md: CONDITIONAL and re-fetch decisions are his), and a gate that invented that
+    refusal for itself would be this repo's own "a global constant governs a local
+    feature". What the gate owes is that no receipt and no refusal can be read without the
+    age of the ruling it applied.
+    """
+    today = today or _today()
+    applied = []
+    for c in comp or []:
+        for m in ((c.get("ruling") or {}).get("matches") or
+                  ([{"matched_on": (c.get("ruling") or {}).get("matched_on")}]
+                   if (c.get("ruling") or {}).get("matched_on") else [])):
+            key = m.get("matched_on")
+            row = RULED_COMPONENTS.get(key)
+            if row is None:
+                continue
+            applied.append({"matched_on": key, "verdict": row["verdict"],
+                            "fetched": row.get("fetched"),
+                            "source": row.get("source"),
+                            "advisory_after": licence_advisory_after(row.get("fetched")),
+                            "age_days": licence_age_days(row.get("fetched"), today)})
+    seen, rows = set(), []
+    for r in applied:
+        if r["matched_on"] in seen:
+            continue
+        seen.add(r["matched_on"])
+        rows.append(r)
+    rows.sort(key=lambda r: (r["fetched"] or "", r["matched_on"]))
+    dated = [r for r in rows if r["fetched"]]
+    undated = [r["matched_on"] for r in rows if not r["fetched"]]
+    stale = [r for r in dated if (r["age_days"] or 0) > LICENCE_ADVISORY_DAYS]
+    return {
+        "as_of": today.isoformat(),
+        "advisory_days": LICENCE_ADVISORY_DAYS,
+        "applied_rows": rows,
+        "oldest_fetched": dated[0]["fetched"] if dated else None,
+        "advisory_after": dated[0]["advisory_after"] if dated else None,
+        "advisory_rows": [r["matched_on"] for r in stale],
+        "undated_rows": undated,
+    }
+
+
+def licence_phrase_for(reading):
+    """The clause the verdict and the refusals both quote about ruling age."""
+    if reading["oldest_fetched"] is None:
+        return ("no applied licence ruling carries a fetch date"
+                if reading["applied_rows"] else "no licence ruling applied")
+    base = (f"licence rulings applied were fetched no earlier than "
+            f"{reading['oldest_fetched']} (advisory after {reading['advisory_after']} "
+            f"under the map's {reading['advisory_days']}-day rule)")
+    if reading["advisory_rows"]:
+        base += (f"; ADVISORY — past {reading['advisory_days']} days as of "
+                 f"{reading['as_of']}: {reading['advisory_rows']}, re-fetch before "
+                 f"reading this verdict as current")
+    if reading["undated_rows"]:
+        base += f"; UNDATED rows applied: {reading['undated_rows']}"
+    return base
+
+
+def _row_provenance(key):
+    """`(fetched=…, source=…)` for a `RULED_COMPONENTS` key, for a refusal sentence."""
+    row = RULED_COMPONENTS.get(key) or {}
+    fetched = row.get("fetched")
+    src = row.get("source")
+    return (f"map row {key!r} fetched {fetched or 'NEVER'}"
+            + (f", {src}" if src else ", document NOT RETRIEVED")
+            + (f", advisory after {licence_advisory_after(fetched)}" if fetched else ""))
+
+
+def graph_digest(graph):
+    """A stable sha256 over the NORMALISED graph, so a stored receipt names what it ruled.
+
+    Written for the other half of the reproducibility question `TOOL_VERSION` answers: two
+    Gate ROUTE receipts in `outputs/<experiment>/` said which clauses passed and named
+    neither the version that ruled nor the graph it ruled on. Computed after
+    `normalise_graph`, so the same graph inside two different wrappers digests the same;
+    `default=repr` because a hand-built graph may carry a value JSON cannot encode and a
+    digest that raises is worse than a digest of a repr.
+    """
+    return hashlib.sha256(
+        json.dumps(normalise_graph(graph), sort_keys=True, default=repr,
+                   separators=(",", ":")).encode("utf-8")).hexdigest()
+
+
 def attribution_entry_for(key):
     """The `attribution` record entry a submitting tool must carry for row `key`.
 
@@ -1704,9 +1893,37 @@ def components(graph):
 
 
 def _component_label(rec):
-    """What to call a component in a refusal: its filename, or its node class."""
-    return (f"node class {rec['class_type']!r}" if rec.get("kind") == "class"
+    """What to call a component in a refusal: its name AND the node it sits on.
+
+    ⚠ **It named the file and threw away the node.** Until 2026-09-05 this returned
+    `repr(rec.get("file"))` or `f"node class {rec['class_type']!r}"` and read neither
+    `node_id` nor `where`, though `components()` records both on every row — and it is
+    what the BANNED/EXCLUDED refusal, the uncredited-CONDITIONAL refusal,
+    `ev["banned_or_excluded"]` and `ev["unclassified"]` are all built from. Measured in a
+    worktree on a save-format graph whose banned LoRA sits inside a blueprint:
+    `components()` returned `causvid_x.safetensors -> node_id: 42, where: style_stack`,
+    and `verify(g, frame=(832,480,81))` raised "[ROUTE] the graph loads
+    'causvid_x.safetensors' (BANNED: …)" with neither `42` nor `style_stack` anywhere in
+    the message. The refusal's required action is to DELETE a node, and the sentence
+    demanding it did not say which node or which subgraph level to open — on a graph that
+    can carry blueprints, a converted canvas file, or two loaders of the same filename.
+
+    The precedent was already in this module twice: `hosted_enums` gained the level
+    because "the per-node billing andon and the enum refusal above it cannot name which
+    node", and Gate PAIR's rows gained `where` because "its receipt and its refusal cannot
+    name which node they are about". Those two fixes reached the ROWS; this SENTENCE was
+    not carried with them. The spelling is `{where}/{node_id}`, which is Gate PAIR's, Gate
+    S's and the generator-family refusal's already.
+
+    A record carrying neither field (a caller's synthetic row) still gets its name back,
+    so a label is never a sentence about nothing.
+    """
+    what = (f"node class {rec['class_type']!r}" if rec.get("kind") == "class"
             else repr(rec.get("file")))
+    where, node_id = rec.get("where"), rec.get("node_id")
+    if where is None and node_id is None:
+        return what
+    return f"{what} at {where}/{node_id}"
 
 
 #: The input names a seed lives under in API format, per node class.
@@ -2898,7 +3115,23 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # THIS literal for symmetry with those three, every builder's payload record starts
     # refusing at the last gate before a paid submission with
     # `record_carries_a_caught_refusal` naming the wrong defect. Do not add one.
+    #
+    # ⚠ **`tool_version` and `graph_sha256` are written HERE, before the first clause can
+    # raise, for the same reason both fact keys are: a receipt that identifies neither the
+    # version that ruled nor the graph it ruled on cannot be read back. Measured
+    # 2026-09-05: this receipt had 29 keys and `json.dumps(ev)` contained none of
+    # `TOOL_VERSION`, `tool_version`, `E09`, a graph hash or a graph path, while
+    # `donor_gate` (:458) and `lift_solve` (:627) write their `TOOL_VERSION` into the
+    # record they emit and all ten payload builders record their own. Gate ROUTE's clause
+    # set moved materially in waves 25 and 26 (a hosted-tier ruling-table check, four new
+    # `SavedAdmission` clause words, the licence walk's name-shaped-widget pass, the
+    # blueprint level-label andon), so two receipts stored in `outputs/<experiment>/` from
+    # either side of those waves were indistinguishable in the record — which is the
+    # reproducibility claim CLAUDE.md makes of every generation record. Neither key is a
+    # `clause`, so the invariant above is untouched.
     ev = {"gate": "ROUTE", "andon": "RouteGate", "receipt": "verify",
+          "tool_version": TOOL_VERSION,
+          "graph_sha256": graph_digest(graph),
           "carries_no_sampler_asserted": bool(carries_no_sampler),
           "require_pinned_seeds": bool(require_pinned_seeds),
           "attribution": [dict(e) if isinstance(e, dict) else e
@@ -2911,6 +3144,14 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
           "components": comp, "seeds": sd, "latents": lat,
           "latents_checkable": sum(1 for l in lat if l["checkable"]),
           "frame_legality": legality}
+
+    # · The AGE of the rulings this graph is about to be judged by, written before the
+    # first licence clause can raise so a REFUSAL carries it too. `docs/license-map.md`
+    # states the law this reads — "Entries older than 90 days are advisory until
+    # re-fetched" — and until 2026-09-05 no receipt and no refusal at the spend boundary
+    # could say how old the ruling it applied was. It reports; it does not raise. Whether
+    # a lapsed ruling also refuses is the Director's call, not this gate's.
+    ev["licence_fetch"] = licence_fetch_reading(comp)
 
     # `allow` may wave a METHODOLOGY ruling. It may not wave a LICENCE one. The filter
     # used to treat the two verdicts as one class, so `allow=('causvid',)` moved a
@@ -2947,7 +3188,8 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         raise RouteGate(
             "the graph loads " + ", ".join(
                 f"{_component_label(c)} ({c['ruling']['verdict']}: "
-                f"{c['ruling']['reason']})"
+                f"{c['ruling']['reason']}; "
+                f"{_row_provenance(c['ruling'].get('matched_on'))})"
                 + (f" [this {'class name' if c.get('kind') == 'class' else 'filename'}"
                    f" also matches "
                    + ", ".join(f"{m['matched_on']}={m['verdict']}"
@@ -2955,7 +3197,8 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
                    if len(c["ruling"].get("matches") or []) > 1 else "")
                 for c in bad) +
             ". The licence map's ruling is that presence is presence — a bypassed node "
-            "still counts, and these are not even bypassed",
+            "still counts, and these are not even bypassed. Delete the node named above; "
+            + licence_phrase_for(ev["licence_fetch"]),
             ev)
 
     # · ANDON — the direction `WEIGHT_SUFFIXES` leaves unbounded, placed AFTER the licence
@@ -3001,7 +3244,8 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         raise RouteGate(
             "the graph loads " + ", ".join(
                 f"{c['label']} (CONDITIONAL: {c['condition'].get('kind', 'credit')} — "
-                f"{c['condition'].get('text') or c['condition'].get('creditor')})"
+                f"{c['condition'].get('text') or c['condition'].get('creditor')}; "
+                f"{_row_provenance(c.get('matched_on'))})"
                 for c in uncredited) +
             ", and the submitting record carries no attribution entry crediting "
             + ", ".join(sorted({str(c["condition"].get("creditor")) for c in uncredited}))
@@ -3062,7 +3306,11 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
         f"{len(unclassified)} unclassified, "
         f"{len(conditional)} conditional (credited), "
         f"{len(unmatched)} attribution entr"
-        f"{'y' if len(unmatched) == 1 else 'ies'} matching no loaded component")
+        f"{'y' if len(unmatched) == 1 else 'ies'} matching no loaded component, "
+        # The AGE of the rulings the three numbers above were computed under. A verdict
+        # that states what was classified and not when the classification was fetched
+        # reads identically on the day the map's 90-day rule makes it advisory.
+        + licence_phrase_for(ev["licence_fetch"]))
 
     # · ANDON — Gate PAIR. Placed after the licence clause (a banned weight stays the
     # headline) and before everything else, because every clause below is a question about

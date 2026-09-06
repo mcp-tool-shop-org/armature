@@ -354,7 +354,13 @@ def test_round_trip_refuses_a_probe_it_could_not_finish_instead_of_passing_it():
         rig_gates.gate_p_round_trip_positions(base, moved, DIAGONAL, max_probe=3)
     ev = exc.value.evidence
     assert ev["probe_truncated_at"] == 3
-    assert ev["probe_population"] == 10
+    # CORRECTED IN PLACE, wave 28 (F-594c5a7a). `probe_population` used to be written ONLY
+    # on this refusal branch and meant "this direction's odd positions" (10). It is now
+    # written above the loop on EVERY path — the walk's whole population, both directions
+    # (20) — so a receipt from a run that COMPLETED also says how much was measured; this
+    # branch's own per-side count kept its meaning under `probe_population_this_side`.
+    assert ev["probe_population_this_side"] == 10
+    assert ev["probe_population"] == 20
     assert ev["probe_unexamined"] == 7
     assert "verdict" not in ev
     assert "agree" not in str(exc.value)
@@ -383,10 +389,19 @@ def test_gate_p_takes_no_tolerance_argument():
     assert list(inspect.signature(rig_gates.gate_p_evaluation_is_live).parameters) == [
         "rest_world", "probe_world", "bbox_diagonal"]
     params = inspect.signature(rig_gates.gate_p_round_trip_positions).parameters
-    assert list(params) == ["source", "roundtrip", "bbox_diagonal", "max_probe"]
+    assert list(params) == ["source", "roundtrip", "bbox_diagonal", "max_probe",
+                            "progress"]
     # `max_probe` survives because it is no longer a threshold a caller can widen past:
     # exceeding it REFUSES (the test above). It is keyword-only so a caller states it.
     assert params["max_probe"].kind is inspect.Parameter.KEYWORD_ONLY
+    # CORRECTED IN PLACE, wave 28 (F-594c5a7a). `progress` JOINED the signature and this
+    # census is about numbers a gate COMPARES AGAINST, not about arity: it is a callback,
+    # keyword-only, defaults to None, and no clause reads it — the verdict is identical
+    # with and without one (asserted in `test_amend_w28_core_gates.py`). The list is
+    # corrected rather than the assertion loosened, so the next parameter still has to
+    # justify itself here.
+    assert params["progress"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert params["progress"].default is None
 
 
 def test_gate_d_takes_no_tolerance_argument():

@@ -274,7 +274,8 @@ def g2_completeness(run_dir, expected, frame_count):
     # before the manifest that makes a run look finished.
     if not expected:
         raise G2Completeness(
-            "G2 was asked to check completeness over ZERO channels, which is not a "
+            f"{run_dir}: G2 was asked to check completeness over ZERO channels, which is "
+            "not a "
             "completeness verdict: nothing would be examined and the manifest written "
             "after it would report a finished run. The caller built its channel "
             "expectation wrongly — spec.channels cannot be empty",
@@ -333,8 +334,18 @@ def g2_completeness(run_dir, expected, frame_count):
             problems.append(f"{channel}: {len(empty)} zero-length file(s), e.g. {empty[:3]}")
 
     if problems:
+        # ⚠ **The sentence names the DIRECTORY, not only the channel.** Every entry in
+        # `problems` is channel-relative ("depth: 31 frames present, expected 33 …"), and
+        # `run_dir` sat in the evidence and nowhere in the message, on a gate that runs
+        # after every render — so an operator comparing arms with several run directories
+        # open read "export is incomplete" about no particular export, and had to open the
+        # halt line's JSON to learn which. The shape is established in this domain three
+        # times over: `donor_gate` puts `frames_dir` in its sentence, `canon.load` puts the
+        # path in every one of its refusals, and `route_gates.load_graph` prefixes all
+        # three of its own with `f"{path}: …"`. This is the sentence catching up to the
+        # receipt; the empty-expectation refusal above carries the same prefix.
         raise G2Completeness(
-            "export is incomplete: " + "; ".join(problems),
+            f"{run_dir}: export is incomplete: " + "; ".join(problems),
             {"gate": "G2", "andon": "G2Completeness", "clause": "export_incomplete",
              "run_dir": run_dir, "frame_count": frame_count, "channels": detail},
         )

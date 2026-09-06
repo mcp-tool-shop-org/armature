@@ -243,8 +243,15 @@ def test_the_licence_clause_reports_classified_unclassified_and_conditional():
     ev = _verify(g)
     assert ev["components_classified"] == 0
     assert ev["components_unclassified"] == 3
-    assert ev["unclassified"] == [repr(BASE), repr("wan_2.1_vae.safetensors"),
-                                  repr("some_unknown_style_v3.safetensors")]
+    # CORRECTED IN PLACE, wave 28 (F-1e1780ba). `unclassified` is built from
+    # `_component_label`, which used to return a bare `repr(file)` and now spells the node
+    # the component sits on (`{where}/{node_id}`, Gate PAIR's and Gate S's existing
+    # spelling) — because the BANNED refusal built from the same helper demanded a node be
+    # DELETED without saying which one. The COUNT this test is about is unmoved; the label
+    # gained the level and the id, and the filename is still asserted inside it.
+    assert ev["unclassified"] == [f"{repr(BASE)} at api/1",
+                                  f"{repr('wan_2.1_vae.safetensors')} at api/2",
+                                  f"{repr('some_unknown_style_v3.safetensors')} at api/3"]
     assert "0 of 3 component(s) classified, 3 unclassified" in ev["verdict"]
     assert "weight file(s)," not in ev["verdict"]
 
