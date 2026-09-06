@@ -154,10 +154,35 @@ def classifier_rows(path):
     return email.parser.Parser().parsestr(text).get_all("Classifier") or []
 
 
+def _print_help():
+    """A help request is not a gate firing — exit 0 with the calling convention."""
+    print(
+        "Usage: python classifier_gate.py [dist-dir]  (default dist)\n"
+        "  %s<json> and exit 0 when every readable artifact's classifiers are in the "
+        "trove list\n"
+        "  %s<json> and exit 2 for a refusal; exit 1 for a crash\n"
+        "  -h / --help prints this and exits 0"
+        % (OK, HALT)
+    )
+
+
 def main(argv):
     from trove_classifiers import classifiers as TROVE
 
+    if len(argv) > 1 and argv[1] in ("-h", "--help"):
+        _print_help()
+        return 0
+
     dist = argv[1] if len(argv) > 1 else "dist"
+    # A missing path and an empty build send an operator to opposite files; collapsing
+    # both into empty-population made `--help` and a typo look like a gate firing.
+    if not os.path.isdir(dist):
+        raise ClassifierGateFailure(
+            "no such directory %s (resolved %s); this gate is upstream of the publish "
+            "fork and refuses rather than inventing a population"
+            % (dist, os.path.abspath(dist)),
+            "no-such-directory",
+            {"dist": dist, "resolved": os.path.abspath(dist)})
     if len(TROVE) < 100:
         raise ClassifierGateFailure(
             "the trove list loaded %d rows; refusing to judge an artifact against it"

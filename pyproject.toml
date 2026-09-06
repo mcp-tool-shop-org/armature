@@ -231,5 +231,15 @@ package-dir = { "" = "tools" }
 where = ["tools"]
 include = ["armature_core*"]
 
+# `armature_core.canon.DEFAULT_ROOT` resolves to `armature_core/canon/` inside the package.
+# Without this row setuptools ships `.py` alone, so the first ratified surfaces JSON would
+# resolve from a source checkout and be absent from every installed wheel.
+[tool.setuptools.package-data]
+armature_core = ["canon/*.json"]
+
 [tool.pytest.ini_options]
+# MANIFEST.in prunes `tests/`; the sdist ships NO tests. This `testpaths` entry is for the
+# repository checkout (`verify.ps1`, `ci.yml`). Unpacking the sdist and running pytest
+# there yields PytestConfigWarning (no files in testpaths) rather than a recursive search
+# that pretends the archive is a suite — keep the path so a checkout stays explicit.
 testpaths = ["tests"]

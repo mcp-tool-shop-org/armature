@@ -64,7 +64,16 @@ const IDENT_PROGRAM =
 const IDENT_SHAPE = new RegExp("(?:^|\\n)" + IDENT + " (\\d+\\.\\d+\\.\\d+)");
 
 /**
- * QUESTION ONE: is this candidate a Python at all? Returns its version, or null.
+ * QUESTION ONE: is this candidate a Python at all?
+ *
+ * Returns `{ version }` on success, or `{ reason }` where reason is one of:
+ *   `not-found`   — spawn errored (not on PATH at all)
+ *   `not-a-python` — it started and exited non-zero (Store stub, renamed where.exe, node)
+ *   `no-sentinel` — exited 0 without printing the IDENT token
+ *
+ * Collapsing the three into `null` made `fail()` assert "could not run" about a pin that
+ * ran perfectly and simply is not a Python — the Store App Execution Alias's install notice
+ * contradicted by the launcher's next line.
  *
  * WHAT THIS REPLACES. `locate()` set `sawInterpreter = true` for any candidate whose spawn did
  * not `error` — `if (probe.error) continue; sawInterpreter = true;` — so "this thing is a
@@ -89,10 +98,10 @@ function pythonVersion(exe, pre) {
     encoding: "utf8",
     shell: false,
   });
-  if (probe.error) return null; // not on PATH at all
-  if (probe.status !== 0) return null; // it started, and it is not a Python
+  if (probe.error) return { reason: "not-found" };
+  if (probe.status !== 0) return { reason: "not-a-python" };
   const match = `${probe.stdout ?? ""}`.match(IDENT_SHAPE);
-  return match ? match[1] : null; // it exited 0 without being a Python
+  return match ? { version: match[1] } : { reason: "no-sentinel" };
 }
 
 /**
@@ -109,13 +118,20 @@ function pythonVersion(exe, pre) {
  */
 function locate() {
   let sawInterpreter = false;
+  let probeReason = null;
   for (const exe of candidates()) {
     const pre = argsFor(exe);
     // QUESTION ONE. A candidate that is not a Python leaves `sawInterpreter` alone, so the
     // refusal below stays "no interpreter was found" rather than becoming a claim about a
-    // toolkit missing from something that could never have imported it.
-    if (pythonVersion(exe, pre) === null) continue;
+    // toolkit missing from something that could never have imported it. The reason rides
+    // so `fail()` can distinguish "not on PATH" from "ran, and is not a Python".
+    const identity = pythonVersion(exe, pre);
+    if (!identity.version) {
+      probeReason = identity.reason;
+      continue;
+    }
     sawInterpreter = true;
+    probeReason = null;
     // QUESTION TWO.
     const probe = spawnSync(exe, [...pre, "-c", "import armature_core"], {
       stdio: "ignore",
@@ -126,9 +142,11 @@ function locate() {
     // undefined and the launcher reported "No Python interpreter was found on PATH" about an
     // interpreter it had just imported the toolkit with. A caller cannot read a fact off a
     // shape that only carries it when the answer is no.
-    if (!probe.error && probe.status === 0) return { exe, pre, sawInterpreter: true };
+    if (!probe.error && probe.status === 0) {
+      return { exe, pre, sawInterpreter: true, reason: null };
+    }
   }
-  return { exe: null, pre: null, sawInterpreter };
+  return { exe: null, pre: null, sawInterpreter, reason: probeReason };
 }
 
 /**
@@ -155,23 +173,38 @@ function fail(found, err) {
   }
   // A pinned run and an unpinned one fail for different reasons, and saying "no Python was
   // found on PATH" to someone who pinned one would send them fixing the wrong thing — the
-  // same distinction `locate()` draws between "no interpreter" and "no package".
+  // same distinction `locate()` draws between "no interpreter" and "no package". A pin that
+  // RAN and is not a Python is a third sentence: "could not run" is the opposite of what
+  // happened for the Store stub and for `ARMATURE_PYTHON` pointed at node.
+  const ranButNotPython =
+    !found.sawInterpreter &&
+    (found.reason === "not-a-python" || found.reason === "no-sentinel");
   const what = pinned
     ? found.sawInterpreter
       ? `ARMATURE_PYTHON is set to ${pinned}, and the ${PYPI} toolkit is not importable from it.`
-      : `ARMATURE_PYTHON is set to ${pinned}, which this shell could not run.`
+      : ranButNotPython
+        ? `ARMATURE_PYTHON is set to ${pinned}; it ran, and it is not a Python interpreter.`
+        : `ARMATURE_PYTHON is set to ${pinned}, which this shell could not run.`
     : found.sawInterpreter
       ? `Python is installed, but the ${PYPI} toolkit is not importable from it.`
       : "No Python interpreter was found on PATH.";
+  // Branch the REMEDY the way the headline already branches: pip ships with Python, so the
+  // one machine state with no interpreter is the one where `pip install` cannot run.
+  const remedy = found.sawInterpreter
+    ? `  This package is a launcher. The toolkit itself is Python:\n\n` +
+      `      pip install ${PYPI}\n\n`
+    : `  This package is a launcher. Install Python 3.11 or newer first\n` +
+      `  (https://www.python.org/downloads/), then:\n\n` +
+      `      pip install ${PYPI}\n\n`;
   const hint = pinned
     ? `  That pin is the ONLY interpreter tried — PATH is not searched while it is set.\n` +
       `  Install the toolkit into it, or unset ARMATURE_PYTHON to search PATH again.\n`
     : `  Point at a specific interpreter with ARMATURE_PYTHON if you use one.\n`;
   process.stderr.write(
     `armature: ${what}\n\n` +
-      `  This package is a launcher. The toolkit itself is Python:\n\n` +
-      `      pip install ${PYPI}\n\n` +
+      remedy +
       hint +
+      `  What this launcher tried: armature --node-selftest\n` +
       `  Docs: ${DOCS}\n`
   );
   process.exit(127);
@@ -254,14 +287,81 @@ if (argv[0] === "--node-selftest") {
   try {
     process.env.ARMATURE_PYTHON = process.execPath;
     const probed = locate();
-    if (probed.exe !== null || probed.sawInterpreter !== false) {
+    if (
+      probed.exe !== null ||
+      probed.sawInterpreter !== false ||
+      (probed.reason !== "not-a-python" && probed.reason !== "no-sentinel")
+    ) {
       process.stderr.write(
         `selftest: a non-Python executable (${process.execPath}) was read as an interpreter ` +
-          `— exe=${probed.exe}, sawInterpreter=${probed.sawInterpreter}.\n` +
+          `— exe=${probed.exe}, sawInterpreter=${probed.sawInterpreter}, ` +
+          `reason=${probed.reason}.\n` +
           `  Someone with no Python at all would be told to pip install the toolkit, with no\n` +
           `  pip to run it with.\n`
       );
       process.exit(1);
+    }
+    // Drive fail()'s four operand pairs (pinned × sawInterpreter) and assert: every
+    // refusal names --node-selftest; the no-interpreter body names a Python install;
+    // a pin that ran and is not a Python gets the third headline.
+    const captured = [];
+    const realWrite = process.stderr.write.bind(process.stderr);
+    const realExit = process.exit.bind(process);
+    process.stderr.write = (chunk) => {
+      captured.push(String(chunk));
+      return true;
+    };
+    process.exit = () => {};
+    try {
+      const pairs = [
+        { pin: "/armature/selftest/pinned-python", sawInterpreter: false, reason: "not-found" },
+        {
+          pin: "/armature/selftest/pinned-python",
+          sawInterpreter: false,
+          reason: "not-a-python",
+        },
+        { pin: "/armature/selftest/pinned-python", sawInterpreter: true, reason: null },
+        { pin: undefined, sawInterpreter: false, reason: "not-found" },
+        { pin: undefined, sawInterpreter: true, reason: null },
+      ];
+      for (const shape of pairs) {
+        if (shape.pin === undefined) delete process.env.ARMATURE_PYTHON;
+        else process.env.ARMATURE_PYTHON = shape.pin;
+        captured.length = 0;
+        fail({
+          exe: null,
+          pre: null,
+          sawInterpreter: shape.sawInterpreter,
+          reason: shape.reason,
+        });
+        const body = captured.join("");
+        if (!body.includes("--node-selftest")) {
+          throw new Error("fail() no longer names --node-selftest in the refusal");
+        }
+        if (!shape.sawInterpreter && !/python\.org\/downloads/i.test(body)) {
+          throw new Error("no-interpreter refusal does not name a Python install");
+        }
+        if (shape.sawInterpreter && /python\.org\/downloads/i.test(body)) {
+          throw new Error("interpreter-found refusal still points at python.org");
+        }
+        if (
+          shape.reason === "not-a-python" &&
+          !body.includes("it ran, and it is not a Python interpreter")
+        ) {
+          throw new Error(
+            "not-a-python pin no longer gets the ran-but-not-Python sentence"
+          );
+        }
+      }
+    } catch (e) {
+      process.stderr.write = realWrite;
+      process.exit = realExit;
+      process.stderr.write(`selftest: ${e.message}\n`);
+      process.exit(1);
+    } finally {
+      process.stderr.write = realWrite;
+      process.exit = realExit;
+      process.env.ARMATURE_PYTHON = process.execPath;
     }
   } finally {
     if (pinSaved === undefined) delete process.env.ARMATURE_PYTHON;

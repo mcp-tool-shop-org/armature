@@ -203,6 +203,9 @@ jobs:
   site-build:
     if: github.event_name != 'push' || github.ref != 'refs/heads/main'
     runs-on: ubuntu-latest
+    # npm audit + ci + site build: minutes on a warm runner; 15 bounds a hung install.
+    # Platform default without this key is 360 (docs.github.com, fetched 2026-09-06).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -240,6 +243,9 @@ jobs:
   # Blender-side coverage is the rig's job, not CI's.
   python-tests:
     runs-on: ubuntu-latest
+    # Suite twice (plain + -O) plus clean-room build/install: tens of minutes; 45 bounds
+    # a hung pip. Platform default without this key is 360 (fetched 2026-09-06).
+    timeout-minutes: 45
     strategy:
       # The two ENDS of the interval pyproject promises: 3.11 is `requires-python`'s floor
       # and 3.13 is the highest classifier. Until v0.3.2 there was no matrix at all and the
@@ -328,6 +334,9 @@ jobs:
   # python-tests x2, launcher x2.
   launcher:
     runs-on: ubuntu-latest
+    # Node self-test only; minutes. Platform default without this key is 360
+    # (fetched 2026-09-06).
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:

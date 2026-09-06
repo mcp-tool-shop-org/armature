@@ -59,6 +59,9 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    # npm audit + ci + site build: minutes; 15 bounds a hung install. Platform default
+    # without this key is 360 (docs.github.com, fetched 2026-09-06).
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -112,6 +115,9 @@ jobs:
     if: github.event.repository.private == false && github.ref == 'refs/heads/main'
     needs: build
     runs-on: ubuntu-latest
+    # One deploy-pages action. Platform default without this key is 360
+    # (fetched 2026-09-06).
+    timeout-minutes: 10
     # A job-level block REPLACES the workflow-level grant, so this job has no `contents`
     # scope at all — deliberately: its one step performs the deployment and never clones.
     # (release.yml's `npm` job is the same rule in the other direction: it re-declares
