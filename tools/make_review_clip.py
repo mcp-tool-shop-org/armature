@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """make_review_clip — the motion review, and the stills where structure is hardest.
 
-    python tools/make_review_clip.py --frames=<lossless dir> --out=<dir>
+    <venv-python> tools/make_review_clip.py --frames=<lossless dir> --out=<dir>
                                      [--detection=<detection_raw.json>] [--fps=8]
 
 *Video is judged in motion AND as frames.* A clip that reads well at speed can carry a
@@ -29,6 +29,7 @@ precisely because that is where a video model's structure fails first.
 
 Nothing here resamples the source: the clip is written at the frames' own resolution and
 the stills are cut at 1:1. Sheets locate; full size decides.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -45,6 +46,9 @@ from measure_lift import as_pairing_rows as ML_as_pairing_rows  # noqa: E402
 from measure_lift import gate_listing_pairing  # noqa: E402
 from sheet_compose import frames_by_number, require_frames  # noqa: E402
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class ReviewClipError(ArmatureError):
     """This review pass cannot be written where it was pointed.
@@ -195,7 +199,8 @@ def clip_name(fps, source_fps, run=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the motion review and the stills where structure is hardest — a clip "
-                    "is judged in motion AND as frames")
+                    "is judged in motion AND as frames",
+        epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True,
                     help="the lossless frame directory to review")
     ap.add_argument("--out", required=True,

@@ -14,6 +14,7 @@ rather than supplied, because supplying them is how a decode silently reshapes.
 
 Compensator (NAMED_COMPENSATORS): writes PNGs + JSON under `outputs/`. Compensator: delete
 the directory; owner: the executor session. The clip is read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -31,6 +32,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from armature_core.errors import ArmatureError  # noqa: E402
 from encode_control import (  # noqa: E402
     FFMPEG, decode, gate_ffmpeg_binary, run_ffmpeg, timeout_for_file,
+    runtime_provenance,
 )
 
 TOOL_VERSION = "E13.1"
@@ -40,6 +42,9 @@ TOOL_VERSION = "E13.1"
 DIM = re.compile(r"[,\s](\d{2,5})x(\d{2,5})[,\s]")
 FPS = re.compile(r"([\d.]+)\s+fps")
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class ClipReadError(ArmatureError):
     """The clip's stream could not be read, so nothing downstream may quote its numbers.
@@ -140,7 +145,8 @@ def probe(path, out_dir=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="turn a generated clip into lossless per-frame PNGs and record the "
-                    "stream facts every later measurement is read against")
+                    "stream facts every later measurement is read against",
+        epilog=HALT_EPILOG)
     ap.add_argument("--clip", required=True,
                     help="the video a run returned; its dimensions are READ off the "
                          "stream, never supplied, because supplying them is how a decode "
@@ -196,6 +202,7 @@ def main(argv=None):
         "frame_sha256": hashes, "ffmpeg": FFMPEG,
     }
     with open(os.path.join(out, "frames.json"), "w", encoding="utf-8") as fh:
+        record.update(runtime_provenance())
         json.dump(record, fh, indent=1)
 
     print(f"stream   {stream['line']}")

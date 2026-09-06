@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """encode_control — build the control video and prove the bridge is lossless.
 
-    python tools/encode_control.py --frames=<dir> --out=<video> --codec=<name>
+    <venv-python> tools/encode_control.py --frames=<dir> --out=<video> --codec=<name>
                                    [--invert] [--survey]
 
 E02 Stage 0. There is no folder loader on Comfy Cloud, so a control *sequence* reaches
@@ -29,6 +29,7 @@ frame of the control), an alpha channel with no named plate (the Director's 2026
 the RGB composite a route submits is a deliberate, recorded choice), and a non-uint8 dtype
 (the old cast wrapped 16-bit levels mod 256). The receipt records the modes, the dtype, and
 the alpha disposition, because the frame hash it carries is of the already-coerced array.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -44,6 +45,49 @@ import numpy as np
 from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+HALT_EPILOG = (
+    'Halt contract: exit 0 on success, 2 on a deliberate refusal '
+    '(one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. '
+    'See README §"Reading a halt".'
+)
+
+
+def runtime_provenance(libraries=None):
+    """Interpreter + imaging-library versions for a written record (F-2ad4f715).
+
+    Defined ABOVE the `composite_reference` import so writers that import this helper
+    from encode_control (and that encode_control itself imports) do not circular-import.
+    Pass ``libraries`` as ``{short_name: module}`` for what THIS tool imported; when
+    omitted, versions are taken only for numpy / Pillow / cv2 / matplotlib already
+    present in ``sys.modules`` — never imported just to ask.
+    """
+    libs = {}
+    if libraries is None:
+        for label, modname in (
+            ("numpy", "numpy"),
+            ("Pillow", "PIL"),
+            ("cv2", "cv2"),
+            ("matplotlib", "matplotlib"),
+        ):
+            mod = sys.modules.get(modname)
+            if mod is not None:
+                libs[label] = getattr(mod, "__version__", "UNKNOWN")
+    else:
+        for label, mod in libraries.items():
+            if mod is None:
+                continue
+            ver = getattr(mod, "__version__", None)
+            if ver is None and label == "Pillow":
+                pil = sys.modules.get("PIL")
+                ver = getattr(pil, "__version__", "UNKNOWN") if pil else "UNKNOWN"
+            libs[label] = "UNKNOWN" if ver is None else ver
+    return {
+        "python_executable": sys.executable,
+        "python_version": sys.version,
+        "libraries": libs,
+    }
+
 
 from armature_core import gates, shotspec  # noqa: E402
 from composite_reference import compose_over_named_plate, parse_plate  # noqa: E402
@@ -582,6 +626,9 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
         "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        # F-2ad4f715: the interpreter and imaging libs beside the ffmpeg key — a receipt
+        # that names the encoder but not the Python cannot attribute a re-measured gap.
+        **runtime_provenance({"numpy": np, "Pillow": Image}),
         "video": out_path,
         "video_sha256": video_sha,
         "source_frames_sha256": hashlib.sha256(
@@ -597,7 +644,8 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="build the control video a paid run uploads, and prove the encoder "
-                    "round trip is lossless (Gate R)")
+                    "round trip is lossless (Gate R)",
+        epilog=HALT_EPILOG)
     ap.add_argument("--frames", help="the channel directory of NNNNN.png control frames "
                                      "to encode, in index order")
     ap.add_argument("--out", help="the video file to write; its receipt is written beside "
@@ -651,7 +699,9 @@ def main(argv=None):
         if args.survey_out:
             os.makedirs(os.path.dirname(os.path.abspath(args.survey_out)), exist_ok=True)
             with open(args.survey_out, "w", encoding="utf-8") as fh:
-                json.dump({"ffmpeg": FFMPEG, "survey": rows}, fh, indent=2)
+                json.dump({"ffmpeg": FFMPEG, "survey": rows,
+                           **runtime_provenance({"numpy": np, "Pillow": Image})},
+                          fh, indent=2)
         return 0
 
     if not args.frames or not args.out:

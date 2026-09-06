@@ -42,6 +42,7 @@ Compensator (NAMED_COMPENSATORS): the only world-touching act is writing JSON un
 opened read-only.
 
 Prints `RESAMPLE_MOTION_OK`.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -53,6 +54,8 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from encode_control import runtime_provenance  # noqa: E402
 
 from armature_core import lift_solve, resample  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
@@ -74,6 +77,9 @@ DIAGNOSTIC_BONES = ("hips", "chest", "head",
 MIN_DST_FRAMES = 2
 
 
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
+
 class ResampleArgError(ArmatureError):
     """A flag this tool was given is not a value it can resample with.
 
@@ -89,7 +95,8 @@ class ResampleArgError(ArmatureError):
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="the same dance, more in-betweens: resample a motion record to a new "
-                    "sample count without changing the performance's duration")
+                    "sample count without changing the performance's duration",
+        epilog=HALT_EPILOG)
     ap.add_argument("--motion", required=True,
                     help="a motion record: {frames: [{frame, local: {bone: 3x3}, root}]}")
     ap.add_argument("--frames", type=int, required=True,
@@ -263,6 +270,7 @@ def main(argv=None):
     #      refused. Nothing irreversible is at stake; the ordering rule is.
     os.makedirs(out_dir, exist_ok=True)      # scripts create their own output directories
     with open(path, "w", encoding="utf-8") as fh:
+        payload.update(runtime_provenance())
         json.dump(payload, fh, indent=2)
 
     med = {b: {"src": payload["diagnostics"]["step_angles_src_deg"][b]["median_deg"],

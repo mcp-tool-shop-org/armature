@@ -51,6 +51,7 @@ The gates — all raise, in-process, before the JSON exists
 Compensator (NAMED_COMPENSATORS): the only world-touching act is writing a JSON under
 `outputs/`. Compensator: delete the directory; owner: the executor session. The motion
 record and the manifest are opened read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -61,6 +62,8 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from encode_control import runtime_provenance  # noqa: E402
 
 import numpy as np  # noqa: E402
 
@@ -91,6 +94,9 @@ PINNED_CAMERA_EXPECT = {
 GROUND_TRUTH_CONFIDENCE = 1.0
 
 
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
+
 class ProjectGate(GateFailure):
     gate = "PROJECT"
 
@@ -98,7 +104,8 @@ class ProjectGate(GateFailure):
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="project the rig's AAPose-20 keypoints into pixel space, per frame, "
-                    "for the control sequence a run is driven by")
+                    "for the control sequence a run is driven by",
+        epilog=HALT_EPILOG)
     ap.add_argument("--motion", required=True,
                     help="a motion record: {frames: [{local: {bone: 3x3}, root: [x,y,z]}]}")
     ap.add_argument("--manifest", required=True, help="the rig manifest (rest landmarks)")
@@ -465,6 +472,7 @@ def main(argv=None):
     os.makedirs(out, exist_ok=True)
     path = os.path.join(out, "keypoints.json")
     with open(path, "w", encoding="utf-8") as fh:
+        payload.update(runtime_provenance())
         json.dump(payload, fh, indent=2)
 
     print("PROJECT_POSE_OK " + json.dumps({

@@ -11,6 +11,7 @@ is as wide as its longest LABEL as well as its widest row (the stats line is the
 point of this sheet and was the first thing cropped), and the typeface is resolved through
 an explicit search that raises when nothing is found rather than through two absolute
 `C:\\Windows\\Fonts` literals that a POSIX runner turns into relative strings.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 import argparse
 import json
@@ -30,6 +31,9 @@ from armature_core.errors import ArmatureError  # noqa: E402
 PANEL_SUFFIXES = ("full_a", "full_b", "head_a", "head_b")
 STATS_KEYS = ("armatures", "triangles", "mesh_objects", "materials", "empties", "images")
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class CastSheetError(ArmatureError):
     """This cast survey cannot be produced as asked. One typed refusal for this tool.
@@ -69,7 +73,8 @@ SUB = (90, 90, 100)
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the cast survey the Director compares subjects on: one row per "
-                    "subject, four preview_glb panels and a stats label")
+                    "subject, four preview_glb panels and a stats label",
+        epilog=HALT_EPILOG)
     ap.add_argument("--dir", required=True,
                     help="the directory holding each subject's preview_glb panels and "
                          "<name>_stats.json sidecar")

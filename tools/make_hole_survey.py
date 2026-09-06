@@ -68,6 +68,7 @@ input in two independent ways, both measured before the flag was written:
 
 With the flag, the old side is treated exactly as the new one: composited over the same
 `OLD_VOID_RGB` and masked by its own alpha. Same instrument, both sides.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -84,6 +85,9 @@ from armature_core.errors import ArmatureError  # noqa: E402
 
 TOOL_VERSION = "S06.1"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class HoleSurveyError(ArmatureError):
     """The survey cannot be run over what it was pointed at. F-c66ad0c4, wave 25.
@@ -230,7 +234,8 @@ def _fmt(rec, field):
 def main():
     ap = argparse.ArgumentParser(
         description="the old turnaround beside the new one, per view, at full size — "
-                    "sheets locate, full size decides")
+                    "sheets locate, full size decides",
+        epilog=HALT_EPILOG)
     ap.add_argument("--new", required=True,
                     help="the NEW side's view directory")
     ap.add_argument("--old", required=True,

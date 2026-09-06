@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """make_lift_sheet — source | what the detector saw | the rig performing the lift.
 
-    python tools/make_lift_sheet.py --source=<render dir> --detection=<detection_raw.json>
+    <venv-python> tools/make_lift_sheet.py --source=<render dir> --detection=<detection_raw.json>
                                     --lifted=<render dir> --out=<sheet.png>
                                     [--frames=0,16,32,48,64]
 
@@ -47,6 +47,7 @@ So `gate_listing_pairing` (the same gate, one implementation) runs before a tile
 loaded rather than the index that was asked for.
 
 This tool computes nothing and judges nothing.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -78,6 +79,9 @@ EDGES = ((11, 12), (11, 23), (12, 24), (23, 24),
          (23, 25), (25, 27), (27, 31), (24, 26), (26, 28), (28, 32),
          (0, 11), (0, 12), (7, 0), (8, 0))
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 def _rgb(path, plate=SHEET_PLATE):
     """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""
@@ -172,7 +176,8 @@ def main(argv=None):
     """
     ap = argparse.ArgumentParser(
         description="source | what the detector saw | the rig performing the lift — the "
-                    "three columns that say whether a lift is the same performance")
+                    "three columns that say whether a lift is the same performance",
+        epilog=HALT_EPILOG)
     ap.add_argument("--source", required=True,
                     help="the source frame directory the lift was taken FROM")
     ap.add_argument("--detection", required=True,

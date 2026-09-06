@@ -26,6 +26,7 @@ the arm, the arc range, the key count and the fps. `sheet_compose` computes exac
 records why ("a cropped sheet still saves, still opens, and looks fine"); the fix was written
 there and never carried here. The width computation and the typeface resolution are now
 imported from that module rather than re-derived, so there is one of each.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import json

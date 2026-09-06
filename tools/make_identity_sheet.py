@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """make_identity_sheet — put the candidate reference plates beside the mesh.
 
-    python tools/make_identity_sheet.py --run=<control run> --plates=<a.png,b.png,...>
+    <venv-python> tools/make_identity_sheet.py --run=<control run> --plates=<a.png,b.png,...>
                                         --out=<sheet.png> [--frames=0,8,16,24]
 
 E02 needs a `reference_image`, and four plates sit beside the subject GLB with matching
@@ -19,6 +19,7 @@ mask reads as a black cut-out. The point is to show what shape the geometry actu
 Sheets locate; full size decides. Tiles are downscaled to a common height so the rows
 line up, and the scale factor is printed on every tile so nobody mistakes this panel for
 the artifact.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -41,6 +42,9 @@ BG = (18, 18, 20)
 FG = (235, 235, 235)
 DIM = (140, 140, 150)
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class IdentitySheetError(SheetPopulationError):
     """The sheet cannot show what it was asked to show, and would not have said so.
@@ -183,7 +187,8 @@ def build(run_dir, plates, frames, tile_h=360, channel="normal",
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="put the candidate reference plates beside the mesh, so the identity "
-                    "question is answered by the eye against the thing it conditions")
+                    "question is answered by the eye against the thing it conditions",
+        epilog=HALT_EPILOG)
     ap.add_argument("--run", required=True,
                     help="the control run directory whose channel frames show the mesh")
     ap.add_argument("--plates", required=True,

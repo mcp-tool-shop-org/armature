@@ -41,6 +41,7 @@ Compensator (NAMED_COMPENSATORS): writes one clip and one sidecar under `outputs
 Compensator: delete them; owner: the executor session. The frames are read-only.
 
 Prints `MAKE_AB_CLIP_OK`.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -58,6 +59,9 @@ from armature_core.parts import require_finite  # noqa: E402
 
 TOOL_VERSION = "E10.1"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class ABClipError(ArmatureError):
     """The A/B composite cannot be built as asked.
@@ -264,7 +268,8 @@ def banner(im, text, height=22):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="two clips side by side in one file, each played at its OWN true "
-                    "tempo, for the Director to judge in motion")
+                    "tempo, for the Director to judge in motion",
+        epilog=HALT_EPILOG)
     ap.add_argument("--a", required=True, help="the left clip's frame directory")
     ap.add_argument("--b", required=True, help="the right clip's frame directory")
     ap.add_argument("--a-fps", type=float, required=True,

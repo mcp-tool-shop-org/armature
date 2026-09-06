@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """compare_runs — G3's instrument. Compares two run directories **pixel by pixel**.
 
-    python tools/compare_runs.py --a=<run_a> --b=<run_b> --out=<report.json>
+    <venv-python> tools/compare_runs.py --a=<run_a> --b=<run_b> --out=<report.json>
 
 A PNG byte-hash mismatch is **not** evidence a render changed — facet false-halted on
 that twice. So this compares decoded pixels and reports per-channel max and mean
@@ -58,6 +58,7 @@ POLICY — these disagreements are refused, never reported — which is what is 
 (H, W, C) array, so a single differing RGB pixel read 3. The pixel count and the sample
 count are now reported as separate, separately named quantities with the channel count
 beside them.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -71,9 +72,14 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from encode_control import runtime_provenance  # noqa: E402
+
 from armature_core.errors import ArmatureError  # noqa: E402
 from sheet_compose import frames_by_number  # noqa: E402
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class CompareError(ArmatureError):
     """The comparison could not be made — not "the runs differ", but "nothing was opened"."""
@@ -296,7 +302,8 @@ def main(argv=None):
     leaving a reader to infer a report exists.
     """
     ap = argparse.ArgumentParser(
-        description="compare two run directories pixel by pixel (G3's instrument)")
+        description="compare two run directories pixel by pixel (G3's instrument)",
+        epilog=HALT_EPILOG)
     ap.add_argument("--a", required=True, help="the first run directory")
     ap.add_argument("--b", required=True, help="the second run directory")
     ap.add_argument("--out", default=None,
@@ -309,6 +316,7 @@ def main(argv=None):
     if args.out:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
         with open(args.out, "w", encoding="utf-8") as fh:
+            report.update(runtime_provenance())
             json.dump(report, fh, indent=2)
         written = os.path.abspath(args.out)
     # The success sentinel rides AFTER the report is on disk, and names it: a verdict line

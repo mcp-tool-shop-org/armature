@@ -19,6 +19,7 @@ picture, not evidence.
 
 Compensator (NAMED_COMPENSATORS): writes one PNG and one JSON under `outputs/`.
 Compensator: delete them; owner: the executor session. Inputs are read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -29,6 +30,9 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class ZoomSheetError(ArmatureError):
     """The zoom sheet cannot be cut as asked.
@@ -62,7 +66,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(
         description="native-resolution crops where structure is hardest, with the boxes "
                     "they were cut from — a clip that reads well at speed can carry a "
-                    "melted hand in every frame")
+                    "melted hand in every frame",
+        epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True, help="directory of NNNNN.png frames")
     ap.add_argument("--keypoints", required=True,
                     help="the keypoints record that says where --site is, per frame")

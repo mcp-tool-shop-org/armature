@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """lift_clip — a generated clip through the detector and the solver. No ground truth.
 
-    python tools/lift_clip.py --frames=<dir> --manifest=<rig_manifest.json>
+    <venv-python> tools/lift_clip.py --frames=<dir> --manifest=<rig_manifest.json>
                               --model=<pose.task> --out=<dir>
 
 E09 Stage B2's measurement. B1 had an authored performance to measure against; a generated
@@ -31,6 +31,7 @@ Two things B1 measured that this stage cannot, and says so instead of pretending
   quantity instead: the ratio of summed rest segment lengths to summed observed segment
   lengths. Bone lengths do not change with pose, so this is a size correction that does not
   need to know what the dancer was doing.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -41,6 +42,8 @@ import sys
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+from encode_control import runtime_provenance  # noqa: E402
 
 import numpy as np
 
@@ -70,6 +73,9 @@ FRONTAL_BASIS = ((1.0, 0.0, 0.0),
                  (0.0, -1.0, 0.0))
 
 
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
+
 class DetectionGate(GateFailure):
     """The detector did not return a pose on every frame."""
 
@@ -79,7 +85,8 @@ class DetectionGate(GateFailure):
 def parse_args():
     ap = argparse.ArgumentParser(
         description="run a generated clip's frames through the detector and the solver. "
-                    "There is no ground truth here: every number is a diagnostic")
+                    "There is no ground truth here: every number is a diagnostic",
+        epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True,
                     help="directory of NNNNN.png frames from the generated clip")
     ap.add_argument("--manifest", required=True,
@@ -406,6 +413,7 @@ def main():
     #      reads as an attempt that produced nothing rather than one that was refused.
     os.makedirs(out, exist_ok=True)
     with open(os.path.join(out, "measurement.json"), "w", encoding="utf-8") as fh:
+        record.update(runtime_provenance())
         json.dump(record, fh, indent=2)
     with open(os.path.join(out, "detection_raw.json"), "w", encoding="utf-8") as fh:
         json.dump({"frames": names, "rows": rows}, fh)

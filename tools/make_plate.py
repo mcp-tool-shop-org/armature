@@ -37,6 +37,7 @@ Prints `MAKE_PLATE_OK`.
 
 Compensator (NAMED_COMPENSATORS): the only world-touching act is writing a PNG and a JSON
 under `outputs/`. Compensator: delete them; owner: the executor session.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -58,6 +59,9 @@ from composite_reference import (  # noqa: E402
 TOOL_VERSION = "E12.2"
 
 
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
+
 class PlateError(ArmatureError):
     """The plate cannot be derived honestly — the authored-RGBA law, chiefly."""
 
@@ -65,7 +69,8 @@ class PlateError(ArmatureError):
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="turn a picked still into the plate that stands behind the performer, "
-                    "with the reason it was picked in its provenance")
+                    "with the reason it was picked in its provenance",
+        epilog=HALT_EPILOG)
     ap.add_argument("--src", default=None,
                     help="a single image to use as the plate (argparse eats leading minus "
                          "signs: pass flags as --flag=value)")

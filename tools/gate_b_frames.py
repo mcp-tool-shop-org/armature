@@ -33,6 +33,7 @@ Compensator (NAMED_COMPENSATORS): writes one JSON under `outputs/`. Compensator:
 file; owner: the executor session. Every frame directory is opened read-only.
 
 Prints `GATE_B_OK`, or raises.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -51,6 +52,9 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "E10.1"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 def frame_paths(directory):
     """The numbered frames of a directory, in index order. Order IS the signal here.
@@ -100,7 +104,8 @@ def mean_abs_frame_deltas(paths):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="Gate B: did the driving signal reach the model exactly as it was "
-                    "drawn? Compares what was sent against what the server returned")
+                    "drawn? Compares what was sent against what the server returned",
+        epilog=HALT_EPILOG)
     ap.add_argument("--sticks", required=True, help="the local stick frames as drawn")
     ap.add_argument("--batchprobe", required=True,
                     help="the frames the server returned off the pose LoadImage")

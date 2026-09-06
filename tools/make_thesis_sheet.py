@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """make_thesis_sheet — control vs controlled-output vs no-control-output, one panel.
 
-    python tools/make_thesis_sheet.py --control=<dir> --arms=A1a:<dir>,A2:<dir>
+    <venv-python> tools/make_thesis_sheet.py --control=<dir> --arms=A1a:<dir>,A2:<dir>
                                       --reference=<plate.png> --out=<sheet.png>
 
 The panel E02 exists to produce. The A1a sheet on its own shows a turning armored figure
@@ -21,6 +21,7 @@ arms had been generated and paid for.
 
 Computes nothing, decides nothing, quotes no metric. Whether the figure is in the same
 place at the same time is P3, and P3 is judged by eye on this panel at full size.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -53,6 +54,9 @@ FG = (235, 235, 235)
 DIM = (145, 145, 155)
 
 
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
+
 def _rgb(p, plate=SHEET_PLATE):
     """One tile, composited over the NAMED plate. See `sheet_compose.SHEET_PLATE`."""
     return load_rgb_over_plate(p, plate)[0]
@@ -61,7 +65,8 @@ def _rgb(p, plate=SHEET_PLATE):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="control vs controlled-output vs no-control-output in one panel — the "
-                    "sheet the whole thesis is read off")
+                    "sheet the whole thesis is read off",
+        epilog=HALT_EPILOG)
     ap.add_argument("--control", required=True,
                     help="the control channel directory this run was driven by")
     ap.add_argument("--arms", required=True, help="LABEL:dir,LABEL:dir")

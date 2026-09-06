@@ -35,6 +35,7 @@ which raises naming the path, as `make_overlay_sheet`, `make_zoom_sheet` and `ma
 already do.
 
 Compensator: writes one PNG under `outputs/`; delete it. Inputs are read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -54,6 +55,9 @@ TILE_W = 416
 #: for a measurement — a plausible default here is the defect this file was written around.
 MISSING = "NOT RECORDED"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class SheetInputError(ArmatureError):
     """A tile could not be read. Names the path, which an AttributeError did not."""
@@ -79,12 +83,25 @@ def _imread(path, cv2, what):
     return img
 
 
-def provenance_lines(rec, prompt_id=None, seeds_file=None, gates=None):
+def _sha_text(*candidates):
+    """First non-empty candidate, truncated; else NOT RECORDED (F-6f968906)."""
+    for c in candidates:
+        if c in (None, "", MISSING):
+            continue
+        return str(c)[:32]
+    return MISSING
+
+
+def provenance_lines(rec, prompt_id=None, seeds_file=None, gates=None,
+                     output_sha=None, control_sha=None, reference_sha=None):
     """Every line of the provenance panel, derived from the record. No literals.
 
     The two values that are not in the payload record are the `prompt_id` (which does not
     exist until the run is submitted) and the `seeds_file` the seed was drawn from; both
     are passed in and print `NOT RECORDED` when they are not.
+
+    F-6f968906: also prints `output sha` and per-input `control sha` / `reference sha`,
+    matching `make_e13_sheet` — from the record when present, else `NOT RECORDED`.
     """
     res = _get(rec, "resolution")
     wh = f"{res[0]}x{res[1]}" if isinstance(res, (list, tuple)) and len(res) == 2 else MISSING
@@ -97,6 +114,8 @@ def provenance_lines(rec, prompt_id=None, seeds_file=None, gates=None):
     meter = _get(rec, "meters", "estimate_credits")
     if meter is MISSING:
         meter = _get(rec, "estimate_credits")
+    pose = rec.get("pose_video") if isinstance(rec.get("pose_video"), dict) else {}
+    ref = rec.get("reference_image") if isinstance(rec.get("reference_image"), dict) else {}
 
     return [
         f"{_get(rec, 'experiment')} PROBE - provenance",
@@ -118,11 +137,14 @@ def provenance_lines(rec, prompt_id=None, seeds_file=None, gates=None):
         f"Gate ROUTE          {_get(rec, 'gate_ROUTE_built', 'verdict')}",
         f"  seed clause       {_get(rec, 'gate_ROUTE_built', 'seed_clause_verdict')}",
         f"payload sha256      {str(sha)[:48] if sha else MISSING}",
+        f"output sha          {_sha_text(output_sha, rec.get('output_sha256'), rec.get('clip_sha256'))}",
         f"control             {_get(rec, 'pose_video', 'declared_frames')} frames, "
         f"convention {_get(rec, 'pose_video', 'convention')}",
         f"                    source {_get(rec, 'pose_video', 'source')}",
+        f"control sha         {_sha_text(control_sha, pose.get('video_sha256'), pose.get('source_frames_sha256'), rec.get('control_sha256'))}",
         f"reference           {_get(rec, 'reference_image', 'server_name')}, "
         f"fit {_get(rec, 'reference_image', 'fit')}",
+        f"reference sha       {_sha_text(reference_sha, ref.get('sha256'), rec.get('reference_sha256'))}",
         f"unconnected         {unconnected}",
         f"gates               {gates or MISSING}",
         f"meters              estimate_credits {meter}",
@@ -132,7 +154,8 @@ def provenance_lines(rec, prompt_id=None, seeds_file=None, gates=None):
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="E08's Gate 0 sheet: previz | control | output | reference | "
-                    "provenance, the panel no metric may be quoted before")
+                    "provenance, the panel no metric may be quoted before",
+        epilog=HALT_EPILOG)
     ap.add_argument("--sticks", default="outputs/E08/sticks",
                     help="the control column: the drawn pose-stick frames this run was "
                          "driven by")

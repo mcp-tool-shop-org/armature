@@ -45,7 +45,8 @@ hole measured on 2026-08-18, the day six artifact rows were found dangling:
     state of a record whose db commits at session boundaries rather than at
     every fold; the three refusals exit 4.
 
-    python tools/armature_index.py build|verify|q|claims|health
+    <venv-python> tools/armature_index.py build|verify|q|claims|health
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 import os
 import sys
@@ -76,6 +77,9 @@ OWNED_VERBS = ("build", "health")
 DELEGATED_VERBS = ("verify", "q", "claims")
 VERBS = ("build", "verify", "q", "claims", "health")
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 def repo():
     if REPO is None:
@@ -232,7 +236,8 @@ def _dispatch(argv):
         return _cli.main(BINDING, argv)
     ap = _cli.ContractParser(
         prog=_cli.prog_name(),
-        description="the derived SQLite+FTS5 index over the armature record")
+        description="the derived SQLite+FTS5 index over the armature record",
+        epilog=HALT_EPILOG)
     ap.add_argument("verb", choices=OWNED_VERBS,
                     help="what to do: build the index from the record, or report its health")
     ap.add_argument("--db", default=None,

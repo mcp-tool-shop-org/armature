@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """invert_frames — write the near-dark polarity of a rendered control channel.
 
-    python tools/invert_frames.py --frames=<src dir> --out=<dst dir> [--expect=33]
+    <venv-python> tools/invert_frames.py --frames=<src dir> --out=<dst dir> [--expect=33]
 
 E02's A1b is **one operation on A1a**: full-image `255 - x` on the same geometry, the
 same normalisation and the same frames. The video bridge could do this in memory
@@ -21,6 +21,7 @@ fail is inverting the wrong kind of array: a 16-bit depth PNG (`255 - 40000` is 
 or an image carrying alpha (inverting opacity is not a polarity flip), or a palette image
 (inverting an index is not inverting a value). Those are the unbounded directions, and
 they are what `_read_u8_gray` raises on.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -34,9 +35,14 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from encode_control import runtime_provenance  # noqa: E402
+
 from armature_core import pngio, shotspec  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class InvertError(ArmatureError):
     """The source frames are not the kind of image this transform is defined for.
@@ -271,7 +277,8 @@ def invert_dir(src, dst, expect=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="write the near-dark polarity of a rendered control channel, with a "
-                    "receipt naming every frame it inverted")
+                    "receipt naming every frame it inverted",
+        epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True,
                     help="the source channel directory of NNNNN.png frames, read only")
     ap.add_argument("--out", required=True,
@@ -284,6 +291,7 @@ def main(argv=None):
 
     receipt = invert_dir(a.frames, a.out, expect=a.expect)
     with open(a.out.rstrip("/\\") + ".receipt.json", "w", encoding="utf-8") as fh:
+        receipt.update(runtime_provenance())
         json.dump(receipt, fh, indent=2)
     print("INVERT_FRAMES " + json.dumps({
         "out": receipt["dst"],

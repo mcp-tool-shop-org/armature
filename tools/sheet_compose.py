@@ -42,6 +42,7 @@ Linux boxes, but its licence document could not be fetched from the seat that wr
 and this repo treats a licence it cannot retrieve as NO. It is named in the refusal instead
 of quietly substituted. No font binary is committed here — that would need a licence-map row
 of its own, and big binaries stay out of git.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import json

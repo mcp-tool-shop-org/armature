@@ -49,6 +49,7 @@ source's channel count, alpha extrema and composite choice ride the provenance b
 
 Compensator (NAMED_COMPENSATORS): writes a PNG and a JSON under `outputs/`. Compensator:
 delete them; owner: the executor session. The source is opened read-only.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -61,12 +62,17 @@ import numpy as np
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from encode_control import runtime_provenance  # noqa: E402
+
 from armature_core.errors import ArmatureError  # noqa: E402
 from composite_reference import (  # noqa: E402
     compose_over_named_plate, parse_plate)
 
 TOOL_VERSION = "E08.2"
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class FitReferenceError(ArmatureError):
     """The fit cannot be made honestly — the alpha law, or a degenerate source."""
@@ -79,7 +85,8 @@ BORDER_FRAC = 0.04
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="letterbox a reference image into a generator's frame without losing "
-                    "the figure, and record the derivation")
+                    "the figure, and record the derivation",
+        epilog=HALT_EPILOG)
     ap.add_argument("--src", required=True,
                     help="the reference master to fit; read RGBA, never written to")
     ap.add_argument("--out", required=True,
@@ -283,6 +290,7 @@ def main(argv=None):
     }
     rpath = os.path.join(out_dir, f"{stem}_fit_provenance.json")
     with open(rpath, "w", encoding="utf-8") as fh:
+        rec.update(runtime_provenance())
         json.dump(rec, fh, indent=2)
 
     print("FIT_REFERENCE_OK " + json.dumps({

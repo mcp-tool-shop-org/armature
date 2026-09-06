@@ -1,7 +1,7 @@
 #!/usr/bin/env python
 """measure_arm — where is the arm, frame by frame, in image space.
 
-    python tools/measure_arm.py --run=<control run dir> --joints=<subject.joints.json>
+    <venv-python> tools/measure_arm.py --run=<control run dir> --joints=<subject.joints.json>
                                 [--frames=<image dir>] [--label=B1] [--out=<json>]
 
 Two independent things, deliberately kept apart:
@@ -28,6 +28,7 @@ and **an angle whose segmentation is implausible is reported as failed, not as a
 
 The Director's eye on the sheet is the judge. This exists so the report can put a number
 beside the eye, not instead of it.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """
 
 import argparse
@@ -41,11 +42,16 @@ from PIL import Image
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+from encode_control import runtime_provenance  # noqa: E402
+
 from armature_core.errors import ArmatureError  # noqa: E402
 from armature_core.framing import half_fovs  # noqa: E402
 from armature_core.parts import require_finite  # noqa: E402
 from measure_lift import as_pairing_rows, gate_pairing  # noqa: E402
 
+
+
+HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
 
 class MeasureError(ArmatureError):
     """The measurement could not be made as specified.
@@ -471,7 +477,8 @@ def run(run_dir, joints_path, frames_dir=None, label=None, tol=12):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="where the arm is, frame by frame, in image space — a diagnostic that "
-                    "gates nothing")
+                    "gates nothing",
+        epilog=HALT_EPILOG)
     ap.add_argument("--run", required=True, help="control run dir (for camera + manifest)")
     ap.add_argument("--joints", required=True, help="the subject's .joints.json sidecar")
     ap.add_argument("--frames", default=None, help="image dir to MEASURE (control or output)")
@@ -490,6 +497,7 @@ def main(argv=None):
     if a.out:
         os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
         with open(a.out, "w", encoding="utf-8") as fh:
+            res.update(runtime_provenance())
             json.dump(res, fh, indent=2)
 
     print("MEASURE_ARM " + json.dumps({
