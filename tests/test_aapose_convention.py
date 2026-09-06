@@ -501,7 +501,40 @@ ENVIRONMENT_VERIFIED_2026_09_05 = {
     "numpy": "2.5.2",
     "cv2": "5.0.0",
     "cv2 distribution": "opencv-contrib-python 5.0.0.93",
+    "where": "this rig, the repo venv",
 }
+
+#: WAVE-26 CI FIX-UP (coordinator, 2026-09-05). The first CI run over the record above read it on ubuntu-latest —
+#: Python 3.11.16 with numpy 2.4.6, and Python 3.13.15 with numpy 2.5.2, both with opencv-python-headless
+#: 5.0.0.93 (the `ci.yml` pin) — and ALL FOUR HASHES PASSED on both; only the record test was red, because it
+#: held the observed triple to this rig's exact versions. So the record is a TABLE of every environment the
+#: hashes were verified in, and the test holds the observed environment to it at the MINOR boundary
+#: (major.minor of python / numpy / cv2): the boundaries the prose above says the rasterisation crossed are
+#: minor ones, and a runner's monthly patch release is not one. The full observed versions are printed on
+#: every run, so a patch drift is on the record without a red. A minor boundary nobody has verified — numpy
+#: 2.6, cv2 5.1, CPython 3.15 — goes red here, naming the row to add once the hashes pass there.
+ENVIRONMENTS_VERIFIED_2026_09_05 = (
+    ENVIRONMENT_VERIFIED_2026_09_05,
+    {"python": "3.11.16", "numpy": "2.4.6", "cv2": "5.0.0",
+     "cv2 distribution": "opencv-python-headless 5.0.0.93",
+     "where": "ubuntu-latest, ci.yml python-tests (3.11), run 33998757157"},
+    {"python": "3.13.15", "numpy": "2.5.2", "cv2": "5.0.0",
+     "cv2 distribution": "opencv-python-headless 5.0.0.93",
+     "where": "ubuntu-latest, ci.yml python-tests (3.13), run 33998757157"},
+)
+
+VERSION_AXES = ("python", "numpy", "cv2")
+
+
+def _minor(version):
+    """`major.minor` of a dotted version string — the boundary the record is kept at."""
+    return ".".join(version.split(".")[:2])
+
+
+def environment_is_recorded(observed, table=ENVIRONMENTS_VERIFIED_2026_09_05):
+    """True when `observed` matches a row of `table` on every version axis at the minor boundary."""
+    want = {k: _minor(observed[k]) for k in VERSION_AXES}
+    return any({k: _minor(row[k]) for k in VERSION_AXES} == want for row in table)
 
 
 def observed_environment():
@@ -567,20 +600,33 @@ def test_golden_frames_are_byte_stable(width, height, hands):
 def test_the_recorded_environment_is_the_one_verifying_these_hashes():
     """The dated comment above may not go stale silently again (F-b460731c).
 
-    RECORDS the observed triple in the run's own output, and holds the recorded one to it.
-    A version bump on this rig now fails HERE — naming both triples — instead of leaving a
-    reader of the golden pin diffing against an environment nobody has run since 2026-08-12.
+    RECORDS the observed triple in the run's own output, and holds the recorded table to it.
+    A MINOR version boundary on any verifying host — this rig or a CI runner — now fails HERE,
+    naming the observed triple and the rows, instead of leaving a reader of the golden pin
+    diffing against an environment nobody has run since 2026-08-12. (WAVE-26 CI FIX-UP (coordinator, 2026-09-05):
+    the boundary is major.minor; the first CI run over the exact-triple form went red on
+    both runners while every hash passed.)
     """
     observed = observed_environment()
     print("aapose golden environment: " + json.dumps(observed, sort_keys=True))
-    drifted = {k: (ENVIRONMENT_VERIFIED_2026_09_05[k], observed[k])
-               for k in ("python", "numpy", "cv2")
-               if ENVIRONMENT_VERIFIED_2026_09_05[k] != observed[k]}
-    assert drifted == {}, (
+    recorded = [{k: _minor(row[k]) for k in VERSION_AXES} for row in ENVIRONMENTS_VERIFIED_2026_09_05]
+    assert environment_is_recorded(observed), (
         f"the golden frames are being verified in an environment the record does not name: "
-        f"{drifted}. If the four hashes still pass, re-date the record above with these "
-        f"versions — that is evidence the pin is stable across the boundary, and it is the "
-        f"whole reason the comment exists.")
+        f"observed { {k: observed[k] for k in VERSION_AXES} } is on none of the recorded minor "
+        f"boundaries {recorded}. If the four hashes still pass here, add a row to "
+        f"ENVIRONMENTS_VERIFIED_2026_09_05 with these versions and where they were seen — that is "
+        f"evidence the pin is stable across the boundary, and it is the whole reason the record exists.")
+
+
+def test_the_environment_record_goes_red_on_an_unverified_minor_boundary():
+    """WAVE-26 CI FIX-UP (coordinator, 2026-09-05): the direction the record must catch, driven. A numpy minor
+    nobody has verified is not recorded; a patch release of a recorded minor is."""
+    rig = ENVIRONMENT_VERIFIED_2026_09_05
+    assert environment_is_recorded(dict(rig, numpy="2.5.99"))            # a patch release: recorded
+    assert not environment_is_recorded(dict(rig, numpy="2.6.0"))         # a minor boundary: not
+    assert not environment_is_recorded(dict(rig, python="3.15.0"))
+    assert not environment_is_recorded(dict(rig, cv2="5.1.0"))
+    assert not environment_is_recorded(rig, table=())                    # an empty record verifies nothing
 
 
 def test_the_ci_opencv_pin_and_the_local_one_are_reconciled_by_measurement():

@@ -798,6 +798,26 @@ def _cascade_zip_line():
     return lines[0]
 
 
+def _cascade_zip_statement_span():
+    """`(first, last)` line of the STATEMENT holding the `zip(cascade_plan(...), ...)` call.
+
+    WAVE-26 CI FIX-UP (coordinator, 2026-09-05): CPython before 3.12 (PEP 709 inlined comprehensions) reports a
+    comprehension's frames at the statement's first line; 3.12+ reports the zip call's own line.
+    Measured on ubuntu-latest 3.11: the refusal's frames sat at :203 while the call is at :204,
+    and the line-equality clause went red with nothing in the repo changed. The clause is the
+    statement's span — still derived by AST, still keyed on the repo: move the pairing and the
+    span moves with it; drop `strict=True` and no frame in the span raises.
+    """
+    import ast
+
+    src = open(os.path.join(TOOLS, "build_cascade_payload.py"), encoding="utf-8").read()
+    zip_line = _cascade_zip_line()
+    spans = [(n.lineno, n.end_lineno) for n in ast.walk(ast.parse(src))
+             if isinstance(n, ast.stmt) and n.lineno <= zip_line <= n.end_lineno]
+    assert spans, zip_line
+    return min(spans, key=lambda s: s[1] - s[0])      # the innermost statement
+
+
 def test_a_short_plan_refuses_at_the_pairing_rather_than_building_a_short_graph(
         tmp_path, monkeypatch):
     r"""WAVE 26, F-c2b3d97b — the property the literal-zip demonstration could not hold.
@@ -825,6 +845,8 @@ def test_a_short_plan_refuses_at_the_pairing_rather_than_building_a_short_graph(
     import sys
 
     zip_line = _cascade_zip_line()
+    lo, hi = _cascade_zip_statement_span()
+    assert lo <= zip_line <= hi, (lo, zip_line, hi)
     real = AS.cascade_plan
     fired = {"n": 0}
 
@@ -834,10 +856,10 @@ def test_a_short_plan_refuses_at_the_pairing_rather_than_building_a_short_graph(
         Keyed on the caller's line, because `gate_slot_ceiling` calls `cascade_plan` too
         (`armature_core/assembly.py:877`) and a plain call counter shortened THAT plan and
         refused three lines above the site under test — measured here before this frame
-        check was added. The line is the AST-derived one, so moving the pairing moves the
-        fixture with it.
+        check was added. The span is the AST-derived statement's, so moving the pairing moves
+        the fixture with it (and CPython 3.11 reports the comprehension's line, 3.12+ the call's).
         """
-        if sys._getframe(1).f_lineno == zip_line:
+        if lo <= sys._getframe(1).f_lineno <= hi:       # the statement's span, not one line
             fired["n"] += 1
             return real(n, group_size)[:-1]
         return real(n, group_size)
@@ -850,7 +872,7 @@ def test_a_short_plan_refuses_at_the_pairing_rather_than_building_a_short_graph(
 
     frames = [(os.path.basename(tb.tb_frame.f_code.co_filename), tb.tb_lineno)
               for tb in _traceback_frames(excinfo.tb)]
-    assert ("build_cascade_payload.py", zip_line) in frames, frames
+    assert any(f == "build_cascade_payload.py" and lo <= ln <= hi for f, ln in frames), (frames, (lo, hi))
     assert fired["n"] == 1, fired
     assert not out.exists() or not list(out.iterdir()), sorted(p.name for p in out.iterdir())
 
