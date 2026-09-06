@@ -167,12 +167,36 @@ def sheet_subtitle(table, side):
             f"1:1, character's {side} side, same camera in both rows")
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/make_skeleton_sheet.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    p = argparse.ArgumentParser()
-    p.add_argument("--glb", required=True)
-    p.add_argument("--out", required=True)
-    p.add_argument("--bands", type=int, default=200)
+    p = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--glb", required=True,
+                   help="the skeleton GLB the Director is approving -- the insets are "
+                        "framed on its BALL CENTRES, before and after, same camera. "
+                        "Read only")
+    p.add_argument("--out", required=True,
+                   help="the directory panels.json and its panels are written into; "
+                        "`sheet_compose.py <out>/panels.json` composes the sheet. "
+                        "Compensator: delete it; owner: the executor session")
+    p.add_argument("--bands", type=int, default=200,
+                   help="horizontal bands the silhouette is read in to place the pivots "
+                        "(default 200); the same number make_skeleton_sheet's own "
+                        "landmark derivation is bounded by")
     return p.parse_args(argv)
 
 
@@ -314,7 +338,10 @@ def shoot(scene, path, transparent):
             f"{os.path.basename(path)}; it returned {_status!r}, and any file at "
             f"that path is then the previous run's",
             {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(path)})
+             "path": os.path.abspath(path),
+             # F-d6042cf6: where the partial run is, and its named undo.
+             "out": os.path.dirname(os.path.abspath(path)),
+             "compensator": "delete --out; owner: the executor session"})
     # THE WRITER VERIFIES ITS OWN OUTPUT (F-51c5e0ef). `bpy.ops.render.render` returns
     # an operator status set and can return `{'CANCELLED'}` WITHOUT raising; this
     # function discarded it, and no code path in this tool ever opened a rendered file

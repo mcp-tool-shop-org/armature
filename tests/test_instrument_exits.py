@@ -869,11 +869,26 @@ def _keysafe_is_guarded(filename):
     member this check RAN against into one it SKIPPED, on the commit that fixed it. That is
     wave 18's first rule (a census keys on the resolved shape) failing in the direction that
     loses coverage, so the adoption is read as the guarantee it is.
+
+    **WAVE 28 (instruments, F-814335e4): the delegation branch keys on a CALL, not on the
+    name appearing anywhere in the file — and this one failed in the direction that INVENTS
+    coverage.** The five handlers that gained `except SystemExit: raise` carry a comment
+    naming `armature_core.parts.run_tool_main` as the CPython home those two lines are
+    adopted from. The substring test read all five as delegating, so `_keysafe_is_guarded`
+    returned True and the five `key_str_raises` cases stopped skipping and started PASSING —
+    MEASURED on this branch with the shortcut removed, the AST half answers **False** for all
+    five, which is the honest answer: they build their sentinel above the guarded `try`
+    exactly as they did before, and the wave-12 move (F-e47781f3) has still not landed on
+    them. A test that passes because a census misread a comment is worse than the documented
+    skip it replaced, so the five skip again, with their own reason.
     """
     import ast
 
     src = read_source(filename)
-    if "run_tool_main" in src:
+    if any(isinstance(n, ast.Call)
+           and (getattr(n.func, "attr", None) == "run_tool_main"
+                or getattr(n.func, "id", None) == "run_tool_main")
+           for n in ast.walk(ast.parse(src))):
         return True
     stem = os.path.basename(filename)[:-3].upper()
     tree = ast.parse(src)

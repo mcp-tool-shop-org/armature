@@ -102,11 +102,30 @@ class TooMuchRemoved(GateFailure):
 REPAIR_FACE_BUDGET = 0.02
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/rig_repair.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    p = argparse.ArgumentParser()
-    p.add_argument("--glb", required=True)
-    p.add_argument("--out", required=True)
+    p = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--glb", required=True,
+                   help="the double-walled character shell to REPAIR in place of "
+                        "resampling it; read only")
+    p.add_argument("--out", required=True,
+                   help="the directory the repaired GLB and its manifold record are "
+                        "written into. Compensator: delete it; owner: the executor session")
     return vars(p.parse_args(argv))
 
 
@@ -413,6 +432,24 @@ if __name__ == "__main__":
     # the whole `try` statement with `sys.exit` never reached (measured 2026-09-04).
     try:
         main()
+    # WAVE 28, F-814335e4. A DELIBERATE REFUSAL IS NOT A CRASH, and this handler used
+    # to record it as one. `argparse` refuses a missing or mistyped required flag by
+    # raising `SystemExit(2)`; with no re-raise above the `except BaseException`, the
+    # branch below caught it, wrote `"error": "SystemExit", "message": "2"` under
+    # `FAILED - an unhandled error`, and exited **1** -- the code this repo reserves for
+    # a crash. MEASURED on `3380ae2` with `blender_stub.exit_code_of_main_block` and a
+    # `main` replaced by a `SystemExit(2)` raiser: rig_bake, rig_character, rig_parts,
+    # rig_repair and rig_retopo returned 1 with a halt line whose entire message was the
+    # character `2`, while the sixteen siblings (preview_glb.py and kin) returned 2 and
+    # printed nothing. Worse, the halt-record branch re-parses argv to find `--out`, and
+    # on this path argparse raised a SECOND time, so no `halt.json` was written either.
+    # `armature_core.parts.run_tool_main`, the ONE CPython handler, has carried this
+    # same two lines since wave 22; this is the Blender-side local handler adopting the
+    # shape, not a second spelling of it. The three-outcome rule the comment above
+    # states -- "a deliberate refusal exits 2; a crash exits 1" -- is what these two
+    # lines make true for an argument the operator got wrong.
+    except SystemExit:
+        raise
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
 

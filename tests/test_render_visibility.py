@@ -428,7 +428,10 @@ def test_no_file_under_tools_reaches_into_the_private_vertex_primitive():
 #   Door one — `blender_scene.world_bounds(objects, scene=None)` routes through
 #   `_points_to_measure`, which calls the private primitive VERBATIM when `scene is None`
 #   (blender_scene.py:305). Measured 2026-09-04, four production sites pass no scene:
-#   probe_subject.py:63, probe_subject.py:75, preview_walk.py:159, stage_render.py:155.
+#   probe_subject.py:63, probe_subject.py:75, `preview_walk.py::main` (RE-ANCHORED ON THE
+#   SYMBOL, wave 28 -- the citation read `preview_walk.py:159` and that line went blank when
+#   the instruments domain's `--help` work landed above it; the call is the two-arg
+#   `world_bounds(subject, scene=scene)` inside `main`), stage_render.py:155.
 #   probe_subject.py:75 is the exact site wave 8 introduced `unfiltered_world_bounds` to
 #   carry — its own docstring names `probe_subject` as its consumer — and it was never
 #   re-pointed, so the naive row is still taken through the public two-arg form.

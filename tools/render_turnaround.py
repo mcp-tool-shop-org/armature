@@ -312,23 +312,110 @@ class RenderTurnaroundGate(GateFailure):
     gate = "TURNAROUND"
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/render_turnaround.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
+def gate_output_overwrite(out, planned, overwrite, gate_cls):
+    """`(pre_existed, already_present, strays)` for `--out`, refusing a silent overwrite.
+
+    WAVE 28, F-8b7f48a8 (panel CRITICAL). MEASURED on `3380ae2` over the 21 Blender-side
+    instruments: **36 `os.makedirs` call sites, every one `exist_ok=True`, no refusal, no
+    numbering, and no line in any record saying the directory already existed.** The three
+    renderers that author the images a generation is conditioned on -- `render_turnaround`,
+    `render_start_frame` and `preview_glb` -- also had no `unexpected_files_in_out_dir`
+    sweep, where `render_performer.py:511` and `preview_walk.py:365` both derive one and
+    say in their own comments why. All three write FIXED names, so a re-run always lands on
+    the previous run's: a re-run with fewer views or a different name left the earlier run's
+    masters beside this run's, the manifest named only its own, and every consumer that
+    reads the directory as a set (`encode_control.py:138`, `build_payload.py:363`, both a
+    bare listdir) picked up both.
+
+    THE POLICY, stated rather than defaulted: a run that would land on its own earlier
+    output REFUSES, by name, ABOVE `os.makedirs` -- so a declined run leaves nothing behind
+    -- unless `--overwrite` says to replace it. When it does replace, the success record
+    and the success line both carry `out_dir_pre_existed` and `overwrote`, which is what
+    makes two runs into one `--out` distinguishable in a scrollback.
+
+    SEAM 1 (`wave-28/seams-inbox.md`): builders' `F-5fd16451` is the same mechanism at
+    `build_assembly_payload.py:831`. The flag name, the clause word, the sentence and the
+    two record keys are agreed across both domains. `armature_core.parts` is where a shared
+    helper would live and is another domain's owned file this wave, so these three
+    Blender-side copies are held to ONE text by `tests/test_instruments_amend_w28.py`
+    instead -- the arrangement `_render_status`'s nine copies already have.
+
+    `strays` is a DIAGNOSTIC: it gates nothing here either.
+    """
+    pre_existed = os.path.isdir(out)
+    already_present = sorted(f for f in planned
+                             if os.path.isfile(os.path.join(out, f))
+                             ) if pre_existed else []
+    strays = sorted(f for f in os.listdir(out)
+                    if f.lower().endswith(".png") and f not in set(planned)
+                    ) if pre_existed else []
+    if already_present and not overwrite:
+        raise gate_cls(
+            f"{len(already_present)} of the {len(planned)} files this run writes: already "
+            f"on disk from an earlier run; this run would replace what is there. Pass "
+            f"--overwrite to replace it, or point --out at a directory of its own",
+            {"clause": "output_already_exists", "out": os.path.abspath(out),
+             "already_present": already_present, "planned": len(planned),
+             "unexpected_files_in_out_dir": strays,
+             "compensator": "delete --out; owner: the executor session"})
+    return pre_existed, already_present, strays
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--glb", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--views", type=int, default=8)
+    ap = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--glb", required=True,
+                    help="the STATIC textured character GLB to orbit; read only")
+    ap.add_argument("--out", required=True,
+                    help="the directory the RGBA view masters and "
+                         "turnaround_manifest.json are written into -- this stack is what "
+                         "a composed route conditions a generation on. Compensator: "
+                         "delete it; owner: the executor session")
+    ap.add_argument("--views", type=int, default=8,
+                    help="how many views the closed sweep is divided into (default 8); "
+                         "view i sits at --azimuth-start + i * --sweep / --views")
     ap.add_argument("--azimuth-start", type=float, default=AZIMUTH_START_DEG,
                     help="degrees; view 0 sits here. 270 puts the camera in front of a "
                          "performer who faces -Y")
     ap.add_argument("--sweep", type=float, default=SWEEP_DEG,
                     help="degrees of the CLOSED path; view `views` would coincide with 0")
-    ap.add_argument("--elevation", type=float, default=ELEVATION_DEG)
-    ap.add_argument("--width", type=int, default=WIDTH)
-    ap.add_argument("--height", type=int, default=HEIGHT)
-    ap.add_argument("--height-frac", type=float, default=HEIGHT_FRAC)
-    ap.add_argument("--lens", type=float, default=LENS_MM)
-    ap.add_argument("--sensor", type=float, default=SENSOR_MM)
+    ap.add_argument("--elevation", type=float, default=ELEVATION_DEG,
+                    help=f"camera elevation in degrees above the orbit plane (default "
+                         f"{ELEVATION_DEG}); shared by every view. Pass a negative value "
+                         f"as --elevation=-10")
+    ap.add_argument("--width", type=int, default=WIDTH,
+                    help=f"view width in pixels (default {WIDTH}); the reference stack is "
+                         f"submitted at this size, so it must be generator-legal")
+    ap.add_argument("--height", type=int, default=HEIGHT,
+                    help=f"view height in pixels (default {HEIGHT}); same rule as --width")
+    ap.add_argument("--height-frac", type=float, default=HEIGHT_FRAC,
+                    help=f"how tall the FIGURE stands as a fraction of the view height "
+                         f"(default {HEIGHT_FRAC}) -- the orbit radius, or the shared "
+                         f"ortho_scale, is solved to put it there. Ignored when "
+                         f"--ortho-scale pins the scale")
+    ap.add_argument("--lens", type=float, default=LENS_MM,
+                    help=f"camera focal length in mm (default {LENS_MM}); with --sensor it "
+                         f"is the projection the radius is solved against. Bounded finite "
+                         f"and positive -- a NaN lens used to return a 1 mm standoff and "
+                         f"render eight well-formed views of nothing")
+    ap.add_argument("--sensor", type=float, default=SENSOR_MM,
+                    help=f"camera sensor width in mm (default {SENSOR_MM}), sensor_fit "
+                         f"AUTO; bounded finite and positive for the same reason as --lens")
     ap.add_argument("--fps", type=int, default=16,
                     help="pinned before the import because glTF key times are SECONDS; a "
                          "static subject has no action, and this keeps that true rather "
@@ -337,6 +424,10 @@ def parse_args():
                     help="ONE path component — it is pasted into every written view "
                          "filename, so a separator or an absolute path writes the "
                          "views outside --out")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace this run's own files where --out already holds them "
+                         "from an earlier run. WITHOUT it the run REFUSES rather than "
+                         "overwriting, by name, before the output directory is touched")
     ap.add_argument("--ortho", action="store_true",
                     help="parallel projection with ONE ortho_scale shared by every view "
                          "— the sprite shot-set. Absent, the perspective path runs "
@@ -955,6 +1046,18 @@ def main():
     # subject they cannot frame. Neither needs a directory. The wave-10 census reported
     # this file clean because it recognised a refusal by the callee's NAME, and neither
     # solver is called `gate_*`.
+    # ---- F-8b7f48a8 (panel CRITICAL). The silent overwrite, and the two populations a
+    # re-used --out has. The derivation and its whole measurement are in
+    # `gate_output_overwrite` above; the refusal fires HERE, above `os.makedirs`, so a
+    # declined run leaves nothing behind -- the invariant the line below states.
+    planned = [f"{a.prefix}_{i}.png" for i in range(len(azimuths))]
+    planned.append("turnaround_manifest.json")
+    out_dir_pre_existed, already_present, strays = gate_output_overwrite(
+        out, planned, a.overwrite, RenderTurnaroundGate)
+    if already_present:
+        print("[overwrite] " + json.dumps(
+            {"out": os.path.abspath(out), "overwrote": already_present}))
+
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
 
     cam_data = bpy.data.cameras.new("turn_cam")
@@ -994,12 +1097,19 @@ def main():
                 f"{os.path.basename(path)}; it returned {_status!r}, and any file at "
                 f"that path is then the previous run's",
                 {"clause": "operator_status", "status": _status,
-                 "path": os.path.abspath(path)})
+                 "path": os.path.abspath(path),
+                 # F-d6042cf6: where the partial run is, and its named undo.
+                 "out": os.path.dirname(os.path.abspath(path)),
+                 "compensator": "delete --out; owner: the executor session"})
         if not os.path.isfile(path):          # pragma: no cover - Blender-side failure
             raise RenderTurnaroundGate(
                 f"view {i} rendered no file at {path}",
                 {"clause": "write", "view": i, "azimuth_deg": az, "path": path,
-                 "views_written": [v["path"] for v in views]})
+                 "views_written": [v["path"] for v in views],
+                 # F-d6042cf6: a halt on view 6 of eight leaves five masters and no
+                 # manifest; the directory and its undo are named here.
+                 "out": os.path.abspath(out),
+                 "compensator": "delete --out; owner: the executor session"})
         rc.require_render_target_moved(
             path, _before, RenderTurnaroundGate,
             {"gate": RenderTurnaroundGate.gate, "sub_gate": "RENDER_TARGET",
@@ -1120,6 +1230,12 @@ def main():
                           "recorded choice, per the law"),
         },
         "views": manifest_views(views),
+        # F-8b7f48a8: what the output directory held BEFORE this run, in the record a
+        # reader reconciles a submission against. `overwrote` is `[]` on a fresh --out.
+        "out_dir_pre_existed": out_dir_pre_existed,
+        "overwrote": already_present,
+        "unexpected_files_in_out_dir": strays,
+        "unexpected_files_rule": ("every file in --out whose name ends in .png, compared case-INSENSITIVELY, that this run did not plan to write. A DIAGNOSTIC: it gates nothing. The sibling renderers render_performer.py and preview_walk.py derive the same population"),
         "pixel_plane": PIXEL_PLANE,
         "gates": {"TURN": gate_turn,
                   "ALPHA": [v["gate_ALPHA"]["verdict"] for v in views],
@@ -1149,7 +1265,10 @@ def main():
     # succeeded at (F-161b09fc).
     print("RENDER_TURNAROUND_OK " + json.dumps({
         "out": os.path.abspath(out), "views": [v["view"] for v in views],
-        "projection": plan["projection"], "radius": round(radius, 6)}))
+        "projection": plan["projection"], "radius": round(radius, 6),
+        # F-8b7f48a8: two runs into one --out are distinguishable in a scrollback.
+        "out_dir_pre_existed": out_dir_pre_existed, "overwrote": already_present,
+        "unexpected_files_in_out_dir": strays}))
 
 
 def _halt_keysafe(value, _seen=None):

@@ -56,13 +56,33 @@ class RigSheetSubjectError(ArmatureError):
     unreadable file -- so the two refusals a reader has to tell apart are two classes."""
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/make_rig_sheet.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    p = argparse.ArgumentParser()
+    p = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--glb", required=True, help="the skinned, animated GLB")
     p.add_argument("--reference", required=True, help="the ORIGINAL textured GLB")
-    p.add_argument("--out", required=True)
-    p.add_argument("--title", default="E07 arm (d) — retopologised, baked, bone-heat bound")
+    p.add_argument("--out", required=True,
+                   help="the directory panels.json and its panels are written into; "
+                        "`sheet_compose.py <out>/panels.json` composes the sheet. "
+                        "Compensator: delete it; owner: the executor session")
+    p.add_argument("--title", default="E07 arm (d) — retopologised, baked, bone-heat bound",
+                   help="the sheet's heading, as the Director reads it (default names "
+                        "E07 arm (d))")
     p.add_argument("--after-label", default=None,
                    help="what the AFTER column actually is. Derived from the mesh when "
                         "omitted -- a hard-coded label outlived its route once already and "

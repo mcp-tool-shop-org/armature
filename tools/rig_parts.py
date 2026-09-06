@@ -726,6 +726,24 @@ if __name__ == "__main__":
     # the whole `try` statement with `sys.exit` never reached (measured 2026-09-04).
     try:
         main()
+    # WAVE 28, F-814335e4. A DELIBERATE REFUSAL IS NOT A CRASH, and this handler used
+    # to record it as one. `argparse` refuses a missing or mistyped required flag by
+    # raising `SystemExit(2)`; with no re-raise above the `except BaseException`, the
+    # branch below caught it, wrote `"error": "SystemExit", "message": "2"` under
+    # `FAILED - an unhandled error`, and exited **1** -- the code this repo reserves for
+    # a crash. MEASURED on `3380ae2` with `blender_stub.exit_code_of_main_block` and a
+    # `main` replaced by a `SystemExit(2)` raiser: rig_bake, rig_character, rig_parts,
+    # rig_repair and rig_retopo returned 1 with a halt line whose entire message was the
+    # character `2`, while the sixteen siblings (preview_glb.py and kin) returned 2 and
+    # printed nothing. Worse, the halt-record branch re-parses argv to find `--out`, and
+    # on this path argparse raised a SECOND time, so no `halt.json` was written either.
+    # `armature_core.parts.run_tool_main`, the ONE CPython handler, has carried this
+    # same two lines since wave 22; this is the Blender-side local handler adopting the
+    # shape, not a second spelling of it. The three-outcome rule the comment above
+    # states -- "a deliberate refusal exits 2; a crash exits 1" -- is what these two
+    # lines make true for an argument the operator got wrong.
+    except SystemExit:
+        raise
     except BaseException as exc:                                      # noqa: BLE001
         import traceback
         # THE HALT CONTRACT'S OWN GUARD (F-586822bf, wave 12). Wave 10 moved `json.dumps`

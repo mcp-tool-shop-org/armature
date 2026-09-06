@@ -79,11 +79,83 @@ class PreviewGlbGate(GateFailure):
     gate = "PREVIEW_GLB"
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/preview_glb.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
+def gate_output_overwrite(out, planned, overwrite, gate_cls):
+    """`(pre_existed, already_present, strays)` for `--out`, refusing a silent overwrite.
+
+    WAVE 28, F-8b7f48a8 (panel CRITICAL). MEASURED on `3380ae2` over the 21 Blender-side
+    instruments: **36 `os.makedirs` call sites, every one `exist_ok=True`, no refusal, no
+    numbering, and no line in any record saying the directory already existed.** The three
+    renderers that author the images a generation is conditioned on -- `render_turnaround`,
+    `render_start_frame` and `preview_glb` -- also had no `unexpected_files_in_out_dir`
+    sweep, where `render_performer.py:511` and `preview_walk.py:365` both derive one and
+    say in their own comments why. All three write FIXED names, so a re-run always lands on
+    the previous run's: a re-run with fewer views or a different name left the earlier run's
+    masters beside this run's, the manifest named only its own, and every consumer that
+    reads the directory as a set (`encode_control.py:138`, `build_payload.py:363`, both a
+    bare listdir) picked up both.
+
+    THE POLICY, stated rather than defaulted: a run that would land on its own earlier
+    output REFUSES, by name, ABOVE `os.makedirs` -- so a declined run leaves nothing behind
+    -- unless `--overwrite` says to replace it. When it does replace, the success record
+    and the success line both carry `out_dir_pre_existed` and `overwrote`, which is what
+    makes two runs into one `--out` distinguishable in a scrollback.
+
+    SEAM 1 (`wave-28/seams-inbox.md`): builders' `F-5fd16451` is the same mechanism at
+    `build_assembly_payload.py:831`. The flag name, the clause word, the sentence and the
+    two record keys are agreed across both domains. `armature_core.parts` is where a shared
+    helper would live and is another domain's owned file this wave, so these three
+    Blender-side copies are held to ONE text by `tests/test_instruments_amend_w28.py`
+    instead -- the arrangement `_render_status`'s nine copies already have.
+
+    `strays` is a DIAGNOSTIC: it gates nothing here either.
+    """
+    pre_existed = os.path.isdir(out)
+    already_present = sorted(f for f in planned
+                             if os.path.isfile(os.path.join(out, f))
+                             ) if pre_existed else []
+    strays = sorted(f for f in os.listdir(out)
+                    if f.lower().endswith(".png") and f not in set(planned)
+                    ) if pre_existed else []
+    if already_present and not overwrite:
+        raise gate_cls(
+            f"{len(already_present)} of the {len(planned)} files this run writes: already "
+            f"on disk from an earlier run; this run would replace what is there. Pass "
+            f"--overwrite to replace it, or point --out at a directory of its own",
+            {"clause": "output_already_exists", "out": os.path.abspath(out),
+             "already_present": already_present, "planned": len(planned),
+             "unexpected_files_in_out_dir": strays,
+             "compensator": "delete --out; owner: the executor session"})
+    return pre_existed, already_present, strays
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    p = argparse.ArgumentParser()
-    p.add_argument("--glb", required=True)
-    p.add_argument("--out", required=True)
+    p = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    p.add_argument("--glb", required=True,
+                   help="the GLB to look at. READ ONLY -- nothing here writes to it")
+    p.add_argument("--out", required=True,
+                   help="the directory the four renders and <name>_stats.json are written "
+                        "into; make_cast_sheet.py consumes that stats file. Compensator: "
+                        "delete it; owner: the executor session")
+    p.add_argument("--overwrite", action="store_true",
+                   help="replace this run's own files where --out already holds them "
+                        "from an earlier run. WITHOUT it the run REFUSES rather than "
+                        "overwriting, by name, before the output directory is touched")
     p.add_argument("--name", required=True,
                    help="ONE path component — it is pasted into every written "
                         "filename, so a separator, an absolute path or a dot name "
@@ -337,6 +409,26 @@ def main():
     # Every refusal above this line can fire before a single pixel exists; the output
     # directory is created here so a halt does not leave an empty one behind for a later
     # run to read as a used one.
+    # ---- WAVE 28, F-8b7f48a8 (panel CRITICAL). THE SILENT OVERWRITE. Every written
+    # name here is `<--name>_<suffix>`, so a second run under the same --name lands on the
+    # first one's four renders and its stats file -- and `make_cast_sheet.py` consumes that
+    # stats file. MEASURED on `3380ae2` over the 21 owned tools: 36 `os.makedirs` sites,
+    # every one `exist_ok=True`, none saying the directory already existed. SEAM 1
+    # (wave-28 inbox): one flag, one clause word, one sentence, two record keys, shared
+    # with builders' `F-5fd16451`.
+    #
+    # The refusal fires ABOVE `os.makedirs`, so a declined run leaves nothing behind.
+    planned = [f"{args.name}_{s}.png"
+               for s in ("full_a", "full_b", "head_a", "head_b")]
+    planned.append(f"{args.name}_stats.json")
+    # Here the stray sweep is also how an operator sees that a PREVIOUS --name's four
+    # views are still sitting in this directory.
+    out_dir_pre_existed, already_present, strays = gate_output_overwrite(
+        args.out, planned, args.overwrite, PreviewGlbGate)
+    if already_present:
+        print("[overwrite] " + json.dumps(
+            {"out": os.path.abspath(args.out), "overwrote": already_present}))
+
     os.makedirs(args.out, exist_ok=True)
     written = [
         add_camera_render("full_a", center, radius, 30, 10, (640, 960), args.out, args),
@@ -347,11 +439,21 @@ def main():
     stats["gate_PREVIEW_GLB"] = gate_previews_written(written)
     stats["views"] = [os.path.abspath(p) for p, _st, _b in written]
     stats["render_status"] = {os.path.basename(p): st for p, st, _b in written}
+    # F-8b7f48a8: what --out held BEFORE this run, in the record make_cast_sheet reads.
+    stats["out_dir_pre_existed"] = out_dir_pre_existed
+    stats["overwrote"] = already_present
+    stats["unexpected_files_in_out_dir"] = strays
+    stats["unexpected_files_rule"] = ("every file in --out whose name ends in .png, compared case-INSENSITIVELY, that this run did not plan to write. A DIAGNOSTIC: it gates nothing. The sibling renderers render_performer.py and preview_walk.py derive the same population")
 
     with open(os.path.join(args.out, f"{args.name}_stats.json"), "w", encoding="utf-8") as f:
         json.dump(stats, f, indent=2)
     print("PREVIEW_GLB_OK " + json.dumps({"name": args.name, "engine": stats["engine"],
-                                      "triangles": tris}))
+                                      "triangles": tris,
+                                      # F-8b7f48a8: two runs into one --out are
+                                      # distinguishable in a scrollback.
+                                      "out_dir_pre_existed": out_dir_pre_existed,
+                                      "overwrote": already_present,
+                                      "unexpected_files_in_out_dir": strays}))
     return 0
 
 

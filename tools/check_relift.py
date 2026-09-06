@@ -273,16 +273,40 @@ def signatures(glb, frames, fps):
     return out, window
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/check_relift.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args(argv=None):
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--pinned", required=True)
-    ap.add_argument("--fresh", required=True)
-    ap.add_argument("--out", required=True)
+    ap = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--pinned", required=True,
+                    help="the GLB that has been on disk since it was lifted -- the one a "
+                         "prior generation was conditioned on")
+    ap.add_argument("--fresh", required=True,
+                    help="a GLB re-solved from the same inputs, to compare against it")
+    ap.add_argument("--out", required=True,
+                    help="the JSON record to write. Compensator: delete it; owner: the "
+                         "executor session")
     ap.add_argument("--frames", type=int, default=65,
                     help="how many frames to compare (argparse eats leading minus signs: "
                          "pass flags as --flag=value)")
-    ap.add_argument("--fps", type=int, default=16)
-    ap.add_argument("--label", default=None)
+    ap.add_argument("--fps", type=int, default=16,
+                    help="frame rate both GLBs are read at (default 16); glTF key times "
+                         "are SECONDS, so a mismatch samples different poses")
+    ap.add_argument("--label", default=None,
+                    help="a name for the FRESH arm in the record (default: none), so two "
+                         "re-solves can be told apart by a reader")
     return ap.parse_args(argv[argv.index("--") + 1:] if "--" in argv else [])
 
 

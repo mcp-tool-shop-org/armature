@@ -139,7 +139,10 @@ def test_the_ambiguous_subject_refusal_is_a_refusal_and_not_a_name_error(tmp_pat
 
     Under the Blender stub `bpy.data.objects` iterates empty, so `render_visible_meshes`
     returns nothing and `len(visible) != 1` — the F-cb986eb3 / F-e911313d family guard the
-    comment at rig_repair.py:157-161 describes, and the branch an ordinary GLB reaches
+    comment inside `rig_repair.py::main` describes (RE-ANCHORED ON THE SYMBOL, wave 28:
+    the citation read `rig_repair.py:157-161` and that line went blank when this domain's
+    `--help` work landed above it; a line number is prose, the function and the clause are
+    what this test is about), and the branch an ordinary GLB reaches
     whenever the glTF importer's hidden Icosphere is present. It must raise the module's
     own refusal.
     """
@@ -502,9 +505,24 @@ def test_every_handler_carries_the_keysafe_helper(filename):
     would fail here on the commit that deleted its copy, which is the census keying on the
     spelling rather than on the property (wave 18, rule 1). The property is "the handler
     this tool runs stringifies keys at every depth", and it is satisfied either way.
+
+    WAVE 28 (instruments): "does this handler adopt `run_tool_main`?" is answered by an AST
+    walk for a CALL, not by a substring in the block's text. MEASURED on this branch: the
+    five handlers that gained `except SystemExit: raise` (F-814335e4) carry a comment
+    naming `armature_core.parts.run_tool_main` as the CPython home the two lines are
+    adopted from -- and the substring test then read all five as delegating to it, so it
+    demanded they have no `_halt_keysafe` and failed on the five local walks the recorded
+    exception says they keep. A sentence ABOUT a call is not a call; this is the same trap
+    the wave-26 merge recorded for the clause census ("a prose sentence quoting the literal
+    reads as a raise site") and wave 18's rule 1 in one line.
     """
     block = read_source(filename).split('if __name__ == "__main__":')[-1]
-    if "run_tool_main" in block:
+    delegates = any(
+        isinstance(n, ast.Call)
+        and (getattr(n.func, "attr", None) == "run_tool_main"
+             or getattr(n.func, "id", None) == "run_tool_main")
+        for n in ast.walk(ast.parse(read_source(filename))))
+    if delegates:
         from armature_core.parts import halt_keysafe, run_tool_main  # noqa: F401
 
         assert callable(halt_keysafe)

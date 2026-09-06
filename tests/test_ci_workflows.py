@@ -2902,6 +2902,16 @@ GUARDED_TODAY = [
     "tools/render_turnaround.py",
     "tools/rig_sheet_compose.py",
     "tools/sheet_compose.py",
+    # WAVE 28 (instruments, F-2b8afc38): the falsified approaches kept runnable under
+    # `tools/superseded/` are in that domain's globs and their parsers reach an operator
+    # too, so `test_instruments_amend_w28.py` derives its parser population by LISTING that
+    # directory rather than by naming three files -- a new superseded tool with a bare
+    # parser then joins the census instead of sitting outside it. A census WIDENING, not a
+    # trigger gap: `tools/**` is carried by ci.yml on both `push` and `pull_request`, which
+    # the property below re-checks rather than assumes, so `UNFILTERED_PENDING` stays
+    # empty. Re-derived branch-local with `==` in the commit that added the test: 70 -> 71.
+    # (The list is SORTED; the entry sits here for that reason, not by topic.)
+    "tools/superseded",
     "verify.ps1",
 ]
 

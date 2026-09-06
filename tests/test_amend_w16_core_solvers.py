@@ -1224,6 +1224,17 @@ TESTS_STALE_ANCHORS_RECORDED = {
     #   so the row would excuse nothing.
     # WAVE-25 MERGE (coordinator, 2026-09-05): core-gates' deletion applied (that anchor is live) AND instruments-measure's two joins kept —
     # each branch's own rule, both honoured; the module's converse check below is the measurement.
+    # WAVE 28 (instruments). Two rows JOIN, for the reason most of this table exists: both
+    # numbers are quoted inside the sentence that records them as wrong, and deleting the
+    # number would delete the correction. Both anchors went blank when this domain's
+    # `--help` work (F-2b8afc38) landed above them, and both citations are RE-ANCHORED ON
+    # THE SYMBOL in the same commit -- `rig_repair.py::main` for the ambiguous-subject
+    # guard, `preview_walk.py::main` for the two-arg `world_bounds` call -- which is the fix
+    # this census's own message asks for. The numbers survive only as the measurement of
+    # what moved.
+    #   ⚠ As the note above says: the reasons here name no `<file>.py:<n>`, deliberately.
+    ('test_instruments_amend_w10', 'rig_repair.py', 157),
+    ('test_render_visibility', 'preview_walk.py', 159),
     ('test_refusal_clauses', 'analyze_p3.py', 173),
     ('test_render_visibility', 'stage_render.py', 219),
     ('test_amend_w16_core_solvers', 'lift_solve.py', 307),

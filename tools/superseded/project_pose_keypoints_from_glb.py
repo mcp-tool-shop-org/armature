@@ -118,15 +118,41 @@ class ProjectGate(GateFailure):
     gate = "PROJECT"
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/superseded/project_pose_keypoints_from_glb.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--glb", required=True)
-    ap.add_argument("--manifest", required=True)
-    ap.add_argument("--out", required=True)
-    ap.add_argument("--width", type=int, default=832)
-    ap.add_argument("--height", type=int, default=480)
-    ap.add_argument("--fps", type=int, default=16)
+    ap = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--glb", required=True,
+                    help="the exported GLB whose BONES are read -- the approach this file "
+                         "records as superseded, because glTF has no bone tail and the "
+                         "toes are lost; read only")
+    ap.add_argument("--manifest", required=True,
+                    help="the rig's own rig_manifest.json, for the keypoint names")
+    ap.add_argument("--out", required=True,
+                    help="the keypoints JSON to write. Compensator: delete it; owner: the "
+                         "executor session")
+    ap.add_argument("--width", type=int, default=832,
+                    help="frame width in pixels the keypoints are projected into "
+                         "(default 832)")
+    ap.add_argument("--height", type=int, default=480,
+                    help="frame height in pixels (default 480)")
+    ap.add_argument("--fps", type=int, default=16,
+                    help="frame rate the action is read at (default 16); glTF key times "
+                         "are SECONDS")
     ap.add_argument("--frames", type=int, default=0,
                     help="0 = every frame the action carries")
     ap.add_argument("--camera-json", default=None,

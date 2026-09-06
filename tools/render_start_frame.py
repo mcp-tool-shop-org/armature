@@ -332,18 +332,101 @@ def require_shot_fraction(name, value, *, who="render_start_frame", gate=None,
     return v
 
 
+#: WAVE 28, F-2b8afc38 -- the two operator-facing lines of `--help`, DERIVED, not typed.
+#:
+#: `prog` defaults to `os.path.basename(sys.argv[0])`, which under `blender -b -P` is the
+#: BLENDER BINARY: every parser in this domain printed `usage: blender.exe [-h] --glb GLB
+#: ...` and omitted the `-b -P tools/<name>.py --` prologue that every flag below requires,
+#: so the string an operator would copy is not an invocation that works. README.md:181 is
+#: the route line this spells. `description` was absent on all 20 parsers here, so `--help`
+#: could not say what any tool does; it is read off this module's own docstring rather than
+#: retyped, because two spellings of one sentence is how the other one goes stale.
+HELP_PROG = "blender -b -P tools/render_start_frame.py --"
+HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
+
+
+def gate_output_overwrite(out, planned, overwrite, gate_cls):
+    """`(pre_existed, already_present, strays)` for `--out`, refusing a silent overwrite.
+
+    WAVE 28, F-8b7f48a8 (panel CRITICAL). MEASURED on `3380ae2` over the 21 Blender-side
+    instruments: **36 `os.makedirs` call sites, every one `exist_ok=True`, no refusal, no
+    numbering, and no line in any record saying the directory already existed.** The three
+    renderers that author the images a generation is conditioned on -- `render_turnaround`,
+    `render_start_frame` and `preview_glb` -- also had no `unexpected_files_in_out_dir`
+    sweep, where `render_performer.py:511` and `preview_walk.py:365` both derive one and
+    say in their own comments why. All three write FIXED names, so a re-run always lands on
+    the previous run's: a re-run with fewer views or a different name left the earlier run's
+    masters beside this run's, the manifest named only its own, and every consumer that
+    reads the directory as a set (`encode_control.py:138`, `build_payload.py:363`, both a
+    bare listdir) picked up both.
+
+    THE POLICY, stated rather than defaulted: a run that would land on its own earlier
+    output REFUSES, by name, ABOVE `os.makedirs` -- so a declined run leaves nothing behind
+    -- unless `--overwrite` says to replace it. When it does replace, the success record
+    and the success line both carry `out_dir_pre_existed` and `overwrote`, which is what
+    makes two runs into one `--out` distinguishable in a scrollback.
+
+    SEAM 1 (`wave-28/seams-inbox.md`): builders' `F-5fd16451` is the same mechanism at
+    `build_assembly_payload.py:831`. The flag name, the clause word, the sentence and the
+    two record keys are agreed across both domains. `armature_core.parts` is where a shared
+    helper would live and is another domain's owned file this wave, so these three
+    Blender-side copies are held to ONE text by `tests/test_instruments_amend_w28.py`
+    instead -- the arrangement `_render_status`'s nine copies already have.
+
+    `strays` is a DIAGNOSTIC: it gates nothing here either.
+    """
+    pre_existed = os.path.isdir(out)
+    already_present = sorted(f for f in planned
+                             if os.path.isfile(os.path.join(out, f))
+                             ) if pre_existed else []
+    strays = sorted(f for f in os.listdir(out)
+                    if f.lower().endswith(".png") and f not in set(planned)
+                    ) if pre_existed else []
+    if already_present and not overwrite:
+        raise gate_cls(
+            f"{len(already_present)} of the {len(planned)} files this run writes: already "
+            f"on disk from an earlier run; this run would replace what is there. Pass "
+            f"--overwrite to replace it, or point --out at a directory of its own",
+            {"clause": "output_already_exists", "out": os.path.abspath(out),
+             "already_present": already_present, "planned": len(planned),
+             "unexpected_files_in_out_dir": strays,
+             "compensator": "delete --out; owner: the executor session"})
+    return pre_existed, already_present, strays
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--glb", required=True)
-    ap.add_argument("--out", required=True)
+    ap = argparse.ArgumentParser(
+        prog=HELP_PROG, description=HELP_DESCRIPTION,
+        formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--glb", required=True,
+                    help="the performer GLB whose frame becomes the model's picture of "
+                         "the world; read only")
+    ap.add_argument("--out", required=True,
+                    help="the directory the RGBA master, the composites and "
+                         "start_frame_provenance.json are written into. Compensator: "
+                         "delete it; owner: the executor session")
     ap.add_argument("--frame", type=int, default=0,
                     help="which frame of the action to stage, 0-based (argparse eats "
                          "leading minus signs: pass flags as --flag=value)")
-    ap.add_argument("--fps", type=int, default=16)
-    ap.add_argument("--width", type=int, default=WIDTH)
-    ap.add_argument("--height", type=int, default=HEIGHT)
-    ap.add_argument("--height-frac", type=float, default=HEIGHT_FRAC)
+    ap.add_argument("--fps", type=int, default=16,
+                    help="frame rate --frame is counted in (default 16); glTF key times "
+                         "are SECONDS, so a mismatch stages a different moment")
+    ap.add_argument("--width", type=int, default=WIDTH,
+                    help=f"submitted frame width in pixels (default {WIDTH}). It must be "
+                         f"a size the generator accepts -- see the model's own "
+                         f"divisibility rule -- and Gate WHOLE bounds the figure in it")
+    ap.add_argument("--height", type=int, default=HEIGHT,
+                    help=f"submitted frame height in pixels (default {HEIGHT}); same "
+                         f"generator-legality rule as --width")
+    ap.add_argument("--height-frac", type=float, default=HEIGHT_FRAC,
+                    help=f"how tall the FIGURE stands as a fraction of the frame height "
+                         f"(default {HEIGHT_FRAC}) -- the camera distance is solved to "
+                         f"put it there. Bounded: it is a fraction, not a multiplier")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace this run's own files where --out already holds them "
+                         "from an earlier run. WITHOUT it the run REFUSES rather than "
+                         "overwriting, by name, before the output directory is touched")
     ap.add_argument("--composite", default=None,
                     help="the submitted RGB composite's background, as linear floats "
                          "`r,g,b`. THE ALPHA LAW: the render is authored RGBA with a real "
@@ -627,7 +710,13 @@ def main():
             {"clause": "shadow_layer_needs_floor_and_plate", "floor": a.floor, "plate": backdrop})
     if backdrop:
         if not os.path.isfile(backdrop):
-            raise RenderGate("no such plate", {"clause": "plate_is_not_a_file", "plate": backdrop})
+            raise RenderGate(
+                f"--plate={a.plate!r} is not a file; nothing exists at {backdrop}. The "
+                f"plate is the image composited BEHIND the authored master, so there is "
+                f"no frame to submit without it: check the path, or run make_plate.py to "
+                f"produce one at this frame's exact size",
+                {"clause": "plate_is_not_a_file", "plate": backdrop,
+                 "plate_as_typed": a.plate})
         pw, ph = _image_size(backdrop)
         if (pw, ph) != (width, height):
             raise RenderGate(
@@ -645,8 +734,13 @@ def main():
     subject = blender_scene.render_visible_meshes(scene, meshes)
     if not subject:
         raise RenderGate(
-            "the GLB imported no render-visible mesh",
-            {"clause": "glb_has_no_render_visible_mesh", "glb": a.glb})
+            f"{a.glb} imported {len(meshes)} mesh object(s) and none of them is "
+            f"render-visible ({[o.name for o in meshes]}); there is no figure to stage, "
+            f"and framing against hidden geometry would compose a frame of an object the "
+            f"renderer will not draw",
+            {"clause": "glb_has_no_render_visible_mesh", "glb": a.glb,
+             "mesh_objects_all": [o.name for o in meshes],
+             "mesh_objects_render_visible": []})
 
     span = action_frame_range()
     scene.frame_start, scene.frame_end = 1, max(1, int(span[1]) if span else 1)
@@ -665,8 +759,15 @@ def main():
     verts = blender_scene.evaluated_world_vertices(scene, subject)
     if verts.shape[0] == 0:
         raise RenderGate(
-            "the subject evaluates to no vertices at this frame",
-            {"clause": "subject_has_no_vertices_at_this_frame"})
+            f"the subject evaluates to no vertices at --frame={a.frame} (scene frame "
+            f"{scene.frame_current}, action range {list(span) if span else None}): the "
+            f"{len(subject)} render-visible mesh(es) "
+            f"{[o.name for o in subject]} produce an empty evaluated geometry there, so "
+            f"there is nothing to frame and nothing to light",
+            {"clause": "subject_has_no_vertices_at_this_frame",
+             "requested_frame": a.frame, "scene_frame": scene.frame_current,
+             "action_range": list(span) if span else None,
+             "subject_render_visible": [o.name for o in subject]})
 
     cloud = [tuple(map(float, p)) for p in verts]
     solve_cloud = SF.framing_cloud(cloud, cap=FRAMING_CLOUD_CAP)
@@ -743,6 +844,32 @@ def main():
     # a re-run into the same `--out` reads as an attempt that produced nothing rather
     # than one that was refused. Pinned by `tests/test_instruments_amend_w10.py::
     # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`.
+    # ---- WAVE 28, F-8b7f48a8 (panel CRITICAL). THE SILENT OVERWRITE. This tool writes
+    # FIXED names, so a re-run always lands on the previous run's, and the frame it writes
+    # is the one picture an image-to-video model is handed. MEASURED on `3380ae2` over the
+    # 21 owned tools: 36 `os.makedirs` sites, every one `exist_ok=True`, none saying the
+    # directory already existed. SEAM 1 (wave-28 inbox): one flag, one clause word, one
+    # sentence and two record keys, shared with builders' `F-5fd16451`.
+    #
+    # The plan is DERIVED from the flags that decide what gets written, not typed: the
+    # plate branch adds `start_frame.png` beside the flat counterfactual, and
+    # `--shadow-layer` adds its three. A plan that named files this run does not write
+    # would refuse a directory it has no quarrel with.
+    #
+    # The refusal fires ABOVE `os.makedirs`, so a declined run leaves nothing behind.
+    planned = ["start_frame_rgba.png",
+               "start_frame_flat.png" if backdrop else "start_frame.png",
+               "empty_plate.png", "start_frame_provenance.json"]
+    if backdrop:
+        planned.append("start_frame.png")
+    if a.shadow_layer:
+        planned += ["shadow_lit.png", "shadow_cast.png", "plate_shadowed.png"]
+    out_dir_pre_existed, already_present, strays = gate_output_overwrite(
+        out, planned, a.overwrite, RenderGate)
+    if already_present:
+        print("[overwrite] " + json.dumps(
+            {"out": os.path.abspath(out), "overwrote": already_present}))
+
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     rgba_path = os.path.join(out, "start_frame_rgba.png")
     scene.render.film_transparent = True
@@ -761,7 +888,10 @@ def main():
             f"{os.path.basename(rgba_path)}; it returned {_status!r}, and any file at "
             f"that path is then the previous run's",
             {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(rgba_path)})
+             "path": os.path.abspath(rgba_path),
+             # F-d6042cf6: where the partial run is, and its named undo.
+             "out": os.path.dirname(os.path.abspath(rgba_path)),
+             "compensator": "delete --out; owner: the executor session"})
     rc.require_render_target_moved(
         rgba_path, _before, RenderGate,
         {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
@@ -793,7 +923,10 @@ def main():
             f"{os.path.basename(flat_path)}; it returned {_status!r}, and any file at "
             f"that path is then the previous run's",
             {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(flat_path)})
+             "path": os.path.abspath(flat_path),
+             # F-d6042cf6: where the partial run is, and its named undo.
+             "out": os.path.dirname(os.path.abspath(flat_path)),
+             "compensator": "delete --out; owner: the executor session"})
     rc.require_render_target_moved(
         flat_path, _before, RenderGate,
         {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
@@ -818,7 +951,10 @@ def main():
             f"{os.path.basename(plate_path)}; it returned {_status!r}, and any file at "
             f"that path is then the previous run's",
             {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(plate_path)})
+             "path": os.path.abspath(plate_path),
+             # F-d6042cf6: where the partial run is, and its named undo.
+             "out": os.path.dirname(os.path.abspath(plate_path)),
+             "compensator": "delete --out; owner: the executor session"})
     rc.require_render_target_moved(
         plate_path, _before, RenderGate,
         {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
@@ -858,7 +994,10 @@ def main():
                 f"{os.path.basename(lit_path)}; it returned {_status!r}, and any file at "
                 f"that path is then the previous run's",
                 {"clause": "operator_status", "status": _status,
-                 "path": os.path.abspath(lit_path)})
+                 "path": os.path.abspath(lit_path),
+                 # F-d6042cf6: where the partial run is, and its named undo.
+                 "out": os.path.dirname(os.path.abspath(lit_path)),
+                 "compensator": "delete --out; owner: the executor session"})
         rc.require_render_target_moved(
             lit_path, _before, RenderGate,
             {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
@@ -880,7 +1019,10 @@ def main():
                 f"{os.path.basename(cast_path)}; it returned {_status!r}, and any file at "
                 f"that path is then the previous run's",
                 {"clause": "operator_status", "status": _status,
-                 "path": os.path.abspath(cast_path)})
+                 "path": os.path.abspath(cast_path),
+                 # F-d6042cf6: where the partial run is, and its named undo.
+                 "out": os.path.dirname(os.path.abspath(cast_path)),
+                 "compensator": "delete --out; owner: the executor session"})
         rc.require_render_target_moved(
             cast_path, _before, RenderGate,
             {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
@@ -940,7 +1082,10 @@ def main():
                 f"{os.path.basename(frame_path)}; it returned {_status!r}, and any file at "
                 f"that path is then the previous run's",
                 {"clause": "operator_status", "status": _status,
-                 "path": os.path.abspath(frame_path)})
+                 "path": os.path.abspath(frame_path),
+                 # F-d6042cf6: where the partial run is, and its named undo.
+                 "out": os.path.dirname(os.path.abspath(frame_path)),
+                 "compensator": "delete --out; owner: the executor session"})
         rc.require_render_target_moved(
             frame_path, _before, RenderGate,
             {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
@@ -967,7 +1112,14 @@ def main():
         "note": ("fraction of pixels differing from an empty-plate render of the same "
                  "camera, lights and floor with the character hidden. It INCLUDES the "
                  "figure's shadow on the ground plane, so its bbox bounds subject+shadow "
-                 "and is a diagnostic; Gate WHOLE is what bounds the body")}
+                 "and is a diagnostic; Gate WHOLE is what bounds the body"),
+        # F-d6042cf6: this andon fires with every render already on disk. The directory
+        # and its named undo ride the evidence, so the halt line says where the partial
+        # run is instead of leaving the docstring's compensator unread.
+        "out": os.path.abspath(out),
+        "written_so_far": sorted(f for f in os.listdir(out)
+                                 if os.path.isfile(os.path.join(out, f))),
+        "compensator": "delete --out; owner: the executor session"}
     if frac < MIN_SUBJECT_FRAC:
         raise RenderGate(
             f"the render differs from the empty plate over only {frac:.5f} of the image "
@@ -997,6 +1149,12 @@ def main():
                    "pose_signature_selection": "render_visible_meshes"},
         "resolution": [width, height], "fps": a.fps, "floor_drawn": bool(a.floor),
         "floor_material": floor_material,
+        # F-8b7f48a8: what --out held BEFORE this run, in the record a reader reconciles
+        # a submitted frame against. `overwrote` is `[]` on a fresh --out.
+        "out_dir_pre_existed": out_dir_pre_existed,
+        "overwrote": already_present,
+        "unexpected_files_in_out_dir": strays,
+        "unexpected_files_rule": ("every file in --out whose name ends in .png, compared case-INSENSITIVELY, that this run did not plan to write. A DIAGNOSTIC: it gates nothing. The sibling renderers render_performer.py and preview_walk.py derive the same population"),
         "staging": {
             "inherited_from": ("render_performer (E09/E10) for lights, lens and framing; "
                                "the world background is NO LONGER inherited — see alpha"),
@@ -1098,6 +1256,9 @@ def main():
         "gate_WHOLE": gate_whole["verdict"], "gate_COVERAGE": ev_cov["verdict"],
         "gate_ALPHA": gate_alpha["verdict"],
         "gate_BACKDROP": (gate_backdrop or {}).get("verdict", "NOT APPLICABLE"),
+        # F-8b7f48a8: two runs into one --out are distinguishable in a scrollback.
+        "out_dir_pre_existed": out_dir_pre_existed, "overwrote": already_present,
+        "unexpected_files_in_out_dir": strays,
         "provenance": side}))
     return 0
 
