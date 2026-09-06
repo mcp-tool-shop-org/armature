@@ -48,7 +48,7 @@ happens to have it.
 ## Commands
 
 ```bash
-armature check      # resolve every module AND its function-local imports; exit 1 on any needs-*
+armature check      # resolve every module AND its function-local imports; a failing row prints the exception type and message; exit 1 on any needs-*
 armature modules    # what each module is for  (--json for machine output)
 armature where      # where the docs and the Blender-side scripts live
 ```

@@ -31,6 +31,11 @@ clause, and the date it was fetched.
 
 The check is recorded in the spec that introduces the dependency, and the row lands in the map.
 **Entries older than 90 days are advisory until re-fetched** — licences in this space change.
+The same window is mechanical in code: `assembly.MEASURED_FREE_CLASSES` refuses a receipt
+dated in the future (`measurement_dated_in_the_future`), and a CONDITIONAL credit on the
+spend path is load-bearing — a spend that names no loaded component is refused as
+`orphan_attribution`. Partner (hosted API) node classes are ruled by no licence-map row;
+that table is the population a local gate can see.
 
 And the rule that catches the most people: **the same family can split across variants.** Check
 the exact variant and version you are about to run, not the family name.

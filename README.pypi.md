@@ -77,8 +77,9 @@ including experiments.
 
 ## Requirements
 
-Python 3.10+ and numpy. Blender 5.x is required only for the rendering scripts in the
-repository, not for this package.
+Python `>=3.11,<3.15` (the interval `pyproject.toml` declares; CI runs 3.11 and 3.13, the
+rig exercises 3.14) and numpy. Blender 5.x is required only for the rendering scripts in
+the repository, not for this package.
 
 ## License
 

@@ -13,7 +13,10 @@ installs.
 
 ## [Unreleased]
 
-Nothing yet.
+- Operator-facing pages re-measured against the v0.4.0 registries and the wave 6–26
+  DOC-IMPACT rows: publishing versions, SECURITY provenance (public-only), `requires-python`,
+  the ship-gate header, the licence-map reader note, `armature check`'s failing-row cause,
+  `verify.ps1`'s two clean installs.
 
 ## [0.4.0] — 2026-09-06
 

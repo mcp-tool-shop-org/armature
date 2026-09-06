@@ -143,6 +143,8 @@ Named because each is a plausible-sounding drift that would eat the project:
   and what the measured evidence actually says.
 - [Method](/armature/handbook/method/) — three seats, spec → report → ruling, and why the
   discipline exists.
+- [Reading a halt](/armature/handbook/reading-a-halt/) — exit codes, the six-key halt line,
+  the three refusal families, `--help`, and how to run the suite.
 - [The license gate](/armature/handbook/license-gate/) — no non-commercial models anywhere,
   the verified map, and the traps it caught.
 - [Roadmap](/armature/handbook/roadmap/) — the arc as planned, the arc as run, and what

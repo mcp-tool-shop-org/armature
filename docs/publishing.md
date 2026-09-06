@@ -4,9 +4,9 @@
 
 | Surface | Name | Status |
 |---|---|---|
-| GitHub | `mcp-tool-shop-org/armature` | live, public, `main` (re-measured 2026-09-05: `gh repo view` reports PUBLIC) |
-| PyPI | **`armature-studio`** | Trusted Publisher configured 2026-08-10; **published** — 0.2.1 and 0.3.0 on the index (re-measured 2026-09-05) |
-| npm | **`@mcptoolshop/armature-studio`** | **published** — 0.3.0 on the registry (re-measured 2026-09-05). *Corrected 2026-09-05: this row read `@mcptoolshop/armature`, "not yet claimed"; the package that shipped carries the `-studio` suffix like the PyPI project (`npm/package.json`).* |
+| GitHub | `mcp-tool-shop-org/armature` | live, public, `main` (re-measured 2026-09-06: `gh repo view` reports PUBLIC) |
+| PyPI | **`armature-studio`** | Trusted Publisher configured 2026-08-10; **published** — 0.2.1, 0.3.0 and **0.4.0** on the index; latest is 0.4.0 (re-measured 2026-09-06 against `https://pypi.org/pypi/armature-studio/json`) |
+| npm | **`@mcptoolshop/armature-studio`** | **published** — latest **0.4.0** on the registry (re-measured 2026-09-06 against `https://registry.npmjs.org/@mcptoolshop%2Farmature-studio`). *Corrected 2026-09-05: this row read `@mcptoolshop/armature`, "not yet claimed"; the package that shipped carries the `-studio` suffix like the PyPI project (`npm/package.json`).* |
 
 Bare `armature` was unavailable on both PyPI (a 0.0.1 "Config package" stub) and npm (an
 abandoned `1.0.0-alpha4`), which is why the PyPI project carries the `-studio` suffix.
@@ -31,8 +31,9 @@ and the failure surfaces at publish time, after everything else has passed.
 
 ~~The project does not yet exist on PyPI. Under the current bootstrap path, the first successful
 OIDC publish **creates** it; no `v0.0.0` placeholder is required.~~ **Corrected 2026-09-05:** the first OIDC
-publish created it on 2026-08-15 (`release.yml` records the date beside its publish step); the index holds 0.2.1
-and 0.3.0. The bootstrap sentence is kept struck because it was the plan until it ran.
+publish created it on 2026-08-15 (`release.yml` records the date beside its publish step). **Re-measured
+2026-09-06:** the index holds 0.2.1, 0.3.0 and 0.4.0. The bootstrap sentence is kept struck because it
+was the plan until it ran.
 
 **The release rehearsal, in order** (the ordering `release.yml` carries as a comment beside its steps, written
 here so a reader does not have to open the workflow): (1) `verify.ps1` green on the rig, (2) the tag pushed and the
@@ -53,11 +54,12 @@ skips (1) tests the workflow on a tree the rig never verified.
   them on this rig, and do not weaken a test to make CI green — facet's rule is that narrowing
   a test to turn a red gate green is forbidden whichever kind of gate fired.
 - ~~Version floor at ship time is **v1.0.0** minimum, per the shipcheck product standard.~~
-  **Corrected 2026-08-13: the Director ruled the version target for this repo is `v0.1.0`,
+  **Corrected 2026-08-13: the version target for this repo is `v0.x`,
   overriding the studio's v1.0.0 floor.** The struck line is left visible rather than deleted
-  because it was the standing rule until it was not. Nothing here publishes to a registry, so
-  the version marks a state of the record rather than an artifact — see
-  [CHANGELOG.md](../CHANGELOG.md).
+  because it was the standing rule until it was not. A version here still marks a state of the
+  record; since 2026-08-15 it also installs — see [CHANGELOG.md](../CHANGELOG.md). npm
+  provenance is attested only from a public repository (`release.yml` branches on
+  `github.event.repository.private`).
 
 ## Before the first publish
 
@@ -69,6 +71,7 @@ treatment's phases landed the security policy, the changelog, the verify script,
 scanning on the one manifest that exists, the brand logo, the badges, and the repo-knowledge
 entry. *The prior text read: "Neither has run — this repo is at day zero and the roadmap puts
 publishing at P02, after the thesis has been tested."* The day-zero half has expired; the
-roadmap half has since expired too — **v0.1.0, v0.1.1, v0.2.1 and v0.3.0 are published releases (2026-08-13 to
-2026-08-18), `armature-studio` is on PyPI and `@mcptoolshop/armature-studio` on npm** (measured 2026-09-05). *The
-prior text read: "nothing has been published, and the names above remain unused."*
+roadmap half has since expired too — **v0.1.0, v0.1.1, v0.2.1, v0.3.0 and v0.4.0 are published
+releases (2026-08-13 to 2026-09-06), `armature-studio` is on PyPI and `@mcptoolshop/armature-studio`
+on npm** (re-measured 2026-09-06 against both registry APIs). *The prior text read: "nothing has
+been published, and the names above remain unused."*

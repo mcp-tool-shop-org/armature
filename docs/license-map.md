@@ -8,6 +8,15 @@ Every row carries the URL of the **actual license document** (not a blog summary
 clause, and the date it was fetched. **Entries older than 90 days are advisory until re-fetched**
 — licenses in this space change.
 
+**How the gate reads this map (the code half, measured 2026-09-06).** The same 90-day window is
+mechanical in `assembly.MEASURED_FREE_CLASSES`: a receipt dated in the future refuses
+(`measurement_dated_in_the_future`), and `measurement_is_advisory` is readable on the gate's
+evidence. Partner (hosted API) node classes are ruled by **no row here** — that table is the
+population a local gate can see, and a test pins that none of its entries recall a partner
+class. A CONDITIONAL credit is load-bearing on the spend path: `technically_color` (credit
+required, creditor renderartist, CivitAI 2106471) is mirrored as CONDITIONAL in `route_gates`;
+a spend that names no loaded component is refused as `orphan_attribution`.
+
 `CONDITIONAL` is a **Director decision**, surfaced with its condition. It is never a quiet yes.
 
 **The purpose, ruled by the Director 2026-08-12:** every pipeline licence-friendly end to

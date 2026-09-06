@@ -4,10 +4,13 @@
 
 armature is a set of local Python instruments plus headless Blender scenes that stage a
 canonical character mesh, render per-frame control sequences and reference plates from it,
-and measure what comes back from a video model. It is a repository you clone and run — not
-a published package, not a service, not a daemon. Every tool is invoked as
+and measure what comes back from a video model. The experiment record is a repository you
+clone and run — not a service, not a daemon. Every instrument is invoked as
 `python tools/<name>.py` (or `blender -b -P tools/<name>.py -- …`) against paths the
-operator types.
+operator types. The measured pieces also install: `armature_core` ships as
+`armature-studio` on PyPI and `@mcptoolshop/armature-studio` on npm (latest **0.4.0**,
+registry APIs 2026-09-06). *The prior sentence read "not a published package"; that expired
+on 2026-08-15.*
 
 Generation itself runs on Comfy Cloud and is submitted by the operator from outside these
 scripts. **No credential for that service, or any other, lives in this repo.**
@@ -23,15 +26,18 @@ exactly what they do.
 | `main` | Yes — the record is the product; `main` is the only supported state |
 
 `main` carries the current state of every instrument and the evidence behind it. There is
-no release channel, no backport policy and no SLA. See [CHANGELOG.md](CHANGELOG.md) for
-what `v0.2.1` marks and what it deliberately does not.
+no backport policy and no SLA; tagged releases exist (`v0.4.0` is current — see
+[CHANGELOG.md](CHANGELOG.md)) and `main` remains the only supported state.
 
-**Published packages.** `armature-studio` (PyPI) and `armature-studio` (npm) are built
-and published by GitHub Actions from a tagged release, authenticated by **OIDC Trusted
-Publishing**: no long-lived registry token exists in this repository, in its secrets, or on any
-developer machine. npm carries build provenance. A release is gated on the suite passing —
-including under `-O`, where a check written as `assert` would vanish — and on the git tag,
-`pyproject.toml` and `npm/package.json` agreeing on the version.
+**Published packages.** `armature-studio` (PyPI) and `@mcptoolshop/armature-studio` (npm)
+are built and published by GitHub Actions from a tagged release, authenticated by **OIDC
+Trusted Publishing**: no long-lived registry token exists in this repository, in its secrets,
+or on any developer machine. npm provenance is attested only when the repository is public
+(`release.yml` branches on `github.event.repository.private`; this repository is public, so
+v0.4.0 carried provenance). A release is gated on the suite passing — including under `-O`,
+where a check written as `assert` would vanish — on the classifier gate (the Trove rows the
+artifact actually carries), and on the git tag, `pyproject.toml` and `npm/package.json`
+agreeing on the version.
 
 ## Reporting a vulnerability
 

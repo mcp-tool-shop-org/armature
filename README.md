@@ -73,7 +73,8 @@ it as `needs-blender` rather than as a defect. `check` states what is true of th
 ran it from, not merely what imports: it resolves the function-local imports too, so a source
 checkout or a `--no-deps` install missing OpenCV, Pillow or matplotlib reports `needs-cv2` /
 `needs-PIL` rows, prints `UNRESOLVED:` and exits 1 — where it once printed "all modules
-resolved" on an install whose drawing functions could not run.
+resolved" on an install whose drawing functions could not run. A failing row prints the
+exception type and message; `--json` carries the same rows under `module_rows`.
 
 The npm package is a **launcher, not a port**: re-implementing a threshold in a second language
 is how a threshold drifts, so it forwards to the Python that holds the truth, and refuses —
@@ -100,7 +101,7 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
 | Spend gates | **Gate CANON** refuses a paid submission whose subject cannot be named against a machine-readable canon — surface is the row, a null occupant is a **hole rather than an absence**, and both directions are checked (the prompt covers the canon; everything in the prompt *is* canon). It fires **before** the output directory is created, inside each of the seven payload builders, because the irreversible step this repo owns is writing a payload. The escape is census-backed: `--no-canon` on a subject that *has* canon is refused, not honoured — and since the first health pass it is **loud on every spend**: each builder prints `[canon] ARMED: <subject>`, and on the census escape `[canon] UNGATED: <subject> — <the census row's reason>`, so a build log distinguishes a ratified hole from a subject whose canon was never written; and records the verdict under `gates.CANON`, so no record can leave the question of whether canon was armed or escaped unanswered |
 | Tests | **7538 passing on the rig** (64 skips, measured 2026-09-06 at the close of the health run — 1359 before it, 1781 after the first pass, 7181 after Stage B), identical under `-O`; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
-| Status | **v0.4.0** — the health run: 832 findings fixed across three stages, one halt contract for every instrument, every refusal naming what it measured, and a suite five times its size. v0.3.0 gave the record a spend gate and an index that verifies itself. `armature_core` ships to PyPI as `armature-studio` and npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere |
+| Status | **v0.4.0** — the health run: 832 findings fixed across three stages, one halt contract for every instrument, every refusal naming what it measured, and a suite five times its size. v0.3.0 gave the record a spend gate and an index that verifies itself. `armature_core` ships to PyPI as `armature-studio` and npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere. npm provenance is attested only when the repository is public (this one is); a private fork publishes the same way without it |
 
 ### What is measured (the current arc)
 
@@ -181,7 +182,7 @@ python tools/<name>.py --help                       # the 55 CPython instruments
 blender -b -P tools/<name>.py -- <args>             # the 21 Blender-side instruments (stage_render, the rig_* tools, the
                                                     # sheet composers): headless only; `python tools/<name>.py` on one of
                                                     # these fails with `No module named 'bpy'`
-pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + clean install, site build
+pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + two clean installs (wheel + sdist), site build
 ```
 
 Every tool, by how it runs, with its own one-line description: [docs/tools.md](docs/tools.md)
@@ -228,7 +229,7 @@ Three environment levers, all optional: `PYTHONPATH=E:/AI/record-index` (the sib
 import; without it those tests skip by name), `ARMATURE_BLENDER` (the Blender executable the Blender-driving fixtures
 run; without it, or off this rig, those tests skip visibly), and `ARMATURE_GIT` (the git the packaging test invokes).
 CI's exact recipe is the `python-tests` job in `.github/workflows/ci.yml`; `verify.ps1` runs the same suite twice
-(once under `-O`) and then the package build.
+(once under `-O`) and then builds the package and installs it into two clean rooms (wheel and sdist).
 
 A seed spec's `ceiling` block carries the numbers that bind — `submissions`, the per-arm or per-wave split,
 `counted_in`, `note`. The correction history behind them has one home at
@@ -287,8 +288,8 @@ The short form:
   Deliberate refusals do not: every gate raises a typed error carrying the measurement that
   fired it, and **none of them is an `assert`** — the suite runs a second time under `-O` in CI
   to prove they still raise.
-- **Support status** — `main` is the only supported state. No release channel, no backport
-  policy, no SLA.
+- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.4.0`
+  is current); there is no backport policy and no SLA.
 
 **Ship gate.** [SHIP_GATE.md](SHIP_GATE.md) carries the hard gates A–D as they actually stand,
 with every line either checked with its evidence or skipped with the reason on its merits. The
