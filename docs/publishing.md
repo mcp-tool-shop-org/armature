@@ -37,7 +37,9 @@ and 0.3.0. The bootstrap sentence is kept struck because it was the plan until i
 **The release rehearsal, in order** (the ordering `release.yml` carries as a comment beside its steps, written
 here so a reader does not have to open the workflow): (1) `verify.ps1` green on the rig, (2) the tag pushed and the
 GitHub release published, which is the only trigger `release.yml` answers to, (3) the workflow's `verify` job — the
-suite on both CI Pythons, the two clean rooms, the classifier gate — before the publish job runs. A rehearsal that
+suite on both CI Pythons, the two clean rooms, the classifier gate; its three pure-shell gates (tag/ref, visibility,
+pre-release) run immediately after `setup-python`, so a dispatch from a branch is refused in seconds rather than after
+two suite runs and three clean installs (reordered 2026-09-06) — before the publish job runs. A rehearsal that
 skips (1) tests the workflow on a tree the rig never verified.
 
 ## Standing rules that apply here

@@ -98,7 +98,7 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Routes | **three, measured** — the **driven route** (rig-rendered AAPose sticks → Animate; proven at shot level, parked, and licence-clear for its unpark) · the **free route** (GLB-authored start frame → camera tier at the 6.0 / uni_pc baseline; identity holds unanchored, a handed world holds on two seeds, and the LoRA scene-lever is measured live — E14) · the **composed route** (authored references into a hosted identity-lock tier — graduated by E13: identity-locked, model-decided cinematography with worlds steered by what the references carry; disclosure note in its spec) |
 | Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** (GPU-hour billing) under per-experiment ceilings; **E13's four generations are the repo's first partner-credit spend, inside their pre-stated 424–844 bracket**; E14's two generations metered **0 partner credits** at a two-generation ceiling, reached exactly |
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
-| Spend gates | **Gate CANON** refuses a paid submission whose subject cannot be named against a machine-readable canon — surface is the row, a null occupant is a **hole rather than an absence**, and both directions are checked (the prompt covers the canon; everything in the prompt *is* canon). It fires **before** the output directory is created, inside each of the seven payload builders, because the irreversible step this repo owns is writing a payload. The escape is census-backed: `--no-canon` on a subject that *has* canon is refused, not honoured — and since the first health pass it is **loud on every spend**: each builder prints `[canon] ARMED\|UNGATED: <subject>` and records the verdict under `gates.CANON`, so no record can leave the question of whether canon was armed or escaped unanswered |
+| Spend gates | **Gate CANON** refuses a paid submission whose subject cannot be named against a machine-readable canon — surface is the row, a null occupant is a **hole rather than an absence**, and both directions are checked (the prompt covers the canon; everything in the prompt *is* canon). It fires **before** the output directory is created, inside each of the seven payload builders, because the irreversible step this repo owns is writing a payload. The escape is census-backed: `--no-canon` on a subject that *has* canon is refused, not honoured — and since the first health pass it is **loud on every spend**: each builder prints `[canon] ARMED: <subject>`, and on the census escape `[canon] UNGATED: <subject> — <the census row's reason>`, so a build log distinguishes a ratified hole from a subject whose canon was never written; and records the verdict under `gates.CANON`, so no record can leave the question of whether canon was armed or escaped unanswered |
 | Tests | **7181 passing on the rig** (64 skips, measured 2026-09-05 at the close of the Stage B health pass — 1359 before the first pass, 1781 after it), identical under `-O`; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
 | Status | **v0.3.0** — the record gains a spend gate and an index that verifies itself. `armature_core` ships to PyPI as `armature-studio` and npm as `@mcptoolshop/armature-studio`, published from a tag by OIDC with no long-lived token anywhere |
 
@@ -199,7 +199,24 @@ and `evidence.clause` is the machine-readable word a caller branches on; the cla
 `ENCODE_OK`, …), never the exit code alone — `blender -b -P` exits 0 when a script's exception propagates, which is
 why the Blender-side tools carry the same halt line through a local handler and five of the rig tools also write a
 `halt.json` beside the outputs they did not produce. The one implementation of the CPython contract is
-`armature_core.parts.run_tool_main`; its docstring is the specification.
+`armature_core.parts.run_tool_main`; its docstring is the specification. The record is printed as strict JSON with the
+tool's own prose left as prose; where the terminal's encoding cannot carry a character, the line falls back to a
+`\uXXXX` escape for that character rather than failing to print, and the exit code is unaffected either way.
+
+Three refusal families arrived with the Stage C pass (2026-09-06) and read the same everywhere:
+
+- **A tool that would write over an earlier run's artefacts** — a build's graph and record, a render's frames — refuses
+  with the clause `output_already_exists` and names them (a build names both files and both digests); `--overwrite`
+  replaces them, and the success record then carries `out_dir_pre_existed` and `overwrote`. The one spend builder that
+  sits under Gate CANON's `out_dir_not_empty` refuses a non-empty `--out` one gate earlier and takes no flag.
+- **A tool that waits** — an encode, a decode, a render, a download — prints a lowercase progress line to stderr,
+  `<tool> <stage> <done>/<total>  elapsed <e>s  bound <b>s`, before and after the wait (and per item where the work is
+  countable); stdout still carries only the one success or halt line. Every subprocess carries a bound derived from the
+  work, and a bound that is reached is a refusal by name (`ffmpeg_exceeded_the_time_bound`,
+  `downloader_exceeded_the_time_bound`) that names the partial work on disk and never retries — on the paid path a retry
+  spends credits that have no compensator.
+- **A gate that fires after the output directory exists** says so: the refusal names the directory, says it holds
+  partial work and is not a result, and says the supported next step.
 
 ### Running the suite
 
@@ -212,6 +229,11 @@ import; without it those tests skip by name), `ARMATURE_BLENDER` (the Blender ex
 run; without it, or off this rig, those tests skip visibly), and `ARMATURE_GIT` (the git the packaging test invokes).
 CI's exact recipe is the `python-tests` job in `.github/workflows/ci.yml`; `verify.ps1` runs the same suite twice
 (once under `-O`) and then the package build.
+
+A seed spec's `ceiling` block carries the numbers that bind — `submissions`, the per-arm or per-wave split,
+`counted_in`, `note`. The correction history behind them has one home at
+[specs/ceiling-why-machine-readable.md](specs/ceiling-why-machine-readable.md) (moved there from eight identical
+in-spec copies on 2026-09-06; `specs/*.json` went from 80,321 to 45,585 bytes).
 
 | | |
 |---|---|
