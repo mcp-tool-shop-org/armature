@@ -663,7 +663,7 @@ def download(manifest_path, exits_path=None, record_urls=True):
     # them and inventing one would be a progress bar that is not measuring the work.
     bound_s = timeout_for_jobs(len(planned))
     dest = os.path.dirname(manifest_abs)
-    print(f"[fetch] start download n={len(planned)} bound={bound_s}s -> {dest}",
+    print(f"fetch_run download 0/{len(planned)}  elapsed 0.0s  bound {bound_s}s -> {dest}",
           file=sys.stderr, flush=True)
     started = time.monotonic()
     try:
@@ -688,7 +688,7 @@ def download(manifest_path, exits_path=None, record_urls=True):
             f"was killed. {_partial_sentence(dest, planned)} No download was retried: this "
             f"step runs after the generation has been billed, and a retry this tool started "
             f"for you would hide which half of the fetch is stale",
-            {"gate": "FETCH", "andon": "FetchHalt", "clause": "downloader_timed_out",
+            {"gate": "FETCH", "andon": "FetchHalt", "clause": "downloader_exceeded_the_time_bound",
              "process_returncode": None, "returncode": None,
              "exits_record": exits_abs, "planned": len(planned),
              "bound_s": bound_s, "elapsed_s": round(elapsed, 1),
@@ -710,7 +710,7 @@ def download(manifest_path, exits_path=None, record_urls=True):
              "error": type(exc).__name__,
              "searched": os.environ.get("PATH", "")}) from exc
     elapsed = time.monotonic() - started
-    print(f"[fetch] done download n={len(planned)} elapsed={elapsed:.1f}s",
+    print(f"fetch_run download {len(planned)}/{len(planned)}  elapsed {elapsed:.1f}s  bound {bound_s}s",
           file=sys.stderr, flush=True)
     base = {"gate": "FETCH", "andon": "FetchHalt", "process_returncode": proc.returncode,
             # the key wave 8's halt carried; kept so a reader of an older receipt and a

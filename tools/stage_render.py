@@ -407,7 +407,7 @@ def run_export(spec, out_dir, backend=None, progress=None):
             "master_paths": f.get("master_paths"),
         }
 
-        extent = ch.depth_extent(z, mask)
+        extent = ch.depth_extent(z, mask, extra={"frame": i, "channel": "depth"})
         if extent is None:
             # F-92a67269, wave 22. This raise read "mask is non-empty but carries no finite
             # depth", which names a condition this branch can no longer reach and misnames
@@ -447,7 +447,7 @@ def run_export(spec, out_dir, backend=None, progress=None):
             if "normal" in requested:
                 pngio.write_png(
                     os.path.join(out_dir, "normal", names[i]),
-                    ch.encode_normal(n_cam, mask),
+                    ch.encode_normal(n_cam, mask, extra={"frame": i, "path": os.path.join(out_dir, "normal", names[i]), "channel": "normal"}),
                     bit_depth=8,
                 )
 
@@ -455,6 +455,7 @@ def run_export(spec, out_dir, backend=None, progress=None):
             edge, ediag = ch.derive_edge(
                 z, n_cam, mask,
                 spec["edge"]["depth_rel_threshold"], spec["edge"]["normal_angle_deg"],
+                extra={"frame": i, "path": os.path.join(out_dir, "edge", names[i]), "channel": "edge"},
             )
             pngio.write_png(os.path.join(out_dir, "edge", names[i]), edge, bit_depth=8)
             rec["edge"] = ediag
@@ -492,16 +493,16 @@ def run_export(spec, out_dir, backend=None, progress=None):
         }
         for i in range(count):
             z, mask = z_frames[i], mask_frames[i]
-            d_pf = ch.normalize_depth(z, mask, per_frame[i]["z_min"], per_frame[i]["z_max"])
-            d_ps = ch.normalize_depth(z, mask, shot_min, shot_max)
+            d_pf = ch.normalize_depth(z, mask, per_frame[i]["z_min"], per_frame[i]["z_max"], extra={"frame": i, "path": os.path.join(out_dir, "depth_perframe", names[i]), "channel": "depth_perframe"})
+            d_ps = ch.normalize_depth(z, mask, shot_min, shot_max, extra={"frame": i, "path": os.path.join(out_dir, "depth_pershot", names[i]), "channel": "depth_pershot"})
             pngio.write_png(
-                os.path.join(out_dir, "depth_perframe", names[i]), ch.encode_u8(d_pf), 8
+                os.path.join(out_dir, "depth_perframe", names[i]), ch.encode_u8(d_pf, extra={"frame": i, "path": os.path.join(out_dir, "depth_perframe", names[i]), "channel": "depth_perframe"}), 8
             )
             pngio.write_png(
-                os.path.join(out_dir, "depth_pershot", names[i]), ch.encode_u8(d_ps), 8
+                os.path.join(out_dir, "depth_pershot", names[i]), ch.encode_u8(d_ps, extra={"frame": i, "path": os.path.join(out_dir, "depth_pershot", names[i]), "channel": "depth_pershot"}), 8
             )
             diff, stats = ch.normalization_difference(d_pf, d_ps, mask)
-            pngio.write_png(os.path.join(out_dir, "p3_diff", names[i]), ch.encode_u8(diff), 8)
+            pngio.write_png(os.path.join(out_dir, "p3_diff", names[i]), ch.encode_u8(diff, extra={"frame": i, "path": os.path.join(out_dir, "p3_diff", names[i]), "channel": "p3_diff"}), 8)
             stats["frame"] = i
             stats["z_min"] = per_frame[i]["z_min"]
             stats["z_max"] = per_frame[i]["z_max"]

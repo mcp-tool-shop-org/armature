@@ -495,9 +495,10 @@ def test_the_report_says_when_no_frame_was_checkable():
 # fetchers returned ZERO hits. SIBLINGS: `fetch_t2v_run.download` calls this same
 # implementation, so both fetchers move together and there is no second shape.
 #
-# The shape is the coordinator's ruling (`wave-28/seams-inbox.md` @ 23:1x, adopted at
-# builders @ 23:30): stderr, `[fetch] start … bound=<b>s` / `[fetch] done … elapsed=<e>s`,
-# clause `downloader_timed_out`, evidence `{clause, bound_s, elapsed_s, planned, partial,
+# The shape is the wave's ONE spelling (instruments-measure @ 13:41; the coordinator's SEAM 8 named it
+# final after its own SEAM 6 crossed builders' adoption — aligned here in the merge fix-up): stderr,
+# `fetch_run download <done>/<total>  elapsed <e>s  bound <b>s` before and after the wait, clause
+# `downloader_exceeded_the_time_bound`, evidence `{clause, bound_s, elapsed_s, planned, partial,
 # binary, input}`, and NEVER a retry.
 #
 # reverted-red: yes — reverted, `subprocess.run` takes no `timeout` keyword (asserted
@@ -553,10 +554,10 @@ def test_the_bound_that_is_printed_is_the_bound_that_is_ENFORCED(tmp_path, monke
                    "--root", str(tmp_path / "runs")]) == 0
     err = capfd.readouterr().err
     assert seen.get("timeout") == F.timeout_for_jobs(3), seen.get("timeout")
-    assert f"bound={F.timeout_for_jobs(3)}s" in err, err
-    assert "[fetch] start download n=3" in err
-    assert "[fetch] done download n=3" in err
-    assert "elapsed=" in err
+    assert f"bound {F.timeout_for_jobs(3)}s" in err, err
+    assert "fetch_run download 0/3" in err
+    assert "fetch_run download 3/3" in err
+    assert "elapsed " in err
 
 
 def test_the_progress_lines_are_on_stderr_and_are_not_sentinels(tmp_path, monkeypatch,
@@ -615,7 +616,7 @@ def test_a_downloader_that_exceeds_the_bound_is_a_NAMED_refusal_with_the_partial
     with pytest.raises(F.FetchHalt) as exc:
         F.main(["--dump", dump, "--run", "r", "--root", str(tmp_path / "runs")])
     ev = exc.value.evidence
-    assert ev["clause"] == "downloader_timed_out"
+    assert ev["clause"] == "downloader_exceeded_the_time_bound"
     assert ev["gate"] == "FETCH" and ev["andon"] == "FetchHalt"
     assert ev["bound_s"] == F.timeout_for_jobs(3) == calls[0]
     assert isinstance(ev["elapsed_s"], float)
@@ -645,13 +646,13 @@ def test_the_timeout_refusal_carries_the_same_base_keys_as_its_siblings():
             keys = {k.value: v for k, v in zip(d.keys, d.values)
                     if isinstance(k, ast.Constant)}
         if keys.get("clause") is not None and getattr(
-                keys.get("clause"), "value", None) == "downloader_timed_out":
+                keys.get("clause"), "value", None) == "downloader_exceeded_the_time_bound":
             assert {"gate", "andon", "clause", "process_returncode", "returncode",
                     "exits_record", "planned", "bound_s", "elapsed_s", "binary",
                     "input", "partial"} <= set(keys), sorted(keys)
             break
     else:
-        raise AssertionError("no `downloader_timed_out` raise found in fetch_run")
+        raise AssertionError("no `downloader_exceeded_the_time_bound` raise found in fetch_run")
 
 
 def test_the_sibling_fetcher_moves_with_it():

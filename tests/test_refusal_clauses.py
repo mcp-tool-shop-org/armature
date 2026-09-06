@@ -1749,10 +1749,6 @@ RECORDED_CLAUSES = [
     'class_not_named_by_the_allowlist',
     'class_with_an_unreadable_measurement_date',
     'class_without_a_recorded_free_measurement',
-    # WAVE 28 (instruments-measure, F-79f38dd5): `extract_clip_frames`' three refusals
-    # carried no clause at all — the tool that turns a PAID run's returned clip into
-    # frames. Each now names its condition and its evidence carries `clip_bytes` and the
-    # directory the run created before it refused.
     'clip_decoded_to_zero_frames',
     'clip_end_is_closer_than_the_subject',
     'clip_has_no_consecutive_pair',
@@ -1774,9 +1770,6 @@ RECORDED_CLAUSES = [
     'conditioning_chain_loops',
     'conditioning_family_absent',
     'control_names_not_supplied',
-    # WAVE 28 (instruments-measure, F-18e31b77): the write half of `stage_render.main`'s
-    # former one-size `except OSError`. An out-of-space or locked write inside
-    # `run_export` used to reach the operator as `spec_or_asset_path_unreadable`.
     'control_sequence_write_failed',
     'control_source_directory_holds_no_frames',
     'convention_nonconformance',
@@ -1809,9 +1802,9 @@ RECORDED_CLAUSES = [
     'diagnostic_cannot_be_armed',
     'distinct_uploads_disagree_with_the_rendered_control',
     'donor_below_threshold',
+    'downloader_exceeded_the_time_bound',
     'downloader_job_exits',
     'downloader_shell_not_found',
-    'downloader_timed_out',
     'drawing_constant_outside_the_record',
     'drawing_convention_not_retrieved',
     'duplicate_legal_clause_id',
@@ -1848,19 +1841,12 @@ RECORDED_CLAUSES = [
     'experiment_has_no_seed_registry',
     'experts_read_different_positives',
     'export_incomplete',
-    # WAVE 28 (instruments-measure, F-18e31b77): the other half of the same split — an
-    # OSError inside `run_export` on a path OUTSIDE `--out` is a read of the asset or of
-    # something the backend opens, and calling it a write failure would be a second wrong
-    # label rather than a fix.
     'export_input_path_unreadable',
     'extent_over_zero_points',
     'extraction_left_no_faces',
     'face_assigned_outside_the_registered_list',
     'face_assigned_to_nothing',
     'ffmpeg_binary_not_found',
-    # WAVE 28 (instruments-measure, F-594d4efc): one word for all three ffmpeg subprocess
-    # sites, which had no `timeout=` at all. The bound is DERIVED per call from the frame
-    # list or the file's byte size, and a bound that is reached is a refusal, never a retry.
     'ffmpeg_exceeded_the_time_bound',
     'ffmpeg_refused_the_decode',
     'ffmpeg_refused_the_encode',
@@ -2037,8 +2023,6 @@ RECORDED_CLAUSES = [
     'no_valid_render_engine',
     'no_vertex_group_for_bone',
     'no_vertices_to_frame',
-    # WAVE 28 (instruments-measure, F-79f38dd5): `extract_clip_frames.probe`'s headline
-    # refusal, which carried a `stderr_tail` and no clause, no gate and no andon.
     'no_video_stream_line',
     'no_views',
     'node_map_duplicate_id',
@@ -2246,8 +2230,6 @@ RECORDED_CLAUSES = [
     'stats_document_is_missing_a_key',
     'still_not_manifold_after_repair',
     'stray_png_in_the_frame_population',
-    # WAVE 28 (instruments-measure, F-79f38dd5): the second of the probe's two, which
-    # carried only `{"line": line}`.
     'stream_line_carries_no_resolution',
     'stream_reported_no_rate',
     'strip_stride_not_positive',
