@@ -31,7 +31,7 @@ Two things B1 measured that this stage cannot, and says so instead of pretending
   quantity instead: the ratio of summed rest segment lengths to summed observed segment
   lengths. Bone lengths do not change with pose, so this is a size correction that does not
   need to know what the dancer was doing.
-Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".
 """
 
 import argparse

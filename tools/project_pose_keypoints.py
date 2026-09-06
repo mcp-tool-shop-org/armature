@@ -51,7 +51,7 @@ The gates — all raise, in-process, before the JSON exists
 Compensator (NAMED_COMPENSATORS): the only world-touching act is writing a JSON under
 `outputs/`. Compensator: delete the directory; owner: the executor session. The motion
 record and the manifest are opened read-only.
-Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".
 """
 
 import argparse

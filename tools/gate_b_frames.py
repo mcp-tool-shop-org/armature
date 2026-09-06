@@ -33,7 +33,7 @@ Compensator (NAMED_COMPENSATORS): writes one JSON under `outputs/`. Compensator:
 file; owner: the executor session. Every frame directory is opened read-only.
 
 Prints `GATE_B_OK`, or raises.
-Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
+Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".
 """
 
 import argparse
