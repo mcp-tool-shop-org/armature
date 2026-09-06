@@ -290,14 +290,22 @@ def main():
 
     if not final["closed_manifold"]:
         raise NotManifoldAfterRepair(
-            "the shell is still not a closed manifold after repair",
-            {"clause": "still_not_manifold_after_repair", "final": final, "passes": passes})
+            f"the shell is still not a closed manifold after {len(passes)} repair "
+            f"pass(es): {final['non_manifold_verts']} non-manifold verts, "
+            f"{final['non_manifold_edges']} non-manifold edges, "
+            f"{final['boundary_edges']} boundary edges "
+            f"(faces={final['faces']}, verts={final['verts']})",
+            {"clause": "still_not_manifold_after_repair", "final": final,
+             "passes": passes, "passes_needed": len(passes)})
     removed = shell_faces - final["faces"]
     if removed > REPAIR_FACE_BUDGET * shell_faces:
         raise TooMuchRemoved(
-            "repair removed more of the character than a stitch-fixing pass should",
+            f"repair removed {removed} of {shell_faces} faces "
+            f"({removed / shell_faces:.4f} of the shell) against a budget of "
+            f"{REPAIR_FACE_BUDGET:.2f} ({int(REPAIR_FACE_BUDGET * shell_faces)} faces)",
             {"clause": "repair_removed_too_much", "faces_removed": removed, "of": shell_faces,
-             "budget_fraction": REPAIR_FACE_BUDGET})
+             "budget_fraction": REPAIR_FACE_BUDGET,
+             "removed_fraction": removed / shell_faces})
 
     if not ob.data.validate(verbose=False):
         validated = "mesh reported valid"

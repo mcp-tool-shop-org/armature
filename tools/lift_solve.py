@@ -266,7 +266,13 @@ def author(arm_obj, scene, frames, rest, fps):
 
     action = arm_obj.animation_data.action if arm_obj.animation_data else None
     if action is None:
-        raise LiftGate("keying produced no action at all", {"clause": "keying_produced_no_action"})
+        n_bones = len(sitelist.ALL_NAMES)
+        n_frames = len(frames)
+        raise LiftGate(
+            f"keying produced no action at all after posing {n_bones} sites "
+            f"across {n_frames} frames",
+            {"clause": "keying_produced_no_action",
+             "n_bones": n_bones, "n_frames": n_frames})
     n = 0
     for fc in _action_fcurves(action):
         n += 1

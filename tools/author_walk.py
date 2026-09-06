@@ -298,7 +298,13 @@ def author(arm_obj, scene, gait, fps):
 
     action = arm_obj.animation_data.action if arm_obj.animation_data else None
     if action is None:
-        raise WalkGate("keying produced no action at all", {"clause": "keying_produced_no_action"})
+        n_bones = len(walk.GAIT_BONES)
+        n_frames = len(gait["frames"])
+        raise WalkGate(
+            f"keying produced no action at all after posing {n_bones} gait bones "
+            f"across {n_frames} frames",
+            {"clause": "keying_produced_no_action",
+             "n_bones": n_bones, "n_frames": n_frames})
     n_curves = 0
     for fc in action_fcurves(action):
         n_curves += 1
