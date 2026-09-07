@@ -1,6 +1,11 @@
 # Monthly re-resolve for Actions SHA pins. Workflows pin digests (not floating tags);
 # Dependabot opens a reviewable PR that bumps the digest and the version comment together.
 # Publish-path actions stay SHA-pinned — this file does not switch them to moving tags.
+#
+# pip ecosystem: pyproject.toml Requires-Dist floors (numpy / pillow / opencv /
+# matplotlib and friends). Monthly grouped PRs propose version moves; lower bounds stay
+# honest with the CI matrix. No lockfile at repo root yet — pip-audit still resolves the
+# installed env in CI; a constraints file is an optional follow-up so both share one graph.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -9,5 +14,13 @@ updates:
       interval: monthly
     groups:
       github-actions:
+        patterns:
+          - "*"
+  - package-ecosystem: pip
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      python-deps:
         patterns:
           - "*"

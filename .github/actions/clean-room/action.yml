@@ -191,6 +191,20 @@ runs:
         echo ::group::probe
         "$WHEEL_ROOM/bin/python" "$GITHUB_ACTION_PATH/lazy_import_probe.py"
         echo ::endgroup::
+        # CycloneDX SBOM of the wheel room's resolved set — beside dist/, never inside it.
+        # release.yml uploads `sbom/` next to `dist/` (retention-days 14). Stdlib emitter
+        # only: no extra pip tool on the publish path (toolchain ceiling census).
+        echo ::group::sbom
+        rm -rf sbom
+        mkdir -p sbom
+        SBOM_PATH="sbom/${DIST_NAME}-${VERSION}.cdx.json"
+        python "$GITHUB_ACTION_PATH/sbom_emit.py" "$WHEEL_ROOM/bin/python" "$SBOM_PATH" \
+          --name "$DIST_NAME" --version "$VERSION"
+        if [ ! -f "$SBOM_PATH" ]; then
+          echo "::error::SBOM was not written at $SBOM_PATH"
+          exit 1
+        fi
+        echo ::endgroup::
 
     # THE ONE FAILURE CLASS THIS PROJECT HAS ALREADY PAID FOR, AND THE ONLY GATE THAT CAN
     # SEE IT. `twine check` above validates metadata STRUCTURE, not classifier MEMBERSHIP:

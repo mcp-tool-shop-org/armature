@@ -268,21 +268,32 @@ jobs:
           python-version: ${{ matrix.python-version }}
 
       # Rehearsal obligation is CI-reachable: release.yml's STATUS line must name a completed
-      # Actions run, not NOT YET RUN. A live release:published refuses the same string; this
-      # step makes the debt visible on every PR that touches packaging rather than only after
-      # a tag is cut. Cleared when STATUS records run id + tag.
+      # Actions run that still matches the current gate set — not NOT YET RUN, not STALE,
+      # and not the pre-pip-audit id 34073888719. A live release:published refuses the same
+      # shapes; this step makes the debt visible on every PR rather than only after a tag
+      # is cut. Cleared when STATUS is rewritten to STATUS: RUN <id> after re-dispatch.
       # GATE BEFORE SPEND: sits on the checkout+python floor, before pip / suite / clean-room
       # / npm pack — a run that will refuse is refused before the job is paid for.
       - name: release.yml rehearsal STATUS must be recorded
         run: |
           set -eu
           # Header STATUS comment only — not this step's own error text.
-          if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*NOT YET RUN' .github/workflows/release.yml; then
+          if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*NOT YET RUN\b' .github/workflows/release.yml; then
             echo "::error::release.yml header STATUS is still unset; rehearse before the next live release."
             echo "::error::gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true"
             exit 1
           fi
-          echo "STATUS line is recorded."
+          if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*STALE\b' .github/workflows/release.yml; then
+            echo "::error::release.yml header STATUS is STALE; re-dispatch after the gate-set change."
+            echo "::error::gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true"
+            exit 1
+          fi
+          if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*RUN[[:space:]]+34073888719\b' .github/workflows/release.yml; then
+            echo "::error::release.yml STATUS still names pre-pip-audit rehearsal 34073888719."
+            echo "::error::Re-dispatch after pip-audit and rewrite STATUS with the new run id."
+            exit 1
+          fi
+          echo "STATUS line is recorded and fresh."
 
       # opencv is pinned to the rig's verified version: the aapose golden-frame
       # tests assert byte-stable rasterization, and the rasterizer's version is

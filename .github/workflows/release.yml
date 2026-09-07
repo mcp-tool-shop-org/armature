@@ -64,13 +64,15 @@ on:
   # Do NOT cut a live public version tag solely to rehearse. Prefer an existing release
   # tag that already carries the actions (see STATUS) or a throwaway `rehearse-*` tag.
   #
-  # STATUS: RUN 34073888719 at tag v0.4.0 on 2026-09-07 (workflow_dispatch,
-  # rehearse=true; verify success; pypi+npm skipped — no publish jobs created). First
-  # end-to-end Actions proof; no new public version tag was cut. Re-dispatch after any
-  # change to this workflow or to `.github/actions/{clean-room,npm-clean-room,sheet-fonts}`
-  # (wave-34 handoff + throwaway-tag edits included), and rewrite this line with the new
-  # run id + tag. A live `release: published` refuses while this line still says
-  # NOT YET RUN (STATUS clause in the pre-release gate; ci.yml mirrors the obligation).
+  # STATUS: STALE 34073888719 at tag v0.4.0 on 2026-09-07 (workflow_dispatch,
+  # rehearse=true; verify success; pypi+npm skipped — no publish jobs created). That run
+  # predates `audit Python dependencies` (pip-audit) on this job — measured: `git show
+  # 275fcca` has zero pip-audit hits; HEAD installs `pip-audit>=2.7,<3`. A live
+  # `release: published` refuses while STATUS is NOT YET RUN, STALE, or still names
+  # run 34073888719 (STATUS clause in the pre-release gate; ci.yml mirrors it).
+  # Re-dispatch after any change to this workflow or to
+  # `.github/actions/{clean-room,npm-clean-room,sheet-fonts}`, then rewrite as:
+  #   STATUS: RUN <id> at tag <tag> on <date> (workflow_dispatch, rehearse=true; ...)
   workflow_dispatch:
     inputs:
       rehearse:
@@ -336,17 +338,29 @@ jobs:
           esac
           # REHEARSAL STATUS (same step, not a fourth gate — tests pin exactly three pure-shell
           # gates in verify). A live release:published refuses while the header STATUS line
-          # still says NOT YET RUN. Match only that comment line, never this script's needle.
-          # On workflow_dispatch the obligation notices and continues so the first proof can
-          # clear the line. ci.yml carries the same STATUS check so the debt is CI-reachable.
+          # is unset (NOT YET RUN), marked STALE after a gate-set change, or still names the
+          # pre-pip-audit rehearsal id 34073888719. Match only that comment line, never this
+          # script's needle. On workflow_dispatch the obligation notices and continues so a
+          # fresh proof can clear the line. ci.yml carries the same STATUS check so the debt
+          # is CI-reachable before a tag is cut.
           case "$GITHUB_EVENT_NAME" in
             release)
-              if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*NOT YET RUN' .github/workflows/release.yml; then
+              if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*NOT YET RUN\b' .github/workflows/release.yml; then
                 echo "::error::release.yml header STATUS is still unset; a live release must not be the first execution of this workflow's gates."
                 echo "::error::Rehearse first: gh workflow run release.yml --ref <tag> -f rehearse=true — then record the run id and tag on the STATUS line."
                 exit 1
               fi
-              echo "::notice::STATUS is recorded; live release may proceed past the rehearsal obligation."
+              if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*STALE\b' .github/workflows/release.yml; then
+                echo "::error::release.yml header STATUS is STALE; the recorded rehearsal predates a later gate-set change (e.g. pip-audit)."
+                echo "::error::Re-dispatch: gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true — then rewrite STATUS: RUN <id> ..."
+                exit 1
+              fi
+              if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*RUN[[:space:]]+34073888719\b' .github/workflows/release.yml; then
+                echo "::error::release.yml STATUS still names pre-pip-audit rehearsal 34073888719; that run never exercised audit Python dependencies."
+                echo "::error::Re-dispatch after pip-audit and rewrite STATUS with the new run id."
+                exit 1
+              fi
+              echo "::notice::STATUS is recorded and fresh; live release may proceed past the rehearsal obligation."
               ;;
             *)
               echo "::notice::$GITHUB_EVENT_NAME is not release: published; STATUS obligation applies to a live release only."
@@ -429,10 +443,19 @@ jobs:
       - uses: ./.github/actions/npm-clean-room
         with:
           python: ${{ runner.temp }}/cleanroom/bin/python
+      # retention-days: 14 — studio window for pre-publish wheel/sdist (+ SBOM) forensics /
+      # re-run debugging. Platform default without this key is 90 days (docs.github.com,
+      # noted 2026-09-07). The artifact is the exact bytes handed to pypi-publish.
+      # `sbom/` is CycloneDX from the clean-room wheel resolve (not inside dist/, so the
+      # classifier gate and pypi-publish never see it as a distribution).
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
-          path: dist/
+          path: |
+            dist/
+            sbom/
+          retention-days: 14
+          if-no-files-found: error
 
   pypi:
     needs: verify
@@ -454,10 +477,12 @@ jobs:
     permissions:
       id-token: write
     steps:
+      # path: . — artifact holds both `dist/` and `sbom/` (CycloneDX beside the wheel/sdist).
+      # Downloading into `dist/` would nest as dist/dist/ and break pypi-publish.
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           name: dist
-          path: dist/
+          path: .
       # A release workflow gets re-run — because a sibling job failed, because a gate caught
       # something, because a step was fixed. PyPI rejects a duplicate filename with a 400, so
       # without this the second run failed red for the sound reason that it had already

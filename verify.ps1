@@ -72,8 +72,11 @@
   tag:
       gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true
   The summary block names the three gates as NOT exercised so a green local run cannot be
-  read as clearance to cut a public version tag. Python `pip-audit` (ci.yml / release.yml)
-  is also CI-only — the rig venv is a different resolved set than the install line.
+  read as clearance to cut a public version tag. Python `pip-audit` is opt-in via
+  `-PipAudit` (same pin as ci.yml / release.yml: `pip-audit>=2.7,<3`, spinner off) and
+  runs at the start of the tests leg against the repo venv — not a fifth Invoke-Leg
+  (tests/test_verify_script.py pins four). The rig venv is still a different resolved set
+  than CI's install line; `-PipAudit` pre-flights the same advisory class, not byte-identity.
 
   Every leg runs even if an earlier one fails, so one invocation reports the whole
   picture rather than the first thing to break. The exit code is 0 only if all legs pass,
@@ -93,14 +96,23 @@
   `tests/test_packaging.py` pin what the published archive carries), so `build` is needed by
   leg 1 as well — skipping this leg does not remove that requirement.
 
+.PARAMETER PipAudit
+  Run the Python dependency advisory check (`pip-audit`) at the start of the tests leg,
+  with the same pin and spinner-off invocation as ci.yml python-tests / release.yml verify.
+  Opt-in: default verify does not install the auditor or hit the advisory index. The
+  summary prints exercised vs not so a green run without this flag cannot be read as
+  having cleared the CI pip-audit gate.
+
 .EXAMPLE
   pwsh -NoProfile -File .\verify.ps1
   pwsh -NoProfile -File .\verify.ps1 -NoSite
+  pwsh -NoProfile -File .\verify.ps1 -PipAudit
 #>
 [CmdletBinding()]
 param(
     [switch]$NoSite,
-    [switch]$NoPackage
+    [switch]$NoPackage,
+    [switch]$PipAudit
 )
 
 $ErrorActionPreference = 'Continue'
@@ -244,6 +256,17 @@ if ($absent.Count -gt 0) {
 }
 
 Invoke-Leg -Name 'tests' -Body {
+    # Opt-in pip-audit (ci.yml / release.yml auditor pin), folded into this leg so the
+    # four-leg census in tests/test_verify_script.py stays honest. -PipAudit is required;
+    # default verify does not claim the advisory gate. setuptools upgrade stays CI-only
+    # (hosted image PYSEC-2026-3447); the rig venv is not that image, and a floor-only
+    # setuptools token here would join the unbounded toolchain census.
+    if ($PipAudit) {
+        & $python -m pip install "pip-audit>=2.7,<3"
+        if ($LASTEXITCODE -ne 0) { return }
+        & $python -m pip_audit --progress-spinner off
+        if ($LASTEXITCODE -ne 0) { return }
+    }
     & $python -m pytest $(Join-Path $repo 'tests') -q
 }
 
@@ -569,10 +592,10 @@ if ($NoSite) {
             # install. `npm ci` runs every lifecycle script in the resolved tree, so a scan
             # that follows it reports a compromised dependency that has already run — here,
             # on the rig. `--package-lock-only` reads the committed lockfile and needs no
-            # node_modules. site/ is the npm lockfile surface (Python is audited in CI via
-            # pip-audit, not here); `high` is the studio's threshold. Missing locally
-            # until the legs were enumerated against ci.yml, which meant a green local run
-            # could still be a lockfile CI then rejected.
+            # node_modules. site/ is the npm lockfile surface (Python advisory check is
+            # opt-in `-PipAudit` on the tests leg, same pin as ci.yml); `high` is the
+            # studio's threshold. Missing locally until the legs were enumerated against
+            # ci.yml, which meant a green local run could still be a lockfile CI then rejected.
             npm audit --package-lock-only --audit-level=high
             if ($LASTEXITCODE -ne 0) { return }
             npm ci
@@ -767,7 +790,11 @@ Write-Host '  (the legs and their order are ci.yml''s; the runtimes are this rig
 # in this script; only a release event or `workflow_dispatch` with rehearse reaches them.
 Write-Host '  release gates: NOT exercised here (tag/ref, visibility, pre-release — release.yml only)'
 Write-Host '    rehearse: gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true'
-Write-Host '  python dep audit (pip-audit): NOT exercised here — ci.yml python-tests / release verify'
+if ($PipAudit) {
+    Write-Host '  python dep audit (pip-audit): exercised in tests leg (-PipAudit; same pin as ci.yml / release.yml)'
+} else {
+    Write-Host '  python dep audit (pip-audit): NOT exercised here — pass -PipAudit (ci.yml / release.yml always run it)'
+}
 Write-Host ''
 
 $legRows = @()

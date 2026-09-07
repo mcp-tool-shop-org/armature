@@ -52,6 +52,12 @@ venv/
 *.egg-info/
 .pytest_cache/
 .ruff_cache/
+# Coverage carriers — local pytest-cov / coverage.py runs. Measured 2026-09-07 with
+# `git check-ignore -v`: `.coverage`, `htmlcov/`, `coverage.xml` were NOT IGNORED.
+.coverage
+.coverage.*
+htmlcov/
+coverage.xml
 
 # Build artifacts. The published package is built by CI from a tag, never from a local
 # tree, so a wheel that rode a commit could only ever disagree with the one users get.
@@ -132,6 +138,14 @@ _netrc
 *.p12
 *.pfx
 credentials.json
+# Common private-key basenames (*.pem / *.key already covered). Measured 2026-09-07:
+# `id_rsa` and `id_ed25519` were NOT IGNORED while `.netrc` was.
+id_rsa
+id_rsa.pub
+id_ed25519
+id_ed25519.pub
+id_ecdsa
+id_dsa
 
 # OS / editor
 .DS_Store
