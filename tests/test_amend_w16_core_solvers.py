@@ -1280,10 +1280,14 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # again; row deleted in the same commit (this table's own rule).
     ('test_gates', 'sheet_compose.py', 57),
     ('test_lift_solve', 'measure_lift.py', 481),
-    ('test_amend_w16_core_solvers', 'lift_solve.py', 307),
+    # WAVE 34 pin-fix: lift_solve.py:307 and author_walk.py:13 resolve again — rows
+    # deleted below per this table's own rule. Three new blanks join (numbers survive
+    # only as the measurement; reasons name no <file>.py:<n> here).
     ('test_assembly', 'test_amend_w12_core_solvers.py', 797),
-    ('test_instrument_exits', 'author_walk.py', 13),
     ('test_instruments_amend_w10', 'test_check_relift.py', 44),
+    ('test_build_payload', 'lift_solve.py', 345),
+    ('test_core_solver_evidence', 'author_walk.py', 712),
+    ('test_walk', 'author_walk.py', 712),
     # ROW DELETED, WAVE 25 (core-solvers), in the commit that made it live again — which is
     # this table's own stated rule. The row named a line in `blender_scene.py` cited by
     # `test_instruments_amend_w14`, kept as a deliberate stale citation because the number

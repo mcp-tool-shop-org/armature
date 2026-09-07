@@ -97,11 +97,20 @@ def test_g2_fires_before_the_manifest_is_written(tmp_path, monkeypatch):
 
 
 def test_pose_is_refused_because_its_convention_is_not_retrieved(tmp_path):
+    """WAVE 34 pin-fix: OpenPose-18 PALETTE/names ARE retrieved, so the convention
+    door no longer refuses `pose`. This tool still does not emit pose frames, so G2
+    fires on an empty pose channel after the run directory exists.
+    """
+    from armature_core import openpose
+
+    assert openpose.require_drawing_convention() is True
     spec = make_spec(tmp_path, channels=("mask", "pose"))
-    with pytest.raises(ArmatureError) as exc:
-        stage_render.run_export(spec, str(tmp_path / "run"), backend=FakeBackend(64, 96))
-    assert "not fully retrieved" in str(exc.value)
-    assert not (tmp_path / "run").exists()
+    out = tmp_path / "run"
+    with pytest.raises(G2Completeness) as exc:
+        stage_render.run_export(spec, str(out), backend=FakeBackend(64, 96))
+    assert "not fully retrieved" not in str(exc.value)
+    assert "pose" in str(exc.value)
+    assert out.exists()
 
 
 def test_depth_direction_near_is_bright(tmp_path):

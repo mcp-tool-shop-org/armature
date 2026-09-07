@@ -142,6 +142,15 @@ def _gate_raises(module_name, source=None):
         with blender_stubbed():
             m = importlib.import_module("armature_core." + module_name)
             classes = {name: getattr(m, name) for name in dir(m)}
+            # Local `from .errors import GateX` inside a function is invisible to
+            # `dir(m)`; the judge still counts those raises by class name. Fall back
+            # to every GateFailure subclass defined on errors so cli's two GateCanon
+            # sites (WAVE 34) stay in the same population both walks measure.
+            import armature_core.errors as _errors
+            for _name in dir(_errors):
+                _obj = getattr(_errors, _name)
+                if isinstance(_obj, type) and issubclass(_obj, GateFailure):
+                    classes.setdefault(_name, _obj)
         resolve_class = classes.get
     else:
         # The real base class, so `issubclass(..., GateFailure)` reads the same way it
@@ -288,8 +297,10 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         #   route_gates 50 -> 53  F-ebb1ebb4 / F-6fcab339 / F-f1234354:
         #                       `ruled_name_with_unknown_suffix`, `hosted_nodes_without_a_tier`
         #                       and `generator_family_contradicted`.
-        "assembly": 23, "blender_scene": 8, "canon": 1, "donor_gate": 15, "framing": 6,
-        "gates": 28, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8,
+        "assembly": 23, "blender_scene": 8, "canon": 1, "cli": 2, "donor_gate": 15, "framing": 6,
+        # WAVE 34 pin-fix: gates 28 -> 29 (measured); cli 0 -> 2 GateCanon raises via
+        # function-local imports, now visible to `_gate_raises` after the errors fallback.
+        "gates": 29, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8,
                 # WAVE 20 (core-gates, 2026-09-05): +3 in `route_gates.RouteGate`, RE-DERIVED with
         # `==` in this worktree against the merged base `475f4eb`, which every census here read
         # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
@@ -360,7 +371,8 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # WAVE 25 (core-gates, 2026-09-05): 208 -> 219, the three rows itemised in the dict
     # above. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL — the coordinator
     # re-measures on the merged tree and never sums the branches.
-    assert sum(with_gates.values()) == 219
+    # WAVE 34 pin-fix: 219 -> 222 (gates +1, cli +2 GateCanon via function-local import).
+    assert sum(with_gates.values()) == 222
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

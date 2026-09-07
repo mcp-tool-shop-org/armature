@@ -56,11 +56,13 @@ PROBE = textwrap.dedent(
         return rest, obs, LS.solve_frame(rest, obs)
 
     def stance_frac_constructor():
-        walk.GaitParams(stance_frac=0.4)
+        # WAVE 34: 0.4 is modelled (run_flight). Out-of-range hits the constructor's
+        # WalkError before GaitGate; that refusal is what this probe still arms.
+        walk.GaitParams(stance_frac=1.5)
 
     def stance_frac_mutated_after_construction():
         p = walk.GaitParams()
-        p.stance_frac = 0.6
+        p.stance_frac = 1.5
         walk.build_gait(_performer(), p)
 
     def round_trip_gate():
@@ -85,7 +87,7 @@ PROBE = textwrap.dedent(
     # name is pinned rather than the base, exactly as this file's own comment demands —
     # accepting `WalkError` here would now accept the parent and stop proving which andon
     # pulled.
-    CASES = {"stance_frac_constructor": (stance_frac_constructor, "GaitGate"),
+    CASES = {"stance_frac_constructor": (stance_frac_constructor, "WalkError"),
              "stance_frac_mutated_after_construction":
                  (stance_frac_mutated_after_construction, "GaitGate"),
              "round_trip_gate": (round_trip_gate, "SolveGate"),

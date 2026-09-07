@@ -414,6 +414,10 @@ RECORDED_POPULATION = frozenset({
     "UnknownBaseline",
     "TurnaroundCropGate", "TurnaroundGate", "TurnaroundPlanRefusal", "WalkError",
     "WalkGate",
+    # WAVE 34 pin-fix (core-solvers coordinator): MEASURED on the merged tree.
+    # CeilingBudget / SubmitGate / UploadGate are new multi-site family classes;
+    # SiteListError crossed the two-site threshold (leaves the single-site set).
+    "CeilingBudget", "SiteListError", "SubmitGate", "UploadGate",
     # Joined 2026-09-04 (wave 10, instruments-measure). The census caught the growth
     # loudly, which is what it is for: `ReviewClipError`, `ShotsetSheetError` and
     # `ZoomSheetError` are new typed classes replacing thirteen bare
@@ -664,7 +668,7 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # which was already policed. It leaves the single-site set in the same commit — see
     # `test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed`, whose two
     # derived counts move 22 -> 21 and 21 -> 20 for the same one reason.
-    assert len(POLICED) == 127, sorted(POLICED)
+    assert len(POLICED) == 131, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -912,9 +916,10 @@ def test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed():
         n for n in RAISE_SITES if n not in POLICED}
     assert "QuadriflowDeclined" in single
     assert not (single & POLICED)
-    assert len(single) == 21, sorted(single)
+    # WAVE 34 pin-fix: SiteListError crossed into POLICED; 21 -> 20 / 20 -> 19.
+    assert len(single) == 20, sorted(single)
     family_here = single & _family_classes_defined_under_tools()
-    assert len(family_here) == 20, sorted(family_here)
+    assert len(family_here) == 19, sorted(family_here)
 
 
 def _family_classes_defined_under_tools():
@@ -1051,7 +1056,9 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # return`, which is what `test_the_two_family_walks_are_one_law` reconciles.
     # BRANCH-LOCAL — a COMPOSITION on the merged tree.
     # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree with the derivation above.
-    assert len(defined) == 148, len(defined)
+    # WAVE 34 pin-fix: +3 family classes on the merged tree (CeilingBudget,
+    # SubmitGate, UploadGate); SiteListError was already defined.
+    assert len(defined) == 151, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
@@ -1632,13 +1639,18 @@ TESTS_DIR = TESTS
 
 #: DERIVED 2026-09-05 by _census_nodes.clause_literals(). Equality.
 #:
-#: WAVE 34 (core-solvers feature-execute): 699 -> 749, RE-DERIVED on this branch.
-#: +51 clauses from GLB animation ingest, framing path, character-class adapters,
-#: OpenPose drawing, articulated hands, gait named params, lift root_provider;
-#: -1 retired stance_frac_not_modelled (F-ce5896e5 generalised the gait model).
+#: WAVE 34 (core-solvers feature-execute): 699 -> 749 on the feature branch.
+#: WAVE 34 pin-fix: 749 -> 816 on the merged tree — builders/submit/cloud/retarget
+#: clauses arrived with the same merge; +51 core-solvers clauses from GLB animation,
+#: framing path, character-class, OpenPose drawing, articulated hands, named gaits,
+#: lift root_provider; -1 retired stance_frac_not_modelled (F-ce5896e5).
 RECORDED_CLAUSES = [
     'above_one',
     'adjacent_pair_shapes_differ',
+    'admission_matches',
+    'admission_missing',
+    'admission_not_a_mapping',
+    'admission_unreadable',
     'allowlist_may_only_narrow',
     'allowlist_name_pattern',
     'alpha_declaration_missing',
@@ -1669,6 +1681,7 @@ RECORDED_CLAUSES = [
     'animation_translation_not_vec3',
     'animation_unsupported_accessor_type',
     'animation_unsupported_component_type',
+    'api_key_missing',
     'arc_did_not_survive',
     'arc_does_not_move',
     'arc_names_parts_the_figure_has_none_of',
@@ -1726,6 +1739,9 @@ RECORDED_CLAUSES = [
     'bone_has_no_model_rule',
     'bone_has_no_registered_cross_section',
     'bone_has_zero_rest_length',
+    'bone_map_not_an_object',
+    'bone_map_source_bone_missing',
+    'bone_map_unknown_sitelist_bones',
     'bone_names_do_not_match_registry',
     'bone_radius_not_positive',
     'bone_set_changes_between_frames',
@@ -1742,6 +1758,8 @@ RECORDED_CLAUSES = [
     'bufferview_past_bin_chunk',
     'built_graph_is_not_the_spec_graph',
     'built_graph_link_topology_is_wrong',
+    'bvh_import_failed',
+    'bvh_importer_missing',
     'cadence_outruns_frame_rate_at_a_stance_exchange',
     'camera_clip_range_not_ordered',
     'camera_frame_contradicted',
@@ -1763,9 +1781,12 @@ RECORDED_CLAUSES = [
     'cap_below_the_bbox_corners',
     'cap_would_loosen_the_module_ceiling',
     'carried_from_an_assembly_gate',
+    'ceiling_allows',
     'census_is_not_a_mapping',
     'centreline_has_zero_length',
     'centroids_not_n_by_3',
+    'channel_dir_missing',
+    'channel_dirs_missing',
     'channel_is_zero_bytes',
     'channel_never_reached_disk',
     'channel_unknown',
@@ -1781,6 +1802,14 @@ RECORDED_CLAUSES = [
     'clip_end_is_closer_than_the_subject',
     'clip_has_no_consecutive_pair',
     'clip_would_be_written_outside_out',
+    'cloud_post_failed',
+    'cloud_post_unreadable',
+    'cloud_response_no_prompt_id',
+    'cloud_upload_failed',
+    'cloud_upload_no_name',
+    'cloud_upload_unreadable',
+    'codec_not_in_survey',
+    'codec_unsafe_for_channel_mode',
     'comparison_is_not_isolated',
     'compensator_target_carries_no_run_marker',
     'completeness_over_zero_channels',
@@ -1876,6 +1905,8 @@ RECORDED_CLAUSES = [
     'extraction_left_no_faces',
     'face_assigned_outside_the_registered_list',
     'face_assigned_to_nothing',
+    'fbx_import_failed',
+    'fbx_importer_missing',
     'ffmpeg_binary_not_found',
     'ffmpeg_exceeded_the_time_bound',
     'ffmpeg_refused_the_decode',
@@ -1886,6 +1917,7 @@ RECORDED_CLAUSES = [
     'fit_disagrees_with_the_file',
     'flag_component_not_an_integer',
     'flat_slot_ceiling_exceeded',
+    'flf_pair_same_index',
     'floor_material_reads_an_image',
     'forbidden_not_a_list',
     'forbidden_word',
@@ -1897,6 +1929,7 @@ RECORDED_CLAUSES = [
     'frame_count_changed_through_the_bridge',
     'frame_counts_differ',
     'frame_dtype_is_not_uint8',
+    'frame_exceeds_trained_horizon',
     'frame_form',
     'frame_hints_are_parallel',
     'frame_illegal',
@@ -1924,18 +1957,30 @@ RECORDED_CLAUSES = [
     'frame_triple',
     'frame_type',
     'frame_zero_carries_no_bones',
+    'frames_and_end_frame_both_set',
     'frames_and_out_are_required',
     'frames_are_not_all_one_size',
     'frames_are_not_contiguous',
+    'frames_dir_empty',
     'frames_dir_is_not_a_directory',
+    'frames_dir_missing',
+    'frames_dir_required',
+    'frames_dirs_required',
     'frames_is_not_a_comparable_count',
     'frames_not_numerically_named',
+    'frames_pair_not_int',
+    'frames_pair_shape',
     'frames_without_index',
     'gait_too_short_for_a_skin_comparison',
+    'gate0_fps_mismatch',
+    'gate0_meta_not_an_object',
+    'gate0_meta_required',
+    'gate0_meta_unreadable',
     'gate_l_frame_source',
     'gate_s_registration',
     'gated_text_is_not_shipped_text',
     'generator_family_contradicted',
+    'generator_unknown',
     'glb_and_out_are_required',
     'glb_has_no_render_visible_mesh',
     'glb_is_not_a_file',
@@ -1964,6 +2009,7 @@ RECORDED_CLAUSES = [
     'import_is_not_one_render_visible_mesh',
     'imported_sites_empty',
     'imported_sites_required',
+    'input_missing',
     'inserted_node_id_already_exists',
     'insertions_are_not_the_named_ones',
     'interior_sample_past_the_span',
@@ -1976,6 +2022,9 @@ RECORDED_CLAUSES = [
     'landmark_list_is_partial',
     'landmark_table_renamed',
     'landmarks_missing',
+    'ledger_not_a_mapping',
+    'ledger_submissions_not_a_list',
+    'ledger_unreadable',
     'legal_clause_needs_id_and_phrase',
     'length_mismatch',
     'lens_mm_not_finite_and_positive',
@@ -2004,6 +2053,9 @@ RECORDED_CLAUSES = [
     'missing_upload_key',
     'mitten_hand_wrong_point_count',
     'model_chain_loops',
+    'motion_and_pose_library_both_set',
+    'motion_and_retarget_both_set',
+    'motion_or_retarget_required',
     'motion_record_has_no_frames',
     'motion_undefined_over_one_frame',
     'multiple_graph_declarations',
@@ -2149,6 +2201,8 @@ RECORDED_CLAUSES = [
     'point_cloud_not_finite',
     'points_behind_the_camera',
     'population_is_not_the_spec_names',
+    'pose_frames_missing',
+    'pose_library_needs_positive_frames',
     'pose_pack_frames_are_not_the_shot_length',
     'positive_encoder_is_not_reachable',
     'positive_prompt_is_empty',
@@ -2171,6 +2225,7 @@ RECORDED_CLAUSES = [
     'record_describes_a_different_graph',
     'record_frame_counts_disagree',
     'record_is_not_tied_to_the_graph',
+    'record_missing_fetch_recipe',
     'record_route_facts_disagree',
     'record_unreadable',
     'recorded_convention_digest_drift',
@@ -2196,6 +2251,11 @@ RECORDED_CLAUSES = [
     'resolution_is_not_a_frame_size',
     'resolved_lift_diverges_from_the_pinned_glb',
     'rest_landmarks_missing',
+    'retarget_glb_armature_count',
+    'retarget_missing_admission',
+    'retarget_source_armature_count',
+    'retarget_source_has_no_action',
+    'retarget_unsupported_format',
     'retired_gates_block',
     'retired_gates_key',
     'rig_builds_disagree',
@@ -2211,9 +2271,13 @@ RECORDED_CLAUSES = [
     'round_trip_population_incomplete',
     'round_trip_probe_window_too_small',
     'round_trip_residual_over_tolerance',
+    'route_unknown',
     'ruled_name_with_unknown_suffix',
+    'run_excludes_frames_and_out',
     'run_manifest_is_missing_a_key',
     'run_manifest_is_not_on_disk',
+    'runs_not_valid_for_seed_spread',
+    'runs_required_for_fixed_seed',
     'sample_component_not_an_integer',
     'sample_frame_not_in_the_extraction',
     'sample_index_is_negative',
@@ -2230,8 +2294,11 @@ RECORDED_CLAUSES = [
     'seed_not_pinned',
     'seed_not_registered',
     'seed_registry_is_empty',
+    'seeds_not_valid_for_fixed_seed',
+    'seeds_required_for_seed_spread',
     'segment_has_zero_length',
     'sensor_mm_not_finite_and_positive',
+    'set_glb_is_not_a_file',
     'set_short',
     'shadow_floor_eps_is_zero',
     'shadow_layer_needs_floor_and_plate',
@@ -2260,6 +2327,8 @@ RECORDED_CLAUSES = [
     'spec_value_not_positive',
     'spec_value_wrong_type',
     'spec_version_unsupported',
+    'stage_render_manifest_missing',
+    'stage_render_manifest_unreadable',
     'stale_channel',
     'stale_consumer',
     'stale_render_target',
@@ -2294,6 +2363,8 @@ RECORDED_CLAUSES = [
     'survey_panel_is_not_on_disk',
     'sweep_revisits_an_azimuth',
     'target_not_a_3_vector',
+    'targets_empty',
+    'targets_require_detection',
     'the_figure_did_not_move_at_all',
     'the_two_builds_share_no_part_name',
     'tier_is_not_in_the_lora_name',
@@ -2323,12 +2394,14 @@ RECORDED_CLAUSES = [
     'unknown_axis',
     'unknown_binding_mode',
     'unknown_bone',
+    'unknown_channel_mode',
     'unknown_character_class',
     'unknown_codec',
     'unknown_conditioning_class',
     'unknown_envelope_radii',
     'unknown_experiment',
     'unknown_flag',
+    'unknown_floor_mode',
     'unknown_generator_family',
     'unknown_generator_profile',
     'unknown_hand_mode',
@@ -2338,9 +2411,11 @@ RECORDED_CLAUSES = [
     'unknown_named_gait',
     'unknown_occupant_kind',
     'unknown_pose_arc',
+    'unknown_pose_library',
     'unknown_spatial_kind',
     'unknown_spec_key',
     'unknown_stickwidth_type',
+    'unknown_still_target',
     'unknown_subject',
     'unknown_trajectory_profile',
     'unlicensed_residue',
@@ -2392,99 +2467,15 @@ RECORDED_CLAUSES = [
 #: CATEGORY, not an exemption — it may not grow, and a clause that gains a
 #: fixture leaves it in the commit that adds the fixture.
 CLAUSES_NAMED_BY_NO_FIXTURE = [
-    # WAVE 28 (core-gates, 2026-09-05): 136 -> 133. THREE rows LEAVE, in the commit that
-    # gives them fixtures — this table's own rule. `escape_unknown`, `no_surfaces` and
-    # `not_object` were unnamed only because the wave-26 fix made `fixture_text()` read
-    # CODE, and the sole place they appeared was the block comment above
-    # `RECORDED_CLAUSES`. `tests/test_amend_w28_core_gates.py` now names all three in code:
-    # `escape_unknown` in the `--no-canon` unknown-subject test, `no_surfaces` and
-    # `not_object` in `MALFORMED`, the parametrised census over every `canon.load`
-    # refusal. NONE join: all twelve clause words this wave adds are reached by that same
-    # parametrisation. RE-DERIVED with `==` on this branch; BRANCH-LOCAL.
-    # WAVE-25 MERGE (coordinator, 2026-09-05): the entries below are REGENERATED from this test's own derivation on the merged tree
-    # (five branches each read their table branch-local; their unions left duplicated rows, and the test
-    # compares ordered lists). Every reason the table carried is kept here, in one block, as the record:
-    # WAVE 25 (instruments): `asset_has_no_evaluated_geometry` and
-    # `motion_record_has_no_frames` LEFT this table in the commit that gave them a
-    # fixture -- `tests/test_instruments_amend_w25.py` names both (the first in
-    # `WAVE_25_CLAUSE_WORDS`, the second there and in the empty-record refusal's own
-    # test). The table may not grow; it may shrink exactly this way.
-    # 'anchor_outside_unit_interval', 'arc_does_not_move',
-    # 'asset_has_no_evaluated_geometry', 'asset_imported_no_mesh_objects', 'bad_magic',
-    # 'band_too_narrow', 'batch_node_is_not_a_batch', 'batch_node_over_the_slot_ceiling',
-    # 'bit1_not_grayscale', 'bit1_values', 'bit8_dtype', 'blend_band_not_positive',
-    # 'body_keypoints_wrong_shape', 'bone_has_an_unknown_rule', 'bone_has_no_model_rule',
-    # 'bone_has_zero_rest_length', 'bone_radius_not_positive',
-    # 'bone_set_changes_between_frames', 'bufferview_negative_range',
-    # 'bufferview_no_bytelength', 'bufferview_not_an_index', 'bufferview_out_of_range',
-    # 'bufferview_past_bin_chunk', 'candidate_frames_are_not_all_one_size',
-    # 'cap_below_the_bbox_corners', 'cap_would_loosen_the_module_ceiling',
-    # 'centroids_not_n_by_3', 'child_bone_has_no_length',
-    # 'clip_end_is_closer_than_the_subject', 'clip_would_be_written_outside_out',
-    # 'compensator_target_carries_no_run_marker', 'composite_colour_carries_a_non_number',
-    # 'composite_colour_not_linear_unit_floats', 'composite_colour_not_three_floats',
-    # 'composition_puts_points_behind_the_camera', 'composition_unreachable',
-    # 'cover_crop_produced_the_wrong_size', 'cv2_could_not_read_the_source',
-    # 'cv2_refused_the_strip_write', 'cv2_refused_the_write',
-    # 'declared_group_size_above_the_ceiling', 'decode_stride_is_not_positive',
-    # 'decoded_bytes_are_not_whole_frames', 'decoded_rate_disagrees_with_the_declaration',
-    # 'degenerate_plate', 'degenerate_target_frame', 'depth_buffer_is_not_the_frame_size',
-    # 'drawing_convention_not_retrieved', 'every_imported_mesh_is_hidden_from_render',
-    # 'expectation_carries_a_duplicated_frame', 'expectation_is_not_the_frame_list',
-    # 'extraction_left_no_faces', 'ffmpeg_refused_the_decode', 'ffmpeg_refused_the_encode',
-    # 'field_absent', 'flag_component_not_an_integer',
-    # 'frame_and_predecessor_are_different_sizes', 'frame_array_shape_is_unsupported',
-    # 'frame_hints_are_parallel', 'frame_index_not_in_the_clip', 'frame_is_missing_a_bone',
-    # 'frame_source_not_callable', 'frame_source_not_reiterable',
-    # 'frame_zero_carries_no_bones', 'frames_are_not_all_one_size',
-    # 'frames_are_not_contiguous', 'frames_without_index',
-    # 'group_node_count_disagrees_with_the_plan', 'group_size_below_one',
-    # 'hand_has_no_length', 'hand_keypoints_wrong_shape', 'hand_length_not_positive',
-    # 'hinge_hint_is_parallel_to_the_bone', 'keypoint_outside_the_frame',
-    # 'keypoint_value_is_not_a_number', 'landmark_list_is_partial', 'landmarks_missing',
-    # 'licence_map_ruling', 'measurement_not_positive', 'min_frac_may_only_tighten',
-    # 'mitten_hand_wrong_point_count', 'motion_record_has_no_frames',
-    # 'no_batch_node_to_measure', 'no_composite_colour_named', 'no_deforming_bones',
-    # 'no_json_chunk', 'no_moving_frames', 'no_numbered_frames_in_the_directory',
-    # 'no_parts_to_assign_to', 'no_positive_joint_radius',
-    # 'no_trace_to_size_a_ball_against', 'no_vertices_to_frame', 'not_a_rotation',
-    # 'numpy_unavailable', 'observed_sites_missing', 'palm_plane_degenerate',
-    # 'part_radius_not_positive', 'phase_shorter_than_a_frame', 'plate_source_missing',
-    # 'population_is_not_the_spec_names', 'readout_angle_outside_the_arc',
-    # 'render_target_missing', 'required_landmark_missing', 'rest_landmarks_missing',
-    # 'root_is_not_a_3_vector', 'scene_fps_disagrees_with_the_shot',
-    # 'segment_has_zero_length', 'set_short', 'sign_not_unit',
-    # 'snappable_site_is_not_a_landmark', 'source_image_has_a_zero_dimension',
-    # 'stance_frac_not_modelled', 'stream_reported_no_rate', 'tolerance_not_finite',
-    # 'too_few_destination_samples', 'too_few_frames_for_an_arc', 'too_few_phase_samples',
-    # 'too_few_points_for_a_sphere_fit', 'too_few_source_samples', 'unknown_pose_arc',
-    # 'unsupported_bit_depth', 'unsupported_shape', 'vector_has_zero_length',
-    # 'view_direction_parallel_to_up', 'view_without_a_digest',
-    # 'visible_rows_component_not_an_integer', 'visible_rows_not_a_band_inside_the_frame',
-    # 'why_not_supplied', 'zero_length_direction', 'zero_quaternion',
-    # 'zero_quaternion',    'allowlist_name_pattern', 'anchor_not_a_number', 'anchor_not_a_pair',
-    # WAVE 26, F-15e155cd: 129 -> 136, RE-DERIVED with `==` on `81d6c07` after
-    # `fixture_text()` began reading CODE rather than raw text. SEVEN words join, and every
-    # one of them was "named" only by prose about it:
-    #   'two_answers', 'plan_paths_collide', 'order_unvouched', 'escape_unknown',
-    #   'no_surfaces', 'not_object'  -- spelled in this file's own block comment above
-    #       `RECORDED_CLAUSES`, the sentence that calls them the most consequential words in
-    #       the vocabulary. Two of them are Gate ROUTE's own clauses on the last gate before
-    #       a paid submission.
-    #   'orbit radius'               -- a sentence-shaped value, spelled in
-    #       `SENTENCE_SHAPED_CLAUSES`' neighbouring prose (the table itself is already
-    #       blanked; the paragraph beside it was not).
-    # NONE leave. The four the finding also predicted -- 'unknown_hosted_tier',
-    # 'arm_input_missing', 'missing_arm_input', 'downloader_job_exits' -- do NOT join: they
-    # are named by real fixtures on the merged tree, which is why this was re-derived here
-    # rather than copied from the finding's list of ten.
-    # These seven are a BACKLOG, not an exemption. The words are deliberately NOT re-spelled
-    # outside this comment; a comment is no longer an input to the census, which is the whole
-    # point of the change, so naming them here is safe in a way it was not before.
+    # WAVE 34 pin-fix (core-solvers coordinator): RE-DERIVED with == on the merged tree after feature-execute.
+    # Vocabulary grew with builders/submit/cloud/retarget clauses; rows below are the unnamed remainder.
+    'admission_not_a_mapping',
+    'admission_unreadable',
     'allowlist_name_pattern',
     'anchor_not_a_number',
     'anchor_not_a_pair',
     'anchor_outside_unit_interval',
+    'api_key_missing',
     'arc_does_not_move',
     'asset_imported_no_mesh_objects',
     'bad_magic',
@@ -2495,21 +2486,33 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'bone_has_an_unknown_rule',
     'bone_has_no_model_rule',
     'bone_has_zero_rest_length',
+    'bone_map_not_an_object',
+    'bone_map_source_bone_missing',
     'bone_radius_not_positive',
     'bone_set_changes_between_frames',
     'bufferview_negative_range',
     'bufferview_no_bytelength',
     'bufferview_not_an_index',
-    # WAVE 34: left — substring-named by animation_bufferview_out_of_range in
-    # tests/test_amend_w34_core_solvers.py W34_NEW_CLAUSES
     'bufferview_past_bin_chunk',
+    'bvh_import_failed',
+    'bvh_importer_missing',
     'candidate_frames_are_not_all_one_size',
     'cap_below_the_bbox_corners',
     'cap_would_loosen_the_module_ceiling',
+    'ceiling_allows',
     'centroids_not_n_by_3',
+    'channel_dir_missing',
+    'channel_dirs_missing',
     'child_bone_has_no_length',
     'clip_end_is_closer_than_the_subject',
     'clip_would_be_written_outside_out',
+    'cloud_post_failed',
+    'cloud_post_unreadable',
+    'cloud_response_no_prompt_id',
+    'cloud_upload_failed',
+    'cloud_upload_no_name',
+    'cloud_upload_unreadable',
+    'codec_not_in_survey',
     'compensator_target_carries_no_run_marker',
     'composite_colour_carries_a_non_number',
     'composite_colour_not_linear_unit_floats',
@@ -2532,6 +2535,8 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'expectation_carries_a_duplicated_frame',
     'expectation_is_not_the_frame_list',
     'extraction_left_no_faces',
+    'fbx_import_failed',
+    'fbx_importer_missing',
     'ffmpeg_refused_the_decode',
     'ffmpeg_refused_the_encode',
     'field_absent',
@@ -2544,9 +2549,19 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'frame_source_not_callable',
     'frame_source_not_reiterable',
     'frame_zero_carries_no_bones',
+    'frames_and_end_frame_both_set',
     'frames_are_not_all_one_size',
     'frames_are_not_contiguous',
+    'frames_dir_empty',
+    'frames_dir_missing',
+    'frames_dir_required',
+    'frames_dirs_required',
+    'frames_pair_not_int',
+    'frames_pair_shape',
     'frames_without_index',
+    'gate0_meta_not_an_object',
+    'gate0_meta_unreadable',
+    'generator_unknown',
     'group_node_count_disagrees_with_the_plan',
     'group_size_below_one',
     'hand_has_no_length',
@@ -2557,8 +2572,13 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'keypoint_value_is_not_a_number',
     'landmark_list_is_partial',
     'landmarks_missing',
+    'ledger_not_a_mapping',
+    'ledger_submissions_not_a_list',
+    'ledger_unreadable',
     'licence_map_ruling',
     'mitten_hand_wrong_point_count',
+    'motion_and_retarget_both_set',
+    'motion_or_retarget_required',
     'no_batch_node_to_measure',
     'no_composite_colour_named',
     'no_deforming_bones',
@@ -2580,18 +2600,32 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'plan_paths_collide',
     'plate_source_missing',
     'population_is_not_the_spec_names',
+    'pose_frames_missing',
+    'pose_library_needs_positive_frames',
     'readout_angle_outside_the_arc',
     'render_target_missing',
     'required_landmark_missing',
     'rest_landmarks_missing',
+    'retarget_glb_armature_count',
+    'retarget_source_armature_count',
+    'retarget_source_has_no_action',
+    'retarget_unsupported_format',
     'root_is_not_a_3_vector',
+    'route_unknown',
+    'run_excludes_frames_and_out',
+    'runs_not_valid_for_seed_spread',
+    'runs_required_for_fixed_seed',
     'scene_fps_disagrees_with_the_shot',
     'segment_has_zero_length',
+    'set_glb_is_not_a_file',
     'set_short',
     'sign_not_unit',
     'snappable_site_is_not_a_landmark',
     'source_image_has_a_zero_dimension',
+    'stage_render_manifest_missing',
+    'stage_render_manifest_unreadable',
     'stream_reported_no_rate',
+    'targets_empty',
     'tolerance_not_finite',
     'too_few_destination_samples',
     'too_few_frames_for_an_arc',
@@ -2599,7 +2633,11 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'too_few_points_for_a_sphere_fit',
     'too_few_source_samples',
     'two_answers',
+    'unknown_channel_mode',
+    'unknown_floor_mode',
     'unknown_pose_arc',
+    'unknown_pose_library',
+    'unknown_still_target',
     'vector_has_zero_length',
     'view_direction_parallel_to_up',
     'view_without_a_digest',

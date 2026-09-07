@@ -959,7 +959,8 @@ def test_the_registered_site_list_refusal_quotes_its_own_counts(monkeypatch):
 # the fifth, in the same function, proved the convention.
 
 PNG_REFUSALS = [
-    ("unsupported_shape", np.zeros((2, 2, 4), dtype=np.uint8), 8),
+    # WAVE 34: RGBA (H,W,4) is supported; unsupported_shape keeps a 5-channel refuse.
+    ("unsupported_shape", np.zeros((2, 2, 5), dtype=np.uint8), 8),
     ("zero_dimension", np.zeros((0, 2), dtype=np.uint8), 8),
     ("bit1_not_grayscale", np.zeros((2, 2, 3), dtype=np.uint8), 1),
     ("bit1_values", np.array([[0, 7]], dtype=np.uint8), 1),

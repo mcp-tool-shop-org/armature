@@ -184,8 +184,9 @@ def test_printable_halt_line_remains_last_resort_for_hostile_glyphs():
 
 
 def test_shortened_stance_gate_message_still_names_the_model():
+    # WAVE 34: (0,1) is modelled; the live andon is stance_frac outside that interval.
     with pytest.raises(walk.GaitGate) as exc:
-        walk.gate_stance_frac_is_modelled(0.4)
-    assert "this gait model represents" in str(exc.value)
+        walk.gate_stance_frac_is_modelled(1.5)
+    assert "stance_frac in (0, 1)" in str(exc.value)
     assert len(str(exc.value)) < 200
-    assert exc.value.evidence["clause"] == "stance_frac_not_modelled"
+    assert exc.value.evidence["clause"] == "stance_frac_outside_0_1"

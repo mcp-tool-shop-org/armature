@@ -569,11 +569,15 @@ def test_the_cadence_gate_walks_every_consecutive_interval():
 def test_the_stance_exchange_refusal_is_labelled_a_tripwire_not_a_live_andon():
     """It carries its OWN clause word and a `reachability` key, so a reader who finds a
     `raise WalkError` there does not conclude the top-of-function gate misses the exchange
-    frames. Same disposition as `resample.sample_map`'s clamp, recorded in one place."""
+    frames. Same disposition as `resample.sample_map`'s clamp, recorded in one place.
+
+    WAVE 34 pin-fix: finding-id stamps moved out of the raise site when the gait model
+    generalised; the tripwire label and CadenceGate representability phrase remain.
+    """
     src = _owned_source("walk")
     assert "cadence_outruns_frame_rate_at_a_stance_exchange" in src
     assert "structural tripwire on " in src
-    assert "F-aee5d2a8" in src and "F-60909e5b" in src
+    assert "representability" in src
 
 
 #: Every `<file>.py:<line>` prose citation surviving in this domain's 21 modules, MEASURED
@@ -767,7 +771,14 @@ REPEATED_CLAUSE_WORDS = {
     # is, under the same two words, which is the whole point of F-e15d9de2.
     "clipcompare": {"frame_not_hw3", "shape_mismatch"},
     # `half_fovs` and `require_frame_size` refuse a non-positive frame size the same way.
-    "framing": {"frame_size_not_positive"},
+    # WAVE 34: camera-path solvers reuse empty_point_cloud / point_cloud_not_finite with
+    # the single-shot framing refusals — one refusal shape, two call doors.
+    "framing": {"empty_point_cloud", "frame_size_not_positive", "point_cloud_not_finite"},
+    # WAVE 34: character-class adapter refuses a mismatched class at two import doors.
+    "landmarks": {"character_class_mismatch"},
+    # WAVE 34: GaitParams' constructor WalkError and gate_stance_frac_is_modelled's
+    # GaitGate share stance_frac_outside_0_1 — one interval, two doors.
+    "walk": {"stance_frac_outside_0_1"},
 }
 
 
@@ -800,12 +811,20 @@ LANDMARK_CLAUSES = {
     "trunk_column_too_short", "limb_trace_too_short",
     "no_foot_vertices_below_the_ankle", "no_head_vertices_above_the_head_base",
     "no_trace_to_size_a_bone_against", "bone_has_no_registered_cross_section",
+    # WAVE 34: character-class adapter + imported-site / proportion-fallback doors.
+    "character_class_mismatch", "imported_sites_empty", "imported_sites_required",
+    "proportion_fallback_bad_cloud", "proportion_fallback_degenerate_bbox",
+    "unknown_character_class",
 }
 
 
 def test_the_seventeen_anatomical_refusals_are_seventeen_distinct_clauses():
-    """`LandmarkError`'s docstring says halting is the only signal that survives. Seventeen
-    refusals under one class need seventeen words, or the signal is the class name."""
+    """`LandmarkError`'s docstring says halting is the only signal that survives.
+
+    WAVE 34 pin-fix: character-class / imported-site work added six clause words;
+    `character_class_mismatch` is raised at two sites, so the site count is 24 over 23
+    distinct words. The name keeps the historical seventeen as the anatomical core.
+    """
     import re
 
     words = re.findall(r'"clause": "([a-z0-9_]+)"', _owned_source("landmarks"))
@@ -813,7 +832,8 @@ def test_the_seventeen_anatomical_refusals_are_seventeen_distinct_clauses():
         "appeared": sorted(set(words) - LANDMARK_CLAUSES),
         "vanished": sorted(LANDMARK_CLAUSES - set(words)),
     }
-    assert len(words) == 17, words
+    assert len(set(words)) == 23, sorted(set(words))
+    assert len(words) == 24, words
 
 
 def test_a_landmark_refusal_reaches_a_halt_line_with_its_clause_on_it(capsys):
