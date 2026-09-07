@@ -536,15 +536,19 @@ def test_every_builder_puts_its_graph_through_the_licence_census():
 
     from conftest import TOOLS
 
-    population = sorted(n for n in os.listdir(TOOLS)
-                        if (n.startswith("build_") and n.endswith("payload.py"))
-                        or n == "gate_saved_graph.py")
+    import _census_nodes as CN
+
+    # Graph builders + the admission writer. Wave-34 submit/uploads match the build_*
+    # payload glob but are not graph authors (`CN.NON_GRAPH_PAYLOAD`).
+    population = CN.graph_payload_builders() + ["gate_saved_graph.py"]
     assert population == [
         "build_animate_payload.py", "build_assembly_payload.py",
         "build_camera_i2v_payload.py", "build_cascade_payload.py",
         "build_i2v_payload.py", "build_lora_arm_payload.py", "build_payload.py",
         "build_r2v_payload.py", "build_t2v_payload.py",
         "gate_saved_graph.py"], population
+    assert CN.boundary_payload_tools() == [
+        "build_submit_payload.py", "build_uploads_payload.py"]
 
     #: The ONE exemption, named and dated: `build_payload.py` (E02/E03/E06's VACE route)
     #: predates `route_gates` and gates through `armature_core.gates` instead, so the

@@ -456,7 +456,10 @@ def test_every_builder_writes_the_field_this_legacy_fixture_omits():
     assert without == {}, (
         f"these builders write no computed `payload_sha256`: {without}. A record with none "
         f"is not tied to the graph it vouches for, and the tie clause cannot fire.")
-    assert len(glob.glob(os.path.join(TOOLS, "build_*payload*.py"))) == len(BUILDERS)
+    import _census_nodes as CN
+    assert len(CN.graph_payload_builders()) == len(BUILDERS)
+    assert CN.boundary_payload_tools() == [
+        "build_submit_payload.py", "build_uploads_payload.py"]
 
 
 def test_two_conflicting_payload_digests_in_one_record_refuse(tmp_path):

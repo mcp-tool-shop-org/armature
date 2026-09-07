@@ -1432,13 +1432,16 @@ def test_the_two_assemblers_share_ONE_subject_reader():
 
 
 def test_the_two_assemblers_are_still_the_only_two_that_arm_no_gate_CANON():
-    """The population the finding names, re-derived rather than carried."""
+    """The population the finding names, re-derived rather than carried.
+
+    Walks the nine graph builders only — wave-34 submit/uploads match the glob but are
+    not graph authors and do not arm Gate CANON (`CN.NON_GRAPH_PAYLOAD`).
+    """
     import build_assembly_payload as BAP  # noqa: F401
+    import _census_nodes as CN
 
     without = []
-    for name in sorted(os.listdir(TOOLS)):
-        if not (name.startswith("build_") and name.endswith("payload.py")):
-            continue
+    for name in CN.graph_payload_builders():
         tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
         calls = {getattr(n.func, "id", None) or getattr(n.func, "attr", None)
                  for n in ast.walk(tree) if isinstance(n, ast.Call)}

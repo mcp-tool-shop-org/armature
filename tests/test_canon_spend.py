@@ -683,9 +683,10 @@ SPEND_FLAGS = ("subject", "no_canon", "canon_prompt")
 
 
 def _builder_names():
-    names = sorted(os.path.basename(p)[:-3]
-                   for p in glob.glob(os.path.join(TOOLS, BUILDER_GLOB)))
-    assert len(names) >= 9, f"the glob found only {names}; it is not reaching tools/"
+    """The nine graph builders. Wave-34 submit/uploads match the glob but are not
+    graph authors — see `CN.NON_GRAPH_PAYLOAD` / `CN.boundary_payload_tools`."""
+    names = [n[:-3] for n in CN.graph_payload_builders()]
+    assert len(names) >= 9, f"the graph-builder walk found only {names}"
     return names
 
 

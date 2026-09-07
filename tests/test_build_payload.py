@@ -600,7 +600,7 @@ def test_the_success_line_is_the_halt_sentinels_prefix_with_OK(tmp_path, capsys)
     """One success convention across the 13 CPU tools: `<PREFIX>_OK `, the same PREFIX the
     `__main__` block prints on a halt. This tool printed a bare `BUILD_PAYLOAD ` line."""
     rc = bp.main(["--experiment=E03", "--arm=B1", f"--out={tmp_path / 'p' / 'B1.json'}",
-                  "--subject=BLACKGUARD", "--no-canon"])
+                  "--subject=WIRE", "--no-canon"])
     assert rc == 0
     out = capsys.readouterr().out
     assert len([ln for ln in out.splitlines()
@@ -633,7 +633,8 @@ def test_the_success_line_is_the_halt_sentinels_prefix_with_OK(tmp_path, capsys)
 
 
 def _e03_argv(out):
-    return ["--experiment=E03", "--arm=B1", f"--out={out}", "--subject=BLACKGUARD",
+    # WIRE is identity-only; BLACKGUARD now has surfaces so --no-canon is checkbox.
+    return ["--experiment=E03", "--arm=B1", f"--out={out}", "--subject=WIRE",
             "--no-canon"]
 
 

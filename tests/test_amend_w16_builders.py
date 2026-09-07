@@ -187,7 +187,7 @@ def test_an_empty_registration_is_a_clause_and_not_an_IndexError(tmp_path):
     out = tmp_path / "fresh"
     with pytest.raises(ArmatureError) as exc:
         T2V.main(["--seeds", _reg(tmp_path, {"seeds": []}), "--out", str(out),
-                  "--subject", "BLACKGUARD", "--no-canon"])
+                  "--subject", "PERFORMER", "--no-canon"])
     ev = exc.value.evidence
     assert isinstance(ev, dict) and ev, ev
     assert ev["clause"] == "no_seed_and_no_registration", ev
@@ -199,7 +199,7 @@ def test_a_registration_with_no_seeds_key_is_a_clause_and_not_a_KeyError(tmp_pat
     out = tmp_path / "fresh"
     with pytest.raises(ArmatureError) as exc:
         T2V.main(["--seeds", _reg(tmp_path, {"committed": [1, 2]}), "--out", str(out),
-                  "--subject", "BLACKGUARD", "--no-canon"])
+                  "--subject", "PERFORMER", "--no-canon"])
     ev = exc.value.evidence
     assert ev["clause"] == "registration_no_seeds_key", ev
     assert ev["flag"] == "--seeds", ev
@@ -215,7 +215,7 @@ def test_the_empty_registration_halt_leaves_the_process_at_the_gate_exit_code(tm
     proc = subprocess.run(
         [sys.executable, os.path.join(TOOLS, "build_t2v_payload.py"),
          "--seeds=" + _reg(tmp_path, {"seeds": []}), "--out=" + str(out),
-         "--subject=BLACKGUARD", "--no-canon"],
+         "--subject=PERFORMER", "--no-canon"],
         capture_output=True, text=True, cwd=os.path.dirname(TOOLS))
     assert proc.returncode == 2, proc.stdout + proc.stderr
     line = [ln for ln in proc.stdout.splitlines() if ln.startswith("BUILD_T2V_HALT ")]
@@ -232,7 +232,7 @@ def test_an_explicit_seed_still_builds_against_a_one_entry_registration(tmp_path
     defaulting to anything, so there is nothing to index."""
     out = tmp_path / "fresh"
     T2V.main(["--seeds", _reg(tmp_path, {"seeds": [7]}), "--out", str(out), "--seed", "7",
-              "--subject", "BLACKGUARD", "--no-canon"])
+              "--subject", "PERFORMER", "--no-canon"])
     assert out.exists()
 
 

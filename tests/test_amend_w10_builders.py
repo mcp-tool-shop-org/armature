@@ -336,7 +336,7 @@ def test_the_r2v_spend_builder_exits_0_on_a_fully_gated_success(tmp_path):
                 f"--seeds={os.path.join(REPO, 'specs', 'E13-seeds.json')}",
                 f"--prompt-file={os.path.join(REPO, 'specs', 'E13-prompt.json')}",
                 f"--refs={_refs_record(tmp_path)}", f"--out={tmp_path / 'fresh'}",
-                "--subject=BLACKGUARD", "--no-canon")
+                "--subject=PERFORMER", "--no-canon")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert len([ln for ln in proc.stdout.splitlines()
                 if ln.startswith("BUILD_R2V_OK")]) == 1, proc.stdout

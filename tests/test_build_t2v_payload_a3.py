@@ -260,7 +260,9 @@ def test_the_reference_graph_loads_no_lora_of_any_kind():
 
 
 def _t2v_args(tmp_path, *extra):
-    return ["--out", str(tmp_path / "fresh"), "--subject", "BLACKGUARD", "--no-canon",
+    # PERFORMER is identity-only (surfaces=None); BLACKGUARD now has surfaces, so
+    # --no-canon --subject BLACKGUARD is the checkbox refuse.
+    return ["--out", str(tmp_path / "fresh"), "--subject", "PERFORMER", "--no-canon",
             "--tag", "probe", *extra]
 
 
@@ -271,7 +273,7 @@ def test_canon_prompt_cannot_change_the_text_this_builder_ships(tmp_path, capsys
     shared `add_spend_flags` help string describes only the cross-check semantics ("text
     the router checks; default is the payload's positive"). Measured on today's tree: a
     `--canon-prompt` naming a sentence no canon governs printed `[canon] UNGATED:
-    BLACKGUARD` and BUILD_T2V_OK, and node 30 of the emitted graph carried exactly that
+    PERFORMER` and BUILD_T2V_OK, and node 30 of the emitted graph carried exactly that
     string. An operator who learned the flag on r2v or i2v, where passing it can only
     raise, silently changed the text a paid generation is made from."""
     from armature_core.errors import GateCanon

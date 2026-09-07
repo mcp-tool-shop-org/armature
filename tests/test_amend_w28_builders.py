@@ -44,13 +44,14 @@ import gate_saved_graph as GSG
 REPO = os.path.dirname(TOOLS)
 SPECS = os.path.join(REPO, "specs")
 
-#: The thirteen CPython tools this domain owns — the population every parser census below
-#: walks. Derived from the owned globs, not from a hand-kept list of "the ones I remembered".
-DOMAIN_TOOLS = sorted(
-    n for n in os.listdir(TOOLS)
-    if n.endswith(".py")
-    and (n.startswith("build_") or n in ("canon_gate.py", "gate_saved_graph.py",
-                                         "fetch_run.py", "fetch_t2v_run.py")))
+import _census_nodes as CN
+
+#: The thirteen graph / admit / fetch tools this domain owns for parser censuses, plus the
+#: wave-34 boundary pair (submitter + uploads map) recorded as their own class. Derived
+#: from the owned globs, not from a hand-kept list of "the ones I remembered".
+_GRAPH_AND_ADMIT = CN.spend_and_fetch_tools()
+_BOUNDARY = CN.boundary_payload_tools()
+DOMAIN_TOOLS = sorted(set(_GRAPH_AND_ADMIT) | set(_BOUNDARY))
 
 
 def _run(tool, *args, cwd=None):
@@ -255,7 +256,7 @@ def test_the_spend_builder_is_measured_as_ALREADY_CLOSED_not_assumed(tmp_path):
     out = tmp_path / "out"
     argv = ["--arm=A1", f"--seed={seed}", f"--seeds={seeds}",
             f"--prompt-file={os.path.join(SPECS, 'E13-prompt.json')}",
-            f"--out={out}", f"--refs={refs}", "--subject", "BLACKGUARD", "--no-canon"]
+            f"--out={out}", f"--refs={refs}", "--subject", "PERFORMER", "--no-canon"]
     assert BR2V.main(argv) == 0
     with pytest.raises(Exception) as exc:
         BR2V.main(argv)
@@ -330,7 +331,7 @@ def _r2v(tmp_path, *extra):
     out = tmp_path / "out"
     return ["--arm=A1", f"--seed={seed}", f"--seeds={seeds}",
             f"--prompt-file={os.path.join(SPECS, 'E13-prompt.json')}",
-            f"--out={out}", f"--refs={refs}", "--subject", "BLACKGUARD", "--no-canon",
+            f"--out={out}", f"--refs={refs}", "--subject", "PERFORMER", "--no-canon",
             *extra], out
 
 
@@ -868,9 +869,21 @@ def _parser_census():
 
 
 def test_the_domain_population_is_the_thirteen_tools():
-    """Size and membership before the property, so a fourteenth tool joins the census on
-    the day it lands rather than being guarded by a list somebody forgot."""
-    assert len(DOMAIN_TOOLS) == 13, DOMAIN_TOOLS
+    """Size and membership before the property, so a new tool joins the census on the day
+    it lands rather than being guarded by a list somebody forgot.
+
+    Thirteen graph/admit/fetch tools plus the wave-34 boundary class (submitter + uploads
+    map) that match `build_*payload*.py` without authoring a graph.
+    """
+    assert _GRAPH_AND_ADMIT == [
+        "build_animate_payload.py", "build_assembly_payload.py",
+        "build_camera_i2v_payload.py", "build_cascade_payload.py",
+        "build_i2v_payload.py", "build_lora_arm_payload.py", "build_payload.py",
+        "build_r2v_payload.py", "build_t2v_payload.py", "canon_gate.py",
+        "fetch_run.py", "fetch_t2v_run.py", "gate_saved_graph.py"], _GRAPH_AND_ADMIT
+    assert len(_GRAPH_AND_ADMIT) == 13
+    assert _BOUNDARY == ["build_submit_payload.py", "build_uploads_payload.py"]
+    assert len(DOMAIN_TOOLS) == 15, DOMAIN_TOOLS
 
 
 def test_every_parser_in_this_domain_says_what_its_tool_IS():

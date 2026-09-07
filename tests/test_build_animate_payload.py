@@ -120,12 +120,17 @@ def test_gate_ROUTE_runs_in_tool_on_the_graph_this_tool_built():
 
 
 def test_gate_ROUTE_would_go_red_past_the_trained_horizon():
-    """Gate L in `gates` checks the 4n+1 form; the 81-frame trained horizon lives only in
-    the route gate, so 85 has to be refused THERE or it is refused nowhere."""
-    with pytest.raises(RG.RouteGate) as exc:
+    """85 is 4n+1 (legal form) but past the 81-frame trained horizon.
+
+    Gate L (`g1_generator_legality`) now refuses the horizon itself
+    (`frame_exceeds_trained_horizon`, F-ecb0a75b); the route gate still carries the same
+    bound. Either andon is a halt — what must not happen is a silent build past 81.
+    """
+    with pytest.raises(G.G1GeneratorLegality) as exc:
         BAP.build(dict(UPLOADS_81, pose_frames=85), 2026081221, NEG, POS, E10_SEEDS,
                   "letterbox", experiment="E10", length=85, fps=20.0)
     assert "81-frame" in str(exc.value)
+    assert exc.value.evidence["clause"] == "frame_exceeds_trained_horizon"
 
 
 def test_gate_S_refuses_a_seed_the_committed_list_does_not_carry():
@@ -312,7 +317,7 @@ def test_main_names_the_file_beside_the_key(tmp_path):
     neg.write_text("sample_neg_prompt: 'blurry'\n", encoding="utf-8")
     with pytest.raises(BAP.PayloadError) as exc:
         BAP.main(["--uploads", str(up), "--out", str(tmp_path / "fresh"),
-                  "--negative-source", str(neg), "--subject", "BLACKGUARD", "--no-canon"])
+                  "--negative-source", str(neg), "--subject", "PERFORMER", "--no-canon"])
     assert "pose_pack" in str(exc.value)
     assert str(up) in str(exc.value)
     assert not (tmp_path / "fresh").exists()

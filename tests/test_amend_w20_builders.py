@@ -57,18 +57,21 @@ TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 REPO = os.path.dirname(TOOLS)
 SPECS = os.path.join(REPO, "specs")
 
+import _census_nodes as CN
+
 BUILDER_GLOB = "build_*payload*.py"
 
 
 def _builder_names():
-    """The population, enumerated from the tree — never typed.
+    """The nine graph builders, enumerated from the tree — never typed.
 
     Rule 2's population: a builder added later joins these checks whether or not anyone
     remembers to add it, and a builder that stops writing the digest fails here.
+    Wave-34 submit/uploads match the glob but are not graph authors
+    (`CN.NON_GRAPH_PAYLOAD` / `CN.boundary_payload_tools`).
     """
-    names = sorted(os.path.basename(p)[:-3]
-                   for p in glob.glob(os.path.join(TOOLS, BUILDER_GLOB)))
-    assert len(names) >= 9, f"the glob found only {names}; it is not reaching tools/"
+    names = [n[:-3] for n in CN.graph_payload_builders()]
+    assert len(names) >= 9, f"the graph-builder walk found only {names}"
     return names
 
 
@@ -80,6 +83,8 @@ def test_the_population_is_the_nine_builders_the_finding_names():
         "build_animate_payload", "build_assembly_payload", "build_camera_i2v_payload",
         "build_cascade_payload", "build_i2v_payload", "build_lora_arm_payload",
         "build_payload", "build_r2v_payload", "build_t2v_payload"]
+    assert CN.boundary_payload_tools() == [
+        "build_submit_payload.py", "build_uploads_payload.py"]
 
 
 # ======================================================== driving each builder to its record
