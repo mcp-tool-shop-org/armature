@@ -1435,6 +1435,94 @@ def test_the_optimize_census_is_red_on_a_leg_that_drops_the_environment_block(tm
         "        run: python -m pytest -q\n") == []
 
 
+# The three markers, and only these three, by which PYTHON SOURCE can observe whether
+# `assert` survived: the builtin the compiler folds, the flag the interpreter exposes, and
+# the variable a spawned child inherits. Anything else in a test file is indifferent to -O.
+OPTIMIZE_MARKERS = ("__debug__", "sys.flags.optimize", "PYTHONOPTIMIZE")
+
+
+def optimize_obligated_test_files():
+    """`tests/<name>.py` for every test file whose BEHAVIOUR depends on assert-stripping.
+
+    Derived from the markers, never listed. Comments are dropped first, because naming
+    `-O` in prose is not depending on it -- but string literals are KEPT, since
+    `os.environ["PYTHONOPTIMIZE"]` is exactly how a test reaches the child process, and
+    blanking strings would erase the reach this census exists to find.
+    """
+    out = []
+    for name in sorted(os.listdir(TESTS_DIR)):
+        if not (name.startswith("test_") and name.endswith(".py")):
+            continue
+        with open(os.path.join(TESTS_DIR, name), encoding="utf-8") as fh:
+            code = _code_only(fh.read())
+        if any(marker in code for marker in OPTIMIZE_MARKERS):
+            out.append("tests/" + name)
+    return out
+
+
+def _files_named_by(script):
+    """The `tests/*.py` paths a run script names, or an empty set if it names none."""
+    return set(re.findall(r"tests/[A-Za-z0-9_.\-]+\.py", script))
+
+
+@pytest.mark.parametrize("workflow,job", jobs_that_run_the_suite())
+def test_a_narrowed_optimize_leg_still_covers_every_assert_stripping_test(workflow, job):
+    """Narrowing the -O leg is allowed. Narrowing it INCOMPLETELY is not.
+
+    Running the whole suite a second time under -O is a rig ritual -- correct once, on
+    hardware that costs nothing, which is why `verify.ps1` still does it. Hosted it ran
+    4497 tests on two interpreters to prove what 19 files assert: 41 of ci.yml's 84
+    minutes, measured on run 34106483511. So a leg MAY name only the files that carry the
+    obligation.
+
+    What it may not do is drift. The population is derived here from the markers, so a
+    test that reaches for `__debug__` tomorrow and is not added to the leg turns this red
+    rather than quietly going unproven -- which is the failure mode that makes narrowing
+    dangerous, and the only reason the full re-run was defensible in the first place.
+
+    A leg that names no files at all runs the whole tree and covers the obligation by
+    construction; it is passed over rather than required to enumerate anything.
+    """
+    body = "\n".join(_job_lines(_text(workflow), job))
+    obligated = set(optimize_obligated_test_files())
+    for script, _value in optimized_suite_steps(body):
+        named = _files_named_by(script)
+        if not named:
+            continue
+        missing = obligated - named
+        assert not missing, (
+            f"{workflow} job {job!r} runs a NARROWED -O leg that skips "
+            f"{sorted(missing)}; each of those reads one of {OPTIMIZE_MARKERS}, so the "
+            f"leg no longer proves what it claims. Add them to the step, or widen the "
+            f"leg back to `tests`.")
+
+
+def test_the_obligation_census_sees_a_marker_a_narrowed_leg_forgot(tmp_path, monkeypatch):
+    """Rule 3: drive the census over a tree where a marked file is NOT in the leg.
+
+    Pointing the check at the real repo only would make it a re-implementation. Here the
+    tests directory is synthetic, so the red case is reachable: two marked files, a leg
+    that names one.
+    """
+    (tmp_path / "test_marked.py").write_text("assert __debug__ or True\n", encoding="utf-8")
+    (tmp_path / "test_also_marked.py").write_text(
+        'import os\nos.environ.get("PYTHONOPTIMIZE")\n', encoding="utf-8")
+    (tmp_path / "test_plain.py").write_text("x = 1\n", encoding="utf-8")
+    # ...and a file that only MENTIONS the flag in a comment is not obligated by it.
+    (tmp_path / "test_comment_only.py").write_text(
+        "# runs fine under __debug__ and PYTHONOPTIMIZE\nx = 2\n", encoding="utf-8")
+
+    monkeypatch.setattr(sys.modules[__name__], "TESTS_DIR", str(tmp_path))
+    assert optimize_obligated_test_files() == [
+        "tests/test_also_marked.py", "tests/test_marked.py"]
+
+    named = _files_named_by("python -O -m pytest -q tests/test_marked.py")
+    assert set(optimize_obligated_test_files()) - named == {"tests/test_also_marked.py"}
+
+    whole_tree = _files_named_by("python -O -m pytest tests -q")
+    assert whole_tree == set(), whole_tree
+
+
 def test_the_verify_script_runs_the_same_optimize_leg_the_workflows_do():
     """The third copy. `verify.ps1` is the local equivalent of both jobs, and a rule that
     holds in CI and not on the rig is a rule contributors meet only after pushing."""

@@ -244,9 +244,12 @@ jobs:
   # Blender-side coverage is the rig's job, not CI's.
   python-tests:
     runs-on: ubuntu-latest
-    # Suite twice (plain + -O) plus two clean rooms. 3.13 finishes in ~27 min; 3.11's
-    # -O leg was canceled at 45 min on a1a4b0a (first suite green, -O still running).
-    # 90 bounds a hung pip without cutting the slower floor interpreter off mid-leg.
+    # Suite ONCE, then the -O leg over the 19 assert-stripping files, plus two clean
+    # rooms. Until 2026-09-07 the suite ran TWICE per cell; the -O leg alone was 22.2 min
+    # on 3.11 and 19.4 on 3.13 and now runs in about one (measured on the rig: 1082 tests
+    # in 58s). 90 still bounds a hung pip rather than the suite -- that is what the number
+    # was ever for, and it is deliberately not retuned in the same change that moved the
+    # workload.
     timeout-minutes: 90
     strategy:
       # The two ENDS of the interval pyproject promises: 3.11 is `requires-python`'s floor
@@ -358,8 +361,45 @@ jobs:
       # proves the gate is not an `assert` the interpreter is licensed to
       # delete — 87 of facet's ANDONs were removable by an environment
       # variable, and this repo does not add the 88th.
+      # NARROWED 2026-09-07. The leg above already ran all 4497 tests; running the WHOLE
+      # suite a second time under -O re-ran 4497 to prove what these 19 files assert, on
+      # BOTH interpreters. Measured on run 34106483511: 22.2 + 19.4 min, 41 of this
+      # workflow's 84. A full-suite re-run is a rig ritual -- correct once, on free
+      # hardware -- and `verify.ps1` still does exactly that. It is not a CI shape
+      # (dogfood-swarm SKILL item 7).
+      #
+      # The population below is NOT a hand-kept list: tests/test_ci_workflows.py derives
+      # it from the three markers by which Python source can observe assert-stripping
+      # (`__debug__`, `sys.flags.optimize`, `PYTHONOPTIMIZE`) and turns RED if a file
+      # reaches for one and is missing here. Add a marker, add the file, or CI says so.
+      #
+      # Still on BOTH matrix cells, deliberately. Assert-stripping is interpreter-wide,
+      # so 3.13 cannot disprove what 3.11 shows -- but the invariant this repo asserts is
+      # "every job that runs the suite also runs it under -O", and an `if:` on one cell
+      # would leave that true of the file and false of the run. ~1 min a cell buys the
+      # invariant back intact.
       - name: run tests under -O (gates must still raise)
-        run: python -O -m pytest tests -q
+        run: >-
+          python -O -m pytest -q
+          tests/test_amend_w12_core_gates.py
+          tests/test_amend_w12_core_solvers.py
+          tests/test_amend_w16_core_solvers.py
+          tests/test_amend_w3_andons.py
+          tests/test_amend_w6_andons.py
+          tests/test_assembly.py
+          tests/test_cascade.py
+          tests/test_ci_workflows.py
+          tests/test_donor_gate.py
+          tests/test_gate_s.py
+          tests/test_gate_survives_optimize.py
+          tests/test_instruments_amend_w18.py
+          tests/test_instruments_amend_w18_optics.py
+          tests/test_instruments_measure_amend_w12.py
+          tests/test_instruments_measure_amend_w14.py
+          tests/test_instruments_measure_amend_w18.py
+          tests/test_lift_solve.py
+          tests/test_resample.py
+          tests/test_turnaround.py
         env:
           PYTHONOPTIMIZE: "1"
 
