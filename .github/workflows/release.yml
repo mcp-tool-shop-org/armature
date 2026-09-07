@@ -376,7 +376,8 @@ jobs:
       # ceiling matches ci.yml so the auditor cannot pick up a new major on release day.
       - name: audit Python dependencies
         run: |
-          python -m pip install "pip-audit>=2.7,<3"
+          # Same as ci.yml python-tests: runner setuptools 79.0.1 is PYSEC-2026-3447.
+          python -m pip install "setuptools>=83.0.0" "pip-audit>=2.7,<3"
           python -m pip_audit --progress-spinner off
       # The same font ci.yml installs, from the same implementation. This job ran the suite
       # without one: two tests hard-require a permitted face and FAIL rather than skip without

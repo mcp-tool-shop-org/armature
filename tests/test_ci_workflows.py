@@ -5604,6 +5604,13 @@ def test_the_release_gate_census_reads_the_job_it_claims_to_read():
     assert 12 not in gates and 12 not in work and 12 not in floor, (gates, work, floor)
 
 
+def test_the_python_audit_step_upgrades_setuptools_before_it_audits():
+    """Hosted setuptools 79.0.1 is PYSEC-2026-3447; pip-audit sees the whole env."""
+    needle = 'python -m pip install "setuptools>=83.0.0" "pip-audit>=2.7,<3"'
+    assert needle in CI, "ci.yml python-tests audit must upgrade setuptools before pip-audit"
+    assert needle in RELEASE, "release.yml verify audit must upgrade setuptools before pip-audit"
+
+
 def test_the_jobs_that_carry_a_gate_are_the_ones_this_file_thinks_they_are():
     """The population, derived off the tree, with the sibling that made the predicate honest.
 
