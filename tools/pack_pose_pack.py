@@ -306,6 +306,27 @@ def main(argv=None):
 
     paths = frame_paths(frames_dir)
     frames = load_frames(paths, alpha_over=parse_plate(a.alpha_over, PosePackError))
+    from_motion_meta = None
+    if pipeline is not None:
+        # Refuse size drift above the pack write — a refused run must not leave a pack
+        # directory that reads as an attempt that produced nothing (wave-37 pin-fix).
+        stick_w = int(frames[0].shape[1])
+        stick_h = int(frames[0].shape[0])
+        if stick_w != int(a.width) or stick_h != int(a.height):
+            raise PosePackError(
+                f"--from-motion size drift after render: sticks are {stick_w}x{stick_h}, "
+                f"pipeline asked {a.width}x{a.height}",
+                {"gate": "ARGS", "andon": "PosePackError",
+                 "clause": "from_motion_stick_size_drift",
+                 "stick_resolution": [stick_w, stick_h],
+                 "asked": [a.width, a.height]})
+        from_motion_meta = {
+            "motion": os.path.abspath(a.from_motion),
+            "manifest": os.path.abspath(a.manifest),
+            "keypoints": pipeline["keypoints"],
+            "sticks": pipeline["sticks"],
+            "width": a.width, "height": a.height, "fps": a.fps,
+        }
     # WAVE-12 MERGE (coordinator, 2026-09-04): created below the frame refusals (a missing or unreadable frame leaves
     # nothing on disk); Gate R below reads back the pack this tool writes.
     os.makedirs(out_dir, exist_ok=True)
@@ -342,25 +363,8 @@ def main(argv=None):
             "Gate B probe saves the batch as the conditioning node received it, to be "
             "counted and compared against these source frames."),
     }
-    if pipeline is not None:
-        # Refuse size drift between rendered sticks and the pack canvas.
-        stick_w = int(frames[0].shape[1])
-        stick_h = int(frames[0].shape[0])
-        if stick_w != int(a.width) or stick_h != int(a.height):
-            raise PosePackError(
-                f"--from-motion size drift after render: sticks are {stick_w}x{stick_h}, "
-                f"pipeline asked {a.width}x{a.height}",
-                {"gate": "ARGS", "andon": "PosePackError",
-                 "clause": "from_motion_stick_size_drift",
-                 "stick_resolution": [stick_w, stick_h],
-                 "asked": [a.width, a.height]})
-        manifest["from_motion"] = {
-            "motion": os.path.abspath(a.from_motion),
-            "manifest": os.path.abspath(a.manifest),
-            "keypoints": pipeline["keypoints"],
-            "sticks": pipeline["sticks"],
-            "width": a.width, "height": a.height, "fps": a.fps,
-        }
+    if from_motion_meta is not None:
+        manifest["from_motion"] = from_motion_meta
     mpath = os.path.join(out_dir, "pose_pack_manifest.json")
     with open(mpath, "w", encoding="utf-8") as fh:
         manifest.update(runtime_provenance())

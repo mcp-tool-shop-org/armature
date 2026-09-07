@@ -352,6 +352,31 @@ def main():
              "asset": asset, "subject": [o.name for o in subject],
              "animation": spec["subject"]["animation"], "frames": count})
 
+    # F-dec5af66: validate --write-camera-path knobs BEFORE creating --out. A missing
+    # or malformed --azimuth-sweep needs no directory; stranding those raises under
+    # makedirs left an empty --out that read as a used attempt (wave-37 pin-fix).
+    write_cam_path = getattr(a, "write_camera_path", None)
+    az0 = az1 = None
+    elev_for_path = None
+    if write_cam_path:
+        sweep = getattr(a, "azimuth_sweep", None)
+        if not sweep:
+            raise PreviewWalkGate(
+                "--write-camera-path needs --azimuth-sweep=start,end degrees",
+                {"clause": "write_camera_path_needs_azimuth_sweep",
+                 "out": os.path.abspath(a.out),
+                 "compensator": "delete --out; owner: the executor session"})
+        parts_az = [p.strip() for p in str(sweep).split(",")]
+        if len(parts_az) != 2:
+            raise PreviewWalkGate(
+                f"--azimuth-sweep={sweep!r} must be start,end degrees",
+                {"clause": "azimuth_sweep_shape", "azimuth_sweep": sweep,
+                 "out": os.path.abspath(a.out),
+                 "compensator": "delete --out; owner: the executor session"})
+        az0, az1 = float(parts_az[0]), float(parts_az[1])
+        elev_for_path = (float(a.elevation) if a.elevation is not None
+                         else float(c["elevation_deg"]))
+
     # Every refusal above this line can fire before a single pixel exists; the output
     # directory is created HERE so a halt does not leave an empty one behind for a later
     # run to read as a used one (F-8d2b9d7d). Nothing between the old site and this one
@@ -362,26 +387,12 @@ def main():
     target = Vector(cam_solution["target"])
     radius = cam_solution["radius"]
     authored_cam = None
-    if getattr(a, "write_camera_path", None):
-        # F-dec5af66: author the camera-path schema from sweep/elevation/radius knobs.
-        sweep = getattr(a, "azimuth_sweep", None)
-        if not sweep:
-            raise PreviewWalkGate(
-                "--write-camera-path needs --azimuth-sweep=start,end degrees",
-                {"clause": "write_camera_path_needs_azimuth_sweep"})
-        parts_az = [p.strip() for p in str(sweep).split(",")]
-        if len(parts_az) != 2:
-            raise PreviewWalkGate(
-                f"--azimuth-sweep={sweep!r} must be start,end degrees",
-                {"clause": "azimuth_sweep_shape", "azimuth_sweep": sweep})
-        az0, az1 = float(parts_az[0]), float(parts_az[1])
-        elev = (float(a.elevation) if a.elevation is not None
-                else float(c["elevation_deg"]))
+    if write_cam_path:
         rad = float(a.radius) if a.radius is not None else float(radius)
         authored_cam = write_camera_path(
-            out_path=a.write_camera_path, n_frames=count,
+            out_path=write_cam_path, n_frames=count,
             azimuth_start_deg=az0, azimuth_end_deg=az1,
-            elevation_deg=elev, radius=rad, target=list(target))
+            elevation_deg=elev_for_path, radius=rad, target=list(target))
         if cam_keys is None:
             cam_keys = authored_cam["keys"]
     cam_data = bpy.data.cameras.new("preview_cam")

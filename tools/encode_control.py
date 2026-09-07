@@ -1121,13 +1121,16 @@ def main(argv=None):
     # exactly this job eleven files over. argparse now refuses the typo before a single
     # frame is opened; the `unknown_codec` raise in `encode()` STAYS, because it guards
     # every programmatic caller and the parser guards only this one.
-    # F-06be7ebb: trap stays in CODECS for survey measurement, but argparse only offers
-    # it when --allow-trap is set. auto is the per-channel pack selector (F-1bfe3e49).
+    # F-06be7ebb: trap stays in CODECS for survey measurement, but selecting it still
+    # needs --allow-trap (runtime gate below). auto is the per-channel pack selector
+    # (F-1bfe3e49). choices= keeps a typo an argparse exit-2 before any frame is opened
+    # (wave-28 F-7c3f8a26); the closed set now includes auto + the trap.
     ap.add_argument("--allow-trap", action="store_true",
                     help="offer x264-qp0-yuv420 (THE TRAP) as a --codec choice; without "
                          "this flag the trap is surveyed but not selectable for a normal "
                          "encode (F-06be7ebb)")
     ap.add_argument("--codec", default="ffv1-gbrp",
+                    choices=[*SAFE_CODECS, CODEC_AUTO, TRAP_CODEC],
                     help="the bridge to encode with (default ffv1-gbrp). With --run, "
                          "codec=auto picks recommended_gray/recommended_rgb per channel "
                          "(F-1bfe3e49). Explicit codec remains an all-channels override "

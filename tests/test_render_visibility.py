@@ -158,10 +158,10 @@ def _tools_that_obtain_meshes(tools_dir=None):
 RECORDED_MESH_TOOLS = [
     "author_walk.py", "check_relift.py", "diagnose_bone_heat.py", "lift_solve.py",
     "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
-    "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py", "probe_glb.py",
-    "probe_subject.py", "render_performer.py", "render_start_frame.py",
-    "render_turnaround.py", "rig_bake.py", "rig_character.py", "rig_parts.py",
-    "rig_repair.py", "rig_retopo.py", "stage_render.py",
+    "make_skeleton_sheet.py", "make_test_armature.py", "preview_glb.py",
+    "preview_walk.py", "probe_glb.py", "probe_subject.py", "render_performer.py",
+    "render_start_frame.py", "render_turnaround.py", "rig_bake.py", "rig_character.py",
+    "rig_parts.py", "rig_repair.py", "rig_retopo.py", "stage_render.py",
 ]
 
 #: Exemptions, re-derived 2026-09-04, each with the clause that makes it true and a
@@ -190,7 +190,8 @@ def test_the_mesh_tool_population_is_derived_and_has_not_grown_silently():
     everything, and one whose predicate was a substring would report green over a comment.
     """
     pop = _tools_that_obtain_meshes()
-    assert len(pop) == 21, pop
+    # WAVE 37: make_test_armature joins (GLB dress path obtains meshes from bpy).
+    assert len(pop) == 22, pop
     assert pop == RECORDED_MESH_TOOLS, {
         "appeared": sorted(set(pop) - set(RECORDED_MESH_TOOLS)),
         "vanished": sorted(set(RECORDED_MESH_TOOLS) - set(pop)),

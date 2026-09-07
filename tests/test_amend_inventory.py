@@ -44,8 +44,11 @@ FINDING_RE = re.compile(r"\bF-[0-9a-f]{8}\b")
 #: (test_builders_seed_registration / test_core_solvers_graduated_w35 /
 #: test_instruments_hand_and_roster / test_instruments_measure_progress_and_timeout)
 #: and left the amend glob — first live exercise of GRADUATION_PATH.
-AMEND_FILE_CEILING = 60
-AMEND_BYTE_FRACTION_CEILING = 0.41
+#: WAVE 37 execute: 60 -> 63. Three `test_*_w37_*.py` amend modules landed with the
+#: feature-execute (builders / core-solvers / instruments); bump with that reason.
+#: Byte fraction 0.41 -> 0.42 with the same three modules (measured 0.4126).
+AMEND_FILE_CEILING = 63
+AMEND_BYTE_FRACTION_CEILING = 0.42
 
 
 def _amend_paths():

@@ -83,7 +83,7 @@ def main(argv=None):
     # and a path that does not exist was accepted in silence
     # (`--meta=E:/no/such/meta.json` returned 0, printed THESIS_SHEET and left the sheet on
     # disk). Its two siblings read the same flag and draw the run's provenance from it
-    # (`make_gate0_sheet.py:251`, `make_startframe_sheet.py:206`). A flag DECLARED and not
+    # (`make_gate0_sheet.py:395`, `make_startframe_sheet.py:228`). A flag DECLARED and not
     # READ is the mirror of the `--sheet-plate` regression `tests/test_sheet_argv_smoke.py`
     # exists for, and that census walks only the other direction.
     ap.add_argument("--meta", default=None,

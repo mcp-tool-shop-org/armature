@@ -27,6 +27,7 @@ refusals, a real subprocess for the halt records — because the property under 
 lands on disk and what the operator reads, not what a function returns.
 """
 
+import ast
 import json
 import os
 import subprocess
@@ -230,14 +231,24 @@ def test_both_pack_andons_sit_above_the_makedirs_they_protect():
     This is the structural half: a later edit that moves `os.makedirs` up would keep those
     green only until the first andon that fires after a directory is created.
     """
-    src = open(os.path.join(TOOLS, "pack_pose_pack.py"), encoding="utf-8").read().splitlines()
+    src = open(os.path.join(TOOLS, "pack_pose_pack.py"), encoding="utf-8").read()
+    lines = src.splitlines()
+    tree = ast.parse(src)
+    main_fn = next(n for n in tree.body
+                   if isinstance(n, ast.FunctionDef) and n.name == "main")
 
     def line_of(needle):
-        hits = [i for i, ln in enumerate(src) if needle in ln]
+        hits = [i for i, ln in enumerate(lines) if needle in ln]
         assert len(hits) == 1, (needle, hits)
         return hits[0]
 
-    makedirs = line_of("os.makedirs(out_dir, exist_ok=True)")
+    # WAVE 37: from_motion_pipeline also makedirs out_dir (helper HELPER_BOTH). The
+    # andons this pin guards live in main and must sit above main's makedirs.
+    main_makedirs = sorted(
+        n.lineno - 1 for n in ast.walk(main_fn)
+        if isinstance(n, ast.Call) and ast.unparse(n.func) == "os.makedirs")
+    assert len(main_makedirs) == 1, main_makedirs
+    makedirs = main_makedirs[0]
     assert line_of("if a.fps <= MIN_FPS_EXCLUSIVE:") < makedirs
     assert line_of('single_path_segment(a.name, "--name", PosePackError,') < makedirs
 

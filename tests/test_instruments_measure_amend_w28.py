@@ -572,11 +572,14 @@ def test_the_helper_that_both_refuses_and_writes_is_unmoved_by_this_split():
     # WAVE 34: submit's `post_prompt` and encode_control's `build_control_pack` join —
     # same residue HELPER_BOTH pin in test_instrument_write_ordering.py.
     # WAVE 35: make_sheet / measure_floor join via run_dailies / sheet_main.
+    # WAVE 37: merge_spend_into_record / write_diff_sheet / from_motion_pipeline join.
     assert derived == {
-        "build_submit_payload": ["post_prompt"],
+        "build_submit_payload": ["merge_spend_into_record", "post_prompt"],
+        "compare_runs": ["write_diff_sheet"],
         "encode_control": ["build_control_pack"],
         "make_sheet": ["run_dailies"],
         "measure_floor": ["sheet_main"],
+        "pack_pose_pack": ["from_motion_pipeline"],
         "rig_character": ["export_rigged"],
         "stage_render": ["run_export"],
     }, derived

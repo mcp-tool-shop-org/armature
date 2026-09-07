@@ -874,6 +874,8 @@ def main():
         "radius": round(radius, 5), "target": [round(v, 5) for v in target],
         "coverage": gate_cov["verdict"], "provenance": side,
         "next": review.get("next"), "review_clip": review,
+        # Zero sets is the finding when the operator passed no --set (wave 37).
+        "set_glbs_requested": bool(getattr(a, "set", None)),
         "sets": len(set_pack["records"])}))
     return 0
 

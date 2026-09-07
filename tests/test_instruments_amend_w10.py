@@ -810,7 +810,8 @@ def test_the_export_read_back_backlog_is_empty_and_says_so():
     inline = sorted(f for f in RECORDED_EXPORTERS
                     if "os.path.isfile(" in read_source(f)
                     and "os.path.getsize(" in read_source(f))
-    assert inline == ["rig_character.py"], inline
+    # WAVE 37: lift_solve joins the inline isfile+getsize exporters (retarget read-back).
+    assert inline == ["lift_solve.py", "rig_character.py"], inline
 
 
 @pytest.mark.parametrize("filename", [f for f in RECORDED_RENDERERS
@@ -902,6 +903,8 @@ RECORDED_COUNTING_SUCCESS_LINES = [
     # success line, which is what this census asks of a counting payload.
     "make_parts_sheet.py",
     "make_rig_sheet.py", "make_skeleton_sheet.py", "preview_walk.py",
+    # WAVE 37: `render_performer` JOINED — success payload now reports a counted term.
+    "render_performer.py",
     # WAVE-12 MERGE (coordinator, 2026-09-04): `probe_subject` LEFT — its payload is now
     # `{"n_probed","n_measured","n_errors","json"}` computed from a population guarded by
     # `require_openable` / `require_something_measured` (instruments F-5b3ead49), no longer a bare
@@ -928,6 +931,10 @@ COUNTED_SUCCESS_WITHOUT_A_GUARD_ROUTED = set()
 #: JSON. A counting success line that does neither -- no guard AND no flag -- still fails.
 COUNTED_SUCCESS_WHERE_ZERO_IS_THE_FINDING = {
     "diagnose_bone_heat.py": "all_arms_weighted_nothing",
+    # WAVE 37: render_performer's `sets` count is 0 when the operator passed no --set;
+    # refusing that would delete the no-scenery success path. Payload carries
+    # `set_glbs_requested` so zero-by-request reads differently from a failed import.
+    "render_performer.py": "set_glbs_requested",
 }
 
 
@@ -1438,19 +1445,10 @@ def test_the_write_ordering_population_is_derived_and_is_the_one_recorded():
 #: above the first write" there); this file's half is the census that makes them visible and
 #: the ratchet that stops a new one arriving. The set may not GROW; it is expected to shrink
 #: as the moves land, and an entry closed by a move is deleted by the commit that moves it.
+#: WAVE 37: re-derived — eleven former members MOVED their refusals above makedirs;
+#: only `make_binding_sheet.render_arm` remains between the directory and the first byte.
 STRANDED_BETWEEN_DIR_AND_BYTE = {
-    "diagnose_bone_heat.py": ["load"],
     "make_binding_sheet.py": ["render_arm"],
-    "make_parts_sheet.py": ["articulated_side", "light_the_scene", "raise ArmatureError"],
-    "make_rig_sheet.py": ["raise ArmatureError"],
-    "make_skeleton_sheet.py": ["light_the_scene", "raise SkeletonSheetGate"],
-    "make_test_armature.py": ["build"],
-    "render_turnaround.py": ["solve_ortho_scale_for_height", "solve_radius_for_height"],
-    "rig_bake.py": ["_import", "bake", "raise BakeEmpty", "unwrap"],
-    "rig_character.py": ["build_pass"],
-    "rig_repair.py": ["raise ArmatureError", "raise NotManifoldAfterRepair",
-                      "raise TooMuchRemoved"],
-    "rig_retopo.py": ["import_subject", "quadriflow", "raise NoRetopoProduced"],
 }
 
 
@@ -1464,7 +1462,8 @@ def test_the_stranded_ratchet_names_real_members_and_may_not_grow():
             for f, v in derived.items()
             if set(v) - set(STRANDED_BETWEEN_DIR_AND_BYTE.get(f, []))}
     assert grew == {}, {"new refusals between the directory and the first byte": grew}
-    assert sum(len(v) for v in derived.values()) <= 22, sorted(derived.items())
+    # WAVE 37: ceiling falls with the moves; measured residue is 1 name.
+    assert sum(len(v) for v in derived.values()) <= 1, sorted(derived.items())
 
 
 @pytest.mark.parametrize("filename", RECORDED_DIR_AND_WRITE)

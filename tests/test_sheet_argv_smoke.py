@@ -411,7 +411,11 @@ def test_the_deleted_walk_is_the_one_that_reported_six_correct_modules():
         if old != new:
             disagree[mod] = (old, new)
     assert disagree == {
-        "build_lora_arm_payload": (["canon_prompt", "no_canon", "subject"], []),
+        # WAVE 37: seeds_registry joins the old walk's undeclared set on the LoRA arm
+        # builder; CN.undeclared_flags still resolves it. Pin may only name the deleted
+        # walk's remaining disagreements.
+        "build_lora_arm_payload": (
+            ["canon_prompt", "no_canon", "seeds_registry", "subject"], []),
         "build_payload": (["canon_prompt", "no_canon", "subject"], []),
         "build_r2v_payload": (["canon_prompt", "no_canon", "subject"], []),
         # WAVE 35: routes dispatcher — old walk saw subparser dests; CN.undeclared_flags

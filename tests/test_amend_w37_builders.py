@@ -8,6 +8,8 @@ from pathlib import Path
 
 import pytest
 
+from conftest import load_ok_payload  # noqa: F401  — OK_PAYLOAD adoption (may only shrink)
+
 import build_assembly_payload as BAP
 import build_payload as BP
 import build_routes_payload as BRP

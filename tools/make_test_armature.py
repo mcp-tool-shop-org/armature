@@ -460,6 +460,9 @@ def main():
         scene = bpy.context.scene
         blender_scene.set_frame_rate(scene, args.fps)
         meshes, arms, info = blender_scene.import_glb(glb_path, expected_fps=args.fps)
+        # glTF drops a hidden Icosphere into `glTF_not_exported`; measuring it reframes
+        # the shot (E02-report.md:34). Filter before any bound_box / vertex census.
+        meshes = blender_scene.render_visible_meshes(scene, meshes)
         if len(arms) != 1:
             raise SpecError(
                 f"--glb imported {len(arms)} armature(s); need exactly one to arc",

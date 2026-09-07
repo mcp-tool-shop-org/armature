@@ -149,13 +149,18 @@ HELPER_BOTH_REFUSES_AND_WRITES = {
     # WAVE 34: `post_prompt` writes the curl body and raises; `build_control_pack` writes
     # the control receipt and raises. Both join the residue the one-hop write deliberately
     # does not record — measured after the submitter / encode_control --run landings.
-    "build_submit_payload": ["post_prompt"],
+    # WAVE 37: `merge_spend_into_record` joins on submit (reads/refuses then writes spend);
+    # `write_diff_sheet` joins on compare_runs (--sheet); `from_motion_pipeline` joins on
+    # pack_pose_pack (--from-motion). Measured; named exemptions, not product rollback.
+    "build_submit_payload": ["merge_spend_into_record", "post_prompt"],
+    "compare_runs": ["write_diff_sheet"],
     "encode_control": ["build_control_pack"],
     # WAVE 35: `run_dailies` / `sheet_main` both refuse and write; make_sheet and
     # measure_floor still gate-and-write directly elsewhere, so they stay in the
     # ordering population too (same shape as rig_character / export_rigged).
     "make_sheet": ["run_dailies"],
     "measure_floor": ["sheet_main"],
+    "pack_pose_pack": ["from_motion_pipeline"],
     # `export_rigged` writes the GLB and raises the family; `rig_character` is in the ordering
     # population anyway, because its CLI body also writes directly (`os.makedirs` at :1691).
     "rig_character": ["export_rigged"],
@@ -482,6 +487,10 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     # (`NOT_YET_MOVED`) whose size is pinned, not a design decision.
     "author_walk": ["gate_a_arrival", "gate_arrived", "gate_glb_written", "gate_n_names",
                     "pick_subject"],
+    # WAVE 37: submit merges spend onto --record after append_ledger; compare_runs'
+    # --sheet helper both refuses and writes. Named exemptions (per-refusal ratchet).
+    "build_submit_payload": ["merge_spend_into_record"],
+    "compare_runs": ["write_diff_sheet"],
     "extract_clip_frames": ["probe", "raise ClipReadError"],
     "fetch_run": ["download", "verify_downloads"],
     # WAVE-14 MERGE (coordinator, 2026-09-04): `download` LEFT — `fetch_t2v_run.download` is now a call into
@@ -648,6 +657,9 @@ NOT_YET_MOVED = {
     "raise ClipReadError": "extract_clip_frames, same family as `probe`",
     "raise FitReferenceError": "fit_reference refuses inline below its first write",
     "raise GateMode": "rig_character, same family as `build_pass`",
+    "merge_spend_into_record": (
+        "build_submit_payload merges spend onto --record after append_ledger "
+        "(wave 37); the read/refuse is of the builder record, not a read-back of the ledger"),
     "raise PreviewWalkGate": "preview_walk refuses inline below its first write",
     "raise RenderGate": "render_performer / render_start_frame",
     "raise RenderTurnaroundGate": "render_turnaround, same family as `gate_set_distinct`",
@@ -655,6 +667,8 @@ NOT_YET_MOVED = {
     "shoot": "make_parts_sheet shoots after `<out>/` exists",
     "subject_box": "make_lift_sheet takes the subject box after `<out>/` exists",
     "unbound_determinism_record": "rig_character, same family as `build_pass`",
+    "write_diff_sheet": (
+        "compare_runs --sheet helper refuses and writes below os.makedirs (wave 37)"),
 }
 
 #: The domains this run froze. An owner outside this set is a typo, and the test says so.
@@ -928,8 +942,10 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # WAVE-22 MERGE (coordinator, 2026-09-05): 27 / 54 / 78 MEASURED on the merged tree with the derivation above —
     # builders (27 / 50 / 68) and instruments (27 / 55 / 79) each moved this census branch-local; the merged value
     # is neither and is not their sum.
-    assert len(derived) == 27, (
-        f"{len(derived)} tools strand a refusal below their first write; this pin asserts 27 "
+    # WAVE 37: 27 -> 29. build_submit_payload (merge_spend_into_record) and compare_runs
+    # (write_diff_sheet) join; measured after --write-record / --sheet landings.
+    assert len(derived) == 29, (
+        f"{len(derived)} tools strand a refusal below their first write; this pin asserts 29 "
         f"(one unit = one tool in derive_population() that still strands). Re-derive with the "
         f"suite interpreter named in tests/conftest.py via the command in the comment block "
         f"above (tools/names/sites). Record the wave that moved it BRANCH-LOCAL, never summed. "
@@ -942,8 +958,9 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # WAVE 34: 55 -> 58. author_walk gains `gate_arrived`; lift_solve gains `author` /
     # `gate_objects_registered` / `gate_space_is_identity` below the new retarget
     # motion_out write; render_start_frame loses `require_render_target_moved` (-1).
-    assert names == 58, (
-        f"{names} distinct stranded refusal NAMES; this pin asserts 58 (one unit = one "
+    # WAVE 37: 58 -> 60. merge_spend_into_record + write_diff_sheet join.
+    assert names == 60, (
+        f"{names} distinct stranded refusal NAMES; this pin asserts 60 (one unit = one "
         f"refusal spelling under a tool, collapsed per tool). Re-derive with the suite "
         f"interpreter named in tests/conftest.py via the command in the comment block above. "
         f"Record the wave that moved it BRANCH-LOCAL, never summed. Dump: {sorted(derived.items())}")
@@ -975,9 +992,12 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # WAVE 34: 78 -> 72. The six `require_render_target_moved` sites inside
     # `render_start_frame`'s former inlined write_still calls leave when the nested
     # `_render_still` helper owns the snapshot+require pair; measured, never summed.
-    assert sites == 72, (
-        f"{sites} refusal SITES below a first write; this pin asserts 72, re-derived on the "
-        f"merged tree after wave 34 retarget / render_start_frame helper landings "
+    # WAVE 37: 72 -> 75. submit merge_spend + compare_runs write_diff_sheet sites join;
+    # pack_pose_pack's from_motion stick-drift raise MOVED above makedirs (sites fall
+    # relative to an unmoved strand). Measured 29/60/75.
+    assert sites == 75, (
+        f"{sites} refusal SITES below a first write; this pin asserts 75, re-derived on the "
+        f"merged tree after wave 37 submit/compare/pack landings "
         f"(see the comments above for the measurements it overturned), and the number "
         f"falls as the moves land")
 
@@ -1121,7 +1141,8 @@ def test_the_read_back_table_is_read_and_says_what_it_means():
     # WAVE 16, F-9b4d01ef: the message named 35, which the wave-14 merge overturned when it
     # re-derived 12 / 29 on the merged tree. Same correction as the sites message above.
     # WAVE 34: 29 -> 32 (`author`, `gate_objects_registered`, `gate_space_is_identity`).
-    assert len(NOT_YET_MOVED) == 32, (
+    # WAVE 37: 32 -> 34. merge_spend_into_record + write_diff_sheet join the backlog.
+    assert len(NOT_YET_MOVED) == 34, (
         f"{len(NOT_YET_MOVED)} refusals still sit below a first write without reading it "
         f"back; this pin asserts 32, re-derived after wave 34 retarget strands, and the "
         f"number may only fall — a move deletes its entry in the commit that makes it")

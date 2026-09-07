@@ -366,12 +366,15 @@ def test_the_int_flags_are_enumerated_so_the_next_one_cannot_hide():
 def test_the_width_and_height_siblings_are_still_bounded_by_the_frame_gate():
     """The two int flags that ARE bounded stay bounded — the wave-12/14 fix this one sits
     beside must not be displaced by it."""
-    for filename in ("render_start_frame.py", "render_turnaround.py"):
+    # WAVE 37: render_start_frame's beauty mode re-bounds 704x2048 through a second
+    # require_frame_size call; turnaround stays at one.
+    expected = {"render_start_frame.py": 2, "render_turnaround.py": 1}
+    for filename, n_expected in expected.items():
         fn = _fn(filename, "main")
         calls = [n for n in ast.walk(fn)
                  if isinstance(n, ast.Call) and isinstance(n.func, ast.Name)
                  and n.func.id == "require_frame_size"]
-        assert len(calls) == 1, (filename, [n.lineno for n in calls])
+        assert len(calls) == n_expected, (filename, [n.lineno for n in calls])
 
 
 def test_the_lens_refusal_reaches_the_halt_line_intact(turn, capsys):

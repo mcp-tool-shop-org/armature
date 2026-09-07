@@ -24,24 +24,7 @@ import _census_nodes as CN  # noqa: E402
 
 TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 _flag_names = CN.flag_names
-
-
-def _arg_action(src, flag, func="parse_args"):
-    tree = ast.parse(src)
-    fn = next(n for n in ast.walk(tree)
-              if isinstance(n, ast.FunctionDef) and n.name == func)
-    for node in ast.walk(fn):
-        if not isinstance(node, ast.Call):
-            continue
-        if not (isinstance(node.func, ast.Attribute) and node.func.attr == "add_argument"):
-            continue
-        if not (node.args and isinstance(node.args[0], ast.Constant)
-                and node.args[0].value == flag):
-            continue
-        for kw in node.keywords:
-            if kw.arg == "action" and isinstance(kw.value, ast.Constant):
-                return kw.value.value
-    return None
+_arg_action = CN.arg_action
 
 
 # =======================================================================================

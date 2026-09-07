@@ -429,6 +429,29 @@ def flag_names(src, func="parse_args"):
     return names
 
 
+def arg_action(src, flag, func="parse_args"):
+    """`action=` value for `flag` on a parser function, or None (wave 37 home).
+
+    Graduated from duplicate walks in `test_instruments_amend_w37` and
+    `test_instruments_hand_and_roster` (`test_amend_w26_suite` F-f893634d).
+    """
+    tree = ast.parse(src) if isinstance(src, str) else src
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == func)
+    for node in ast.walk(fn):
+        if not isinstance(node, ast.Call):
+            continue
+        if not (isinstance(node.func, ast.Attribute) and node.func.attr == "add_argument"):
+            continue
+        if not (node.args and isinstance(node.args[0], ast.Constant)
+                and node.args[0].value == flag):
+            continue
+        for kw in node.keywords:
+            if kw.arg == "action" and isinstance(kw.value, ast.Constant):
+                return kw.value.value
+    return None
+
+
 def flag_helpers(trees):
     """`{(module, function): dests}` for every function that adds flags to a parser.
 
