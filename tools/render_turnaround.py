@@ -245,6 +245,7 @@ ORTHO_STANDOFF_SPHERES = 4.0
 #: exit 1 naming a bpy property assignment. The order is the sheets' order, so a sheet and
 #: a render made beside each other cannot be drawn by different engines.
 ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+CYCLES_CANDIDATES = ("CYCLES",)
 
 
 def select_engine(scene, candidates=ENGINE_CANDIDATES):
@@ -441,6 +442,12 @@ def parse_args():
                          "number a whole ROSTER renders on, so relative character heights "
                          "survive into the sheet. Used verbatim; --height-frac does not "
                          "participate. Requires --ortho (S05)")
+    ap.add_argument("--set", action="append", default=None,
+                    help="owned 3D set/prop GLB as non-deforming scenery (F-bfac5ade). "
+                         "Appendable; excluded from ortho framing solve; recorded in "
+                         "turnaround provenance")
+    ap.add_argument("--engine", default="eevee", choices=("eevee", "cycles"),
+                    help="eevee (default) or cycles (F-787129aa)")
     a = ap.parse_args(argv)
     require_roster_pin(a)
     if not a.roster and not a.glb:
@@ -1038,13 +1045,17 @@ def main():
             "ortho_scale": cast["ortho_scale"],
             "ortho_scale_source": "pinned"})
         gate_roster_scales(roster_member_records, cast["ortho_scale"])
+    from render_performer import import_set_glbs, engine_candidates_for
+    set_pack = import_set_glbs(
+        scene, getattr(a, "set", None), expected_fps=a.fps, sha_fn=_sha256)
     if not meshes:
         raise RenderTurnaroundGate(
             f"{primary} imported no mesh objects; nothing to render",
             {"clause": "import", "glb": primary, "mesh_objects": [],
              "armatures": [o.name for o in arms]})
 
-    engine = select_engine(scene)
+    engine = select_engine(
+        scene, engine_candidates_for(getattr(a, "engine", "eevee")))
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
@@ -1260,9 +1271,14 @@ def main():
         "numpy": np.__version__,
         "source": {"glb": os.path.abspath(primary), "sha256": _sha256(primary),
                    "bytes": os.path.getsize(primary),
-                   "cast": cast, "roster_members": roster_member_records},
+                   "cast": cast, "roster_members": roster_member_records,
+                   "sets": set_pack["records"]},
         "import_info": dict(info, subject_render_visible=[o.name for o in subject],
                             subject_excluded_not_render_visible=excluded),
+        "sets_in_framing_solve": False,
+        "sets_in_render": bool(set_pack["records"]),
+        "engine": engine,
+        "engine_choice": getattr(a, "engine", "eevee"),
         "resolution": [width, height],
         "camera": {
             "type": "orbit", "n_views": int(a.views),

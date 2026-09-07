@@ -180,6 +180,10 @@ def parse_args():
                    help="replace this run's own files where --out already holds them "
                         "from an earlier run. WITHOUT it the run REFUSES rather than "
                         "overwriting, by name, before the output directory is touched")
+    p.add_argument("--camera-path", default=None,
+                   help="optional keyframed orbit JSON (framing.normalize_camera_keys); "
+                        "reuses render_performer.load_camera_path / sample_camera_at "
+                        "(F-813d7a7f). Default: this tool's hard-coded preview orbits")
     p.add_argument("--name", required=True,
                    help="ONE path component — it is pasted into every written "
                         "filename, so a separator, an absolute path or a dot name "
@@ -461,12 +465,30 @@ def main():
             {"out": os.path.abspath(args.out), "overwrote": already_present}))
 
     os.makedirs(args.out, exist_ok=True)
+    # F-813d7a7f: optional authored camera path drives full_a / full_b orbits.
+    cam_keys = None
+    if getattr(args, "camera_path", None):
+        from render_performer import load_camera_path
+        from armature_core import framing as _framing
+        cam_keys = load_camera_path(args.camera_path)
+        sample_a = _framing.sample_camera_at(cam_keys, 0)
+        sample_b = _framing.sample_camera_at(cam_keys, cam_keys[-1]["frame"])
+        full_a_az, full_a_el = sample_a["azimuth_deg"], sample_a["elevation_deg"]
+        full_b_az, full_b_el = sample_b["azimuth_deg"], sample_b["elevation_deg"]
+        # Path radius is absolute world distance; fall back to bbox radius when unset.
+        path_radius = float(sample_a["radius"]) if sample_a["radius"] else radius
+    else:
+        full_a_az, full_a_el, full_b_az, full_b_el = 30, 10, -30, 10
+        path_radius = radius
+    stats["camera_path"] = getattr(args, "camera_path", None)
     written = [
-        add_camera_render("full_a", center, radius, 30, 10, (640, 960), args.out, args),
-        add_camera_render("full_b", center, radius, 210, 10, (640, 960), args.out, args),
-        add_camera_render("head_a", head_c, head_r, 30, HEAD_ELEV_DEG,
+        add_camera_render("full_a", center, path_radius, full_a_az, full_a_el,
+                          (640, 960), args.out, args),
+        add_camera_render("full_b", center, path_radius, full_b_az, full_b_el,
+                          (640, 960), args.out, args),
+        add_camera_render("head_a", head_c, head_r, full_a_az, HEAD_ELEV_DEG,
                           (512, 512), args.out, args),
-        add_camera_render("head_b", head_c, head_r, 210, HEAD_ELEV_DEG,
+        add_camera_render("head_b", head_c, head_r, full_b_az, HEAD_ELEV_DEG,
                           (512, 512), args.out, args),
     ]
     stats["gate_PREVIEW_GLB"] = gate_previews_written(written)

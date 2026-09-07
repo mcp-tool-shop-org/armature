@@ -140,9 +140,9 @@ def parse_args(argv=None):
                          "(F-97da5a40). Mutually exclusive with --motion; requires "
                          "--bone-map and --licence-row")
     ap.add_argument("--bone-map", default=None,
-                    help="JSON object mapping sitelist bone name -> source armature bone "
-                         "name. Required with --retarget. Unmapped sitelist bones hold "
-                         "IDENTITY")
+                    help="JSON object path OR preset alias (mixamo|gltf-humanoid) mapping "
+                         "sitelist bone name -> source armature bone name (F-c743fc7d). "
+                         "Required with --retarget. Unmapped sitelist bones hold IDENTITY")
     ap.add_argument("--licence-row", default=None,
                     help="license-map.md row id for the clip (required with --retarget); "
                          "recorded in provenance before any bake")
@@ -151,6 +151,13 @@ def parse_args(argv=None):
                     help="whether hips translation from the source root survives the "
                          "retarget (default hips_delta_world) or is stripped. Movement-"
                          "library §4: this is a retargeter setting, not a clip property")
+    ap.add_argument("--foot-plant", default="off", choices=("off", "speed"),
+                    help="after retarget sampling, pin ankle locals when root speed is "
+                         "below threshold (speed) or leave as sampled (off, default) "
+                         "(F-63fdb149 / movement-library §4)")
+    ap.add_argument("--foot-plant-speed", type=float, default=0.02,
+                    help="root travel per frame below which ankles plant when "
+                         "--foot-plant=speed (default 0.02 world units)")
     ap.add_argument("--motion-out", default=None,
                     help="optional path to write the emitted motion-record JSON (retarget "
                          "mode). Default: <out> with .motion.json suffix")
@@ -190,15 +197,90 @@ def require_retarget_flags(args):
     return args
 
 
-def load_bone_map(path):
-    """Sitelist -> source bone names. Refuses unknown sitelist keys and empty maps."""
-    with open(path, encoding="utf-8") as fh:
-        raw = json.load(fh)
+#: F-c743fc7d: reviewed preset maps embedded in-module (coordinator: embed JSON in .py;
+#: tools/retarget_maps/ is outside the instruments glob). Alias tokens resolve here.
+BONE_MAP_PRESETS = {
+    "mixamo": {
+        "hips": "mixamorig:Hips",
+        "spine": "mixamorig:Spine",
+        "chest": "mixamorig:Spine1",
+        "neck": "mixamorig:Neck",
+        "head": "mixamorig:Head",
+        "shoulder.L": "mixamorig:LeftArm",
+        "elbow.L": "mixamorig:LeftForeArm",
+        "wrist.L": "mixamorig:LeftHand",
+        "shoulder.R": "mixamorig:RightArm",
+        "elbow.R": "mixamorig:RightForeArm",
+        "wrist.R": "mixamorig:RightHand",
+        "hip.L": "mixamorig:LeftUpLeg",
+        "knee.L": "mixamorig:LeftLeg",
+        "ankle.L": "mixamorig:LeftFoot",
+        "hip.R": "mixamorig:RightUpLeg",
+        "knee.R": "mixamorig:RightLeg",
+        "ankle.R": "mixamorig:RightFoot",
+    },
+    "gltf-humanoid": {
+        "hips": "hips",
+        "spine": "spine",
+        "chest": "chest",
+        "neck": "neck",
+        "head": "head",
+        "shoulder.L": "leftUpperArm",
+        "elbow.L": "leftLowerArm",
+        "wrist.L": "leftHand",
+        "shoulder.R": "rightUpperArm",
+        "elbow.R": "rightLowerArm",
+        "wrist.R": "rightHand",
+        "hip.L": "leftUpperLeg",
+        "knee.L": "leftLowerLeg",
+        "ankle.L": "leftFoot",
+        "hip.R": "rightUpperLeg",
+        "knee.R": "rightLowerLeg",
+        "ankle.R": "rightFoot",
+    },
+}
+BONE_MAP_PRESET_ALIASES = tuple(BONE_MAP_PRESETS.keys())
+
+
+def bone_map_preset_sha(name):
+    """Stable sha256 of a preset's JSON (sorted keys) for provenance."""
+    raw = BONE_MAP_PRESETS[name]
+    blob = json.dumps(raw, sort_keys=True, separators=(",", ":")).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()
+
+
+def load_bone_map(path_or_alias):
+    """Sitelist -> source bone names. Accepts a JSON path or preset alias (F-c743fc7d)."""
+    bone_map, _meta = resolve_bone_map(path_or_alias)
+    return bone_map
+
+
+def resolve_bone_map(path_or_alias):
+    """Return (map_dict, preset_meta_or_None). Preset aliases embed under BONE_MAP_PRESETS."""
+    token = (path_or_alias or "").strip()
+    preset_meta = None
+    if token in BONE_MAP_PRESETS:
+        raw = dict(BONE_MAP_PRESETS[token])
+        preset_meta = {"preset": token, "preset_sha256": bone_map_preset_sha(token),
+                       "source": "embedded:BONE_MAP_PRESETS"}
+    else:
+        path = token
+        if not os.path.isfile(path):
+            raise ArmatureError(
+                f"--bone-map={path_or_alias!r} is neither a preset "
+                f"({list(BONE_MAP_PRESET_ALIASES)}) nor an existing JSON file",
+                {"clause": "bone_map_not_an_object", "path": os.path.abspath(path)
+                 if path else None, "known_presets": list(BONE_MAP_PRESET_ALIASES)})
+        with open(path, encoding="utf-8") as fh:
+            raw = json.load(fh)
     if not isinstance(raw, dict) or not raw:
         raise ArmatureError(
-            f"--bone-map={path!r} must be a non-empty JSON object "
-            f"{{sitelist_name: source_bone_name}}",
-            {"clause": "bone_map_not_an_object", "path": os.path.abspath(path)})
+            f"--bone-map={path_or_alias!r} must be a non-empty JSON object "
+            f"{{sitelist_name: source_bone_name}} or a preset alias",
+            {"clause": "bone_map_not_an_object",
+             "path": os.path.abspath(path_or_alias)
+             if path_or_alias and os.path.isfile(path_or_alias) else None,
+             "known_presets": list(BONE_MAP_PRESET_ALIASES)})
     known = set(sitelist.ALL_NAMES)
     unknown = sorted(k for k in raw if k not in known)
     if unknown:
@@ -206,14 +288,59 @@ def load_bone_map(path):
             f"--bone-map names sitelist bones this rig does not carry: {unknown}",
             {"clause": "bone_map_unknown_sitelist_bones", "unknown": unknown,
              "known": list(sitelist.ALL_NAMES)})
-    out = {str(k): str(v) for k, v in raw.items()}
-    return out
+    return {str(k): str(v) for k, v in raw.items()}, preset_meta
+
+
+def apply_foot_plant(frames, *, mode="off", speed_threshold=0.02):
+    """Pin ankle locals when root speed is below threshold (F-63fdb149).
+
+    Pure. ``mode=off`` returns frames unchanged. ``mode=speed`` freezes ankle.L/R
+    local matrices to the last planted frame whenever |Δroot| < speed_threshold.
+    """
+    key = (mode or "off").strip().lower()
+    if key == "off":
+        return list(frames), {"policy": "off", "planted_frames": 0,
+                              "speed_threshold": None}
+    if key != "speed":
+        raise ArmatureError(
+            f"--foot-plant={mode!r} is not one of ['off', 'speed']",
+            {"clause": "unknown_foot_plant", "foot_plant": mode,
+             "known": ["off", "speed"]})
+    thr = float(speed_threshold)
+    if not (thr >= 0.0) or thr != thr:  # NaN guard
+        raise ArmatureError(
+            f"--foot-plant-speed={speed_threshold!r} must be a finite >= 0",
+            {"clause": "foot_plant_speed_not_finite", "speed": speed_threshold})
+    out = []
+    planted = 0
+    last_ankles = None
+    prev_root = None
+    for fr in frames:
+        local = {k: [list(row) for row in v] for k, v in fr["local"].items()}
+        root = list(fr["root"])
+        speed = 0.0
+        if prev_root is not None:
+            speed = math.sqrt(sum((root[i] - prev_root[i]) ** 2 for i in range(3)))
+        plant_now = prev_root is not None and speed < thr and last_ankles is not None
+        if plant_now:
+            for ank in ("ankle.L", "ankle.R"):
+                if ank in last_ankles:
+                    local[ank] = [list(row) for row in last_ankles[ank]]
+            planted += 1
+        else:
+            last_ankles = {ank: [list(row) for row in local[ank]]
+                           for ank in ("ankle.L", "ankle.R") if ank in local}
+        out.append({"frame": fr["frame"], "local": local, "root": root})
+        prev_root = root
+    return out, {"policy": "speed", "planted_frames": planted,
+                 "speed_threshold": thr, "n_frames": len(out)}
 
 
 def retarget_provenance(*, source_path, source_sha, bone_map, licence_row,
-                        root_translation, source_format):
+                        root_translation, source_format, bone_map_preset=None,
+                        foot_plant=None):
     """The provenance block every retarget bake must carry (pure; movement-library §4)."""
-    return {
+    rec = {
         "mode": "retarget",
         "source_clip": {"path": os.path.abspath(source_path), "sha256": source_sha,
                         "format": source_format},
@@ -225,6 +352,11 @@ def retarget_provenance(*, source_path, source_sha, bone_map, licence_row,
             "retargeter setting, not a clip property; this run records which setting was "
             "chosen rather than assuming the clip arrived with traversal intact"),
     }
+    if bone_map_preset:
+        rec["bone_map_preset"] = dict(bone_map_preset)
+    if foot_plant is not None:
+        rec["foot_plant"] = dict(foot_plant)
+    return rec
 
 
 def read_rest(manifest_path):
@@ -647,7 +779,7 @@ def main():
         # F-97da5a40: retarget mode — map source clip onto sitelist, emit motion record,
         # THEN key. Licence row and root-translation representation ride provenance
         # before the bake.
-        bone_map = load_bone_map(a.bone_map)
+        bone_map, bone_map_preset = resolve_bone_map(a.bone_map)
         clip_sha = _sha256(a.retarget)
         scene = rig_character.fresh_scene(a.fps)
         # Performer first so fps andon is armed before either import settles.
@@ -657,10 +789,15 @@ def main():
             a.retarget, expected_fps=a.fps)
         frames, gate_record, span_info = sample_retarget_frames(
             src_arm, bone_map, root_translation=a.root_translation, scene=scene)
+        frames, plant_meta = apply_foot_plant(
+            frames, mode=getattr(a, "foot_plant", "off"),
+            speed_threshold=float(getattr(a, "foot_plant_speed", 0.02)))
+        gate_record = LS.validate_motion_record(frames)
         retarget_meta = retarget_provenance(
             source_path=a.retarget, source_sha=clip_sha, bone_map=bone_map,
             licence_row=a.licence_row, root_translation=a.root_translation,
-            source_format=src_fmt)
+            source_format=src_fmt, bone_map_preset=bone_map_preset,
+            foot_plant=plant_meta)
         retarget_meta["source_import"] = src_info
         retarget_meta["source_span"] = span_info
         record = {"tool": "lift_solve", "mode": "retarget",

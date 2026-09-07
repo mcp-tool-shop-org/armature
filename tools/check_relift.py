@@ -290,11 +290,17 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--pinned", required=True,
+    ap.add_argument("--pinned", default=None,
                     help="the GLB that has been on disk since it was lifted -- the one a "
-                         "prior generation was conditioned on")
-    ap.add_argument("--fresh", required=True,
-                    help="a GLB re-solved from the same inputs, to compare against it")
+                         "prior generation was conditioned on (GLB mode)")
+    ap.add_argument("--fresh", default=None,
+                    help="a GLB re-solved from the same inputs, to compare against it "
+                         "(GLB mode)")
+    ap.add_argument("--pinned-motion", default=None,
+                    help="pinned lift_solve motion-record JSON (F-6a7e819f); mutually "
+                         "exclusive with --pinned GLB mode unless both layers are compared")
+    ap.add_argument("--fresh-motion", default=None,
+                    help="fresh lift_solve motion-record JSON (F-6a7e819f)")
     ap.add_argument("--out", required=True,
                     help="the JSON record to write. Compensator: delete it; owner: the "
                          "executor session")
@@ -310,86 +316,201 @@ def parse_args(argv=None):
     return ap.parse_args(argv[argv.index("--") + 1:] if "--" in argv else [])
 
 
+def motion_channel_signatures(path, frames):
+    """Per-frame digests of local rotation channels (pure; F-6a7e819f)."""
+    with open(path, encoding="utf-8") as fh:
+        rec = json.load(fh)
+    rows = list(rec.get("frames") or [])
+    if not rows:
+        raise ReliftError(
+            f"motion record {path!r} carries no frames",
+            {"clause": "motion_record_has_no_frames", "path": os.path.abspath(path)})
+    n = min(int(frames), len(rows))
+    sigs = []
+    for i in range(n):
+        fr = rows[i]
+        local = fr.get("local") or {}
+        # Stable digest: sorted bone -> flattened 3x3 + root.
+        parts = []
+        for bone in sorted(local):
+            m = local[bone]
+            flat = ",".join(f"{float(v):.9g}" for row in m for v in row)
+            parts.append(f"{bone}:{flat}")
+        root = fr.get("root") or [0.0, 0.0, 0.0]
+        parts.append("root:" + ",".join(f"{float(v):.9g}" for v in root))
+        blob = "|".join(parts).encode("utf-8")
+        sigs.append({"frame": i, "sha256": hashlib.sha256(blob).hexdigest(),
+                     "n_bones": len(local)})
+    window = {
+        "glb": os.path.abspath(path), "action_frame_range": [0.0, float(len(rows) - 1)],
+        "keyed_frames": len(rows), "requested": int(frames), "sampled": n,
+        "first_keyed_scene_frame": 0, "last_keyed_scene_frame": len(rows) - 1,
+        "sampled_scene_frames": [0, n - 1] if n > 0 else None,
+        "layer": "motion_local",
+    }
+    return sigs, window
+
+
+def compare_motion_signatures(pinned_sigs, fresh_sigs, label=None):
+    """Same shape as compare_signatures, over motion-channel digests."""
+    n = min(len(pinned_sigs), len(fresh_sigs))
+    differing = []
+    for i in range(n):
+        if pinned_sigs[i]["sha256"] != fresh_sigs[i]["sha256"]:
+            differing.append(i)
+    if len(pinned_sigs) != len(fresh_sigs):
+        return {
+            "verdict": (f"frame counts differ: pinned {len(pinned_sigs)} vs "
+                        f"fresh {len(fresh_sigs)}"),
+            "n_frames_compared": n, "n_frames_differing": len(differing) + 1,
+            "differing_frames": differing, "label": label, "layer": "motion_local",
+            "clause": "motion_frame_counts_differ",
+        }
+    if differing:
+        return {
+            "verdict": f"{len(differing)} of {n} motion frames differ in local channels",
+            "n_frames_compared": n, "n_frames_differing": len(differing),
+            "differing_frames": differing, "label": label, "layer": "motion_local",
+        }
+    return {
+        "verdict": f"all {n} frames of local rotation channels identical",
+        "n_frames_compared": n, "n_frames_differing": 0,
+        "differing_frames": [], "label": label, "layer": "motion_local",
+    }
+
+
 def main():
     a = parse_args(sys.argv)
-    for p in (a.pinned, a.fresh):
-        if not os.path.isfile(p):
-            raise ReliftError(f"no such GLB: {p}",
-                {"clause": "glb_is_not_a_file", "andon": "ArmatureError",
-                 "glb": os.path.abspath(p)})
-    # BEFORE either GLB is imported, and on identity of FILE rather than on content
-    # (F-94657d8e). `os.path.samefile` compares the filesystem's own identity, so
-    # `--pinned=x.glb --fresh=./x.glb`, a relative/absolute pair, a hard link and a symlink
-    # are all one file; `pinned_sha == fresh_sha` is deliberately NOT the test, because two
-    # byte-identical GLBs from two independent solves are the result this tool exists to
-    # find. Both paths were confirmed to be files on the loop above, so `samefile` cannot
-    # raise here.
-    if os.path.samefile(a.pinned, a.fresh):
-        raise ReliftSelfComparison(
-            f"--pinned and --fresh name the same file "
-            f"({os.path.realpath(a.pinned)}); a comparison of a decode with itself reports "
-            f"every frame identical and every byte identical by construction, and this "
-            f"tool's record would publish that as the verdict that the E09 lift solver is "
-            f"deterministic",
-            {"clause": "pinned_and_fresh_are_the_same_file",
-             "gate": "RELIFT_SIDES", "andon": "ReliftSelfComparison",
-             "pinned": os.path.abspath(a.pinned), "fresh": os.path.abspath(a.fresh),
-             "pinned_realpath": os.path.realpath(a.pinned),
-             "fresh_realpath": os.path.realpath(a.fresh),
-             "compared_on": "os.path.samefile (identity of file, never content)"})
+    glb_mode = bool(a.pinned or a.fresh)
+    motion_mode = bool(a.pinned_motion or a.fresh_motion)
+    if not glb_mode and not motion_mode:
+        raise ReliftError(
+            "pass --pinned/--fresh (GLB) and/or --pinned-motion/--fresh-motion",
+            {"clause": "relift_sides_required"})
+    if glb_mode and (not a.pinned or not a.fresh):
+        raise ReliftError(
+            "GLB mode needs both --pinned and --fresh",
+            {"clause": "glb_pair_incomplete",
+             "pinned": a.pinned, "fresh": a.fresh})
+    if motion_mode and (not a.pinned_motion or not a.fresh_motion):
+        raise ReliftError(
+            "motion mode needs both --pinned-motion and --fresh-motion",
+            {"clause": "motion_pair_incomplete",
+             "pinned_motion": a.pinned_motion, "fresh_motion": a.fresh_motion})
 
     if a.frames < 1:
         raise ReliftError(f"--frames={a.frames}: there is nothing to compare",
             {"clause": "frames_is_not_a_comparable_count", "andon": "ArmatureError",
              "flag": "--frames", "frames": a.frames})
 
-    pinned_sha, fresh_sha = _sha256(a.pinned), _sha256(a.fresh)
-    pinned_sigs, pinned_window = signatures(a.pinned, a.frames, a.fps)
-    fresh_sigs, fresh_window = signatures(a.fresh, a.frames, a.fps)
-    # The window andon runs BEFORE any verdict is computed: a comparison over a window the
-    # assets do not both have is not a weaker comparison, it is a different question.
-    window = gate_relift_window(pinned_window, fresh_window, a.frames)
-    ev = compare_signatures(pinned_sigs, fresh_sigs, label=a.label)
-    ev["window"] = window
-
     rec = {
         "tool": "check_relift", "tool_version": TOOL_VERSION,
         "blender": blender_scene.blender_provenance(),
         "label": a.label,
-        # `realpath` beside the sha so a READER can see the two sides were two files
-        # (F-94657d8e): a record whose only identity evidence is a pair of equal digests
-        # cannot be told apart from a record of one file compared with itself.
-        "pinned": {"path": os.path.abspath(a.pinned), "sha256": pinned_sha,
-                   "realpath": os.path.realpath(a.pinned)},
-        "fresh": {"path": os.path.abspath(a.fresh), "sha256": fresh_sha,
-                  "realpath": os.path.realpath(a.fresh)},
-        "sides_are_distinct_files": (
-            "refused before either import by gate RELIFT_SIDES, on os.path.samefile"),
-        "bytes_identical": pinned_sha == fresh_sha,
         "frames": a.frames, "fps": a.fps,
-        "frames_source": ("--frames, checked against both GLBs' own keyed action ranges by "
-                          "gate_RELIFT.window; a request that overruns either one refuses"),
-        "gate_RELIFT": ev,
-        "signature_selection": (
-            "render_visible_meshes - every digest above was taken over the RENDER-VISIBLE "
-            "meshes of each import, never over every mesh the file happens to carry. Named "
-            "here because a digest is a number about a population and the population was "
-            "not in the record (F-33fb7947)"),
-        "what_this_settles": (
-            "whether the E09 lift solver is deterministic and the on-disk GLB is what the "
-            "recorded inputs still produce. Geometry is the verdict; the byte hashes are a "
-            "second independent fact, because identical bytes cannot decode to different "
-            "geometry while differing bytes need not mean anything moved"),
     }
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+    ok_payload = {"label": a.label, "record": a.out}
+
+    if glb_mode:
+        for p in (a.pinned, a.fresh):
+            if not os.path.isfile(p):
+                raise ReliftError(f"no such GLB: {p}",
+                    {"clause": "glb_is_not_a_file", "andon": "ArmatureError",
+                     "glb": os.path.abspath(p)})
+        if os.path.samefile(a.pinned, a.fresh):
+            raise ReliftSelfComparison(
+                f"--pinned and --fresh name the same file "
+                f"({os.path.realpath(a.pinned)}); a comparison of a decode with itself "
+                f"reports every frame identical and every byte identical by construction, "
+                f"and this tool's record would publish that as the verdict that the E09 "
+                f"lift solver is deterministic",
+                {"clause": "pinned_and_fresh_are_the_same_file",
+                 "gate": "RELIFT_SIDES", "andon": "ReliftSelfComparison",
+                 "pinned": os.path.abspath(a.pinned), "fresh": os.path.abspath(a.fresh),
+                 "pinned_realpath": os.path.realpath(a.pinned),
+                 "fresh_realpath": os.path.realpath(a.fresh),
+                 "compared_on": "os.path.samefile (identity of file, never content)"})
+        pinned_sha, fresh_sha = _sha256(a.pinned), _sha256(a.fresh)
+        pinned_sigs, pinned_window = signatures(a.pinned, a.frames, a.fps)
+        fresh_sigs, fresh_window = signatures(a.fresh, a.frames, a.fps)
+        window = gate_relift_window(pinned_window, fresh_window, a.frames)
+        ev = compare_signatures(pinned_sigs, fresh_sigs, label=a.label)
+        ev["window"] = window
+        rec.update({
+            "pinned": {"path": os.path.abspath(a.pinned), "sha256": pinned_sha,
+                       "realpath": os.path.realpath(a.pinned)},
+            "fresh": {"path": os.path.abspath(a.fresh), "sha256": fresh_sha,
+                      "realpath": os.path.realpath(a.fresh)},
+            "sides_are_distinct_files": (
+                "refused before either import by gate RELIFT_SIDES, on os.path.samefile"),
+            "bytes_identical": pinned_sha == fresh_sha,
+            "frames_source": (
+                "--frames, checked against both GLBs' own keyed action ranges by "
+                "gate_RELIFT.window; a request that overruns either one refuses"),
+            "gate_RELIFT": ev,
+            "signature_selection": (
+                "render_visible_meshes - every digest above was taken over the "
+                "RENDER-VISIBLE meshes of each import"),
+            "what_this_settles": (
+                "whether the E09 lift solver is deterministic and the on-disk GLB is what "
+                "the recorded inputs still produce"),
+        })
+        ok_payload.update({
+            "frames_compared": ev["n_frames_compared"],
+            "frames_differing": ev["n_frames_differing"],
+            "bytes_identical": rec["bytes_identical"],
+            "verdict": ev["verdict"],
+        })
+
+    if motion_mode:
+        for p in (a.pinned_motion, a.fresh_motion):
+            if not os.path.isfile(p):
+                raise ReliftError(f"no such motion record: {p}",
+                    {"clause": "motion_is_not_a_file", "andon": "ArmatureError",
+                     "motion": os.path.abspath(p)})
+        if os.path.samefile(a.pinned_motion, a.fresh_motion):
+            raise ReliftSelfComparison(
+                f"--pinned-motion and --fresh-motion name the same file "
+                f"({os.path.realpath(a.pinned_motion)})",
+                {"clause": "pinned_and_fresh_motion_are_the_same_file",
+                 "gate": "RELIFT_SIDES", "andon": "ReliftSelfComparison",
+                 "pinned_motion": os.path.abspath(a.pinned_motion),
+                 "fresh_motion": os.path.abspath(a.fresh_motion)})
+        p_sigs, p_win = motion_channel_signatures(a.pinned_motion, a.frames)
+        f_sigs, f_win = motion_channel_signatures(a.fresh_motion, a.frames)
+        # Reuse window gate over motion lengths.
+        window_m = gate_relift_window(p_win, f_win, a.frames)
+        ev_m = compare_motion_signatures(p_sigs, f_sigs, label=a.label)
+        ev_m["window"] = window_m
+        rec["pinned_motion"] = {
+            "path": os.path.abspath(a.pinned_motion),
+            "sha256": _sha256(a.pinned_motion),
+        }
+        rec["fresh_motion"] = {
+            "path": os.path.abspath(a.fresh_motion),
+            "sha256": _sha256(a.fresh_motion),
+        }
+        rec["gate_RELIFT_motion"] = ev_m
+        rec["motion_layer"] = (
+            "local rotation channels + root; same --frames/--fps window gates as GLB mode "
+            "(F-6a7e819f)")
+        ok_payload["motion_frames_compared"] = ev_m["n_frames_compared"]
+        ok_payload["motion_frames_differing"] = ev_m["n_frames_differing"]
+        ok_payload["motion_verdict"] = ev_m["verdict"]
+        if not glb_mode:
+            ok_payload.update({
+                "frames_compared": ev_m["n_frames_compared"],
+                "frames_differing": ev_m["n_frames_differing"],
+                "bytes_identical": (rec["pinned_motion"]["sha256"]
+                                    == rec["fresh_motion"]["sha256"]),
+                "verdict": ev_m["verdict"],
+            })
+
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)) or ".", exist_ok=True)
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(rec, fh, indent=2)
 
-    print("CHECK_RELIFT_OK " + json.dumps({
-        "label": a.label, "frames_compared": ev["n_frames_compared"],
-        "frames_differing": ev["n_frames_differing"],
-        "bytes_identical": rec["bytes_identical"],
-        "verdict": ev["verdict"], "record": a.out}))
+    print("CHECK_RELIFT_OK " + json.dumps(ok_payload))
     return 0
 
 

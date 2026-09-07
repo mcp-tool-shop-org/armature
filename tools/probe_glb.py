@@ -268,6 +268,47 @@ def probe_one(path):
         rec["clause_A_loads"] and rec["clause_B_has_bones"] and rec["clause_C_posable_and_named"]
     )
 
+    # F-e04bca15: clause D — does this GLB actually key an action? Admission for retarget.
+    # Does NOT enter P2_joined (existing conjunction stays A∧B∧C).
+    n_actions = len(bpy.data.actions)
+    bone_fcurve_count = 0
+    frame_lo, frame_hi = None, None
+    for action in bpy.data.actions:
+        fcurves = []
+        flat = getattr(action, "fcurves", None)
+        if flat is not None:
+            fcurves = list(flat)
+        else:
+            for layer in getattr(action, "layers", []) or []:
+                for strip in getattr(layer, "strips", []) or []:
+                    for cbag in getattr(strip, "channelbags", []) or []:
+                        fcurves.extend(list(getattr(cbag, "fcurves", []) or []))
+        for fc in fcurves:
+            path = getattr(fc, "data_path", "") or ""
+            if "pose.bones" in path or path.startswith("bones"):
+                bone_fcurve_count += 1
+            for kp in getattr(fc, "keyframe_points", []) or []:
+                f = float(kp.co[0])
+                frame_lo = f if frame_lo is None else min(frame_lo, f)
+                frame_hi = f if frame_hi is None else max(frame_hi, f)
+    # Also count actions bound on armature animation_data.
+    arm_bound_actions = 0
+    for arm in armatures:
+        ad = getattr(arm, "animation_data", None)
+        if ad is not None and getattr(ad, "action", None) is not None:
+            arm_bound_actions += 1
+    n_frames = None
+    if frame_lo is not None and frame_hi is not None:
+        n_frames = int(round(frame_hi - frame_lo)) + 1
+    rec["n_actions"] = n_actions
+    rec["arm_bound_actions"] = arm_bound_actions
+    rec["bone_fcurve_count"] = bone_fcurve_count
+    rec["frame_range"] = ([frame_lo, frame_hi] if frame_lo is not None else None)
+    rec["n_frames"] = n_frames
+    rec["clause_D_has_keyed_action"] = bool(
+        (n_actions > 0 or arm_bound_actions > 0) and bone_fcurve_count > 0
+        and n_frames is not None and n_frames >= 1)
+
     # skinning: bones that actually deform something
     vgroups = set()
     for m in meshes:
@@ -369,6 +410,8 @@ def main():
         "clause_A_loads": sum(1 for r in records if r.get("clause_A_loads")),
         "clause_B_has_bones": sum(1 for r in records if r.get("clause_B_has_bones")),
         "clause_C_posable_and_named": sum(1 for r in records if r.get("clause_C_posable_and_named")),
+        "clause_D_has_keyed_action": sum(
+            1 for r in records if r.get("clause_D_has_keyed_action")),
         "P2_joined": sum(1 for r in records if r.get("P2_joined")),
         "P2b_all_18_sites_named": sum(1 for r in records if r.get("P2b_all_18_sites_named")),
         # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.

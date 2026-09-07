@@ -148,6 +148,15 @@ FRAMING_CLOUD_CAP = 1500
 #: exit 1 naming a bpy property assignment. The order is the sheets' order, so a sheet and
 #: a render made beside each other cannot be drawn by different engines.
 ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+CYCLES_CANDIDATES = ("CYCLES",)
+ENGINE_CHOICES = ("eevee", "cycles")
+START_MODES = ("start", "beauty")
+
+
+def engine_candidates_for(choice="eevee"):
+    """Candidate engine ids for --engine=eevee|cycles (F-787129aa)."""
+    from render_performer import engine_candidates_for as _ecf
+    return _ecf(choice)
 
 
 def select_engine(scene, candidates=ENGINE_CANDIDATES):
@@ -468,6 +477,19 @@ def parse_args(argv=None):
                     help="owned 3D set/prop GLB imported as non-deforming scenery "
                          "(F-91411b51). Appendable. Excluded from subject framing solve; "
                          "included in the render. --plate remains the 2D fallback")
+    ap.add_argument("--engine", default="eevee", choices=ENGINE_CHOICES,
+                    help="eevee (default, control speed) or cycles (opt-in beauty; "
+                         "F-787129aa)")
+    ap.add_argument("--mode", default="start", choices=START_MODES,
+                    help="start (default FLF/conditioning plate) or beauty (identity "
+                         "reference master; F-d9a334e8). beauty defaults framing toward "
+                         "the superseded render_reference recipe")
+    ap.add_argument("--hdri", default=None,
+                    help="EXR/HDR world environment replacing the default two studio suns "
+                         "(F-ff605a1f). Licence-row required when the file is external; "
+                         "studio suns remain the default when unset")
+    ap.add_argument("--hdri-licence-row", default=None,
+                    help="license-map.md row id for --hdri; recorded in provenance")
     ap.add_argument("--floor", type=int, default=1,
                     help="1 draws a ground plane; recorded either way")
     ap.add_argument("--shadow-layer", type=int, default=0,
@@ -764,7 +786,7 @@ def main():
     started = time.time()
     a = parse_args()
     from render_performer import (  # noqa: E402  — lazy; see import note above
-        load_camera_path, subject_glbs, glb_provenance_records)
+        load_camera_path, subject_glbs, glb_provenance_records, import_set_glbs)
     glbs = subject_glbs(a)
     primary_glb = glbs[0]
     subjects_prov = glb_provenance_records(glbs, _sha256)
@@ -773,6 +795,14 @@ def main():
     indices = resolve_frame_indices(a)
     width, height = require_frame_size(int(a.width), int(a.height))
     height_frac = require_shot_fraction("--height-frac", a.height_frac)
+    mode = (getattr(a, "mode", "start") or "start").strip().lower()
+    if mode == "beauty":
+        # F-d9a334e8: identity beauty plate — portrait-ish defaults from superseded
+        # render_reference when the operator did not override width/height.
+        if int(a.width) == WIDTH and int(a.height) == HEIGHT:
+            width, height = require_frame_size(704, 2048, who="render_start_frame",
+                                              module_frame=(704, 2048))
+        height_frac = max(height_frac, 0.86)
 
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
@@ -781,30 +811,14 @@ def main():
     for extra in glbs[1:]:
         blender_scene.import_glb(extra, expected_fps=a.fps)
 
-    # F-91411b51: owned 3D sets — scenery, not the framing subject.
-    set_records = []
-    set_meshes = []
-    set_arms = []
-    for sp in (a.set or []):
-        path = os.path.abspath(sp)
-        if not os.path.isfile(path):
-            raise RenderGate(
-                f"--set={sp!r} is not a file at {path}",
-                {"clause": "set_glb_is_not_a_file", "set": path, "set_as_typed": sp})
-        sm, sa, sinfo = blender_scene.import_glb(path, expected_fps=a.fps)
-        for arm in sa:
-            arm.hide_render = True  # non-deforming scenery; armature not drawn
-            set_arms.append(arm)
-        visible = blender_scene.render_visible_meshes(scene, sm)
-        set_meshes.extend(visible)
-        set_records.append({
-            "glb": path, "sha256": _sha256(path),
-            "meshes": [o.name for o in visible],
-            "armatures_hidden": [o.name for o in sa],
-            "import_info": sinfo,
-        })
+    # F-91411b51 / F-0f6135ad: owned 3D sets — scenery, not the framing subject.
+    set_pack = import_set_glbs(
+        scene, a.set, expected_fps=a.fps, sha_fn=_sha256)
+    set_records = set_pack["records"]
+    set_meshes = set_pack["meshes"]
+    set_arms = set_pack["arms"]
 
-    engine = select_engine(scene)
+    engine = select_engine(scene, engine_candidates_for(getattr(a, "engine", "eevee")))
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
@@ -903,16 +917,43 @@ def main():
     world.node_tree.nodes["Background"].inputs[0].default_value = (
         composite_rgb[0], composite_rgb[1], composite_rgb[2], 1.0)
 
-    key = bpy.data.lights.new("key", type="SUN")
-    key.energy = 3.2
-    ko = bpy.data.objects.new("key", key)
-    scene.collection.objects.link(ko)
-    ko.rotation_euler = (math.radians(58), 0.0, math.radians(-25))
-    fill = bpy.data.lights.new("fill", type="SUN")
-    fill.energy = 1.1
-    fo = bpy.data.objects.new("fill", fill)
-    scene.collection.objects.link(fo)
-    fo.rotation_euler = (math.radians(65), 0.0, math.radians(150))
+    lighting = {"rig": "two_studio_suns", "hdri": None}
+    hdri_path = getattr(a, "hdri", None)
+    if hdri_path:
+        # F-ff605a1f: image-based lighting replaces the pale studio suns.
+        hp = os.path.abspath(hdri_path)
+        if not os.path.isfile(hp):
+            raise RenderGate(
+                f"--hdri={hdri_path!r} is not a file at {hp}",
+                {"clause": "hdri_is_not_a_file", "hdri": hp})
+        ext = os.path.splitext(hp)[1].lower()
+        if ext not in (".exr", ".hdr", ".hdri"):
+            raise RenderGate(
+                f"--hdri={hdri_path!r} must be .exr/.hdr (got {ext!r})",
+                {"clause": "hdri_unsupported_format", "hdri": hp, "extension": ext})
+        nt = world.node_tree
+        nodes, links = nt.nodes, nt.links
+        bg = nodes["Background"]
+        env = nodes.new("ShaderNodeTexEnvironment")
+        env.image = bpy.data.images.load(hp)
+        links.new(env.outputs["Color"], bg.inputs["Color"])
+        bg.inputs["Strength"].default_value = 1.0
+        lighting = {
+            "rig": "hdri",
+            "hdri": {"path": hp, "sha256": _sha256(hp),
+                     "licence_row_id": getattr(a, "hdri_licence_row", None)},
+        }
+    else:
+        key = bpy.data.lights.new("key", type="SUN")
+        key.energy = 3.2
+        ko = bpy.data.objects.new("key", key)
+        scene.collection.objects.link(ko)
+        ko.rotation_euler = (math.radians(58), 0.0, math.radians(-25))
+        fill = bpy.data.lights.new("fill", type="SUN")
+        fill.energy = 1.1
+        fo = bpy.data.objects.new("fill", fill)
+        scene.collection.objects.link(fo)
+        fo.rotation_euler = (math.radians(65), 0.0, math.radians(150))
 
     floor_material = {"applied": None}
     gob = None
@@ -1123,7 +1164,11 @@ def main():
             "inherited_from": ("render_performer (E09/E10) for lights, lens and framing; "
                                "the world background is NO LONGER inherited — see alpha"),
             "world_background": list(composite_rgb) + [1.0],
-            "key_sun_energy": 3.2, "fill_sun_energy": 1.1,
+            "lighting": lighting,
+            "mode": mode,
+            "engine_choice": getattr(a, "engine", "eevee"),
+            "key_sun_energy": (None if lighting["rig"] == "hdri" else 3.2),
+            "fill_sun_energy": (None if lighting["rig"] == "hdri" else 1.1),
             "engine": engine, "view_transform": "Standard",
             "sets_in_framing_solve": False,
             "sets_in_render": bool(set_records),
@@ -1131,10 +1176,10 @@ def main():
                             "picture of the world, so whatever it shows is what the prompt "
                             "must either keep or replace. What it shows is now a recorded "
                             "choice rather than an inherited studio grey"),
-            "residual_not_changed": ("the floor plane is still lit by the two studio suns "
-                                     "and reads pale. Only the world void moved under the "
-                                     "alpha law; re-lighting the floor would be a second "
-                                     "variable this wave did not authorise")},
+            "residual_not_changed": (
+                "studio suns remain the default when --hdri is unset (F-ff605a1f); "
+                "with --hdri the suns are omitted and the environment texture lights "
+                "the plate")},
         "alpha": {
             "law": ("CLAUDE.md, the Director's ruling 2026-08-12 — authored image inputs "
                     "carry alpha, never a baked void"),

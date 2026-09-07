@@ -362,8 +362,10 @@ def main():
     heat_empty = all(v["weighted_fraction"] <= 0 for v in arms.values())
     next_tool = None
     next_invocation = None
+    next_pipelines = None
     if heat_empty:
-        # F-ce65f941: empty heat points at the live arm — repair then character bind.
+        # F-ce65f941 / F-0f3723ca: empty heat points at live arms — repair-bind default,
+        # and retopo-bake-bind when the E07 retopo route is the live question.
         next_tool = "rig_repair"
         next_invocation = (
             "blender -b --factory-startup -P tools/rig_repair.py -- "
@@ -372,6 +374,26 @@ def main():
             "--glb=<repaired.glb> --out=<bind-out> --mode=full --binding=hand "
             "--hand-mode=articulated --pipeline=repair-bind"
         )
+        next_pipelines = {
+            "repair-bind": {
+                "stages": ["rig_repair", "rig_character"],
+                "first_tool": "rig_repair",
+                "invocation": next_invocation,
+            },
+            "retopo-bake-bind": {
+                "stages": ["rig_retopo", "rig_bake", "rig_character"],
+                "first_tool": "rig_retopo",
+                "invocation": (
+                    "blender -b --factory-startup -P tools/rig_retopo.py -- "
+                    f"--glb={args.glb} --out=<retopo-out> ; then "
+                    "blender -b --factory-startup -P tools/rig_bake.py -- "
+                    "--glb=<retopo.glb> --out=<bake-out> ; then "
+                    "blender -b --factory-startup -P tools/rig_character.py -- "
+                    "--glb=<baked.glb> --out=<bind-out> --mode=full --binding=hand "
+                    "--hand-mode=articulated --pipeline=retopo-bake-bind"
+                ),
+            },
+        }
     payload = {
         "tool": "diagnose_bone_heat",
         # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
@@ -383,9 +405,11 @@ def main():
         "arms": arms,
         "next_tool": next_tool,
         "next_invocation": next_invocation,
+        "next_pipelines": next_pipelines,
         "note": ("A DIAGNOSTIC. No arm here is a pipeline stage and none produces a rigged "
                  "asset. Which route E07 should take, if any, is the advisor's ruling. "
-                 "When heat is empty, next_tool names the live arm (F-ce65f941)."),
+                 "When heat is empty, next_tool names repair-bind and next_pipelines also "
+                 "lists retopo-bake-bind (F-ce65f941 / F-0f3723ca)."),
     }
     path = os.path.join(out, "bone_heat_diagnosis.json")
     with open(path, "w", encoding="utf-8") as fh:
@@ -417,6 +441,7 @@ def main():
         "all_arms_weighted_nothing": len(weighted_arms) == 0,
         "next_tool": next_tool,
         "next_invocation": next_invocation,
+        "next_pipelines": (sorted(next_pipelines) if next_pipelines else None),
     }))
     for name, rec in arms.items():
         print(f"  {name:<26} weighted {rec['weighted_vertices']:>7}/{rec['vertices']:<7} "

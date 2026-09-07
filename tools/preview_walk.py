@@ -164,6 +164,19 @@ def parse_args():
                          "(F-cee7b569). Absent: PREVIEW_WALK_OK still carries next:")
     ap.add_argument("--camera-path", default=None,
                     help="optional keyframed orbit JSON (F-82f88f23); default shot-spec camera")
+    ap.add_argument("--set", action="append", default=None,
+                    help="owned 3D set/prop GLB as non-deforming scenery (F-0f6135ad). "
+                         "Appendable; excluded from subject framing")
+    ap.add_argument("--write-camera-path", default=None,
+                    help="author a framing.normalize_camera_keys JSON at this path from "
+                         "--azimuth-sweep / --elevation / --radius (F-dec5af66); may run "
+                         "without rendering when --out is still required for the preview")
+    ap.add_argument("--azimuth-sweep", default=None,
+                    help="start,end degrees for --write-camera-path (e.g. 225,315)")
+    ap.add_argument("--elevation", type=float, default=None,
+                    help="elevation degrees for --write-camera-path (default: shot spec)")
+    ap.add_argument("--radius", type=float, default=None,
+                    help="orbit radius for --write-camera-path (default: resolved camera)")
     return ap.parse_args(argv)
 
 
@@ -277,6 +290,9 @@ def main():
     blender_scene.set_frame_rate(scene, fps)
     asset, sha = shotspec.resolve_asset(spec)
     meshes, arms, info = blender_scene.import_glb(asset, expected_fps=fps)
+    from render_performer import import_set_glbs, write_camera_path, _sha256 as _rp_sha
+    set_pack = import_set_glbs(
+        scene, getattr(a, "set", None), expected_fps=fps, sha_fn=_rp_sha)
 
     engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = w, h
@@ -345,6 +361,29 @@ def main():
                                   int(spec["resolution"]["height"]))
     target = Vector(cam_solution["target"])
     radius = cam_solution["radius"]
+    authored_cam = None
+    if getattr(a, "write_camera_path", None):
+        # F-dec5af66: author the camera-path schema from sweep/elevation/radius knobs.
+        sweep = getattr(a, "azimuth_sweep", None)
+        if not sweep:
+            raise PreviewWalkGate(
+                "--write-camera-path needs --azimuth-sweep=start,end degrees",
+                {"clause": "write_camera_path_needs_azimuth_sweep"})
+        parts_az = [p.strip() for p in str(sweep).split(",")]
+        if len(parts_az) != 2:
+            raise PreviewWalkGate(
+                f"--azimuth-sweep={sweep!r} must be start,end degrees",
+                {"clause": "azimuth_sweep_shape", "azimuth_sweep": sweep})
+        az0, az1 = float(parts_az[0]), float(parts_az[1])
+        elev = (float(a.elevation) if a.elevation is not None
+                else float(c["elevation_deg"]))
+        rad = float(a.radius) if a.radius is not None else float(radius)
+        authored_cam = write_camera_path(
+            out_path=a.write_camera_path, n_frames=count,
+            azimuth_start_deg=az0, azimuth_end_deg=az1,
+            elevation_deg=elev, radius=rad, target=list(target))
+        if cam_keys is None:
+            cam_keys = authored_cam["keys"]
     cam_data = bpy.data.cameras.new("preview_cam")
     cam_data.lens = float(c["lens_mm"])
     cam_data.sensor_fit = "AUTO"
@@ -444,6 +483,8 @@ def main():
             "render_performer.py derives the same population"),
         "asset": asset, "asset_sha256": sha, "camera_position": [round(v, 6) for v in pos],
         "camera_path": getattr(a, "camera_path", None),
+        "write_camera_path": (authored_cam["path"] if authored_cam else None),
+        "sets": len(set_pack["records"]),
         "camera_target": [round(v, 6) for v in cam_solution["target"]],
         "camera_target_source": cam_solution["target_source"],
         "camera_radius": round(cam_solution["radius"], 6),

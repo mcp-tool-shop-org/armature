@@ -105,6 +105,22 @@ MIN_SUBJECT_FRAC = 0.01
 #: exit 1 naming a bpy property assignment. The order is the sheets' order, so a sheet and
 #: a render made beside each other cannot be drawn by different engines.
 ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
+#: F-787129aa: opt-in Cycles for beauty / identity plates; EEVEE stays the control default.
+CYCLES_CANDIDATES = ("CYCLES",)
+ENGINE_CHOICES = ("eevee", "cycles")
+
+
+def engine_candidates_for(choice="eevee"):
+    """Candidate engine ids for --engine=eevee|cycles (F-787129aa)."""
+    key = (choice or "eevee").strip().lower()
+    if key == "eevee":
+        return ENGINE_CANDIDATES
+    if key == "cycles":
+        return CYCLES_CANDIDATES
+    raise ArmatureError(
+        f"--engine={choice!r} is not one of {list(ENGINE_CHOICES)}",
+        {"clause": "unknown_render_engine_choice", "engine": choice,
+         "known": list(ENGINE_CHOICES)})
 
 
 def select_engine(scene, candidates=ENGINE_CANDIDATES):
@@ -199,6 +215,21 @@ def parse_args():
     ap.add_argument("--camera-path", default=None,
                     help="optional keyframed orbit JSON consumed via framing.sample_camera_at "
                          "/ solve_path (F-82f88f23). Default: today's single solve_camera")
+    ap.add_argument("--set", action="append", default=None,
+                    help="owned 3D set/prop GLB imported as non-deforming scenery "
+                         "(F-0f6135ad). Appendable. Excluded from subject framing; "
+                         "included in the render")
+    ap.add_argument("--width", type=int, default=WIDTH,
+                    help=f"frame width in pixels (default {WIDTH}); generator-legal "
+                         f"multiples of 16 (F-4d4508b0)")
+    ap.add_argument("--height", type=int, default=HEIGHT,
+                    help=f"frame height in pixels (default {HEIGHT}); same rule as --width")
+    ap.add_argument("--review-clip", action="store_true",
+                    help="after frames gate green, shell make_review_clip on --out "
+                         "(F-86b53f15). Absent: RENDER_PERFORMER_OK still carries next:")
+    ap.add_argument("--engine", default="eevee", choices=ENGINE_CHOICES,
+                    help="eevee (default, control speed) or cycles (opt-in beauty; "
+                         "F-787129aa)")
     return ap.parse_args(argv)
 
 
@@ -310,6 +341,68 @@ def maybe_run_review_clip(frames_dir, *, enabled=False, out_dir=None, python_exe
     return dict(nxt, ran=True, returncode=proc.returncode,
                 stdout_tail=(proc.stdout or "")[-500:],
                 stderr_tail=(proc.stderr or "")[-500:])
+
+
+def import_set_glbs(scene, set_paths, *, expected_fps, sha_fn):
+    """Import owned set GLBs as scenery-not-subject (F-0f6135ad / F-91411b51).
+
+    Armatures are hide_render; meshes stay visible. Framing callers must NOT pass
+    returned meshes into the subject solve. Shared by render_performer, preview_walk,
+    render_start_frame, and render_turnaround.
+    """
+    records, meshes, arms = [], [], []
+    for sp in (set_paths or []):
+        path = os.path.abspath(sp)
+        if not os.path.isfile(path):
+            raise RenderGate(
+                f"--set={sp!r} is not a file at {path}",
+                {"clause": "set_glb_is_not_a_file", "set": path, "set_as_typed": sp})
+        sm, sa, sinfo = blender_scene.import_glb(path, expected_fps=expected_fps)
+        for arm in sa:
+            arm.hide_render = True
+            arms.append(arm)
+        visible = blender_scene.render_visible_meshes(scene, sm)
+        meshes.extend(visible)
+        records.append({
+            "glb": path, "sha256": sha_fn(path),
+            "meshes": [o.name for o in visible],
+            "armatures_hidden": [o.name for o in sa],
+            "import_info": sinfo,
+        })
+    return {"records": records, "meshes": meshes, "arms": arms}
+
+
+def write_camera_path(*, out_path, n_frames, azimuth_start_deg, azimuth_end_deg,
+                      elevation_deg, radius, target, keys=None):
+    """Author a framing.normalize_camera_keys record (F-dec5af66).
+
+    Pure aside from writing ``out_path``. Either pass explicit ``keys``, or build a
+    two-key azimuth sweep from start/end over ``n_frames``.
+    """
+    from armature_core import framing as _framing
+    if keys is None:
+        n = max(int(n_frames), 1)
+        last = max(n - 1, 0)
+        tgt = list(target)
+        keys = [
+            {"frame": 0, "azimuth_deg": float(azimuth_start_deg),
+             "elevation_deg": float(elevation_deg), "radius": float(radius),
+             "target": tgt},
+            {"frame": last, "azimuth_deg": float(azimuth_end_deg),
+             "elevation_deg": float(elevation_deg), "radius": float(radius),
+             "target": list(tgt)},
+        ]
+    normalised = _framing.normalize_camera_keys(keys)
+    payload = {
+        "tool": "write_camera_path",
+        "schema": "framing.normalize_camera_keys",
+        "keys": normalised,
+    }
+    out_abs = os.path.abspath(out_path)
+    os.makedirs(os.path.dirname(out_abs) or ".", exist_ok=True)
+    with open(out_abs, "w", encoding="utf-8") as fh:
+        json.dump(payload, fh, indent=2)
+    return {"path": out_abs, "n_keys": len(normalised), "keys": normalised}
 
 
 def _sha256(path):
@@ -517,24 +610,30 @@ def main():
     all_points = [p for c in clouds for p in c]
     end_points = clouds[-1]
 
+    from render_start_frame import require_frame_size  # noqa: E402 — shared bound
+    width, height = require_frame_size(
+        int(getattr(a, "width", WIDTH)), int(getattr(a, "height", HEIGHT)),
+        who="render_performer", module_frame=(WIDTH, HEIGHT),
+        gate=RenderGate, gate_id="PERFORMER_FRAME")
+
     cam_keys = load_camera_path(getattr(a, "camera_path", None))
     path_rec = None
     if cam_keys:
         # F-82f88f23: authored path wins over the single-orbit solve default.
         path_rec = framing.solve_path(
-            all_points, cam_keys, LENS_MM, SENSOR_MM, WIDTH, HEIGHT,
+            all_points, cam_keys, LENS_MM, SENSOR_MM, width, height,
             require_in_frame=True)
         sample0 = framing.sample_camera_at(cam_keys, 0)
         sol = framing.solve_camera(
             all_points, end_points, sample0["azimuth_deg"], sample0["elevation_deg"],
-            LENS_MM, SENSOR_MM, WIDTH, HEIGHT,
+            LENS_MM, SENSOR_MM, width, height,
             height_frac=HEIGHT_FRAC, end_x_frac=END_X_FRAC,
             target_y_frac=TARGET_Y_FRAC)
         sol = dict(sol)
         sol["camera_path"] = path_rec
     else:
         sol = framing.solve_camera(all_points, end_points, AZIMUTH_DEG, ELEVATION_DEG,
-                                   LENS_MM, SENSOR_MM, WIDTH, HEIGHT,
+                                   LENS_MM, SENSOR_MM, width, height,
                                    height_frac=HEIGHT_FRAC, end_x_frac=END_X_FRAC,
                                    target_y_frac=TARGET_Y_FRAC)
     if not sol["in_frame"]:
@@ -556,9 +655,11 @@ def main():
     for extra in glbs[1:]:
         blender_scene.import_glb(extra, expected_fps=a.fps)
     subjects_prov = glb_provenance_records(glbs, _sha256)
+    set_pack = import_set_glbs(
+        scene, getattr(a, "set", None), expected_fps=a.fps, sha_fn=_sha256)
 
-    engine = select_engine(scene)
-    scene.render.resolution_x, scene.render.resolution_y = WIDTH, HEIGHT
+    engine = select_engine(scene, engine_candidates_for(getattr(a, "engine", "eevee")))
+    scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
     scene.render.film_transparent = False
     scene.render.image_settings.file_format = "PNG"
@@ -724,12 +825,14 @@ def main():
             "blender": blender_scene.blender_provenance(),
             "source": {"glb": os.path.abspath(primary), "sha256": _sha256(primary),
                        "subjects": subjects_prov,
+                       "sets": set_pack["records"],
                        "camera_path": getattr(a, "camera_path", None),
                        "framed_against": frame_source,
                        "manifest": os.path.abspath(a.manifest)},
-            "resolution": [WIDTH, HEIGHT], "frames": count, "fps": a.fps,
+            "resolution": [width, height], "frames": count, "fps": a.fps,
             # the engine ACTUALLY set, from `select_engine`'s return (F-0bf74152).
             "engine": engine,
+            "engine_choice": getattr(a, "engine", "eevee"),
             "unexpected_files_in_out_dir": strays,
             "unexpected_files_rule": (
                 "every file in --out whose name ends in .png, compared "
@@ -761,10 +864,17 @@ def main():
             "elapsed_s": time.time() - started,
         }, fh, indent=2)
 
+    review = maybe_run_review_clip(
+        out, enabled=bool(getattr(a, "review_clip", False)))
+    if not review.get("ran"):
+        review = dict(review_clip_next(out), ran=False,
+                      reason=review.get("reason", "--review-clip not set"))
     print("RENDER_PERFORMER_OK " + json.dumps({
-        "out": out, "frames": count, "resolution": [WIDTH, HEIGHT],
+        "out": out, "frames": count, "resolution": [width, height],
         "radius": round(radius, 5), "target": [round(v, 5) for v in target],
-        "coverage": gate_cov["verdict"], "provenance": side}))
+        "coverage": gate_cov["verdict"], "provenance": side,
+        "next": review.get("next"), "review_clip": review,
+        "sets": len(set_pack["records"])}))
     return 0
 
 

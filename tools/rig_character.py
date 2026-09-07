@@ -592,9 +592,15 @@ TOE_CHAIN = (
 )
 TOE_CHAIN_NAMES = tuple(b.name for b in TOE_CHAIN)
 
-#: F-ce65f941: Director-ruled live arm — repair the mesh, then bind the performer.
+#: F-ce65f941 / F-0f3723ca: named live-arm pipelines with per-stage receipts.
+#: repair-bind remains the default; retopo-bake-bind sequences the E07 retopo route.
 LIVE_ARM_STAGES = ("rig_repair", "rig_character")
-PIPELINE_MODES = ("", "repair-bind")
+RETOPO_BAKE_STAGES = ("rig_retopo", "rig_bake", "rig_character")
+PIPELINES = {
+    "repair-bind": LIVE_ARM_STAGES,
+    "retopo-bake-bind": RETOPO_BAKE_STAGES,
+}
+PIPELINE_MODES = ("",) + tuple(PIPELINES.keys())
 
 ARGUMENTS = (
     ("--glb", "<path>", True,
@@ -621,11 +627,13 @@ ARGUMENTS = (
      "mitten (default) keeps the 22-bone sitelist; articulated adds sitelist.HAND_CHAIN "
      "finger bones plus toe.L/toe.R so finger/toe verts can carry named deform groups "
      "(F-30f9bf58)"),
-    ("--pipeline", "repair-bind", False,
-     "when set to repair-bind, write a stage_manifest.json sequencing the live arm "
-     "rig_repair -> rig_character and record --repaired-from when provided (F-ce65f941)"),
+    ("--pipeline", "repair-bind|retopo-bake-bind", False,
+     "write a stage_manifest.json sequencing a named live arm (F-ce65f941 / F-0f3723ca): "
+     "repair-bind (default when set) or retopo-bake-bind (rig_retopo -> rig_bake -> "
+     "rig_character). Empty keeps today's tribal multi-tool path"),
     ("--repaired-from", "<path>", False,
-     "optional path of the pre-repair GLB when --pipeline=repair-bind; provenance only"),
+     "optional path of the pre-repair / pre-retopo GLB when --pipeline is set; "
+     "provenance only"),
     ("--measure-only", "(bare flag)", False,
      "measure the subject and write the record, then stop -- no skeleton is built and no "
      "GLB is exported. It is the ONLY bare flag here; every other argument is --key=value"),
@@ -735,23 +743,58 @@ def assign_unweighted_to_nearest_bones(mesh_obj, arm_obj, bone_names, source_ver
             "note": "unweighted verts nearest-bone fill after envelope"}
 
 
-def build_stage_manifest(*, glb, out_dir, repaired_from=None, stages=LIVE_ARM_STAGES):
-    """Pure stage manifest for the repair→bind live arm (F-ce65f941)."""
-    return {
-        "tool": "rig_character",
-        "pipeline": "repair-bind",
-        "stages": list(stages),
-        "glb": os.path.abspath(glb) if glb else None,
-        "repaired_from": (os.path.abspath(repaired_from) if repaired_from else None),
-        "out": os.path.abspath(out_dir) if out_dir else None,
-        "next_after_repair": (
+def stages_for_pipeline(pipeline):
+    """Resolve named pipeline -> stage tuple (F-0f3723ca)."""
+    key = (pipeline or "").strip()
+    if not key:
+        return LIVE_ARM_STAGES
+    if key not in PIPELINES:
+        raise ArmatureError(
+            f"--pipeline={pipeline!r} is not one of {sorted(PIPELINES)}",
+            {"clause": "unknown_pipeline", "pipeline": pipeline,
+             "known": sorted(PIPELINES)})
+    return PIPELINES[key]
+
+
+def build_stage_manifest(*, glb, out_dir, repaired_from=None, stages=None,
+                         pipeline="repair-bind"):
+    """Pure stage manifest for a named live arm (F-ce65f941 / F-0f3723ca)."""
+    key = (pipeline or "repair-bind").strip() or "repair-bind"
+    stage_list = list(stages if stages is not None else stages_for_pipeline(key))
+    receipts = [
+        {"stage": s, "receipt": f"{s}_OK", "order": i}
+        for i, s in enumerate(stage_list)
+    ]
+    if key == "retopo-bake-bind":
+        next_line = (
+            f"blender -b --factory-startup -P tools/rig_retopo.py -- "
+            f"--glb=<src.glb> --out=<retopo-out> ; then "
+            f"blender -b --factory-startup -P tools/rig_bake.py -- "
+            f"--glb=<retopo.glb> --out=<bake-out> ; then "
+            f"blender -b --factory-startup -P tools/rig_character.py -- "
+            f"--glb=<baked.glb> --out={out_dir} --mode=full --binding=hand "
+            f"--hand-mode=articulated --pipeline=retopo-bake-bind"
+        )
+        note = ("E07 retopo→bake→character live arm (F-0f3723ca). Per-stage receipts "
+                "are the OK sentinels; diagnose_bone_heat lists both pipelines.")
+    else:
+        next_line = (
             f"blender -b --factory-startup -P tools/rig_character.py -- "
             f"--glb=<repaired.glb> --out={out_dir} --mode=full --binding=hand "
             f"--hand-mode=articulated --pipeline=repair-bind"
-        ),
-        "note": ("Director-ruled live arm: rig_repair then rig_character. This manifest "
-                 "is the sequenced hand-off; diagnose_bone_heat names the same next_tool "
-                 "when heat is empty."),
+        )
+        note = ("Director-ruled live arm: rig_repair then rig_character (F-ce65f941). "
+                "diagnose_bone_heat names the same next_tool when heat is empty.")
+    return {
+        "tool": "rig_character",
+        "pipeline": key,
+        "stages": stage_list,
+        "stage_receipts": receipts,
+        "glb": os.path.abspath(glb) if glb else None,
+        "repaired_from": (os.path.abspath(repaired_from) if repaired_from else None),
+        "out": os.path.abspath(out_dir) if out_dir else None,
+        "next_after_repair": next_line,
+        "note": note,
     }
 
 
@@ -830,12 +873,12 @@ def parse_args():
                 {"clause": clause, key: args[key], "known": list(known),
                  "flag": flag, "where": "parse_args"})
     pipe = (args.get("pipeline") or "").strip()
-    if pipe and pipe not in ("repair-bind",):
+    if pipe and pipe not in PIPELINES:
         raise GateMode(
-            f"unknown --pipeline={args['pipeline']!r}; known: repair-bind "
-            f"(omit the flag for a standalone bind)",
+            f"unknown --pipeline={args['pipeline']!r}; known: "
+            f"{', '.join(sorted(PIPELINES))} (omit the flag for a standalone bind)",
             {"clause": "unknown_pipeline_mode", "pipeline": args["pipeline"],
-             "known": ["repair-bind"], "flag": "--pipeline", "where": "parse_args"})
+             "known": sorted(PIPELINES), "flag": "--pipeline", "where": "parse_args"})
     args["pipeline"] = pipe
     if args["binding"] == "hand" and args["hand_mode"] != "articulated":
         raise GateMode(
@@ -2127,10 +2170,11 @@ def main():
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2)
     stage_path = None
-    if args.get("pipeline") == "repair-bind":
+    if args.get("pipeline") in PIPELINES:
         stage = build_stage_manifest(
             glb=args["glb"], out_dir=out_dir,
-            repaired_from=args.get("repaired_from"))
+            repaired_from=args.get("repaired_from"),
+            pipeline=args.get("pipeline"))
         stage_path = os.path.join(out_dir, "stage_manifest.json")
         with open(stage_path, "w", encoding="utf-8") as fh:
             json.dump(stage, fh, indent=2)

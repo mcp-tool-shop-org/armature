@@ -73,10 +73,10 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 TOOL_VERSION = "E08.2"
 
 #: Built-in pose packs that emit the lift_solve channel schema without a detector
-#: (F-3415ebd2). `rest` is one identity frame; `hold` repeats identity; `idle` holds with
-#: a small authored spine sway so a multi-frame idle is not a rest clone wearing a longer
-#: frame count.
-POSE_LIBRARIES = ("rest", "idle", "hold")
+#: (F-3415ebd2 / F-b11474d7). `rest`/`hold` are identity; `idle` adds a spine nod;
+#: `sit`/`turn`/`run`/`gesture` are pure builders for cutscene beats that are not gait.
+POSE_LIBRARIES = ("rest", "idle", "hold", "sit", "turn", "run", "gesture")
+HAND_POSES = ("hold", "fist", "point", "spread")
 
 #: Both tolerances are fractions of the CHARACTER'S OWN bounding diagonal, never absolute
 #: metres — a global constant must not govern a local feature.
@@ -183,6 +183,10 @@ def parse_args(argv=None):
                          "HAND_CHAIN / toe.* bones at identity with a named reason; "
                          "articulated keys finger sites when the motion record carries "
                          "them (F-30f9bf58)")
+    ap.add_argument("--hand-pose", default="hold", choices=HAND_POSES,
+                    help="when --hand-mode=articulated: fist|point|spread write HAND_CHAIN "
+                         "locals; hold (default) keeps identity (F-6966f488). Ignored on "
+                         "mitten")
     ap.add_argument("--fps", type=int, default=16,
                     help="frames per second the action is keyed at (default 16); glTF "
                          "stores key times in SECONDS, so this must match the shot spec's")
@@ -195,19 +199,19 @@ def parse_args(argv=None):
                     help="frames of the gesture after the stop (default 12); gait path only")
     ap.add_argument("--n-hold", type=int, default=5,
                     help="frames held at the end of the gesture (gait), or the frame count "
-                         "for --pose-library=hold/idle/rest (default 5)")
+                         "for --pose-library (default 5)")
     ap.add_argument("--steps", type=int, default=5,
                     help="footfalls inside the walking span (default 5); gait path only")
     # F-3415ebd2: general key_motion path — channel JSON or a named pose library.
     ap.add_argument("--motion", default=None,
                     help="channel JSON in the lift_solve motion-record schema "
-                         "(frames[].local bone->3x3 + frames[].root). Selects the "
-                         "key_motion path; mutually exclusive with --pose-library and "
-                         "with the gait factory")
+                         "(frames[].local bone->3x3 + frames[].root). Optional hand block "
+                         "hand_pose=fist|point|spread|hold applies when articulated "
+                         "(F-6966f488). Mutually exclusive with --pose-library and gait")
     ap.add_argument("--pose-library", default=None, choices=POSE_LIBRARIES,
-                    help="build a small rest/idle/hold channel table and key it "
-                         "(F-3415ebd2). Frame count is --n-hold. Mutually exclusive "
-                         "with --motion and with the gait factory")
+                    help="build a rest/idle/hold/sit/turn/run/gesture channel table and "
+                         "key it (F-3415ebd2 / F-b11474d7). Frame count is --n-hold. "
+                         "Mutually exclusive with --motion and with the gait factory")
     return ap.parse_args(argv)
 
 
@@ -239,11 +243,60 @@ def identity_local_table(hand_mode="mitten"):
     return {name: [list(row) for row in LS.IDENTITY] for name in names}
 
 
-def build_pose_library_frames(name, *, n_frames=1):
-    """Pure pose-library builder: rest / idle / hold as lift_solve channel frames.
+def hand_pose_locals(pose="hold"):
+    """Pure HAND_CHAIN local 3x3 table for fist|point|spread|hold (F-6966f488)."""
+    key = (pose or "hold").strip().lower()
+    if key not in HAND_POSES:
+        raise ArmatureError(
+            f"--hand-pose={pose!r} is not one of {list(HAND_POSES)}",
+            {"clause": "unknown_hand_pose", "hand_pose": pose,
+             "known": list(HAND_POSES)})
+    names = sitelist.hand_chain_names()
+    out = {n: [list(row) for row in LS.IDENTITY] for n in names}
+    if key == "hold":
+        return out
+    # Degrees are small authored curls — product vocabulary, not a detector lift.
+    curls = {
+        "fist": {"thumb": (12.0, 25.0, 0.0), "index": (55.0, 0.0, 0.0),
+                 "middle": (60.0, 0.0, 0.0), "ring": (58.0, 0.0, 0.0),
+                 "pinky": (52.0, 0.0, 0.0)},
+        "point": {"thumb": (8.0, 18.0, 0.0), "index": (0.0, 0.0, 0.0),
+                  "middle": (55.0, 0.0, 0.0), "ring": (55.0, 0.0, 0.0),
+                  "pinky": (50.0, 0.0, 0.0)},
+        "spread": {"thumb": (5.0, -18.0, 0.0), "index": (0.0, -12.0, 0.0),
+                   "middle": (0.0, 0.0, 0.0), "ring": (0.0, 12.0, 0.0),
+                   "pinky": (0.0, 18.0, 0.0)},
+    }[key]
+    for side in ("L", "R"):
+        for finger, angles in curls.items():
+            name = f"{finger}.{side}"
+            if name not in out:
+                continue
+            m = walk.rotation_matrix(*angles)
+            out[name] = [list(row) for row in m]
+    return out
 
-    No bpy. Idle carries a small authored spine sway so a multi-frame idle is not a
-    rest record with a longer count; rest and hold are identity holds.
+
+def apply_hand_pose_to_frames(frames, pose="hold", *, hand_mode="mitten"):
+    """Merge HAND_CHAIN locals into frames when articulated; hold/mitten leave identity."""
+    if hand_mode != "articulated" or (pose or "hold") == "hold":
+        return list(frames), {"hand_pose": pose or "hold", "applied": False,
+                              "hand_mode": hand_mode}
+    locals_hp = hand_pose_locals(pose)
+    out = []
+    for fr in frames:
+        local = {k: [list(row) for row in v] for k, v in fr["local"].items()}
+        local.update(locals_hp)
+        out.append({"frame": fr["frame"], "local": local, "root": list(fr["root"])})
+    return out, {"hand_pose": pose, "applied": True, "hand_mode": hand_mode,
+                 "bones": sorted(locals_hp)}
+
+
+def build_pose_library_frames(name, *, n_frames=1, hand_mode="mitten", hand_pose="hold"):
+    """Pure pose-library builder (F-3415ebd2 / F-b11474d7). No bpy.
+
+    rest/hold = identity; idle = spine nod; sit = hip/knee flex; turn = hips yaw sweep;
+    run = larger contralateral limb swing; gesture = right arm raise.
     """
     key = (name or "").strip().lower()
     if key not in POSE_LIBRARIES:
@@ -259,15 +312,46 @@ def build_pose_library_frames(name, *, n_frames=1):
              "pose_library": key})
     frames = []
     for i in range(n):
-        local = identity_local_table()
+        local = identity_local_table(hand_mode)
         root = [0.0, 0.0, 0.0]
+        t = i / max(n - 1, 1)
         if key == "idle":
-            # ~2 deg spine nod, phase-shifted per frame — authored, not detected.
             phase = (2.0 * math.pi * i / max(n, 1))
             rx = 2.0 * math.sin(phase)
-            m = walk.rotation_matrix(rx, 0.0, 0.0)
-            local["spine"] = [list(row) for row in m]
+            local["spine"] = [list(row) for row in walk.rotation_matrix(rx, 0.0, 0.0)]
+        elif key == "sit":
+            local["hips"] = [list(row) for row in walk.rotation_matrix(-35.0, 0.0, 0.0)]
+            local["spine"] = [list(row) for row in walk.rotation_matrix(12.0, 0.0, 0.0)]
+            local["hip.L"] = [list(row) for row in walk.rotation_matrix(70.0, 0.0, 0.0)]
+            local["hip.R"] = [list(row) for row in walk.rotation_matrix(70.0, 0.0, 0.0)]
+            local["knee.L"] = [list(row) for row in walk.rotation_matrix(-85.0, 0.0, 0.0)]
+            local["knee.R"] = [list(row) for row in walk.rotation_matrix(-85.0, 0.0, 0.0)]
+        elif key == "turn":
+            yaw = 90.0 * t
+            local["hips"] = [list(row) for row in walk.rotation_matrix(0.0, 0.0, yaw)]
+            local["spine"] = [list(row) for row in walk.rotation_matrix(0.0, 0.0, yaw * 0.3)]
+        elif key == "run":
+            phase = (2.0 * math.pi * i / max(n, 1))
+            swing = 28.0 * math.sin(phase)
+            local["hip.L"] = [list(row) for row in walk.rotation_matrix(swing, 0.0, 0.0)]
+            local["hip.R"] = [list(row) for row in walk.rotation_matrix(-swing, 0.0, 0.0)]
+            local["shoulder.L"] = [list(row) for row in
+                                   walk.rotation_matrix(-swing * 0.7, 0.0, 0.0)]
+            local["shoulder.R"] = [list(row) for row in
+                                   walk.rotation_matrix(swing * 0.7, 0.0, 0.0)]
+            local["spine"] = [list(row) for row in
+                              walk.rotation_matrix(4.0 * math.sin(phase * 2), 0.0, 0.0)]
+            root = [0.04 * i, 0.0, 0.0]
+        elif key == "gesture":
+            # Ease the right arm up over the span (same axis family as gait gesture).
+            lift = 70.0 * t
+            local["shoulder.R"] = [list(row) for row in
+                                   walk.rotation_matrix(0.0, -lift, 25.0 * t)]
+            local["elbow.R"] = [list(row) for row in
+                                walk.rotation_matrix(0.0, 0.0, -15.0 * t)]
         frames.append({"frame": i, "local": local, "root": list(root)})
+    frames, _hp = apply_hand_pose_to_frames(
+        frames, hand_pose, hand_mode=hand_mode)
     return frames
 
 
@@ -323,34 +407,38 @@ def resolve_performance(args):
             "--motion and --pose-library both name a performance source; pass one",
             {"clause": "motion_and_pose_library_both_set",
              "motion": motion, "pose_library": library})
+    hm = getattr(args, "hand_mode", "mitten") or "mitten"
+    hp = getattr(args, "hand_pose", "hold") or "hold"
     if library:
-        hm = getattr(args, "hand_mode", "mitten") or "mitten"
-        frames = build_pose_library_frames(library, n_frames=args.n_hold)
-        # Rebuild with hand_mode-aware identity when articulated.
-        if hm == "articulated":
-            frames = []
-            for i in range(int(args.n_hold)):
-                local = identity_local_table(hm)
-                root = [0.0, 0.0, 0.0]
-                if library == "idle":
-                    phase = (2.0 * math.pi * i / max(int(args.n_hold), 1))
-                    rx = 2.0 * math.sin(phase)
-                    m = walk.rotation_matrix(rx, 0.0, 0.0)
-                    local["spine"] = [list(row) for row in m]
-                frames.append({"frame": i, "local": local, "root": list(root)})
+        frames = build_pose_library_frames(
+            library, n_frames=args.n_hold, hand_mode=hm, hand_pose=hp)
         gate = LS.validate_motion_record(frames)
         return {"mode": "pose_library", "pose_library": library,
                 "frames": frames, "motion_record": {
                     "tool": "author_walk", "pose_library": library,
-                    "n_hold": int(args.n_hold), "frames": frames},
-                "motion_gate": gate, "gait": None}
+                    "n_hold": int(args.n_hold), "hand_pose": hp,
+                    "frames": frames},
+                "motion_gate": gate, "gait": None, "hand_pose": hp}
     if motion:
         rec, frames, gate = load_motion_frames(motion)
+        # Optional hand block on the motion record, else CLI --hand-pose.
+        block_pose = None
+        if isinstance(rec, dict):
+            block = rec.get("hand") or rec.get("hand_pose")
+            if isinstance(block, dict):
+                block_pose = block.get("pose") or block.get("hand_pose")
+            elif isinstance(block, str):
+                block_pose = block
+        use_pose = block_pose or hp
+        frames, hp_meta = apply_hand_pose_to_frames(
+            frames, use_pose, hand_mode=hm)
         return {"mode": "motion", "pose_library": None, "frames": frames,
                 "motion_record": rec, "motion_gate": gate, "gait": None,
-                "motion_path": os.path.abspath(motion)}
+                "motion_path": os.path.abspath(motion),
+                "hand_pose": use_pose, "hand_pose_meta": hp_meta}
     return {"mode": "gait", "pose_library": None, "frames": None,
-            "motion_record": None, "motion_gate": None, "gait": None}
+            "motion_record": None, "motion_gate": None, "gait": None,
+            "hand_pose": hp}
 
 
 # ------------------------------------------------------------------------- helpers
@@ -453,7 +541,7 @@ def apply_pose(arm_obj, pose, keyframe=None):
             pb.keyframe_insert(data_path="location", frame=keyframe)
 
 
-def author(arm_obj, scene, gait, fps, hand_mode="mitten"):
+def author(arm_obj, scene, gait, fps, hand_mode="mitten", hand_pose="hold"):
     """Key the whole performance. Returns (action, n_fcurves, hold_record).
 
     E07's GLB ships with the probe arc keyed on one shoulder — MEASURED on import, one
@@ -462,8 +550,8 @@ def author(arm_obj, scene, gait, fps, hand_mode="mitten"):
     written into the GLB as a second animation, and a consumer picking the first one would
     play a 33-frame arm raise instead of the walk. The datablock is removed.
 
-    F-30f9bf58: finger/toe bones present on an articulated rig are held at identity with
-    HAND_HOLD_REASON rather than left unkeyed (which would drift under FK).
+    F-30f9bf58 / F-6966f488: finger/toe bones on an articulated rig are keyed every frame —
+    identity hold by default, or --hand-pose=fist|point|spread locals when requested.
     """
     if arm_obj.animation_data is not None:
         arm_obj.animation_data_clear()
@@ -483,19 +571,36 @@ def author(arm_obj, scene, gait, fps, hand_mode="mitten"):
         pb.matrix_basis = Matrix.Identity(4)
         hold_names.append(name)
 
+    hp_locals = (hand_pose_locals(hand_pose)
+                 if hand_mode == "articulated" and hand_pose != "hold" else {})
+    # Convert 3x3 locals to matrix_basis deltas about identity rest (same as key_motion).
+    hp_mats = {}
+    for name, m3 in hp_locals.items():
+        if name not in arm_obj.pose.bones:
+            continue
+        M = Matrix((
+            (m3[0][0], m3[0][1], m3[0][2], 0.0),
+            (m3[1][0], m3[1][1], m3[1][2], 0.0),
+            (m3[2][0], m3[2][1], m3[2][2], 0.0),
+            (0.0, 0.0, 0.0, 1.0)))
+        hp_mats[name] = M
+
     for rec in gait["frames"]:
         apply_pose(arm_obj, rec["pose"], keyframe=rec["scene_frame"])
-        # Hold extremity bones on every keyed frame so they stay in the action.
+        # Key extremity bones every frame so they stay in the action.
         for name in hold_names:
             pb = arm_obj.pose.bones[name]
-            pb.matrix_basis = Matrix.Identity(4)
+            pb.matrix_basis = hp_mats.get(name, Matrix.Identity(4))
             pb.keyframe_insert(data_path="rotation_quaternion", frame=rec["scene_frame"])
             pb.keyframe_insert(data_path="location", frame=rec["scene_frame"])
 
     hold_record = {
         "bones": hold_names,
-        "reason": HAND_HOLD_REASON if hold_names else None,
+        "reason": (None if hp_mats else
+                   (HAND_HOLD_REASON if hold_names else None)),
         "hand_mode": hand_mode,
+        "hand_pose": hand_pose,
+        "hand_pose_bones": sorted(hp_mats),
     }
 
     action = arm_obj.animation_data.action if arm_obj.animation_data else None
@@ -866,6 +971,7 @@ def main():
     subjects = resolve_subjects(args)
     perf = resolve_performance(args)
     hm = getattr(args, "hand_mode", "mitten") or "mitten"
+    hp = getattr(args, "hand_pose", None) or perf.get("hand_pose") or "hold"
 
     performer_glb = subjects["performer_glb"]
     performer_manifest = subjects["performer_manifest"]
@@ -914,9 +1020,11 @@ def main():
             row["_heads"] = h
 
         # ---- Gate D. Author, snapshot, wipe, author again, compare parsed keys.
-        action, n_curves, hold_record = author(arm_obj, scene, gait, args.fps, hand_mode=hm)
+        action, n_curves, hold_record = author(
+            arm_obj, scene, gait, args.fps, hand_mode=hm, hand_pose=hp)
         snap_a = fcurve_snapshot(action)
-        action_b, _, _ = author(arm_obj, scene, gait, args.fps, hand_mode=hm)
+        action_b, _, _ = author(
+            arm_obj, scene, gait, args.fps, hand_mode=hm, hand_pose=hp)
         snap_b = fcurve_snapshot(action_b)
         gate_d = gate_d_determinism(snap_a, snap_b)
 

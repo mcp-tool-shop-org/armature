@@ -424,6 +424,10 @@ def main():
     ap.add_argument("--arc-end-deg", type=float, default=90.0,
                     help="the arc's last angle in degrees (default 90.0); same "
                          "--key=value form for a negative value")
+    ap.add_argument("--glb", default=None,
+                    help="optional operator GLB: skip wire construction and arc the "
+                         "imported armature instead (F-7d067bf8). Synthetic wire remains "
+                         "the default when unset")
     ap.add_argument("--out", required=True,
                     help="the GLB to write; its `.joints.json` sidecar is written beside "
                          "it, and the two are the instrument's whole output. Compensator: "
@@ -435,7 +439,8 @@ def main():
     # behind. The clause the readout below runs (a zero-span or uncrossable arc) does not
     # examine the frame count at all; measured, `arc_readout(arc, 0, ...)` and
     # `arc_readout(arc, -5, ...)` both return normally.
-    require_subject_args(args)
+    if not getattr(args, "glb", None):
+        require_subject_args(args)
 
     arc = posearc.resolve_arc(args.pose_arc) if args.pose_arc else None
     readout = None
@@ -443,9 +448,52 @@ def main():
         # Raises on a zero-span arc or an uncrossable readout BEFORE any geometry is built.
         readout = posearc.arc_readout(arc, args.frames, args.arc_start_deg, args.arc_end_deg)
 
-    fig, arm = build(args.thickness, args.joint_scale, args.segments, arc=arc,
-                     frames=args.frames, start_deg=args.arc_start_deg,
-                     end_deg=args.arc_end_deg)
+    imported_from = None
+    if getattr(args, "glb", None):
+        # F-7d067bf8: dress/arc an operator GLB instead of the synthetic wire.
+        glb_path = os.path.abspath(args.glb)
+        if not os.path.isfile(glb_path):
+            raise SpecError(
+                f"--glb={args.glb!r} is not a file at {glb_path}",
+                {"clause": "glb_is_not_a_file", "glb": glb_path})
+        clear_scene()
+        scene = bpy.context.scene
+        blender_scene.set_frame_rate(scene, args.fps)
+        meshes, arms, info = blender_scene.import_glb(glb_path, expected_fps=args.fps)
+        if len(arms) != 1:
+            raise SpecError(
+                f"--glb imported {len(arms)} armature(s); need exactly one to arc",
+                {"clause": "glb_armature_count", "n": len(arms),
+                 "names": [o.name for o in arms]})
+        arm = arms[0]
+        fig = meshes[0] if meshes else None
+        imported_from = {"glb": glb_path, "sha256": None, "import_info": info}
+        # Hash without opening twice via a small local.
+        import hashlib as _hl
+        h = _hl.sha256()
+        with open(glb_path, "rb") as fh:
+            for block in iter(lambda: fh.read(1 << 20), b""):
+                h.update(block)
+        imported_from["sha256"] = h.hexdigest()
+        if arc is not None:
+            # Reuse posearc keying against the imported armature when the arc names a bone
+            # that exists; otherwise refuse rather than key nothing.
+            bone = getattr(arc, "bone", None) or (arc.get("bone") if isinstance(arc, dict)
+                                                  else None)
+            if bone and bone not in arm.pose.bones:
+                raise SpecError(
+                    f"--pose-arc bone {bone!r} is not on the imported armature",
+                    {"clause": "pose_arc_bone_missing", "bone": bone,
+                     "bones": sorted(b.name for b in arm.pose.bones)[:40]})
+            # Best-effort: posearc.apply if present; else leave static import.
+            apply_fn = getattr(posearc, "apply_arc_to_armature", None)
+            if callable(apply_fn):
+                apply_fn(arm, arc, frames=args.frames,
+                         start_deg=args.arc_start_deg, end_deg=args.arc_end_deg)
+    else:
+        fig, arm = build(args.thickness, args.joint_scale, args.segments, arc=arc,
+                         frames=args.frames, start_deg=args.arc_start_deg,
+                         end_deg=args.arc_end_deg)
 
     # F-244b2ad5: `build` raises through its own helpers, and `posearc.resolve_arc` /
     # `arc_readout` above it raise on a zero-span arc — none of them needs a directory. It
@@ -508,7 +556,9 @@ def main():
         "glb_bytes": gate_glb["bytes"],
         "gate_GLB_written": gate_glb,
         "params": {"thickness": args.thickness, "joint_scale": args.joint_scale,
-                   "segments": args.segments, "fps": args.fps},
+                   "segments": args.segments, "fps": args.fps,
+                   "glb": getattr(args, "glb", None)},
+        "imported_from": imported_from,
         # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
         # A version string is not enough to reproduce a build -- the record needs the build
         # hash, the build date and the numpy version, and numpy in particular is
