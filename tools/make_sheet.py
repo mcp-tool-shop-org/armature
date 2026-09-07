@@ -2,11 +2,18 @@
 """make_sheet — the panel the Director reads the run off.
 
     <venv-python> tools/make_sheet.py --run=<run dir> --out=<sheet.png> [--frames=0,8,16,24]
+    <venv-python> tools/make_sheet.py --dailies-manifest=<run.json>
 
 facet ran four arms and two gates before building its comparison sheet, and when the
 sheet finally existed the Director read the whole thesis off one panel. E01 generates
 nothing, so there is no *output* or *reference* column yet — what exists is the
 **control** stack and its **provenance**, and those are what this lays out.
+
+**F-ca0f0408 — `--dailies-manifest=`.** Post-generation judging used to be a hand-wired
+chain of separate CLIs. `make_dailies.py` is outside this domain's frozen owned glob, so
+the orchestrator lives here: a small run.json/toml names control/frames/reference/meta
+and optional detection; this invokes the existing tools in-process and refuses to print
+MEASURE_*_OK without GATE0_SHEET present. Each tool stays callable alone.
 
 Sheets locate; full size decides. Every tile here is written at native resolution with
 no resampling, so what is on the sheet is what is in the file.
@@ -153,9 +160,178 @@ def build_sheet(run_dir, frames=None, channels=None):
     return sheet
 
 
+def _manifest_path(token):
+    """Split `--dailies-manifest=<path>` (or bare path after the flag form)."""
+    if token.startswith("--dailies-manifest="):
+        return token.split("=", 1)[1]
+    return None
+
+
+def load_dailies_manifest(path):
+    """Read the small run.json / run.toml naming the post-fetch judging inputs.
+
+    F-ca0f0408: make_dailies.py is outside the frozen owned glob; this tool is the
+    owned entry that turns a fetched run directory into Gate 0 + review pack +
+    measurement JSON in one invocation. Each underlying tool stays callable alone.
+    """
+    if not os.path.isfile(path):
+        raise MakeSheetError(
+            f"--dailies-manifest={path} is not a file",
+            {"gate": "ARGS", "andon": "MakeSheetError",
+             "clause": "dailies_manifest_missing", "path": os.path.abspath(path)})
+    text = open(path, encoding="utf-8").read()
+    lower = path.lower()
+    if lower.endswith(".toml"):
+        try:
+            import tomllib  # noqa: PLC0415
+        except ImportError as exc:  # pragma: no cover — 3.11+ on this rig
+            raise MakeSheetError(
+                f"tomllib unavailable for {path}: {exc}",
+                {"gate": "ARGS", "andon": "MakeSheetError",
+                 "clause": "dailies_toml_unavailable", "path": os.path.abspath(path)}) from exc
+        data = tomllib.loads(text)
+    else:
+        try:
+            data = json.loads(text)
+        except json.JSONDecodeError as exc:
+            raise MakeSheetError(
+                f"--dailies-manifest={path} is not readable JSON: {exc}",
+                {"gate": "ARGS", "andon": "MakeSheetError",
+                 "clause": "dailies_manifest_not_json", "path": os.path.abspath(path)}) from exc
+    if not isinstance(data, dict):
+        raise MakeSheetError(
+            f"--dailies-manifest={path} must be a JSON/TOML object",
+            {"gate": "ARGS", "andon": "MakeSheetError",
+             "clause": "dailies_manifest_not_object", "path": os.path.abspath(path)})
+    required = ("control_dir", "frames_dir", "reference", "meta", "out_dir")
+    missing = [k for k in required if not data.get(k)]
+    if missing:
+        raise MakeSheetError(
+            f"--dailies-manifest missing required keys: {missing}",
+            {"gate": "ARGS", "andon": "MakeSheetError",
+             "clause": "dailies_manifest_missing_keys", "missing": missing,
+             "required": list(required), "path": os.path.abspath(path)})
+    return data
+
+
+def run_dailies(manifest_path):
+    """Gate 0 first; measurements only after GATE0_SHEET exists on disk (F-ca0f0408)."""
+    import make_ab_clip as AB  # noqa: PLC0415
+    import make_gate0_sheet as G0  # noqa: PLC0415
+    import make_review_clip as MRC  # noqa: PLC0415
+    import measure_clip as MC  # noqa: PLC0415
+    import measure_tracking as MT  # noqa: PLC0415
+
+    man = load_dailies_manifest(manifest_path)
+    out_dir = os.path.abspath(man["out_dir"])
+    os.makedirs(out_dir, exist_ok=True)
+    gate0_out = os.path.join(out_dir, man.get("gate0_name", "gate0_sheet.png"))
+    frames_flag = man.get("frames", "0,8,16,24")
+    # ---- Gate 0 BEFORE any MEASURE_*_OK. The judging discipline forbids quoting a
+    #      number without this sheet; the orchestrator refuses to print measure OK
+    #      unless the sheet file is present after this step.
+    G0.main([
+        f"--run={man['control_dir']}",
+        f"--frames-dir={man['frames_dir']}",
+        f"--reference={man['reference']}",
+        f"--meta={man['meta']}",
+        f"--out={gate0_out}",
+        f"--frames={frames_flag}",
+    ])
+    if not os.path.isfile(gate0_out):
+        raise MakeSheetError(
+            f"GATE0_SHEET was not written at {gate0_out}; refusing MEASURE_*_OK",
+            {"gate": "DAILIES", "andon": "MakeSheetError",
+             "clause": "gate0_sheet_missing_before_measure", "gate0_out": gate0_out})
+
+    products = {"gate0_sheet": gate0_out}
+    measure_ok_allowed = True  # sheet is on disk
+
+    if man.get("measure_clip", True):
+        if not measure_ok_allowed:
+            raise MakeSheetError(
+                "refusing MEASURE_CLIP_OK without GATE0_SHEET present",
+                {"gate": "DAILIES", "andon": "MakeSheetError",
+                 "clause": "measure_without_gate0"})
+        clip_out = os.path.join(out_dir, man.get("measure_clip_name", "measure_clip.json"))
+        MC.main([f"--frames={man['frames_dir']}", f"--out={clip_out}",
+                 f"--label={man.get('label', 'clip')}"])
+        products["measure_clip"] = clip_out
+
+    if man.get("measure_tracking", False):
+        if not measure_ok_allowed:
+            raise MakeSheetError(
+                "refusing MEASURE_TRACKING without GATE0_SHEET present",
+                {"gate": "DAILIES", "andon": "MakeSheetError",
+                 "clause": "measure_without_gate0"})
+        track_out = os.path.join(out_dir, man.get("measure_tracking_name",
+                                                   "measure_tracking.json"))
+        MT.main([f"--run={man['frames_dir']}", f"--control={man['control_dir']}",
+                 f"--out={track_out}", f"--label={man.get('label', 'clip')}"])
+        products["measure_tracking"] = track_out
+
+    if man.get("review_clip", True):
+        review_out = os.path.join(out_dir, man.get("review_dir_name", "review"))
+        argv = [f"--frames={man['frames_dir']}", f"--out={review_out}"]
+        if man.get("detection"):
+            argv.append(f"--detection={man['detection']}")
+        if man.get("stills"):
+            argv.append(f"--stills={man['stills']}")
+        MRC.main(argv)
+        products["review_clip"] = review_out
+
+    if man.get("ab_clip", False):
+        ab_out = os.path.join(out_dir, man.get("ab_clip_name", "gate0_ab.webp"))
+        fps = float(man.get("fps", 16))
+        AB.main([
+            "--mode=gate0",
+            f"--a={man['control_dir']}", f"--b={man['frames_dir']}",
+            f"--a-fps={fps}", f"--b-fps={fps}",
+            f"--meta={man['meta']}", f"--out={ab_out}",
+        ])
+        products["ab_clip"] = ab_out
+
+    # Optional: rebuild Gate 0 with measurements bound onto the provenance column.
+    if products.get("measure_clip") and man.get("gate0_with_measurements", True):
+        g0_measured = os.path.join(out_dir, man.get("gate0_measured_name",
+                                                     "gate0_sheet_measured.png"))
+        argv = [
+            f"--run={man['control_dir']}",
+            f"--frames-dir={man['frames_dir']}",
+            f"--reference={man['reference']}",
+            f"--meta={man['meta']}",
+            f"--out={g0_measured}",
+            f"--frames={frames_flag}",
+            f"--measurements={products['measure_clip']}",
+        ]
+        if products.get("measure_tracking"):
+            argv.append(f"--tracking={products['measure_tracking']}")
+        G0.main(argv)
+        products["gate0_sheet_measured"] = g0_measured
+
+    print("DAILIES_OK " + json.dumps({
+        "manifest": os.path.abspath(manifest_path),
+        "out_dir": out_dir,
+        "gate0_sheet": gate0_out,
+        "products": products,
+    }))
+    return 0
+
+
 def main(argv=None):
     argv = argv if argv is not None else sys.argv[1:]
-    args = parse_argv(argv, required=("run", "out"), optional=("frames", "channels"))
+    # F-ca0f0408: dailies pack from a run manifest (owned stand-in for make_dailies.py).
+    dailies = None
+    rest = []
+    for token in argv:
+        path = _manifest_path(token)
+        if path is not None:
+            dailies = path
+        else:
+            rest.append(token)
+    if dailies is not None:
+        return run_dailies(dailies)
+    args = parse_argv(rest, required=("run", "out"), optional=("frames", "channels"))
     frames = [int(v) for v in args["frames"].split(",")] if args.get("frames") else None
     channels = args["channels"].split(",") if args.get("channels") else None
     sheet = build_sheet(args["run"], frames=frames, channels=channels)
