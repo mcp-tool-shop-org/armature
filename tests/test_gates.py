@@ -1273,8 +1273,12 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # `family_raise_count()` — never a sum of branches. Donor-check CLI surface,
     # SavedAdmission experiment/stage clauses, and the rest of the wave-35 execute
     # delta land in this denominator.
-    assert total == 454, (
-        f"{total} family raises in armature_core; this pin asserts 454, MEASURED on the wave-35 merged "
+    # WAVE-37 MERGE pin-fix: 454 → 506. MEASURED on merged main @ 9a3d3e7 by calling
+    # `family_raise_count()` — never a sum of branches. path/track camera refusals,
+    # channel-convention vocabulary, and the rest of the wave-37 execute delta land
+    # in this denominator.
+    assert total == 506, (
+        f"{total} family raises in armature_core; this pin asserts 506, MEASURED on the wave-37 merged "
         f"tree. This is the denominator every ratio below is quoted against — re-measure it "
         f"deliberately")
 

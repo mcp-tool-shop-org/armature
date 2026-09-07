@@ -4628,8 +4628,14 @@ def _drive_prerelease(event_name, value):
 #: `workflow_dispatch` rows carry an EMPTY value because `github.event.release` does not
 #: exist on a dispatch — refusing that would delete the documented rehearsal, which is the
 #: only way to exercise this file before a tag is public.
+#:
+#: WAVE-37: the same step now also enforces the release.yml header STATUS obligation on
+#: `release` arrivals. Header is currently `STATUS: STALE` (pre-pip-audit rehearsal), so
+#: a live `release` + `prerelease=false` refuses on STATUS even though the pre-release
+#: clause itself would pass. Flip the first row back to proceeds=True only when STATUS
+#: is rewritten to a fresh `RUN <id>` after a post-pip-audit rehearsal.
 PRERELEASE_ARRIVALS = [
-    ("release", "false", True),
+    ("release", "false", False),
     ("release", "true", False),
     ("release", "", False),
     ("release", "maybe", False),
@@ -4933,6 +4939,9 @@ def test_a_classifier_gate_crash_exits_1_and_a_refusal_exits_2(tmp_path):
 ANDON_REFUSALS_UNDER_ACTIONS = {
     "classifier_gate.py": 6,
     "lazy_import_probe.py": 1,
+    # WAVE-37: clean-room SBOM emitter landed beside the two gates; floor is its
+    # pip-freeze refusal (named andon, not a bare SystemExit).
+    "sbom_emit.py": 1,
 }
 
 

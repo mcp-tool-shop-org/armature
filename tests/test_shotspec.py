@@ -53,11 +53,13 @@ def test_round_trip_through_disk_is_identical(tmp_path):
 
 
 def test_unknown_channel_is_refused(tmp_path):
+    # `softedge` / `canny` / `flow` joined KNOWN_CHANNELS (convention vocabulary);
+    # the refusal pin needs a name that is still outside that set.
     raw = _minimal(tmp_path)
-    raw["channels"] = ["depth", "flow"]
+    raw["channels"] = ["depth", "hed"]
     with pytest.raises(SpecError) as exc:
         shotspec.normalise_spec(raw)
-    assert "flow" in str(exc.value)
+    assert "hed" in str(exc.value)
 
 
 def test_duplicate_channel_is_refused(tmp_path):
@@ -93,10 +95,13 @@ def test_wrong_spec_version_is_refused(tmp_path):
 def test_unimplemented_camera_type_is_refused(tmp_path):
     raw = _minimal(tmp_path)
     raw["camera"] = {"type": "dolly"}
-    # `static` joined `orbit` as an implemented type; the refusal names the known set.
+    # `path` / `track` joined `orbit` / `static`; `dolly` is still unimplemented.
     with pytest.raises(
         SpecError,
-        match=r"spec\.camera\.type 'dolly' is not implemented \(known: \['orbit', 'static'\]\)",
+        match=(
+            r"spec\.camera\.type 'dolly' is not implemented "
+            r"\(known: \['orbit', 'static', 'path', 'track'\]\)"
+        ),
     ):
         shotspec.normalise_spec(raw)
 
