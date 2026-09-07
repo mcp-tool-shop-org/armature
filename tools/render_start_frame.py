@@ -4,11 +4,17 @@ r"""render_start_frame — the one frame E11 hands an image-to-video model.
     blender -b -P tools\render_start_frame.py -- --glb=<performer.glb>
             --out=<dir> [--frame=0] [--width=832] [--height=480] [--height-frac=0.90]
             --composite=r,g,b --composite-why="..." [--plate=<plate.png> --plate-why="..."]
+            [--set=<set.glb> ...] [--frames=i,j]
 
 E11's commission. armature is image-to-video with a GLB instead of an image; this tool is
 where the GLB becomes the image. It stages one frame of a performance, lights it, and
 writes it at the **generation's own resolution**, so nothing scales, letterboxes or
 centre-crops it on the way to the model.
+
+Wave 34: `--set` (appendable) imports owned 3D scenery excluded from the subject framing
+solve but included in the render (F-91411b51). `--frames=i,j` (or `--end-frame`) stages a
+matched FLF2V first/last pair under one lighting, framing, composite and provenance lock
+(F-d7f9fed5).
 
 **Why native size, stated as a decision.** E08 handed `WanAnimateToVideo` a 352x1024
 portrait reference and measured what the node did to it: `common_upscale(..., "area",
@@ -81,7 +87,7 @@ from armature_core import blender_scene, framing, parts, pngio, startframe as SF
 import rig_character as rc  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
-TOOL_VERSION = "E11.1"
+TOOL_VERSION = "E11.2"
 
 #: The camera convention, carried verbatim from `render_performer` (E09/E10) so this frame
 #: shows the performer from the angle the rest of the arc has been looking at him from.
@@ -394,8 +400,9 @@ def gate_output_overwrite(out, planned, overwrite, gate_cls):
     return pre_existed, already_present, strays
 
 
-def parse_args():
-    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+def parse_args(argv=None):
+    if argv is None:
+        argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -408,7 +415,15 @@ def parse_args():
                          "delete it; owner: the executor session")
     ap.add_argument("--frame", type=int, default=0,
                     help="which frame of the action to stage, 0-based (argparse eats "
-                         "leading minus signs: pass flags as --flag=value)")
+                         "leading minus signs: pass flags as --flag=value). Ignored when "
+                         "--frames is set; used as the first index with --end-frame")
+    ap.add_argument("--frames", default=None,
+                    help="FLF2V pair as `i,j` (0-based). Stages BOTH indices in one "
+                         "session under one lighting/framing/composite lock and writes a "
+                         "`pair` block in provenance (F-d7f9fed5). Refuses when i == j")
+    ap.add_argument("--end-frame", type=int, default=None,
+                    help="alternate FLF2V spelling: pair (--frame, --end-frame). Refuses "
+                         "when equal to --frame")
     ap.add_argument("--fps", type=int, default=16,
                     help="frame rate --frame is counted in (default 16); glTF key times "
                          "are SECONDS, so a mismatch stages a different moment")
@@ -445,6 +460,10 @@ def parse_args():
                          "LIGHTS the scene, so the plate is the only thing that changes")
     ap.add_argument("--plate-why", default=None,
                     help="one sentence, into the provenance, on why THIS plate")
+    ap.add_argument("--set", action="append", default=None,
+                    help="owned 3D set/prop GLB imported as non-deforming scenery "
+                         "(F-91411b51). Appendable. Excluded from subject framing solve; "
+                         "included in the render. --plate remains the 2D fallback")
     ap.add_argument("--floor", type=int, default=1,
                     help="1 draws a ground plane; recorded either way")
     ap.add_argument("--shadow-layer", type=int, default=0,
@@ -462,6 +481,78 @@ def parse_args():
                          "material from shader nodes: no image file is read, so it adds no "
                          "licence surface of any kind")
     return ap.parse_args(argv)
+
+
+def resolve_frame_indices(args):
+    """Return the 0-based frame indices this run stages.
+
+    Single-frame: ``(--frame,)``. FLF pair: two distinct indices from ``--frames=i,j``
+    or ``(--frame, --end-frame)``. Refuses a pair whose ends are the same index
+    (F-d7f9fed5).
+    """
+    if args.frames is not None and args.end_frame is not None:
+        raise ArmatureError(
+            "--frames and --end-frame both name the FLF pair; pass one spelling",
+            {"clause": "frames_and_end_frame_both_set",
+             "frames": args.frames, "end_frame": args.end_frame})
+    if args.frames is not None:
+        parts = [p.strip() for p in str(args.frames).split(",")]
+        if len(parts) != 2 or any(p == "" for p in parts):
+            raise ArmatureError(
+                f"--frames={args.frames!r} must be exactly two integers as i,j",
+                {"clause": "frames_pair_shape", "frames": args.frames})
+        try:
+            i, j = int(parts[0]), int(parts[1])
+        except ValueError as exc:
+            raise ArmatureError(
+                f"--frames={args.frames!r} must be integers i,j",
+                {"clause": "frames_pair_not_int", "frames": args.frames}) from exc
+        if i == j:
+            raise RenderGate(
+                f"--frames={args.frames!r} names the same index twice; an FLF2V pair "
+                f"needs two distinct authored keys under one lock",
+                {"clause": "flf_pair_same_index", "frames": [i, j]})
+        return (i, j)
+    if args.end_frame is not None:
+        i, j = int(args.frame), int(args.end_frame)
+        if i == j:
+            raise RenderGate(
+                f"--frame={i} and --end-frame={j} are the same index; an FLF2V pair "
+                f"needs two distinct authored keys under one lock",
+                {"clause": "flf_pair_same_index", "frames": [i, j]})
+        return (i, j)
+    return (int(args.frame),)
+
+
+def frame_role_prefix(indices, index):
+    """Filename stem for one staged index: start_frame / end_frame."""
+    if len(indices) == 1:
+        return "start_frame"
+    if index == indices[0]:
+        return "start_frame"
+    if index == indices[-1]:
+        return "end_frame"
+    return f"frame_{index:05d}"
+
+
+def plan_output_files(indices, *, backdrop, shadow_layer):
+    """Derive the fixed names this run writes (overwrite gate population)."""
+    planned = ["start_frame_provenance.json", "empty_plate.png"]
+    for idx in indices:
+        stem = frame_role_prefix(indices, idx)
+        planned.append(f"{stem}_rgba.png")
+        planned.append(f"{stem}_flat.png" if backdrop else f"{stem}.png")
+        if backdrop:
+            planned.append(f"{stem}.png")
+        if shadow_layer:
+            planned += [f"{stem}_shadow_lit.png", f"{stem}_shadow_cast.png",
+                        f"{stem}_plate_shadowed.png"]
+    seen, out = set(), []
+    for name in planned:
+        if name not in seen:
+            seen.add(name)
+            out.append(name)
+    return out
 
 
 #: The procedural floor, as numbers rather than as a picture. Kept out of the node-building
@@ -669,39 +760,45 @@ def main():
     started = time.time()
     a = parse_args()
     out = os.path.abspath(a.out)
-    # F-34a858f5: refused BEFORE `scene.render.resolution_x` is assigned, and before the
-    # silhouette solve divides by it.
+    indices = resolve_frame_indices(a)
     width, height = require_frame_size(int(a.width), int(a.height))
-    # F-f0c261c1: the framing FRACTION, bounded in the same breath and for the same reason
-    # — above the `scene.render.resolution_x` assignment and above the solve that would
-    # otherwise return the bisection ceiling for a NaN and hand it to a Gate WHOLE that
-    # certifies it. Read ONCE, here; every use below is of this value, never of the
-    # namespace attribute.
     height_frac = require_shot_fraction("--height-frac", a.height_frac)
 
-    # ---- fps FIRST, on an empty scene, before the import. glTF key times are seconds.
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
     blender_scene.set_frame_rate(scene, a.fps)
     meshes, arms, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
+
+    # F-91411b51: owned 3D sets — scenery, not the framing subject.
+    set_records = []
+    set_meshes = []
+    set_arms = []
+    for sp in (a.set or []):
+        path = os.path.abspath(sp)
+        if not os.path.isfile(path):
+            raise RenderGate(
+                f"--set={sp!r} is not a file at {path}",
+                {"clause": "set_glb_is_not_a_file", "set": path, "set_as_typed": sp})
+        sm, sa, sinfo = blender_scene.import_glb(path, expected_fps=a.fps)
+        for arm in sa:
+            arm.hide_render = True  # non-deforming scenery; armature not drawn
+            set_arms.append(arm)
+        visible = blender_scene.render_visible_meshes(scene, sm)
+        set_meshes.extend(visible)
+        set_records.append({
+            "glb": path, "sha256": _sha256(path),
+            "meshes": [o.name for o in visible],
+            "armatures_hidden": [o.name for o in sa],
+            "import_info": sinfo,
+        })
 
     engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = width, height
     scene.render.resolution_percentage = 100
     scene.render.image_settings.file_format = "PNG"
     scene.view_settings.view_transform = "Standard"
-    # THE ALPHA LAW (CLAUDE.md, the Director's ruling 2026-08-12). `film_transparent` was
-    # False here until wave 3, which baked the world background into every authored input
-    # as opaque pixels — the grey studio that bled through the E11 probe's frame 0 and is
-    # the standing suspect for E08's washed bands. The render below is authored RGBA; the
-    # RGB the route actually submits is composited afterwards over a colour named on the
-    # command line and recorded in the provenance.
     composite_rgb = SF.composite_colour(a.composite)
 
-    # ---- the plate, checked BEFORE anything renders. A plate at the wrong size would
-    # otherwise be discovered after four renders, and a compositor fed a mismatched image
-    # scales or tiles it rather than erroring — which is a reframed backdrop nobody chose.
-    # `make_plate.py` is what puts a picked still at the frame's exact size.
     backdrop = os.path.abspath(a.plate) if a.plate else None
     if a.shadow_layer and not (backdrop and a.floor):
         raise RenderGate(
@@ -727,10 +824,6 @@ def main():
                  "plate": backdrop, "plate_size": [pw, ph],
                  "frame_size": [width, height]})
 
-    # `render_visible_meshes` and not `type == 'MESH'`: the glTF importer drops a
-    # 42-vertex Icosphere into a hidden `glTF_not_exported` collection, and framing against
-    # it once pulled a whole shot's camera back (blender_scene, G4, 2026-08-10). Framing
-    # here is *tighter* than that shot's, so the decoy would cost more, not less.
     subject = blender_scene.render_visible_meshes(scene, meshes)
     if not subject:
         raise RenderGate(
@@ -744,44 +837,53 @@ def main():
 
     span = action_frame_range()
     scene.frame_start, scene.frame_end = 1, max(1, int(span[1]) if span else 1)
-    blender_scene.set_scene_frame(scene, a.frame)
-    if span is not None and not (span[0] <= scene.frame_current <= span[1]):
-        raise RenderGate(
-            f"frame {a.frame} maps to scene frame {scene.frame_current}, outside the "
-            f"action's own keyed range {span}. Blender holds the nearest pose and renders "
-            f"it with no error, so the start frame would be a well-formed picture of a "
-            f"moment the performance never had",
-            {"clause": "frame_outside_the_keyed_range",
-             "requested_frame": a.frame, "scene_frame": scene.frame_current,
-             "action_range": list(span)})
 
-    # ---- the silhouette: every evaluated world vertex the renderer is about to draw.
-    verts = blender_scene.evaluated_world_vertices(scene, subject)
-    if verts.shape[0] == 0:
-        raise RenderGate(
-            f"the subject evaluates to no vertices at --frame={a.frame} (scene frame "
-            f"{scene.frame_current}, action range {list(span) if span else None}): the "
-            f"{len(subject)} render-visible mesh(es) "
-            f"{[o.name for o in subject]} produce an empty evaluated geometry there, so "
-            f"there is nothing to frame and nothing to light",
-            {"clause": "subject_has_no_vertices_at_this_frame",
-             "requested_frame": a.frame, "scene_frame": scene.frame_current,
-             "action_range": list(span) if span else None,
-             "subject_render_visible": [o.name for o in subject]})
+    # Per-index silhouette clouds (subject only — sets excluded from framing solve).
+    clouds_by_index = {}
+    for idx in indices:
+        blender_scene.set_scene_frame(scene, idx)
+        if span is not None and not (span[0] <= scene.frame_current <= span[1]):
+            raise RenderGate(
+                f"frame {idx} maps to scene frame {scene.frame_current}, outside the "
+                f"action's own keyed range {span}. Blender holds the nearest pose and renders "
+                f"it with no error, so the start frame would be a well-formed picture of a "
+                f"moment the performance never had",
+                {"clause": "frame_outside_the_keyed_range",
+                 "requested_frame": idx, "scene_frame": scene.frame_current,
+                 "action_range": list(span)})
+        verts = blender_scene.evaluated_world_vertices(scene, subject)
+        if verts.shape[0] == 0:
+            raise RenderGate(
+                f"the subject evaluates to no vertices at --frame={idx} (scene frame "
+                f"{scene.frame_current}, action range {list(span) if span else None}): the "
+                f"{len(subject)} render-visible mesh(es) "
+                f"{[o.name for o in subject]} produce an empty evaluated geometry there, so "
+                f"there is nothing to frame and nothing to light",
+                {"clause": "subject_has_no_vertices_at_this_frame",
+                 "requested_frame": idx, "scene_frame": scene.frame_current,
+                 "action_range": list(span) if span else None,
+                 "subject_render_visible": [o.name for o in subject]})
+        clouds_by_index[idx] = [tuple(map(float, p)) for p in verts]
 
-    cloud = [tuple(map(float, p)) for p in verts]
+    # Shared camera lock: union of subject silhouettes across the staged indices.
+    cloud = []
+    for idx in indices:
+        cloud.extend(clouds_by_index[idx])
     solve_cloud = SF.framing_cloud(cloud, cap=FRAMING_CLOUD_CAP)
-
     sol = framing.solve_camera(solve_cloud, solve_cloud, AZIMUTH_DEG, ELEVATION_DEG,
                                LENS_MM, SENSOR_MM, width, height,
                                height_frac=height_frac,
                                end_x_frac=CENTRE_X_FRAC, target_y_frac=CENTRE_Y_FRAC)
     target, radius = tuple(sol["target"]), float(sol["radius"])
 
-    # ---- Gate WHOLE, on EVERY vertex and unclipped. The solve above is approximate.
-    extent = SF.silhouette_extent(cloud, target, radius, AZIMUTH_DEG, ELEVATION_DEG,
-                                  LENS_MM, SENSOR_MM, width, height)
-    gate_whole = SF.gate_whole(extent, width, height, MARGIN_PX)
+    # Gate WHOLE on every staged index (shared camera).
+    gates_whole = {}
+    extents = {}
+    for idx in indices:
+        extent = SF.silhouette_extent(clouds_by_index[idx], target, radius, AZIMUTH_DEG,
+                                      ELEVATION_DEG, LENS_MM, SENSOR_MM, width, height)
+        extents[idx] = extent
+        gates_whole[idx] = SF.gate_whole(extent, width, height, MARGIN_PX)
 
     world = bpy.data.worlds.new("performer")
     scene.world = world
@@ -828,329 +930,177 @@ def main():
     cam.matrix_world = blender_scene.orbit_matrix(Vector(target), radius,
                                                   ELEVATION_DEG, AZIMUTH_DEG)
 
-    # ---- (1) THE AUTHORED MASTER, RGBA. `film_transparent` makes the WORLD background
-    # alpha=0 while the floor plane — real geometry — stays opaque, so what becomes
-    # transparent is exactly the void the law is about and nothing else.
-    # Under --shadow-layer the floor is not IN the picture — it exists only to catch what the
-    # figure throws onto it. So it is hidden for every render that describes the frame, and
-    # shown again below only for the two that measure the shadow.
     if a.shadow_layer:
         gob.hide_render = True
 
-    # THE DIRECTORY IS CREATED HERE, immediately above the first byte (F-d47095fa).
-    # It used to sit at line 455 of `main()`, with 1 named refusal(s) stranded between
-    # the two (472) -- none of which needs the directory. A run refused by any of
-    # them left an empty output directory behind, which a reader scanning `outputs/` or
-    # a re-run into the same `--out` reads as an attempt that produced nothing rather
-    # than one that was refused. Pinned by `tests/test_instruments_amend_w10.py::
-    # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`.
-    # ---- WAVE 28, F-8b7f48a8 (panel CRITICAL). THE SILENT OVERWRITE. This tool writes
-    # FIXED names, so a re-run always lands on the previous run's, and the frame it writes
-    # is the one picture an image-to-video model is handed. MEASURED on `3380ae2` over the
-    # 21 owned tools: 36 `os.makedirs` sites, every one `exist_ok=True`, none saying the
-    # directory already existed. SEAM 1 (wave-28 inbox): one flag, one clause word, one
-    # sentence and two record keys, shared with builders' `F-5fd16451`.
-    #
-    # The plan is DERIVED from the flags that decide what gets written, not typed: the
-    # plate branch adds `start_frame.png` beside the flat counterfactual, and
-    # `--shadow-layer` adds its three. A plan that named files this run does not write
-    # would refuse a directory it has no quarrel with.
-    #
-    # The refusal fires ABOVE `os.makedirs`, so a declined run leaves nothing behind.
-    planned = ["start_frame_rgba.png",
-               "start_frame_flat.png" if backdrop else "start_frame.png",
-               "empty_plate.png", "start_frame_provenance.json"]
-    if backdrop:
-        planned.append("start_frame.png")
-    if a.shadow_layer:
-        planned += ["shadow_lit.png", "shadow_cast.png", "plate_shadowed.png"]
+    planned = plan_output_files(indices, backdrop=bool(backdrop),
+                                shadow_layer=bool(a.shadow_layer))
     out_dir_pre_existed, already_present, strays = gate_output_overwrite(
         out, planned, a.overwrite, RenderGate)
     if already_present:
         print("[overwrite] " + json.dumps(
             {"out": os.path.abspath(out), "overwrote": already_present}))
+    os.makedirs(out, exist_ok=True)
 
-    os.makedirs(out, exist_ok=True)          # scripts create their own output directories
-    rgba_path = os.path.join(out, "start_frame_rgba.png")
-    scene.render.film_transparent = True
-    scene.render.image_settings.color_mode = "RGBA"
-    _before = rc.render_target_snapshot(rgba_path)
-    scene.render.filepath = rgba_path
-    render_result = bpy.ops.render.render(write_still=True)
-    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
-    # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
-    # the same path satisfies; only the operator's own verdict says whether THIS call drew
-    # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
-    _status = _render_status(render_result)
-    if "FINISHED" not in _status:
-        raise RenderGate(
-            f"the render operator did not report FINISHED for "
-            f"{os.path.basename(rgba_path)}; it returned {_status!r}, and any file at "
-            f"that path is then the previous run's",
-            {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(rgba_path),
-             # F-d6042cf6: where the partial run is, and its named undo.
-             "out": os.path.dirname(os.path.abspath(rgba_path)),
-             "compensator": "delete --out; owner: the executor session"})
-    rc.require_render_target_moved(
-        rgba_path, _before, RenderGate,
-        {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
-         "who": "render_start_frame"})
+    def _render_still(path):
+        _before = rc.render_target_snapshot(path)
+        scene.render.filepath = path
+        render_result = bpy.ops.render.render(write_still=True)
+        _status = _render_status(render_result)
+        if "FINISHED" not in _status:
+            raise RenderGate(
+                f"the render operator did not report FINISHED for "
+                f"{os.path.basename(path)}; it returned {_status!r}, and any file at "
+                f"that path is then the previous run's",
+                {"clause": "operator_status", "status": _status,
+                 "path": os.path.abspath(path),
+                 "out": os.path.dirname(os.path.abspath(path)),
+                 "compensator": "delete --out; owner: the executor session"})
+        rc.require_render_target_moved(
+            path, _before, RenderGate,
+            {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
+             "who": "render_start_frame"})
 
-    alpha_plane = _alpha_channel(rgba_path, width, height)
-    gate_alpha = SF.gate_alpha(float((alpha_plane < 0.5).mean()), composite_rgb,
-                               a.composite_why, master_path=rgba_path)
-
-    # ---- (2) THE FLAT COMPOSITE, RGB, colour-managed by Blender over the chosen
-    # background rather than composited by hand in byte space. Same camera, same lights,
-    # same pose — only the film's treatment of the void differs between (1) and (2).
-    # With no plate this IS the submitted image. With a plate it is kept anyway, as the
-    # counterfactual Gate BACKDROP measures the plate's arrival against.
-    scene.render.film_transparent = False
-    scene.render.image_settings.color_mode = "RGB"
-    flat_path = os.path.join(out, "start_frame_flat.png" if backdrop else "start_frame.png")
-    _before = rc.render_target_snapshot(flat_path)
-    scene.render.filepath = flat_path
-    render_result = bpy.ops.render.render(write_still=True)
-    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
-    # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
-    # the same path satisfies; only the operator's own verdict says whether THIS call drew
-    # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
-    _status = _render_status(render_result)
-    if "FINISHED" not in _status:
-        raise RenderGate(
-            f"the render operator did not report FINISHED for "
-            f"{os.path.basename(flat_path)}; it returned {_status!r}, and any file at "
-            f"that path is then the previous run's",
-            {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(flat_path),
-             # F-d6042cf6: where the partial run is, and its named undo.
-             "out": os.path.dirname(os.path.abspath(flat_path)),
-             "compensator": "delete --out; owner: the executor session"})
-    rc.require_render_target_moved(
-        flat_path, _before, RenderGate,
-        {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
-         "who": "render_start_frame"})
-
-    # ---- the empty plate: same camera, same lights, same floor, character hidden.
-    # (An "empty plate" in the VFX sense — the background-only render. Not `--plate`.)
+    per_frame = []
+    # Empty plate once under the shared camera (character hidden; sets stay — they are world).
+    blender_scene.set_scene_frame(scene, indices[0])
     for o in subject + arms:
         o.hide_render = True
+    scene.render.film_transparent = False
+    scene.render.image_settings.color_mode = "RGB"
     plate_path = os.path.join(out, "empty_plate.png")
-    _before = rc.render_target_snapshot(plate_path)
-    scene.render.filepath = plate_path
-    render_result = bpy.ops.render.render(write_still=True)
-    # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
-    # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
-    # the same path satisfies; only the operator's own verdict says whether THIS call drew
-    # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
-    _status = _render_status(render_result)
-    if "FINISHED" not in _status:
-        raise RenderGate(
-            f"the render operator did not report FINISHED for "
-            f"{os.path.basename(plate_path)}; it returned {_status!r}, and any file at "
-            f"that path is then the previous run's",
-            {"clause": "operator_status", "status": _status,
-             "path": os.path.abspath(plate_path),
-             # F-d6042cf6: where the partial run is, and its named undo.
-             "out": os.path.dirname(os.path.abspath(plate_path)),
-             "compensator": "delete --out; owner: the executor session"})
-    rc.require_render_target_moved(
-        plate_path, _before, RenderGate,
-        {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
-         "who": "render_start_frame"})
+    _render_still(plate_path)
     for o in subject + arms:
         o.hide_render = False
 
-    # COVERAGE is measured on the FLAT composite in both routes. Against a scene-bearing
-    # plate the empty-plate difference would count the whole backdrop as subject, and the
-    # gate that says "somebody is in the frame" would pass on a picture of an empty bar.
-    frame_px = _pixels(flat_path, width, height)
-    plate_px = _pixels(plate_path, width, height)
-    diff = np.abs(frame_px - plate_px).max(axis=2) > (1.0 / 255.0)
-    frac = float(diff.mean())
+    for idx in indices:
+        stem = frame_role_prefix(indices, idx)
+        blender_scene.set_scene_frame(scene, idx)
 
-    # ---- (2b) THE AUTHORED SHADOW LAYER. Two renders of the floor alone — one with the
-    # figure casting onto it, one without — and their ratio in linear light is the shadow,
-    # free of the floor's own colour and of its lighting gradient. The floor itself never
-    # reaches the picture; only what the figure did to it does.
-    shadow = None
-    if a.shadow_layer:
-        gob.hide_render = False
-        for o in subject + arms:
-            o.hide_render = True
-        lit_path = os.path.join(out, "shadow_lit.png")
-        _before = rc.render_target_snapshot(lit_path)
-        scene.render.filepath = lit_path
-        render_result = bpy.ops.render.render(write_still=True)
-        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
-        # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
-        # the same path satisfies; only the operator's own verdict says whether THIS call drew
-        # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
-        _status = _render_status(render_result)
-        if "FINISHED" not in _status:
+        if a.shadow_layer:
+            gob.hide_render = True
+
+        rgba_path = os.path.join(out, f"{stem}_rgba.png")
+        scene.render.film_transparent = True
+        scene.render.image_settings.color_mode = "RGBA"
+        _render_still(rgba_path)
+        alpha_plane = _alpha_channel(rgba_path, width, height)
+        gate_alpha = SF.gate_alpha(float((alpha_plane < 0.5).mean()), composite_rgb,
+                                   a.composite_why, master_path=rgba_path)
+
+        scene.render.film_transparent = False
+        scene.render.image_settings.color_mode = "RGB"
+        flat_path = os.path.join(out, f"{stem}_flat.png" if backdrop else f"{stem}.png")
+        _render_still(flat_path)
+
+        frame_px = _pixels(flat_path, width, height)
+        plate_px = _pixels(plate_path, width, height)
+        diff = np.abs(frame_px - plate_px).max(axis=2) > (1.0 / 255.0)
+        frac = float(diff.mean())
+
+        shadow = None
+        if a.shadow_layer:
+            gob.hide_render = False
+            for o in subject + arms:
+                o.hide_render = True
+            lit_path = os.path.join(out, f"{stem}_shadow_lit.png")
+            _render_still(lit_path)
+            for o in subject + arms:
+                o.hide_render = False
+            cast_path = os.path.join(out, f"{stem}_shadow_cast.png")
+            _render_still(cast_path)
+            gob.hide_render = True
+            ratio = SF.shadow_ratio(_pixels(cast_path, width, height),
+                                    _pixels(lit_path, width, height))
+            ratio[alpha_plane > 0.0] = 1.0
+            shadowed = SF.apply_shadow(_pixels(backdrop, width, height), ratio)
+            shadowed_path = os.path.join(out, f"{stem}_plate_shadowed.png")
+            pngio.write_png(shadowed_path,
+                            np.clip(shadowed * 255.0, 0, 255).round().astype(np.uint8))
+            darkened = ratio < 0.99
+            shadow = {
+                "treatment": "authored shadow layer (ratio of two floor renders, in linear)",
+                "why_not_a_shadow_catcher": (
+                    "measured 2026-08-12 on this build: Object.is_shadow_catcher exists and "
+                    "EEVEE ignores it — the catcher render came back byte-identical to the "
+                    "ordinary opaque floor (mean alpha 0.7105664 both) — and Cycles is not in "
+                    "this build's engine list. The alternative the spec allows was shut, so "
+                    "this is the branch it left"),
+                "lit_reference": {"path": lit_path, "sha256": _sha256(lit_path)},
+                "cast_reference": {"path": cast_path, "sha256": _sha256(cast_path)},
+                "shadowed_plate": {"path": shadowed_path, "sha256": _sha256(shadowed_path)},
+                "darkened_fraction_of_frame": float(darkened.any(axis=2).mean()),
+                "min_ratio": float(ratio.min()), "mean_ratio_where_darkened": (
+                    float(ratio[darkened].mean()) if darkened.any() else None),
+                "held_at_one_over_the_figure": True,
+                "eps": SF.SHADOW_FLOOR_EPS,
+            }
+            backdrop_for_composite = shadowed_path
+        else:
+            backdrop_for_composite = backdrop
+
+        frame_path, gate_backdrop = flat_path, None
+        if backdrop:
+            wire_plate_composite(scene, backdrop_for_composite)
+            frame_path = os.path.join(out, f"{stem}.png")
+            _render_still(frame_path)
+            void = alpha_plane < 0.5
+            sub_px = _pixels(frame_path, width, height)
+            back_px = _pixels(backdrop_for_composite, width, height)
+            gate_backdrop = SF.gate_backdrop(
+                void_vs_plate_255=float(np.abs(sub_px[void] - back_px[void]).mean() * 255.0),
+                plate_vs_flat_255=float(np.abs(back_px[void] - frame_px[void]).mean() * 255.0),
+                transparent_fraction=float(void.mean()),
+                why=a.plate_why, tol_255=PLATE_TOL_255,
+                min_separation_255=PLATE_MIN_SEPARATION_255,
+                plate=backdrop_for_composite,
+                plate_sha256=_sha256(backdrop_for_composite))
+
+        ev_cov = {
+            "gate": RenderGate.gate, "sub_gate": "COVERAGE",
+            "min_fraction": MIN_SUBJECT_FRAC, "subject_fraction": frac,
+            "empty_plate": plate_path,
+            "note": ("fraction of pixels differing from an empty-plate render of the same "
+                     "camera, lights and floor with the character hidden. Sets stay in the "
+                     "empty plate — they are world. It INCLUDES the figure's shadow on the "
+                     "ground plane, so its bbox bounds subject+shadow and is a diagnostic; "
+                     "Gate WHOLE is what bounds the body"),
+            "out": os.path.abspath(out),
+            "written_so_far": sorted(f for f in os.listdir(out)
+                                     if os.path.isfile(os.path.join(out, f))),
+            "compensator": "delete --out; owner: the executor session"}
+        if frac < MIN_SUBJECT_FRAC:
             raise RenderGate(
-                f"the render operator did not report FINISHED for "
-                f"{os.path.basename(lit_path)}; it returned {_status!r}, and any file at "
-                f"that path is then the previous run's",
-                {"clause": "operator_status", "status": _status,
-                 "path": os.path.abspath(lit_path),
-                 # F-d6042cf6: where the partial run is, and its named undo.
-                 "out": os.path.dirname(os.path.abspath(lit_path)),
-                 "compensator": "delete --out; owner: the executor session"})
-        rc.require_render_target_moved(
-            lit_path, _before, RenderGate,
-            {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
-             "who": "render_start_frame"})
-        for o in subject + arms:
-            o.hide_render = False
-        cast_path = os.path.join(out, "shadow_cast.png")
-        _before = rc.render_target_snapshot(cast_path)
-        scene.render.filepath = cast_path
-        render_result = bpy.ops.render.render(write_still=True)
-        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
-        # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
-        # the same path satisfies; only the operator's own verdict says whether THIS call drew
-        # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
-        _status = _render_status(render_result)
-        if "FINISHED" not in _status:
-            raise RenderGate(
-                f"the render operator did not report FINISHED for "
-                f"{os.path.basename(cast_path)}; it returned {_status!r}, and any file at "
-                f"that path is then the previous run's",
-                {"clause": "operator_status", "status": _status,
-                 "path": os.path.abspath(cast_path),
-                 # F-d6042cf6: where the partial run is, and its named undo.
-                 "out": os.path.dirname(os.path.abspath(cast_path)),
-                 "compensator": "delete --out; owner: the executor session"})
-        rc.require_render_target_moved(
-            cast_path, _before, RenderGate,
-            {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
-             "who": "render_start_frame"})
-        gob.hide_render = True
+                f"the render differs from the empty plate over only {frac:.5f} of the image "
+                f"(floor {MIN_SUBJECT_FRAC}); the performer is not in it, and a frame of an "
+                f"empty floor would condition the whole generation", ev_cov)
+        ev_cov["verdict"] = f"subject covers {frac:.4f} of the frame"
+        ys, xs = np.nonzero(diff)
+        rendered_bbox = [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]
+        per_frame.append({
+            "index": idx, "stem": stem, "scene_frame": scene.frame_current,
+            "rgba_path": rgba_path, "flat_path": flat_path, "frame_path": frame_path,
+            "gate_alpha": gate_alpha, "gate_backdrop": gate_backdrop,
+            "gate_whole": gates_whole[idx], "extent": extents[idx],
+            "ev_cov": ev_cov, "frac": frac, "rendered_bbox": rendered_bbox,
+            "shadow": shadow,
+            "pose_signature": blender_scene.evaluated_geometry_signature(
+                subject, scene=scene),
+        })
 
-        ratio = SF.shadow_ratio(_pixels(cast_path, width, height),
-                                _pixels(lit_path, width, height))
-        # Where the figure itself stands, the "cast" render is the figure, not the floor, so
-        # its ratio is meaningless — and the figure is opaque over it anyway. Held at 1 so
-        # no silhouette-shaped artefact is baked into the backdrop.
-        ratio[alpha_plane > 0.0] = 1.0
-        shadowed = SF.apply_shadow(_pixels(backdrop, width, height), ratio)
-        shadowed_path = os.path.join(out, "plate_shadowed.png")
-        pngio.write_png(shadowed_path,
-                        np.clip(shadowed * 255.0, 0, 255).round().astype(np.uint8))
-        darkened = ratio < 0.99
-        shadow = {
-            "treatment": "authored shadow layer (ratio of two floor renders, in linear)",
-            "why_not_a_shadow_catcher": (
-                "measured 2026-08-12 on this build: Object.is_shadow_catcher exists and "
-                "EEVEE ignores it — the catcher render came back byte-identical to the "
-                "ordinary opaque floor (mean alpha 0.7105664 both) — and Cycles is not in "
-                "this build's engine list. The alternative the spec allows was shut, so "
-                "this is the branch it left"),
-            "lit_reference": {"path": lit_path, "sha256": _sha256(lit_path)},
-            "cast_reference": {"path": cast_path, "sha256": _sha256(cast_path)},
-            "shadowed_plate": {"path": shadowed_path, "sha256": _sha256(shadowed_path)},
-            "darkened_fraction_of_frame": float(darkened.any(axis=2).mean()),
-            "min_ratio": float(ratio.min()), "mean_ratio_where_darkened": (
-                float(ratio[darkened].mean()) if darkened.any() else None),
-            "held_at_one_over_the_figure": True,
-            "eps": SF.SHADOW_FLOOR_EPS,
-        }
-        backdrop_for_composite = shadowed_path
-    else:
-        backdrop_for_composite = backdrop
-
-    # ---- (3) THE SUBMITTED COMPOSITE when a plate was named: the same master, alpha-over
-    # the plate, through the compositor. Everything the performer is lit by is unchanged;
-    # what fills the void is the only thing that moves.
-    frame_path, gate_backdrop = flat_path, None
-    if backdrop:
-        wire_plate_composite(scene, backdrop_for_composite)
-        frame_path = os.path.join(out, "start_frame.png")
-        _before = rc.render_target_snapshot(frame_path)
-        scene.render.filepath = frame_path
-        render_result = bpy.ops.render.render(write_still=True)
-        # WAVE 14, F-6a9a0f72: the render operator's STATUS SET, read. Every check downstream
-        # of this call (`_pixels`, `_sha256`, `isfile`) is a property a PREVIOUS run's file at
-        # the same path satisfies; only the operator's own verdict says whether THIS call drew
-        # anything. Shape carried from `rig_bake.py`'s `if 'FINISHED' not in result`.
-        _status = _render_status(render_result)
-        if "FINISHED" not in _status:
-            raise RenderGate(
-                f"the render operator did not report FINISHED for "
-                f"{os.path.basename(frame_path)}; it returned {_status!r}, and any file at "
-                f"that path is then the previous run's",
-                {"clause": "operator_status", "status": _status,
-                 "path": os.path.abspath(frame_path),
-                 # F-d6042cf6: where the partial run is, and its named undo.
-                 "out": os.path.dirname(os.path.abspath(frame_path)),
-                 "compensator": "delete --out; owner: the executor session"})
-        rc.require_render_target_moved(
-            frame_path, _before, RenderGate,
-            {"gate": RenderGate.gate, "sub_gate": "RENDER_TARGET",
-             "who": "render_start_frame"})
-
-        void = alpha_plane < 0.5
-        sub_px = _pixels(frame_path, width, height)
-        # Against the image the compositor was actually handed. Under --shadow-layer that is
-        # the SHADOWED plate: comparing to the unshadowed one would report the shadow as a
-        # failure to deliver the plate, which is the opposite of what happened.
-        back_px = _pixels(backdrop_for_composite, width, height)
-        gate_backdrop = SF.gate_backdrop(
-            void_vs_plate_255=float(np.abs(sub_px[void] - back_px[void]).mean() * 255.0),
-            plate_vs_flat_255=float(np.abs(back_px[void] - frame_px[void]).mean() * 255.0),
-            transparent_fraction=float(void.mean()),
-            why=a.plate_why, tol_255=PLATE_TOL_255,
-            min_separation_255=PLATE_MIN_SEPARATION_255,
-            plate=backdrop_for_composite,
-            plate_sha256=_sha256(backdrop_for_composite))
-    ev_cov = {
-        "gate": RenderGate.gate, "sub_gate": "COVERAGE",    # F-6381b9ff
-        "min_fraction": MIN_SUBJECT_FRAC, "subject_fraction": frac,
-        "empty_plate": plate_path,
-        "note": ("fraction of pixels differing from an empty-plate render of the same "
-                 "camera, lights and floor with the character hidden. It INCLUDES the "
-                 "figure's shadow on the ground plane, so its bbox bounds subject+shadow "
-                 "and is a diagnostic; Gate WHOLE is what bounds the body"),
-        # F-d6042cf6: this andon fires with every render already on disk. The directory
-        # and its named undo ride the evidence, so the halt line says where the partial
-        # run is instead of leaving the docstring's compensator unread.
-        "out": os.path.abspath(out),
-        "written_so_far": sorted(f for f in os.listdir(out)
-                                 if os.path.isfile(os.path.join(out, f))),
-        "compensator": "delete --out; owner: the executor session"}
-    if frac < MIN_SUBJECT_FRAC:
-        raise RenderGate(
-            f"the render differs from the empty plate over only {frac:.5f} of the image "
-            f"(floor {MIN_SUBJECT_FRAC}); the performer is not in it, and a frame of an "
-            f"empty floor would condition the whole generation", ev_cov)
-    ev_cov["verdict"] = f"subject covers {frac:.4f} of the frame"
-
-    ys, xs = np.nonzero(diff)
-    rendered_bbox = [int(xs.min()), int(ys.min()), int(xs.max()), int(ys.max())]
-
+    first = per_frame[0]
     provenance = {
         "tool": "render_start_frame", "tool_version": TOOL_VERSION,
         "blender": blender_scene.blender_provenance(),
         "source": {"glb": os.path.abspath(a.glb), "sha256": _sha256(a.glb),
-                   "frame_index": a.frame, "scene_frame": scene.frame_current,
+                   "frame_index": first["index"], "scene_frame": first["scene_frame"],
                    "action_frame_range": list(span) if span else None,
-                   # F-33fb7947: `subject` is already `render_visible_meshes(scene,
-                   # meshes)` (bound at :434), so this measured the filtered population
-                   # before the change too - but the correctness lived in a variable
-                   # binding two hundred lines up rather than in the call, and the record
-                   # published a digest with no field saying which population produced it.
-                   # `scene=` is idempotent here and states which of the two measurements
-                   # this is, exactly as `probe_subject.py:67` already does for
-                   # `world_bounds` (F-328aaea2); `selection` says it in the record.
-                   "pose_signature":
-                       blender_scene.evaluated_geometry_signature(subject, scene=scene),
+                   "frame_indices": list(indices),
+                   "pose_signature": first["pose_signature"],
                    "pose_signature_selection": "render_visible_meshes"},
+        "sets": set_records,
         "resolution": [width, height], "fps": a.fps, "floor_drawn": bool(a.floor),
         "floor_material": floor_material,
-        # F-8b7f48a8: what --out held BEFORE this run, in the record a reader reconciles
-        # a submitted frame against. `overwrote` is `[]` on a fresh --out.
         "out_dir_pre_existed": out_dir_pre_existed,
         "overwrote": already_present,
         "unexpected_files_in_out_dir": strays,
@@ -1160,10 +1110,9 @@ def main():
                                "the world background is NO LONGER inherited — see alpha"),
             "world_background": list(composite_rgb) + [1.0],
             "key_sun_energy": 3.2, "fill_sun_energy": 1.1,
-            # the engine ACTUALLY set (F-0bf74152), never the literal: this field used to
-            # assert an identifier the tool pinned without a guard, so on a Blender where
-            # the other spelling is live the record would have named an engine that raised.
             "engine": engine, "view_transform": "Standard",
+            "sets_in_framing_solve": False,
+            "sets_in_render": bool(set_records),
             "consequence": ("on the no-control route this frame is the model's only "
                             "picture of the world, so whatever it shows is what the prompt "
                             "must either keep or replace. What it shows is now a recorded "
@@ -1175,10 +1124,11 @@ def main():
         "alpha": {
             "law": ("CLAUDE.md, the Director's ruling 2026-08-12 — authored image inputs "
                     "carry alpha, never a baked void"),
-            "authored_master": {"path": rgba_path, "sha256": _sha256(rgba_path),
+            "authored_master": {"path": first["rgba_path"],
+                                "sha256": _sha256(first["rgba_path"]),
                                 "color_mode": "RGBA", "film_transparent": True},
             "submitted_composite": {
-                "path": frame_path, "color_mode": "RGB",
+                "path": first["frame_path"], "color_mode": "RGB",
                 "backdrop": "plate" if backdrop else "flat colour",
                 "film_transparent": bool(backdrop),
                 "background_linear_rgb": list(composite_rgb),
@@ -1193,7 +1143,7 @@ def main():
                      "scene, not by hand in byte space — the sRGB transfer is the "
                      "renderer's, not this tool's"))},
             "flat_counterfactual": {
-                "path": flat_path,
+                "path": first["flat_path"],
                 "role": ("the image this route would have submitted with no plate; kept as "
                          "Gate BACKDROP's separation reference and as the COVERAGE source"
                          if backdrop else "this run submitted the flat composite itself")},
@@ -1203,9 +1153,9 @@ def main():
                                 "only: the lights, the floor geometry, the camera and the "
                                 "pose are the flat route's")}
                       if backdrop else None),
-            "shadow_layer": shadow,
-            "gate_ALPHA": gate_alpha,
-            "gate_BACKDROP": gate_backdrop},
+            "shadow_layer": first["shadow"],
+            "gate_ALPHA": first["gate_alpha"],
+            "gate_BACKDROP": first["gate_backdrop"]},
         "camera": {
             "azimuth_deg": AZIMUTH_DEG, "elevation_deg": ELEVATION_DEG,
             "lens_mm": LENS_MM, "sensor_mm": SENSOR_MM,
@@ -1216,51 +1166,111 @@ def main():
             "centre_x_frac": CENTRE_X_FRAC, "centre_y_frac": CENTRE_Y_FRAC,
             "solver_achieved": sol["achieved"], "solver_in_frame": sol["in_frame"],
             "framing_cloud": {"n_vertices": len(cloud), "n_solved_against": len(solve_cloud),
-                              "cap": FRAMING_CLOUD_CAP}},
+                              "cap": FRAMING_CLOUD_CAP,
+                              "indices_unioned": list(indices)},
+            "shared_across_pair": len(indices) > 1},
         "import_info": info,
         "outputs": {
-            "start_frame_rgba": {"path": rgba_path, "sha256": _sha256(rgba_path),
+            "start_frame_rgba": {"path": first["rgba_path"],
+                                 "sha256": _sha256(first["rgba_path"]),
                                  "role": "the authored master (RGBA)"},
-            "start_frame": {"path": frame_path, "sha256": _sha256(frame_path),
+            "start_frame": {"path": first["frame_path"],
+                            "sha256": _sha256(first["frame_path"]),
                             "role": "the submitted composite (RGB)"},
-            "start_frame_flat": ({"path": flat_path, "sha256": _sha256(flat_path),
+            "start_frame_flat": ({"path": first["flat_path"],
+                                  "sha256": _sha256(first["flat_path"]),
                                   "role": "the flat-colour composite, not submitted"}
                                  if backdrop else None),
             "empty_plate": {"path": plate_path, "sha256": _sha256(plate_path)}},
         "measured": {
-            "silhouette_extent_px": extent,
-            "rendered_subject_bbox_px": rendered_bbox,
+            "silhouette_extent_px": first["extent"],
+            "rendered_subject_bbox_px": first["rendered_bbox"],
             "rendered_bbox_includes_shadow": True,
-            "subject_fraction": frac},
+            "subject_fraction": first["frac"]},
         "gates": {
             "fps_ordering": {"verdict": "PASS", "detail": "import_glb(expected_fps)"},
-            "POSE": {"verdict": "PASS", "scene_frame": scene.frame_current,
-                     "action_frame_range": list(span) if span else None},
-            "WHOLE": gate_whole,
-            "ALPHA": gate_alpha,
-            "BACKDROP": gate_backdrop or {"verdict": "NOT APPLICABLE",
+            "POSE": {"verdict": "PASS", "scene_frame": first["scene_frame"],
+                     "action_frame_range": list(span) if span else None,
+                     "frame_indices": list(indices)},
+            "WHOLE": first["gate_whole"],
+            "ALPHA": first["gate_alpha"],
+            "BACKDROP": first["gate_backdrop"] or {"verdict": "NOT APPLICABLE",
                                           "detail": "no --plate; the void is a flat colour"},
-            "COVERAGE": ev_cov},
+            "COVERAGE": first["ev_cov"]},
         "elapsed_s": time.time() - started,
     }
+    if len(per_frame) > 1:
+        last = per_frame[-1]
+        provenance["pair"] = {
+            "kind": "FLF2V",
+            "indices": list(indices),
+            "shared": {
+                "camera": provenance["camera"],
+                "composite_why": a.composite_why,
+                "composite_rgb": list(composite_rgb),
+                "plate_sha256": _sha256(backdrop) if backdrop else None,
+                "plate_why": a.plate_why,
+                "engine": engine,
+                "sets": [{"glb": r["glb"], "sha256": r["sha256"]} for r in set_records],
+            },
+            "start": {
+                "index": first["index"], "stem": first["stem"],
+                "rgba": {"path": first["rgba_path"], "sha256": _sha256(first["rgba_path"])},
+                "submitted": {"path": first["frame_path"],
+                              "sha256": _sha256(first["frame_path"])},
+                "gate_WHOLE": first["gate_whole"]["verdict"],
+                "gate_ALPHA": first["gate_alpha"]["verdict"],
+                "gate_COVERAGE": first["ev_cov"]["verdict"],
+            },
+            "end": {
+                "index": last["index"], "stem": last["stem"],
+                "rgba": {"path": last["rgba_path"], "sha256": _sha256(last["rgba_path"])},
+                "submitted": {"path": last["frame_path"],
+                              "sha256": _sha256(last["frame_path"])},
+                "gate_WHOLE": last["gate_whole"]["verdict"],
+                "gate_ALPHA": last["gate_alpha"]["verdict"],
+                "gate_COVERAGE": last["ev_cov"]["verdict"],
+            },
+        }
+        provenance["outputs"]["end_frame_rgba"] = {
+            "path": last["rgba_path"], "sha256": _sha256(last["rgba_path"]),
+            "role": "FLF2V end authored master (RGBA)"}
+        provenance["outputs"]["end_frame"] = {
+            "path": last["frame_path"], "sha256": _sha256(last["frame_path"]),
+            "role": "FLF2V end submitted composite (RGB)"}
+        provenance["gates"]["WHOLE_end"] = last["gate_whole"]
+        provenance["gates"]["ALPHA_end"] = last["gate_alpha"]
+        provenance["gates"]["COVERAGE_end"] = last["ev_cov"]
+        provenance["gates"]["BACKDROP_end"] = last["gate_backdrop"] or {
+            "verdict": "NOT APPLICABLE", "detail": "no --plate"}
+
     side = os.path.join(out, "start_frame_provenance.json")
     with open(side, "w", encoding="utf-8") as fh:
         json.dump(provenance, fh, indent=2)
 
-    print("RENDER_START_FRAME_OK " + json.dumps({
-        "frame": frame_path, "sha256": provenance["outputs"]["start_frame"]["sha256"][:32],
-        "resolution": [width, height], "scene_frame": scene.frame_current,
-        "figure_height_frac": round(gate_whole["height_frac"], 4),
-        "smallest_margin_px": round(min(gate_whole["margins_px"].values()), 1),
-        "subject_fraction": round(frac, 4),
-        "gate_WHOLE": gate_whole["verdict"], "gate_COVERAGE": ev_cov["verdict"],
-        "gate_ALPHA": gate_alpha["verdict"],
-        "gate_BACKDROP": (gate_backdrop or {}).get("verdict", "NOT APPLICABLE"),
-        # F-8b7f48a8: two runs into one --out are distinguishable in a scrollback.
+    ok = {
+        "frame": first["frame_path"],
+        "sha256": provenance["outputs"]["start_frame"]["sha256"][:32],
+        "resolution": [width, height], "scene_frame": first["scene_frame"],
+        "figure_height_frac": round(first["gate_whole"]["height_frac"], 4),
+        "smallest_margin_px": round(min(first["gate_whole"]["margins_px"].values()), 1),
+        "subject_fraction": round(first["frac"], 4),
+        "gate_WHOLE": first["gate_whole"]["verdict"],
+        "gate_COVERAGE": first["ev_cov"]["verdict"],
+        "gate_ALPHA": first["gate_alpha"]["verdict"],
+        "gate_BACKDROP": (first["gate_backdrop"] or {}).get("verdict", "NOT APPLICABLE"),
         "out_dir_pre_existed": out_dir_pre_existed, "overwrote": already_present,
         "unexpected_files_in_out_dir": strays,
-        "provenance": side}))
+        "sets": len(set_records),
+        "frame_indices": list(indices),
+        "provenance": side,
+    }
+    if len(per_frame) > 1:
+        ok["end_frame"] = per_frame[-1]["frame_path"]
+        ok["pair"] = True
+    print("RENDER_START_FRAME_OK " + json.dumps(ok))
     return 0
+
 
 
 def _halt_keysafe(value, _seen=None):

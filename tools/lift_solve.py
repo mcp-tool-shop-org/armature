@@ -3,6 +3,9 @@
 
     blender -b -P tools\\lift_solve.py -- --glb=<rigged.glb> --manifest=<rig_manifest.json>
                                           --motion=<solved.json> --out=<lifted.glb>
+    blender -b -P tools\\lift_solve.py -- --glb=<rigged.glb> --manifest=<rig_manifest.json>
+                                          --retarget=<clip.bvh> --bone-map=<map.json>
+                                          --licence-row=<license-map-id> --out=<lifted.glb>
 
 The Blender half of E09's Stage A. `armature_core.lift_solve` turns landmarks into
 rotations with no bpy anywhere near it; this file only drives Blender with the answer,
@@ -14,6 +17,12 @@ testable without a render.
 carrying one entry per frame with `local` (bone -> 3x3) and `root` (the hips' translation
 channel). Consuming the solver's numbers verbatim rather than re-deriving them here is
 deliberate — a second implementation of the solve would be a second thing to be wrong.
+
+Wave 34 (F-97da5a40): `--retarget` imports a BVH/FBX/GLB mocap clip, maps its armature
+onto sitelist bone names through `--bone-map`, emits the same per-frame local-3x3 + root
+record, and records root-translation representation + `--licence-row` in provenance
+before any bake. Blender's importers are loaders, not retargeters
+(`docs/research-grounding-movement-library.md` §4); this mode is that missing step.
 
 --------------------------------------------------------------------------------
 Read the exit code and you will be wrong
@@ -64,7 +73,12 @@ from armature_core import blender_scene, parts, rig_gates, sitelist  # noqa: E40
 from armature_core import lift_solve as LS  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
-TOOL_VERSION = "E09.1"
+TOOL_VERSION = "E09.2"
+
+#: Root-translation representations a retarget run must name (movement-library §4).
+#: BVH gives translation only on the root; whether that channel survives the map is a
+#: retargeter setting, never a clip property — provenance must say which was chosen.
+ROOT_TRANSLATION_REPS = ("hips_delta_world", "stripped")
 
 #: A fraction of the CHARACTER'S OWN bbox diagonal, never metres. The value is the repo's
 #: existing round-trip unit (`rig_gates`, `author_walk`'s Gate A): measured there to sit
@@ -106,8 +120,9 @@ HELP_PROG = "blender -b -P tools/lift_solve.py --"
 HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
 
 
-def parse_args():
-    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+def parse_args(argv=None):
+    if argv is None:
+        argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -116,9 +131,29 @@ def parse_args():
     ap.add_argument("--manifest", required=True,
                     help="that rig's own rig_manifest.json -- the rest landmark table the "
                          "solve is expressed against, never typed in")
-    ap.add_argument("--motion", required=True,
+    ap.add_argument("--motion", default=None,
                     help="the SOLVED motion record (armature_core.lift_solve's output): "
-                         "landmarks already turned into rotations, with no bpy involved")
+                         "landmarks already turned into rotations, with no bpy involved. "
+                         "Required unless --retarget is set")
+    ap.add_argument("--retarget", default=None,
+                    help="BVH / FBX / GLB mocap clip to retarget onto the performer "
+                         "(F-97da5a40). Mutually exclusive with --motion; requires "
+                         "--bone-map and --licence-row")
+    ap.add_argument("--bone-map", default=None,
+                    help="JSON object mapping sitelist bone name -> source armature bone "
+                         "name. Required with --retarget. Unmapped sitelist bones hold "
+                         "IDENTITY")
+    ap.add_argument("--licence-row", default=None,
+                    help="license-map.md row id for the clip (required with --retarget); "
+                         "recorded in provenance before any bake")
+    ap.add_argument("--root-translation", default="hips_delta_world",
+                    choices=ROOT_TRANSLATION_REPS,
+                    help="whether hips translation from the source root survives the "
+                         "retarget (default hips_delta_world) or is stripped. Movement-"
+                         "library §4: this is a retargeter setting, not a clip property")
+    ap.add_argument("--motion-out", default=None,
+                    help="optional path to write the emitted motion-record JSON (retarget "
+                         "mode). Default: <out> with .motion.json suffix")
     ap.add_argument("--out", required=True,
                     help="the GLB to write, carrying the lifted action. Compensator: "
                          "delete it; owner: the executor session")
@@ -127,6 +162,66 @@ def parse_args():
                     help="frame rate the action is keyed at (default 16); glTF key times "
                          "are SECONDS, so this must match the record's own rate")
     return ap.parse_args(argv)
+
+
+def require_retarget_flags(args):
+    """Refuse overlapping or incomplete retarget / motion admissions (pure)."""
+    if args.motion and args.retarget:
+        raise ArmatureError(
+            "--motion and --retarget both name a performance source; pass one",
+            {"clause": "motion_and_retarget_both_set",
+             "motion": args.motion, "retarget": args.retarget})
+    if not args.motion and not args.retarget:
+        raise ArmatureError(
+            "one of --motion or --retarget is required",
+            {"clause": "motion_or_retarget_required"})
+    if args.retarget:
+        missing = [f for f, v in (("--bone-map", args.bone_map),
+                                  ("--licence-row", args.licence_row)) if not v]
+        if missing:
+            raise ArmatureError(
+                f"--retarget requires {', '.join(missing)} so the map and the licence "
+                f"row are on the record before any bake",
+                {"clause": "retarget_missing_admission", "missing": missing,
+                 "retarget": args.retarget})
+    return args
+
+
+def load_bone_map(path):
+    """Sitelist -> source bone names. Refuses unknown sitelist keys and empty maps."""
+    with open(path, encoding="utf-8") as fh:
+        raw = json.load(fh)
+    if not isinstance(raw, dict) or not raw:
+        raise ArmatureError(
+            f"--bone-map={path!r} must be a non-empty JSON object "
+            f"{{sitelist_name: source_bone_name}}",
+            {"clause": "bone_map_not_an_object", "path": os.path.abspath(path)})
+    known = set(sitelist.ALL_NAMES)
+    unknown = sorted(k for k in raw if k not in known)
+    if unknown:
+        raise ArmatureError(
+            f"--bone-map names sitelist bones this rig does not carry: {unknown}",
+            {"clause": "bone_map_unknown_sitelist_bones", "unknown": unknown,
+             "known": list(sitelist.ALL_NAMES)})
+    out = {str(k): str(v) for k, v in raw.items()}
+    return out
+
+
+def retarget_provenance(*, source_path, source_sha, bone_map, licence_row,
+                        root_translation, source_format):
+    """The provenance block every retarget bake must carry (pure; movement-library §4)."""
+    return {
+        "mode": "retarget",
+        "source_clip": {"path": os.path.abspath(source_path), "sha256": source_sha,
+                        "format": source_format},
+        "bone_map": dict(bone_map),
+        "licence_row_id": licence_row,
+        "root_translation_representation": root_translation,
+        "root_translation_note": (
+            "docs/research-grounding-movement-library.md §4 — root/hip translation is a "
+            "retargeter setting, not a clip property; this run records which setting was "
+            "chosen rather than assuming the clip arrived with traversal intact"),
+    }
 
 
 def read_rest(manifest_path):
@@ -153,6 +248,150 @@ def read_motion(path):
     frames = rec.get("frames") or []
     gate = LS.validate_motion_record(frames)
     return rec, frames, gate
+
+
+def _clip_format(path):
+    ext = os.path.splitext(path)[1].lower()
+    if ext == ".bvh":
+        return "bvh"
+    if ext == ".fbx":
+        return "fbx"
+    if ext in (".glb", ".gltf"):
+        return "gltf"
+    raise ArmatureError(
+        f"--retarget={path!r} must be a .bvh, .fbx, .glb or .gltf clip",
+        {"clause": "retarget_unsupported_format", "path": os.path.abspath(path),
+         "extension": ext})
+
+
+def import_retarget_source(path, *, expected_fps):
+    """Load a mocap clip into the current scene; return (armature_object, format, info)."""
+    fmt = _clip_format(path)
+    before_arms = {o.name for o in bpy.data.objects if o.type == "ARMATURE"}
+    abspath = os.path.abspath(path)
+    if fmt == "bvh":
+        # Blender 5.x: bpy.ops.import_anim.bvh
+        op = getattr(bpy.ops.import_anim, "bvh", None)
+        if op is None:
+            raise LiftGate(
+                "this Blender build has no import_anim.bvh operator; cannot retarget BVH",
+                {"clause": "bvh_importer_missing"})
+        result = op(filepath=abspath)
+        if "FINISHED" not in set(result):
+            raise LiftGate(
+                f"BVH import of {abspath} did not finish: {set(result)!r}",
+                {"clause": "bvh_import_failed", "path": abspath, "status": list(result)})
+        info = {"importer": "import_anim.bvh", "path": abspath}
+    elif fmt == "fbx":
+        op = getattr(bpy.ops.import_scene, "fbx", None)
+        if op is None:
+            raise LiftGate(
+                "this Blender build has no import_scene.fbx operator; cannot retarget FBX",
+                {"clause": "fbx_importer_missing"})
+        result = op(filepath=abspath)
+        if "FINISHED" not in set(result):
+            raise LiftGate(
+                f"FBX import of {abspath} did not finish: {set(result)!r}",
+                {"clause": "fbx_import_failed", "path": abspath, "status": list(result)})
+        info = {"importer": "import_scene.fbx", "path": abspath}
+    else:
+        _, arms, info = blender_scene.import_glb(abspath, expected_fps=expected_fps)
+        if len(arms) != 1:
+            raise LiftGate(
+                f"retarget GLB imported {len(arms)} armature(s); need exactly one",
+                {"clause": "retarget_glb_armature_count", "n": len(arms),
+                 "names": [a.name for a in arms]})
+        return arms[0], fmt, info
+
+    after = [o for o in bpy.data.objects
+             if o.type == "ARMATURE" and o.name not in before_arms]
+    if len(after) != 1:
+        # Some importers rename onto an existing datablock; fall back to any new-or-only.
+        arms = [o for o in bpy.data.objects if o.type == "ARMATURE"]
+        if len(arms) == 1:
+            after = arms
+        else:
+            raise LiftGate(
+                f"retarget import left {len(after)} new armature(s) "
+                f"(scene total {len(arms)}); need exactly one source armature",
+                {"clause": "retarget_source_armature_count",
+                 "new": [a.name for a in after],
+                 "all": [a.name for a in arms]})
+    return after[0], fmt, info
+
+
+def _mat3_from_matrix(M):
+    """Upper-left 3x3 of a mathutils Matrix as nested tuples."""
+    return ((float(M[0][0]), float(M[0][1]), float(M[0][2])),
+            (float(M[1][0]), float(M[1][1]), float(M[1][2])),
+            (float(M[2][0]), float(M[2][1]), float(M[2][2])))
+
+
+def _source_action_range(arm_obj):
+    """Inclusive (first, last) scene frames of the source armature's action, or None."""
+    ad = arm_obj.animation_data
+    if ad is None or ad.action is None:
+        return None
+    action = ad.action
+    frames = []
+    for fc in _action_fcurves(action):
+        for kp in fc.keyframe_points:
+            frames.append(kp.co[0])
+    if not frames:
+        return None
+    return (int(math.floor(min(frames))), int(math.ceil(max(frames))))
+
+
+def sample_retarget_frames(source_arm, bone_map, *, root_translation, scene):
+    """Read source pose into lift_solve channel frames.
+
+    For each mapped sitelist bone, the source pose-bone's `matrix_basis` rotation becomes
+    the local 3x3 (rest-relative delta on the source skeleton). Unmapped bones stay
+    IDENTITY. Hips translation is taken from the mapped hips source bone's basis location
+    when `root_translation == 'hips_delta_world'`, else stripped to (0,0,0).
+    """
+    span = _source_action_range(source_arm)
+    if span is None:
+        raise LiftGate(
+            f"retarget source armature {source_arm.name!r} carries no keyed action",
+            {"clause": "retarget_source_has_no_action",
+             "armature": source_arm.name})
+    first, last = span
+    missing_src = sorted({src for src in bone_map.values()
+                          if src not in source_arm.pose.bones})
+    if missing_src:
+        raise LiftGate(
+            f"--bone-map names source bones not on {source_arm.name!r}: {missing_src}",
+            {"clause": "bone_map_source_bone_missing", "missing": missing_src,
+             "source_bones": sorted(b.name for b in source_arm.pose.bones)})
+
+    # Rest basis locations for hips delta.
+    hips_src = bone_map.get("hips")
+    rest_hips_loc = None
+    if hips_src and root_translation == "hips_delta_world":
+        scene.frame_set(first)
+        bpy.context.view_layer.update()
+        # Capture rest as frame-first basis location (BVH rest is typically frame 1 / T).
+        pb = source_arm.pose.bones[hips_src]
+        rest_hips_loc = pb.matrix_basis.to_translation().copy()
+
+    frames = []
+    for scene_f in range(first, last + 1):
+        scene.frame_set(scene_f)
+        bpy.context.view_layer.update()
+        local = {name: [list(row) for row in LS.IDENTITY] for name in sitelist.ALL_NAMES}
+        for site, src_name in bone_map.items():
+            pb = source_arm.pose.bones[src_name]
+            local[site] = [list(row) for row in _mat3_from_matrix(pb.matrix_basis)]
+        root = [0.0, 0.0, 0.0]
+        if (hips_src and root_translation == "hips_delta_world"
+                and rest_hips_loc is not None):
+            cur = source_arm.pose.bones[hips_src].matrix_basis.to_translation()
+            root = [float(cur[i] - rest_hips_loc[i]) for i in range(3)]
+        frames.append({"frame": scene_f - first, "local": local, "root": root})
+    gate = LS.validate_motion_record(frames)
+    return frames, gate, {"first_scene_frame": first, "last_scene_frame": last,
+                          "n_frames": len(frames)}
 
 
 def pick_subject(scene):
@@ -389,18 +628,59 @@ def gate_arrived(keyed, reimported, diagonal, tol_frac=None):
 
 def main():
     started = time.time()
-    a = parse_args()
+    a = require_retarget_flags(parse_args())
     out_path = os.path.abspath(a.out)
 
-    source_sha, motion_sha = _sha256(a.glb), _sha256(a.motion)
+    source_sha = _sha256(a.glb)
     rest, man = read_rest(a.manifest)
     diagonal = float(man["bbox"]["diagonal"])
-    record, frames, gate_record = read_motion(a.motion)
 
-    # ---- the fps andon. The rate is pinned on an EMPTY scene, before the import.
-    scene = rig_character.fresh_scene(a.fps)
-    _, _, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
-    mesh_obj, arm_obj = pick_subject(scene)
+    retarget_meta = None
+    motion_sha = None
+    motion_path_abs = None
+    if a.retarget:
+        # F-97da5a40: retarget mode — map source clip onto sitelist, emit motion record,
+        # THEN key. Licence row and root-translation representation ride provenance
+        # before the bake.
+        bone_map = load_bone_map(a.bone_map)
+        clip_sha = _sha256(a.retarget)
+        scene = rig_character.fresh_scene(a.fps)
+        # Performer first so fps andon is armed before either import settles.
+        _, _, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
+        mesh_obj, arm_obj = pick_subject(scene)
+        src_arm, src_fmt, src_info = import_retarget_source(
+            a.retarget, expected_fps=a.fps)
+        frames, gate_record, span_info = sample_retarget_frames(
+            src_arm, bone_map, root_translation=a.root_translation, scene=scene)
+        retarget_meta = retarget_provenance(
+            source_path=a.retarget, source_sha=clip_sha, bone_map=bone_map,
+            licence_row=a.licence_row, root_translation=a.root_translation,
+            source_format=src_fmt)
+        retarget_meta["source_import"] = src_info
+        retarget_meta["source_span"] = span_info
+        record = {"tool": "lift_solve", "mode": "retarget",
+                  "retarget": retarget_meta, "frames": frames}
+        # Hide every MESH/ARMATURE that is not the performer so Gate OBJ and the export
+        # see only the registered subject (clip companions must not ride the bake).
+        for o in list(scene.objects):
+            if o in (mesh_obj, arm_obj):
+                continue
+            if o.type in ("MESH", "ARMATURE"):
+                o.hide_render = True
+        motion_out = (os.path.abspath(a.motion_out) if a.motion_out
+                      else os.path.splitext(out_path)[0] + ".motion.json")
+        os.makedirs(os.path.dirname(motion_out) or ".", exist_ok=True)
+        with open(motion_out, "w", encoding="utf-8") as fh:
+            json.dump(record, fh, indent=2)
+        motion_path_abs = motion_out
+        motion_sha = _sha256(motion_out)
+    else:
+        motion_sha = _sha256(a.motion)
+        motion_path_abs = os.path.abspath(a.motion)
+        record, frames, gate_record = read_motion(a.motion)
+        scene = rig_character.fresh_scene(a.fps)
+        _, _, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
+        mesh_obj, arm_obj = pick_subject(scene)
 
     gate_n_pre = rig_gates.gate_n_names(
         sorted(b.name for b in arm_obj.data.bones), sitelist.ALL_NAMES,
@@ -420,19 +700,11 @@ def main():
         "export_def_bones": False, "export_apply": False, "export_materials": "EXPORT",
     }
     # THE DIRECTORY IS CREATED HERE, immediately above the first byte (F-d47095fa).
-    # It used to sit at line 295 of `main()`, with 3 named refusal(s) stranded between
-    # the two (307, 310, 315) -- none of which needs the directory. A run refused by any of
-    # them left an empty output directory behind, which a reader scanning `outputs/` or
-    # a re-run into the same `--out` reads as an attempt that produced nothing rather
-    # than one that was refused. Pinned by `tests/test_instruments_amend_w10.py::
-    # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`.
     os.makedirs(os.path.dirname(out_path), exist_ok=True)  # scripts make their own dirs
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
-    # WAVE 14, F-6a9a0f72: snapshot before, status set captured, both handed to the gate.
     before_glb = rig_character.export_target_snapshot(out_path)
     export_result = bpy.ops.export_scene.gltf(
         **{k: v for k, v in wanted.items() if k in props})
-    # F-9b2d4106, family carry: one implementation, `rig_character.gate_glb_written`.
     gate_glb = rig_character.gate_glb_written(
         out_path, result=export_result, before=before_glb, what="the lifted GLB")
 
@@ -448,31 +720,44 @@ def main():
 
     out_sha = _sha256(out_path)
     side = os.path.splitext(out_path)[0] + ".lift.json"
+    side_body = {
+        "tool": "lift_solve", "tool_version": TOOL_VERSION,
+        "solver_version": LS.TOOL_VERSION,
+        "mode": "retarget" if a.retarget else "motion",
+        "blender": blender_scene.blender_provenance(),
+        "source": {"glb": os.path.abspath(a.glb), "sha256": source_sha,
+                   "manifest": os.path.abspath(a.manifest),
+                   "motion": motion_path_abs, "motion_sha256": motion_sha},
+        "output": {"glb": out_path, "sha256": out_sha,
+                   "bytes": os.path.getsize(out_path)},
+        "import_info": info, "fps": a.fps, "frames": len(frames),
+        "duration_s": len(frames) / float(a.fps), "n_fcurves": n_curves,
+        "motion_provenance": {k: v for k, v in record.items() if k != "frames"},
+        "gates": {"fps_ordering": {"verdict": "PASS",
+                                   "detail": "import_glb(expected_fps)"},
+                  "MOTION_RECORD": gate_record,
+                  "N_pre": gate_n_pre, "N_post": gate_n_post, "OBJ": gate_obj,
+                  "SPACE": gate_space, "ARRIVED": gate_a,
+                  "GLB_written": gate_glb},
+        "elapsed_s": time.time() - started,
+    }
+    if retarget_meta is not None:
+        side_body["retarget"] = retarget_meta
+        side_body["source"]["retarget_clip"] = retarget_meta["source_clip"]
+        side_body["source"]["licence_row_id"] = retarget_meta["licence_row_id"]
+        side_body["source"]["root_translation_representation"] = (
+            retarget_meta["root_translation_representation"])
     with open(side, "w", encoding="utf-8") as fh:
-        json.dump({
-            "tool": "lift_solve", "tool_version": TOOL_VERSION,
-            "solver_version": LS.TOOL_VERSION,
-            "blender": blender_scene.blender_provenance(),
-            "source": {"glb": os.path.abspath(a.glb), "sha256": source_sha,
-                       "manifest": os.path.abspath(a.manifest),
-                       "motion": os.path.abspath(a.motion), "motion_sha256": motion_sha},
-            "output": {"glb": out_path, "sha256": out_sha,
-                       "bytes": os.path.getsize(out_path)},
-            "import_info": info, "fps": a.fps, "frames": len(frames),
-            "duration_s": len(frames) / float(a.fps), "n_fcurves": n_curves,
-            "motion_provenance": {k: v for k, v in record.items() if k != "frames"},
-            "gates": {"fps_ordering": {"verdict": "PASS",
-                                       "detail": "import_glb(expected_fps)"},
-                      "MOTION_RECORD": gate_record,
-                      "N_pre": gate_n_pre, "N_post": gate_n_post, "OBJ": gate_obj,
-                      "SPACE": gate_space, "ARRIVED": gate_a,
-                      "GLB_written": gate_glb},
-            "elapsed_s": time.time() - started,
-        }, fh, indent=2)
+        json.dump(side_body, fh, indent=2)
 
-    print("LIFT_SOLVE_OK " + json.dumps({
+    ok = {
         "glb": out_path, "sha256": out_sha, "frames": len(frames), "fps": a.fps,
-        "fcurves": n_curves, "gate_ARRIVED": gate_a["verdict"], "sidecar": side}))
+        "fcurves": n_curves, "gate_ARRIVED": gate_a["verdict"], "sidecar": side,
+        "mode": side_body["mode"],
+    }
+    if motion_path_abs:
+        ok["motion"] = motion_path_abs
+    print("LIFT_SOLVE_OK " + json.dumps(ok))
     return 0
 
 
