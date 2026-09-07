@@ -14,7 +14,7 @@ import os
 
 import pytest
 
-from conftest import TOOLS, REPO  # noqa: F401
+from conftest import TOOLS, REPO, requires_bank  # noqa: F401
 import build_t2v_payload as B
 from armature_core import route_gates as RG
 
@@ -28,10 +28,7 @@ BANK = os.path.join(REPO, "outputs", "E09", "route2")
 #: must skip the byte-level citation checks rather than fail — but it must SAY it skipped,
 #: which is what a skip reason is for.
 _banked = os.path.isdir(BANK)
-needs_bank = pytest.mark.skipif(
-    not _banked, reason=f"the fetched reference documents are not present at {BANK}; "
-                        f"re-fetch them before quoting this experiment's values")
-
+needs_bank = requires_bank(BANK, lever="outputs/")
 
 def test_the_default_profile_is_the_one_a3_authorises():
     """A silent default that produced the superseded trajectory is exactly the defect this

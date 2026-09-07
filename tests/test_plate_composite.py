@@ -22,13 +22,9 @@ import subprocess
 
 import pytest
 
-from conftest import BLENDER, REPO
+from conftest import BLENDER, REPO, requires_blender
 
-pytestmark = pytest.mark.skipif(
-    not os.path.isfile(BLENDER),
-    reason=(f"Blender not found at {BLENDER}; set ARMATURE_BLENDER to your blender "
-            "executable to run these"),
-)
+pytestmark = requires_blender()
 
 SCRIPT = os.path.join(REPO, "tests", "blender", "check_plate_composite.py")
 

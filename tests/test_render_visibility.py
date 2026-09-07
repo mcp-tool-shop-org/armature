@@ -12,18 +12,13 @@ import subprocess
 
 import pytest
 
-from conftest import BLENDER, REPO
+from conftest import BLENDER, REPO, requires_blender
 
 #: Scoped to the tests that actually subprocess Blender. This was a module-level
 #: `pytestmark`, which took the static censuses below down with it — and those are the half
 #: that has to run on CI, where there is no Blender at all. A census skipped wherever it
 #: would matter polices nothing.
-needs_blender = pytest.mark.skipif(
-    not os.path.isfile(BLENDER),
-    reason=(f"Blender not found at {BLENDER}; set ARMATURE_BLENDER to your blender "
-            "executable to run these"),
-)
-
+needs_blender = requires_blender()
 SCRIPT = os.path.join(REPO, "tests", "blender", "check_visibility.py")
 
 

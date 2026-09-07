@@ -25,8 +25,9 @@ from conftest import REPO
 
 LAUNCHER = os.path.join(REPO, "npm", "bin", "armature.mjs")
 NODE = shutil.which("node")
-requires_node = pytest.mark.skipif(NODE is None, reason="the launcher is Node; none on PATH")
-
+requires_node = pytest.mark.skipif(
+    NODE is None,
+    reason="the launcher is node; none on PATH — install node or put it on PATH")
 
 def _launch(args, **env):
     return subprocess.run(

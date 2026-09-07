@@ -37,6 +37,7 @@ import pytest
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 
 import sheet_compose as SC  # noqa: E402
+from conftest import requires_fonts  # noqa: E402
 
 
 @pytest.fixture(autouse=True)
@@ -158,10 +159,8 @@ HAS_A_PERMITTED_FACE = _machine_has_a_permitted_face()
 
 #: The machine condition, and nothing else. A regression in `sheet_compose` cannot reach
 #: this mark: it is evaluated once at import against the unpatched module.
-requires_a_permitted_face = pytest.mark.skipif(
-    not HAS_A_PERMITTED_FACE,
-    reason=("this machine has none of the permitted faces (arial / LiberationSans / "
-            "NotoSans) in ARMATURE_FONT_DIR or any platform font directory"))
+#: Wave 35, F-4515289b — same reason vocabulary as conftest.requires_fonts().
+requires_a_permitted_face = requires_fonts()
 
 
 @requires_a_permitted_face

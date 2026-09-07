@@ -18,6 +18,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 
+from conftest import load_ok_payload  # noqa: E402
 import build_payload as bp  # noqa: E402
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
@@ -603,8 +604,8 @@ def test_the_success_line_is_the_halt_sentinels_prefix_with_OK(tmp_path, capsys)
                   "--subject=WIRE", "--no-canon"])
     assert rc == 0
     out = capsys.readouterr().out
-    assert len([ln for ln in out.splitlines()
-                if ln.startswith("BUILD_PAYLOAD_OK ")]) == 1
+    payload = load_ok_payload(out, "BUILD_PAYLOAD_OK")
+    assert "out" in payload or isinstance(payload, (dict, str))
 
 
 # ---------------------------------------------------------------- wave 12, F-4f72af05

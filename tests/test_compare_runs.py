@@ -19,6 +19,7 @@ The module still reports rather than halting on a nonzero difference — that is
 design. What raises is having compared nothing, which is not a measurement at all.
 """
 
+import json
 import os
 import sys
 
@@ -28,6 +29,7 @@ from PIL import Image
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools"))
 
+from conftest import load_ok_payload  # noqa: E402
 import compare_runs as CR  # noqa: E402
 
 
@@ -370,8 +372,7 @@ def test_out_written_in_either_form_leaves_a_file_on_disk(tmp_path, form, capsys
     assert written["verdict_inputs"]["frames_compared"] == 2
     printed = capsys.readouterr().out
     # SUCCESS convention: exit 0 AND a line naming the artifact the run produced.
-    assert printed.startswith("COMPARE_RUNS_OK ")
-    line = json.loads(printed[len("COMPARE_RUNS_OK "):])
+    line = load_ok_payload(printed, "COMPARE_RUNS_OK")
     assert os.path.abspath(line["report"]) == os.path.abspath(str(out))
 
 

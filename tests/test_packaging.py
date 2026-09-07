@@ -34,10 +34,10 @@ import pytest
 import requests.utils
 
 import _census_nodes as CN
-from conftest import REPO  # noqa: F401  (puts tools/ on sys.path)
+from conftest import GIT, REPO
+from conftest import requires_git as _requires_git  # noqa: F401  (puts tools/ on sys.path)
 
 CORE = os.path.join(REPO, "tools", "armature_core")
-GIT = os.environ.get("ARMATURE_GIT", "git")
 
 
 # -- 1. declared dependencies ------------------------------------------------------------
@@ -399,21 +399,7 @@ def _check_ignore(paths):
     return {p: matched.get(p) for p in paths}
 
 
-def _git_present():
-    try:
-        return subprocess.run(
-            [GIT, "--version"], capture_output=True, timeout=30
-        ).returncode == 0
-    except OSError:
-        return False
-
-
-requires_git = pytest.mark.skipif(
-    not _git_present(),
-    reason=(f"git not found via ARMATURE_GIT={GIT!r}; set ARMATURE_GIT to your git "
-            "executable (default 'git' on PATH) — the ignore list can only be read "
-            "through it"),
-)
+requires_git = _requires_git()
 
 CREDENTIAL_SHAPED = [
     ".npmrc",

@@ -587,12 +587,24 @@ def test_the_argv_smoke_population_is_the_plate_parsing_population():
 # five; PAID is the sibling population. The two boundary payload tools that joined the
 # CLI population the same wave (`build_submit_payload`, `build_uploads_payload`) carry
 # dry-run SUCCESS fixtures too, so the gap stays at 47 rather than growing with them.
+#
+# WAVE 35, F-8c52638d: the seven measure_* CLIs move into
+# `tests/test_measure_argv_smoke.MEASURE`, so the gap shrinks 47 -> 40.
+# WAVE 35, F-f1f4cfaa: extended CPython sheets join EXTENDED_SHEETS (see below), shrinking
+# further; blender_reach sheets join BLENDER_SHEET_SUCCESS under the stub.
 
 
 import test_paid_argv_smoke as _PAID_SMOKE  # noqa: E402
+import test_measure_argv_smoke as _MEASURE_SMOKE  # noqa: E402
+import test_extended_sheet_argv_smoke as _EXT_SHEET_SMOKE  # noqa: E402
 
 PAID_SUCCESS = set(_PAID_SMOKE.PAID)
-NO_SUCCESS_FIXTURE = sorted(set(CLI_TOOLS) - set(SHEETS) - PAID_SUCCESS)
+MEASURE_SUCCESS = set(_MEASURE_SMOKE.MEASURE)
+EXTENDED_SHEETS = set(_EXT_SHEET_SMOKE.EXTENDED_SHEETS)
+BLENDER_SHEET_SUCCESS = set(_EXT_SHEET_SMOKE.BLENDER_SHEET_SUCCESS)
+NO_SUCCESS_FIXTURE = sorted(
+    set(CLI_TOOLS) - set(SHEETS) - PAID_SUCCESS - MEASURE_SUCCESS
+    - EXTENDED_SHEETS - BLENDER_SHEET_SUCCESS)
 
 #: The members of `CLI_TOOLS` that cannot be driven from a CPython process at all, keyed on
 #: the BEHAVIOUR "runs under Blender" (`blender_stub.blender_reach`, wave 12 F-6b3040d1) and
@@ -610,19 +622,26 @@ CPYTHON_CLI_TOOLS = _cpython_cli_tools()
 
 
 def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
-    """47 of 69 after wave 34 (was 62 of 67 on 2026-09-04; population grew by the two
-    boundary payload tools, covered by dry-run SUCCESS fixtures so the gap does not grow).
-    A fixture added moves a tool out of this set and into SHEETS or PAID_SUCCESS; nothing
-    may move the other way."""
-    covered = set(SHEETS) | PAID_SUCCESS
+    """29 of 69 after wave 35 (was 47 of 69 after wave 34 paid SUCCESS; measure + extended
+    sheets shrink further). A fixture added moves a tool out of this set; nothing may move
+    the other way."""
+    covered = (set(SHEETS) | PAID_SUCCESS | MEASURE_SUCCESS
+               | EXTENDED_SHEETS | BLENDER_SHEET_SUCCESS)
     assert set(NO_SUCCESS_FIXTURE) | covered == set(CLI_TOOLS)
     assert set(SHEETS) <= set(CLI_TOOLS), sorted(set(SHEETS) - set(CLI_TOOLS))
     assert PAID_SUCCESS <= set(CLI_TOOLS), sorted(PAID_SUCCESS - set(CLI_TOOLS))
-    assert len(NO_SUCCESS_FIXTURE) <= 47, (
+    assert MEASURE_SUCCESS <= set(CLI_TOOLS), sorted(MEASURE_SUCCESS - set(CLI_TOOLS))
+    assert EXTENDED_SHEETS <= set(CLI_TOOLS), sorted(EXTENDED_SHEETS - set(CLI_TOOLS))
+    assert BLENDER_SHEET_SUCCESS <= set(CLI_TOOLS), sorted(
+        BLENDER_SHEET_SUCCESS - set(CLI_TOOLS))
+    assert len(NO_SUCCESS_FIXTURE) <= 29, (
         f"{len(NO_SUCCESS_FIXTURE)} command-line tools have no end-to-end success fixture; "
-        f"47 was the count after wave 34's paid SUCCESS fixtures and it may only fall: "
-        f"{NO_SUCCESS_FIXTURE}")
+        f"29 was the count after wave 35's measure + extended sheet SUCCESS fixtures and "
+        f"it may only fall: {NO_SUCCESS_FIXTURE}")
     assert len(PAID_SUCCESS) == 17, sorted(PAID_SUCCESS)
+    assert len(MEASURE_SUCCESS) == 7, sorted(MEASURE_SUCCESS)
+    assert len(EXTENDED_SHEETS) == 7, sorted(EXTENDED_SHEETS)
+    assert len(BLENDER_SHEET_SUCCESS) == 4, sorted(BLENDER_SHEET_SUCCESS)
 
 
 def test_the_blender_side_of_the_cli_population_is_the_one_that_cannot_be_driven_here():

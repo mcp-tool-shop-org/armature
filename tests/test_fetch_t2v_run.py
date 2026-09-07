@@ -23,7 +23,7 @@ import subprocess
 
 import pytest
 
-from conftest import TOOLS  # noqa: F401
+from conftest import TOOLS, load_ok_payload  # noqa: F401
 import fetch_t2v_run as T
 
 
@@ -358,7 +358,7 @@ def test_a_complete_fetch_still_prints_fetch_ok(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
     rc = T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={tmp_path / 'run'}"])
     assert rc == 0
-    line = json.loads(capsys.readouterr().out.split("FETCH_T2V_OK ", 1)[1])
+    line = load_ok_payload(capsys.readouterr().out, "FETCH_T2V_OK")
     assert line["frames"] == 3
 
 
