@@ -13,7 +13,7 @@ import subprocess
 
 import pytest
 
-from conftest import TOOLS  # noqa: F401
+from conftest import TOOLS, load_ok_payload  # noqa: F401
 import fetch_run as F
 
 
@@ -281,7 +281,7 @@ def test_the_printed_download_counts_come_from_the_plan_not_from_the_directory(
     dump = _dump(tmp_path, [_result("302", i) for i in range(3)]
                  + [_result("301", i) for i in range(2)])
     F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
-    line = json.loads(capsys.readouterr().out.split("FETCH_RUN_OK ", 1)[1])
+    line = load_ok_payload(capsys.readouterr().out, "FETCH_RUN_OK")
     assert line["by_node"] == {"302": 3, "301": 2}
     assert line["downloaded"] == {"lossless": 3, "batchprobe": 2}
 
@@ -342,7 +342,7 @@ def test_the_printed_video_list_comes_from_the_plan_not_from_a_listdir(
     dump = _dump(tmp_path, [_result("302", i) for i in range(2)]
                  + [_result("114", 0, ext=".mp4")])
     F.main([f"--dump={dump}", "--run=r", f"--root={tmp_path / 'runs'}"])
-    line = json.loads(capsys.readouterr().out.split("FETCH_RUN_OK ", 1)[1])
+    line = load_ok_payload(capsys.readouterr().out, "FETCH_RUN_OK")
     assert line["video"] == ["r_00000.mp4"]
 
 

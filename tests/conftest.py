@@ -64,10 +64,114 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLENDER = os.environ.get(
     "ARMATURE_BLENDER", r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 )
+GIT = os.environ.get("ARMATURE_GIT", "git")
+
+#: Wave 35, F-4515289b — skip-family levers named in this module's docstring. Every
+#: `pytest.mark.skipif` reason in tests/** must name one of these (or sit on the
+#: shrinking exemption list in `tests/test_skip_lever_census.py`).
+SKIP_LEVER_VOCABULARY = (
+    "ARMATURE_BLENDER",
+    "ARMATURE_GIT",
+    "ARMATURE_FONT_DIR",
+    "bash",
+    "node",
+    "record-index",
+    "record_index",
+    "PYTHONPATH",
+    "outputs/",
+    "gitignored",
+    "facet",
+    "platform",
+    "Windows",
+    "POSIX",
+    "PowerShell",
+    "Pillow",
+    "trove",
+    "npm",
+)
+
+
+def _git_on_path():
+    import shutil
+    import subprocess
+
+    exe = GIT if os.path.isabs(GIT) or os.path.sep in GIT else shutil.which(GIT)
+    if not exe:
+        return False
+    try:
+        return subprocess.run(
+            [exe, "--version"], capture_output=True, timeout=30
+        ).returncode == 0
+    except OSError:
+        return False
+
+
+def requires_blender():
+    """Skip when `ARMATURE_BLENDER` does not resolve to an executable file."""
+    return pytest.mark.skipif(
+        not os.path.isfile(BLENDER),
+        reason=(f"Blender not found at {BLENDER}; set ARMATURE_BLENDER to your blender "
+                "executable to run these"),
+    )
+
+
+def requires_git():
+    """Skip when `ARMATURE_GIT`/`git` is not runnable."""
+    return pytest.mark.skipif(
+        not _git_on_path(),
+        reason=(f"git not found via ARMATURE_GIT={GIT!r}; set ARMATURE_GIT to your git "
+                "executable (default 'git' on PATH) — the ignore list can only be read "
+                "through it"),
+    )
+
+
+def _permitted_face_present():
+    """True when sheet_compose can resolve arial on this machine (unpatched)."""
+    try:
+        import sheet_compose as SC
+    except Exception:
+        return False
+    env = getattr(SC, "FONT_ENV", "ARMATURE_FONT_DIR")
+    saved = os.environ.pop(env, None)
+    try:
+        if hasattr(SC, "clear_font_index"):
+            SC.clear_font_index()
+        SC.resolve_font_path("arial.ttf")
+        return True
+    except Exception:
+        return False
+    finally:
+        if saved is not None:
+            os.environ[env] = saved
+        if hasattr(SC, "clear_font_index"):
+            SC.clear_font_index()
+
+
+def requires_fonts():
+    """Skip when no permitted face is under `ARMATURE_FONT_DIR` or a platform font dir."""
+    return pytest.mark.skipif(
+        not _permitted_face_present(),
+        reason=("this machine has none of the permitted faces (arial / LiberationSans / "
+                "NotoSans) in ARMATURE_FONT_DIR or any platform font directory"),
+    )
+
+
+def requires_bank(path, *, lever="outputs/"):
+    """Skip when a gitignored bank / sibling path is absent — reason names the lever."""
+    return pytest.mark.skipif(
+        not os.path.exists(path),
+        reason=(f"banked path {path!r} is not present ({lever} is gitignored / rig-local); "
+                f"re-fetch or mount it before quoting this experiment's values"),
+    )
 
 
 def load_ok_payload(text, prefix="SAVED_ADMISSION_OK"):
-    """Parse a builders OK receipt: one-line JSON or sentinel + pretty body (wave 32)."""
+    """Parse a builders OK receipt: one-line JSON or sentinel + pretty body (wave 32).
+
+    Wave 35, F-a048ef6f — the ONE receipt reader for `*_OK` sentinels. Call sites that
+    hand-roll `startswith`/`split` against an OK token belong on the shrinking exemption
+    list in `tests/test_ok_payload_adoption.py` or must migrate here.
+    """
     lines = text.splitlines()
     for i, ln in enumerate(lines):
         if ln.startswith(prefix + " "):
@@ -83,6 +187,8 @@ def load_ok_payload(text, prefix="SAVED_ADMISSION_OK"):
                     except json.JSONDecodeError:
                         continue
                 raise AssertionError(f"{prefix}: truncated JSON on sentinel line")
+            # Non-JSON remainder (path-only receipts): return the rest as a string payload.
+            return rest
         if ln == prefix:
             acc = []
             for cont in lines[i + 1:]:
@@ -94,6 +200,9 @@ def load_ok_payload(text, prefix="SAVED_ADMISSION_OK"):
                 except json.JSONDecodeError:
                     continue
             raise AssertionError(f"{prefix}: no JSON body after sentinel")
+        # `CAST_SHEET_OK path (w, h) font=...` — sentinel as first whitespace token.
+        if ln.split(" ", 1)[0] == prefix and " " in ln:
+            return ln[len(prefix) + 1:]
     raise AssertionError(f"missing {prefix}")
 
 
@@ -675,12 +784,15 @@ def _module_marker_names(path):
             or stem.startswith("test_gate_saved") or stem.startswith("test_gate_b")
             or stem in ("test_assembly", "test_cascade", "test_r2v_payload",
                         "test_canon_spend", "test_route_gates", "test_paid_argv_smoke",
-                        "test_api_fixture_bank", "test_encode_control")):
+                        "test_api_fixture_bank", "test_encode_control",
+                        "test_fake_comfy")):
         marks.add("paid")
-    if stem.startswith("test_measure_") or stem.startswith("test_instruments_measure"):
+    if (stem.startswith("test_measure_") or stem.startswith("test_instruments_measure")
+            or stem == "test_measure_argv_smoke"):
         marks.add("measure")
     if ("sheet" in stem or stem in ("test_sheet_compose", "test_sheet_pairing",
                                     "test_sheet_sides", "test_sheet_argv_smoke",
+                                    "test_extended_sheet_argv_smoke",
                                     "test_e13_sheet")):
         marks.add("sheet")
     if (stem.startswith("test_blender") or stem.startswith("test_render_")

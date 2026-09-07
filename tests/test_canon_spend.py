@@ -15,7 +15,7 @@ import pytest
 from armature_core import canon as C
 from armature_core.errors import GateCanon
 
-from conftest import upload_record
+from conftest import load_ok_payload, upload_record
 from test_canon import COVERED, FIXTURES, TEST_CENSUS
 
 TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
@@ -185,8 +185,8 @@ def test_a_canon_gate_success_prints_the_OK_sentinel(tmp_path, capsys):
                    "--out", str(tmp_path / "ok")])
     assert rc == 0
     out = capsys.readouterr().out
-    assert len([ln for ln in out.splitlines()
-                if ln.startswith("CANON_GATE_OK ")]) == 1, out
+    payload = load_ok_payload(out, "CANON_GATE_OK")
+    assert payload is not None
 
 
 # ---------------------------------------------------------------------------------------
