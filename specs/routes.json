@@ -1,0 +1,181 @@
+{
+  "catalog": "armature spend-path route index",
+  "updated": "2026-09-06",
+  "note": "Machine-readable operator index: experiment → builder → seeds → admission defaults → fetch profile. Narrative lives in docs/experiments/; this file is what a seat lists before spending. Wave 35, F-fb6e1577 / F-dfbc5d79.",
+  "fetch_profiles": "tools/fetch_run.py::ROUTE_FETCH_PROFILES",
+  "dispatcher": "tools/build_routes_payload.py",
+  "routes": [
+    {
+      "id": "E02",
+      "experiment": "E02",
+      "status": "live",
+      "builder": "tools/build_payload.py",
+      "seeds": null,
+      "admission": {"experiment": "E02", "stage": "control"},
+      "fetch_profile": "e02",
+      "notes": "General per-experiment builder; --experiment picks the trajectory table."
+    },
+    {
+      "id": "E03",
+      "experiment": "E03",
+      "status": "live",
+      "builder": "tools/build_payload.py",
+      "seeds": null,
+      "admission": {"experiment": "E03", "stage": "authored-motion"},
+      "fetch_profile": "e02",
+      "notes": "Control specs under specs/E03-*.json; builder is build_payload."
+    },
+    {
+      "id": "E04",
+      "experiment": "E04",
+      "status": "live",
+      "builder": "tools/build_payload.py",
+      "seeds": null,
+      "admission": {"experiment": "E04", "stage": "between-generation-floor"},
+      "fetch_profile": "e02",
+      "notes": "Uses build_payload trajectory table."
+    },
+    {
+      "id": "E06",
+      "experiment": "E06",
+      "status": "live",
+      "builder": "tools/build_payload.py",
+      "seeds": null,
+      "admission": {"experiment": "E06", "stage": "reference-onto-schematic"},
+      "fetch_profile": "e02",
+      "notes": "Uses build_payload trajectory table."
+    },
+    {
+      "id": "E08",
+      "experiment": "E08",
+      "status": "live",
+      "builder": "tools/build_animate_payload.py",
+      "seeds": "specs/E08-seeds.json",
+      "admission": {"experiment": "E08", "stage": "probe"},
+      "fetch_profile": "animate",
+      "notes": "WanAnimate route; default length 65."
+    },
+    {
+      "id": "E09",
+      "experiment": "E09",
+      "status": "live",
+      "builder": "tools/build_t2v_payload.py",
+      "seeds": "specs/E09-A3-seeds.json",
+      "admission": {"experiment": "E09", "stage": "B2"},
+      "fetch_profile": "t2v",
+      "fetch_tool": "tools/fetch_t2v_run.py",
+      "notes": "T2V A3; Gate ORDER via fetch_t2v_run. Also specs/E09-seeds.json for earlier stage."
+    },
+    {
+      "id": "E10",
+      "experiment": "E10",
+      "status": "live",
+      "builder": "tools/build_animate_payload.py",
+      "seeds": "specs/E10-seeds.json",
+      "admission": {"experiment": "E10", "stage": "densified"},
+      "fetch_profile": "animate",
+      "notes": "Densified driving: same animate builder at length 81. SEEDS_REGISTRY_BY_EXPERIMENT['E10'] binds Gate S (F-cb85098b)."
+    },
+    {
+      "id": "E11",
+      "experiment": "E11",
+      "status": "live",
+      "builder": "tools/build_i2v_payload.py",
+      "seeds": "specs/E11-seeds.json",
+      "admission": {"experiment": "E11", "stage": "probe"},
+      "fetch_profile": "i2v",
+      "notes": "No-control i2v route."
+    },
+    {
+      "id": "E12",
+      "experiment": "E12",
+      "status": "live",
+      "builder": "tools/build_camera_i2v_payload.py",
+      "seeds": "specs/E12-seeds.json",
+      "admission": {"experiment": "E12", "stage": "camera"},
+      "fetch_profile": "camera_i2v",
+      "notes": "Camera i2v; E14 LoRA arms measure against this baseline."
+    },
+    {
+      "id": "E13",
+      "experiment": "E13",
+      "status": "live",
+      "builder": "tools/build_r2v_payload.py",
+      "seeds": "specs/E13-seeds.json",
+      "admission": {"experiment": "E13", "stage": "composed"},
+      "fetch_profile": "r2v",
+      "related": ["tools/build_assembly_payload.py", "tools/build_cascade_payload.py"],
+      "notes": "Composed r2v; assembly/cascade author the A2 reference VIDEO."
+    },
+    {
+      "id": "E14",
+      "experiment": "E14",
+      "status": "live",
+      "builder": "tools/build_lora_arm_payload.py",
+      "seeds": "specs/E14-seeds.json",
+      "admission": {"experiment": "E14", "stage": "lora-bakeoff"},
+      "fetch_profile": "lora_arm",
+      "notes": "Style LoRA on E12 baseline."
+    },
+    {
+      "id": "E05",
+      "experiment": "E05",
+      "status": "narrative-only",
+      "builder": null,
+      "seeds": null,
+      "admission": null,
+      "fetch_profile": null,
+      "notes": "docs/experiments/E05-control-strength.md — no owned builder EXPERIMENT id."
+    },
+    {
+      "id": "E07",
+      "experiment": "E07",
+      "status": "narrative-only",
+      "builder": null,
+      "seeds": null,
+      "admission": null,
+      "fetch_profile": null,
+      "notes": "docs/experiments/E07-* — no owned builder EXPERIMENT id."
+    },
+    {
+      "id": "admit",
+      "experiment": null,
+      "status": "tool",
+      "builder": "tools/gate_saved_graph.py",
+      "seeds": null,
+      "admission": null,
+      "fetch_profile": null,
+      "notes": "Last gate before paid submission. experiment/stage from --record when present."
+    },
+    {
+      "id": "fetch",
+      "experiment": null,
+      "status": "tool",
+      "builder": "tools/fetch_run.py",
+      "seeds": null,
+      "admission": null,
+      "fetch_profile": null,
+      "notes": "Post-credit retrieval; --route table or --record recipe. t2v → fetch_t2v_run."
+    },
+    {
+      "id": "submit",
+      "experiment": null,
+      "status": "tool",
+      "builder": "tools/build_submit_payload.py",
+      "seeds": null,
+      "admission": null,
+      "fetch_profile": null,
+      "notes": "Sanctioned Comfy Cloud submitter; dry-run / refuse without admission."
+    },
+    {
+      "id": "uploads",
+      "experiment": null,
+      "status": "tool",
+      "builder": "tools/build_uploads_payload.py",
+      "seeds": null,
+      "admission": null,
+      "fetch_profile": null,
+      "notes": "Authors --uploads maps for i2v/camera/animate/assembly/cascade/r2v_a2."
+    }
+  ]
+}

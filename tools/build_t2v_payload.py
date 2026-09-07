@@ -116,7 +116,8 @@ from armature_core.errors import ArmatureError  # noqa: E402
 # no longer referenced here are dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
     SeedRegistrationError, canonical_payload_digest, comfy_cloud_oss_disclosure,
-    disclosure_lines, fetch_recipe, read_seed_registration, single_path_segment)
+    disclosure_lines, fetch_recipe, gate_output_not_overwritten,
+    read_seed_registration, single_path_segment)
 from canon_gate import canon_line, canon_spend  # noqa: E402
 
 class PayloadError(ArmatureError):
@@ -523,7 +524,12 @@ def main(argv=None):
                          "the list the default seed is taken from (default: %(default)s)")
     output_opts.add_argument("--out", default="outputs/E09/route2",
                     help="the directory the graph and its payload record are written into "
-                         "(default: %(default)s)")
+                         "(default: %(default)s); an existing build there is refused "
+                         "unless --overwrite is passed")
+    output_opts.add_argument("--overwrite", action="store_true",
+                    help="replace an existing graph/record pair in --out. Without it a "
+                         "rebuild over an earlier build refuses by name "
+                         "(`output_already_exists`) and names both digests")
     build_opts.add_argument("--seed", type=int, default=None,
                     help="which registered seed to use; defaults to the first")
     build_opts.add_argument("--profile", default="reference", choices=["reference", "derived"],
@@ -618,8 +624,12 @@ def main(argv=None):
     # directory beside real ones under `outputs/E09/route2`, to be read later as a run that
     # happened. build_payload.py states the invariant and the other five builders were
     # moved below their last gate on 2026-09-03; this was the sixth.
-    os.makedirs(a.out, exist_ok=True)        # scripts create their own output directories
     graph_path = os.path.join(a.out, f"E09-B2-{a.tag}-t2v.api.json")
+    record_path = os.path.join(a.out, f"E09-B2-{a.tag}-payload-record.json")
+    # Wave 35, F-0bd5c9c9: refuse a silent replace before any write.
+    gate_overwrite = gate_output_not_overwritten(
+        [graph_path, record_path], a.out, a.overwrite, PayloadError, gate="PAYLOAD")
+    os.makedirs(a.out, exist_ok=True)        # scripts create their own output directories
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(graph, fh, indent=2, ensure_ascii=False)
     graph_sha = hashlib.sha256(open(graph_path, "rb").read()).hexdigest()
@@ -703,8 +713,11 @@ def main(argv=None):
         "probe_prompt_for_comparison": PROBE_PROMPT,
         "negative_prompt_verbatim": negative_source(),
         "seed": seed,
-        "seed_registration": {"file": os.path.abspath(a.seeds), "registered": registered},
-        "gates": {"ROUTE": gate_route, "S": gate_s, "L": gate_l, "CANON": canon_ev},
+        "seed_registration": {"file": os.path.abspath(a.seeds), "registered": list(registered)},
+        "gates": {"ROUTE": gate_route, "S": gate_s, "L": gate_l, "CANON": canon_ev,
+                  "PAYLOAD_overwrite": gate_overwrite},
+        "out_dir_pre_existed": gate_overwrite["out_dir_pre_existed"],
+        "overwrote": gate_overwrite["overwrote"],
     }
     disc = comfy_cloud_oss_disclosure(route_verdict=gate_route.get("verdict"))
     record["disclosure"] = disc
@@ -714,8 +727,7 @@ def main(argv=None):
         taps=[{"node": "70", "class_type": "SaveImage", "subdir": "lossless"},
               {"node": "81", "class_type": "SaveVideo", "subdir": None}])
     record.update(recipe)
-    rec_path = os.path.join(a.out, f"E09-B2-{a.tag}-payload-record.json")
-    with open(rec_path, "w", encoding="utf-8") as fh:
+    with open(record_path, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2, ensure_ascii=False)
 
     print(canon_line(canon_ev))
@@ -730,7 +742,7 @@ def main(argv=None):
         "split_origin": split["split_origin"],
         "frame": [WIDTH, HEIGHT, LENGTH],
         "gate_ROUTE": gate_route["verdict"], "gate_S": gate_s["verdict"],
-        "gate_L": "legal", "record": rec_path}))
+        "gate_L": "legal", "record": record_path}))
     return 0
 
 

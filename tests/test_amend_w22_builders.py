@@ -1628,13 +1628,14 @@ def test_the_fit_block_reaches_the_written_record_not_only_the_gate(tmp_path):
 # ===========================================================================
 
 
-#: Measured 2026-09-05 by naming each spec file across `tools/**`. FOUR of the fourteen are
-#: read by no tool. `E10-seeds.json` is the finding's own anchor.
+#: Measured 2026-09-05 by naming each spec file across `tools/**`. Wave 35 (F-cb85098b)
+#: wired `E10-seeds.json` into `build_animate_payload.SEEDS_REGISTRY_BY_EXPERIMENT`, so the
+#: orphan set is the three control/anchor specs that still have no tools/ consumer. Adding
+#: `specs/routes.json` (F-fb6e1577) is consumed by `build_routes_payload.py`.
 SPECS_NAMED_BY_NO_TOOL = [
     "E01-anchor-blackguard.json",
     "E03-posearc.json",
     "E03-static.json",
-    "E10-seeds.json",
 ]
 
 
@@ -1654,7 +1655,8 @@ def _spec_consumers():
 def test_the_orphan_specs_are_a_stated_fact_and_not_a_later_discovery():
     """`==`, so a spec that GAINS a reader and one that LOSES its last one both fail here."""
     consumers = _spec_consumers()
-    assert len(consumers) == 14, sorted(consumers)
+    # Wave 35: routes.json joins the population (+1 over the historical fourteen).
+    assert len(consumers) == 15, sorted(consumers)
     orphans = sorted(k for k, v in consumers.items() if not v)
     assert orphans == SPECS_NAMED_BY_NO_TOOL, {
         "orphaned now": orphans, "recorded": SPECS_NAMED_BY_NO_TOOL}
@@ -1664,8 +1666,11 @@ def test_the_other_ten_specs_each_name_the_tool_that_reads_them():
     """The complement, so the census cannot pass by finding nothing at all."""
     consumers = _spec_consumers()
     read = {k: v for k, v in consumers.items() if v}
-    assert len(read) == 10, sorted(read)
+    # Wave 35: E10-seeds + routes.json join the read set (was 10).
+    assert len(read) == 12, sorted(read)
     assert all(v for v in read.values()), read
+    assert "E10-seeds.json" in read
+    assert "routes.json" in read
 
 
 def test_no_tool_counts_a_submission_against_the_ceiling_and_the_specs_SAY_so():

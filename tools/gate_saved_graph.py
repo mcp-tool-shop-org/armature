@@ -1170,12 +1170,16 @@ def main(argv=None):
                     help="replace an existing admission record at --out. Without it a "
                          "re-admission over an earlier one refuses by name "
                          "(`output_already_exists`) and names its digest")
-    ap.add_argument("--experiment", default="E09",
+    ap.add_argument("--experiment", default=None,
                     help="recorded in the admission record, for the reader reconciling a "
-                         "spend against it (default: %(default)s)")
-    ap.add_argument("--stage", default="B2",
-                    help="recorded in the admission record beside --experiment "
-                         "(default: %(default)s)")
+                         "spend against it. Required when --record is omitted; when "
+                         "--record is present, taken from the payload record and refused "
+                         "if this flag conflicts (wave 35, F-e5e57a59 — no silent E09 "
+                         "default on an E13/E14 admission)")
+    ap.add_argument("--stage", default=None,
+                    help="recorded in the admission record beside --experiment. Required "
+                         "when --record is omitted; when --record is present, taken from "
+                         "the payload record and refused if this flag conflicts")
     ap.add_argument("--hosted-tier", default=None,
                     help="a tier from route_gates.HOSTED_TIER_RULES whose graph carries no "
                          "pixel dimension at all (wan2.7-r2v). Gate L's pixel clause is "
@@ -1189,7 +1193,9 @@ def main(argv=None):
                          "from the licence row is the credit this admission checks. "
                          "Without it both facts are `verify`'s defaults and a free "
                          "assembly chain or a CONDITIONAL-component arm cannot be "
-                         "admitted at all (wave 14, F-2da88c51)")
+                         "admitted at all (wave 14, F-2da88c51). Also supplies "
+                         "experiment/stage for the admission receipt (wave 35, "
+                         "F-e5e57a59)")
     ap.add_argument("--frame", default=None,
                     help="width,height,length — the shape the caller knows it is "
                          "generating. Gate L is INDETERMINATE and raises on a graph whose "
@@ -1197,6 +1203,83 @@ def main(argv=None):
                          "its own latent states the shape here (argparse eats leading "
                          "minus signs: pass as --frame=832,480,81)")
     a = ap.parse_args(argv)
+
+    # Wave 35, F-e5e57a59: experiment/stage label the spend receipt. Defaults to E09/B2
+    # silently mistagged every other experiment's admission. With --record, take them from
+    # the payload; refuse a conflicting flag. Without --record, both flags are required.
+    if a.record:
+        try:
+            with open(a.record, encoding="utf-8") as fh:
+                _rec_for_labels = json.load(fh)
+        except (OSError, ValueError) as exc:
+            raise SavedAdmission(
+                f"--record {a.record!r} cannot be read as JSON ({type(exc).__name__}: "
+                f"{exc}). experiment/stage for the admission receipt are taken from it "
+                f"when present",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "record_unreadable", "flag": "--record",
+                 "path": os.path.abspath(a.record),
+                 "error": type(exc).__name__}) from exc
+        if not isinstance(_rec_for_labels, dict):
+            raise SavedAdmission(
+                f"--record {a.record!r} is a {type(_rec_for_labels).__name__}, not a "
+                f"JSON object carrying experiment/stage",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "record_not_a_mapping", "flag": "--record",
+                 "path": os.path.abspath(a.record),
+                 "read_as": type(_rec_for_labels).__name__})
+        rec_exp = _rec_for_labels.get("experiment")
+        rec_stage = _rec_for_labels.get("stage")
+        if a.experiment is not None and rec_exp is not None and a.experiment != rec_exp:
+            raise SavedAdmission(
+                f"--experiment={a.experiment!r} conflicts with --record's experiment "
+                f"{rec_exp!r}. The admission receipt must name the experiment the "
+                f"payload was built for; drop the flag or fix the record",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "experiment_conflicts_with_record",
+                 "flag": "--experiment", "flag_value": a.experiment,
+                 "record_value": rec_exp, "record": os.path.abspath(a.record)})
+        if a.stage is not None and rec_stage is not None and a.stage != rec_stage:
+            raise SavedAdmission(
+                f"--stage={a.stage!r} conflicts with --record's stage {rec_stage!r}. "
+                f"The admission receipt must name the stage the payload was built for; "
+                f"drop the flag or fix the record",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "stage_conflicts_with_record",
+                 "flag": "--stage", "flag_value": a.stage,
+                 "record_value": rec_stage, "record": os.path.abspath(a.record)})
+        if a.experiment is None:
+            if not isinstance(rec_exp, str) or not rec_exp:
+                raise SavedAdmission(
+                    f"--record {a.record!r} carries no usable `experiment` string and "
+                    f"--experiment was not passed. The admission receipt needs both",
+                    {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                     "clause": "record_missing_experiment", "flag": "--record",
+                     "path": os.path.abspath(a.record),
+                     "keys": sorted(_rec_for_labels)})
+            a.experiment = rec_exp
+        if a.stage is None:
+            if not isinstance(rec_stage, str) or not rec_stage:
+                raise SavedAdmission(
+                    f"--record {a.record!r} carries no usable `stage` string and "
+                    f"--stage was not passed. The admission receipt needs both",
+                    {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                     "clause": "record_missing_stage", "flag": "--record",
+                     "path": os.path.abspath(a.record),
+                     "keys": sorted(_rec_for_labels)})
+            a.stage = rec_stage
+    else:
+        missing = [f for f, v in (("--experiment", a.experiment), ("--stage", a.stage))
+                   if v is None]
+        if missing:
+            raise SavedAdmission(
+                f"{', '.join(missing)} required when --record is omitted. The historical "
+                f"E09/B2 defaults silently labelled every other experiment's admission "
+                f"receipt; pass the flags, or pass --record so experiment/stage are read "
+                f"from the payload",
+                {"gate": "SAVED_ADMISSION", "andon": "SavedAdmission",
+                 "clause": "experiment_stage_required_without_record",
+                 "missing": missing, "flag": missing[0]})
 
     # ---- ANDON, wave 18 (F-c7294bc6's sibling half). Rule 2 asks for every flag in this
     # parser. Measured on the base tree: `--saved=<no such file>` and `--api=<no such file>`
