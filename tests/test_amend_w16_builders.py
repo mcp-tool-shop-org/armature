@@ -1094,7 +1094,12 @@ def test_every_clause_name_in_the_two_fetchers_is_distinct():
     # WAVE 35: `output_already_exists` is ONE clause in both fetchers by design — a used
     # `--root/--run` or `--out` refuses the silent blend the same way; `--force` is the
     # shared escape. A reader keying on the word learns the same thing from either tool.
+    #
+    # WAVE 37: `force_and_resume_conflict` joins them — both fetchers gained `--resume`
+    # (F-520d6fd1) and refuse `--force`+`--resume` with the same clause name, so a reader
+    # keying on the word learns the same mutual-exclusion rule from either tool.
     assert sorted(shared) == ["'downloader_shell_not_found'", "'empty_results'",
+                              "'force_and_resume_conflict'",
                               "'output_already_exists'",
                               "'unexpected_source_node'"], shared
 

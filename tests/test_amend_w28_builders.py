@@ -728,7 +728,9 @@ def test_both_download_refusals_name_the_state_and_the_next_step(tmp_path, monke
     assert "1 of 3 planned file(s) are present" in message
     assert "it is not a result" in message
     assert "`urls.json` beside them still names every planned job" in message
-    assert "CLEAR the run directory and re-fetch" in message
+    # WAVE 37, F-520d6fd1: `--resume` is the supported continue path; `--force` replaces.
+    assert "`--resume`" in message
+    assert "`--force`" in message
     assert "mixture of two fetches" in message
     # and the evidence carries what the sentence claims (Stage C rule 1)
     assert [row["present"] for row in ev["partial"]] == [True, False, False]

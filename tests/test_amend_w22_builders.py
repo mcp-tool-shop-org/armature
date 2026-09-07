@@ -1257,13 +1257,14 @@ def test_the_sibling_shim_still_refuses_the_way_it_always_did(monkeypatch):
 # ===========================================================================
 
 
-#: `(module, the flag that module actually reads)`. The wording was not one wording either:
-#: three say `--seeds-registry` and t2v says `--seeds`, which is correct PER FLAG and is not
-#: what the docstring claimed.
+#: `(module, the flag that module actually reads)`. Wave 22 filed three sites under
+#: `--seeds-registry` and t2v under `--seeds`. Wave 37 made `--seeds` primary on every
+#: generation builder (`--seeds-registry` remains a deprecated alias only), so the typed
+#: clause names `--seeds` at all four sites.
 W22_SEED_DEFAULT_SITES = [
-    ("build_animate_payload", "--seeds-registry"),
-    ("build_i2v_payload", "--seeds-registry"),
-    ("build_camera_i2v_payload", "--seeds-registry"),
+    ("build_animate_payload", "--seeds"),
+    ("build_i2v_payload", "--seeds"),
+    ("build_camera_i2v_payload", "--seeds"),
     ("build_t2v_payload", "--seeds"),
 ]
 
@@ -1329,7 +1330,7 @@ def test_the_raise_carries_the_dict_at_runtime_not_only_in_the_source():
     assert type(exc).__name__ == "PayloadError", repr(exc)
     assert ev.get("gate") == "PAYLOAD" and ev.get("andon") == "seed_registration", ev
     assert ev.get("clause") == "no_seed_and_no_registration", ev
-    assert ev.get("flag") == "--seeds-registry", ev
+    assert ev.get("flag") == "--seeds", ev
     assert ev.get("registered") == [], ev
 
 

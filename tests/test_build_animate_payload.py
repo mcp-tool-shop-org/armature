@@ -254,7 +254,7 @@ def test_omitting_the_seed_with_no_registry_names_the_missing_flag():
     with pytest.raises(BAP.PayloadError) as exc:
         BAP.build(UPLOADS_65, None, NEG, POS, None, "letterbox")
     assert "--seed" in str(exc.value)
-    assert "--seeds-registry" in str(exc.value)
+    assert "--seeds" in str(exc.value)
 
 
 def test_the_zero_fallback_is_gone():

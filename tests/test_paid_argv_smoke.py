@@ -342,6 +342,7 @@ def _submit_argv(tmp):
     api.write_text(json.dumps(ASSEMBLY_API), encoding="utf-8")
     saved.write_text(json.dumps(ASSEMBLY_SAVED), encoding="utf-8")
     seeds_src = None
+    seeds_doc = None
     specs = os.path.join(REPO, "specs")
     for name in sorted(os.listdir(specs)):
         if not (name.endswith(".json") and "seeds" in name):
@@ -351,6 +352,7 @@ def _submit_argv(tmp):
             doc = json.load(fh)
         if isinstance(doc, dict) and "allocation" in doc:
             seeds_src = path
+            seeds_doc = doc
             break
     if seeds_src is None:
         raise RuntimeError("no specs/*seeds*.json carries allocation")
@@ -365,11 +367,16 @@ def _submit_argv(tmp):
         f"--saved={saved}", f"--api={api}", f"--seeds={seeds}", f"--out={adm}",
         f"--record={rec}", "--frame=832,480,81",
     ]) == 0
-    return B, [
+    argv = [
         f"--api={api}", f"--saved={saved}", f"--admission={adm}", f"--seeds={seeds}",
         f"--record={rec}", "--frame=832,480,81", "--dry-run",
         f"--ledger={tmp / 'ledger.json'}",
-    ], str(adm), "SUBMIT_COMFY_CLOUD_OK"
+    ]
+    # WAVE 37, F-fcc2d66d: ceiling.per_arm requires --arm so the ledger knows which bound.
+    per_arm = (seeds_doc.get("ceiling") or {}).get("per_arm")
+    if isinstance(per_arm, dict) and per_arm:
+        argv.append(f"--arm={sorted(per_arm)[0]}")
+    return B, argv, str(adm), "SUBMIT_COMFY_CLOUD_OK"
 
 
 #: name -> factory(tmp[, monkeypatch]) -> (mod, argv, artifact, sentinel)
