@@ -1,0 +1,80 @@
+{
+  "200": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000000.png"
+    }
+  },
+  "201": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000001.png"
+    }
+  },
+  "202": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000002.png"
+    }
+  },
+  "203": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000003.png"
+    }
+  },
+  "204": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000004.png"
+    }
+  },
+  "400": {
+    "class_type": "BatchImagesNode",
+    "inputs": {
+      "images.image0": [
+        "200",
+        0
+      ],
+      "images.image1": [
+        "201",
+        0
+      ],
+      "images.image2": [
+        "202",
+        0
+      ],
+      "images.image3": [
+        "203",
+        0
+      ],
+      "images.image4": [
+        "204",
+        0
+      ]
+    }
+  },
+  "401": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "fps": 16.0,
+      "bit_depth": 8,
+      "images": [
+        "400",
+        0
+      ]
+    }
+  },
+  "402": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "video/S03_assembly",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "401",
+        0
+      ]
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "100": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "ref_0.png"
+    }
+  },
+  "101": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "ref_1.png"
+    }
+  },
+  "102": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "ref_2.png"
+    }
+  },
+  "103": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "ref_3.png"
+    }
+  },
+  "500": {
+    "class_type": "Wan2ReferenceVideoApi",
+    "inputs": {
+      "model": "wan2.7-r2v",
+      "model.prompt": "a figure walks",
+      "model.negative_prompt": "blurry",
+      "model.resolution": "720P",
+      "model.ratio": "16:9",
+      "model.duration": 5,
+      "seed": 2026081351,
+      "watermark": false,
+      "model.reference_images.image1": [
+        "100",
+        0
+      ],
+      "model.reference_images.image2": [
+        "101",
+        0
+      ],
+      "model.reference_images.image3": [
+        "102",
+        0
+      ],
+      "model.reference_images.image4": [
+        "103",
+        0
+      ]
+    }
+  },
+  "501": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "video/E13_A1_seed2026081351",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "500",
+        0
+      ]
+    }
+  }
+}

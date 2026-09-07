@@ -1,0 +1,192 @@
+{
+  "106": {
+    "class_type": "UNETLoader",
+    "inputs": {
+      "unet_name": "wan2.2_animate_14B_bf16.safetensors",
+      "weight_dtype": "default"
+    }
+  },
+  "105": {
+    "class_type": "VAELoader",
+    "inputs": {
+      "vae_name": "wan_2.1_vae.safetensors"
+    }
+  },
+  "110": {
+    "class_type": "CLIPLoader",
+    "inputs": {
+      "clip_name": "umt5_xxl_fp16.safetensors",
+      "type": "wan",
+      "device": "default"
+    }
+  },
+  "48": {
+    "class_type": "ModelSamplingSD3",
+    "inputs": {
+      "shift": 8.0,
+      "model": [
+        "106",
+        0
+      ]
+    }
+  },
+  "6": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "a figure",
+      "clip": [
+        "110",
+        0
+      ]
+    }
+  },
+  "7": {
+    "class_type": "CLIPTextEncode",
+    "inputs": {
+      "text": "blurry",
+      "clip": [
+        "110",
+        0
+      ]
+    }
+  },
+  "134": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "ref.png"
+    }
+  },
+  "200": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "pack.png"
+    }
+  },
+  "301": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "E08/probe/batchprobe",
+      "images": [
+        "200",
+        0
+      ]
+    }
+  },
+  "49": {
+    "class_type": "WanAnimateToVideo",
+    "inputs": {
+      "width": 832,
+      "height": 480,
+      "length": 65,
+      "batch_size": 1,
+      "continue_motion_max_frames": 5,
+      "video_frame_offset": 0,
+      "positive": [
+        "6",
+        0
+      ],
+      "negative": [
+        "7",
+        0
+      ],
+      "vae": [
+        "105",
+        0
+      ],
+      "reference_image": [
+        "134",
+        0
+      ],
+      "pose_video": [
+        "200",
+        0
+      ]
+    }
+  },
+  "3": {
+    "class_type": "KSampler",
+    "inputs": {
+      "seed": 2026081211,
+      "steps": 20,
+      "cfg": 6.0,
+      "sampler_name": "uni_pc",
+      "scheduler": "simple",
+      "denoise": 1.0,
+      "model": [
+        "48",
+        0
+      ],
+      "positive": [
+        "49",
+        0
+      ],
+      "negative": [
+        "49",
+        1
+      ],
+      "latent_image": [
+        "49",
+        2
+      ]
+    }
+  },
+  "58": {
+    "class_type": "TrimVideoLatent",
+    "inputs": {
+      "samples": [
+        "3",
+        0
+      ],
+      "trim_amount": [
+        "49",
+        3
+      ]
+    }
+  },
+  "8": {
+    "class_type": "VAEDecode",
+    "inputs": {
+      "samples": [
+        "58",
+        0
+      ],
+      "vae": [
+        "105",
+        0
+      ]
+    }
+  },
+  "68": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "fps": 16,
+      "bit_depth": 8,
+      "images": [
+        "8",
+        0
+      ]
+    }
+  },
+  "114": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "video/E08_probe",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "68",
+        0
+      ]
+    }
+  },
+  "302": {
+    "class_type": "SaveImage",
+    "inputs": {
+      "filename_prefix": "E08/probe/lossless",
+      "images": [
+        "8",
+        0
+      ]
+    }
+  }
+}
