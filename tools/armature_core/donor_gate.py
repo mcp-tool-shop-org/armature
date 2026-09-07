@@ -591,12 +591,17 @@ def check_donor_clip(frames_dir, detection):
 
 
 def _publish_gate_to_errors_catalog():
-    """Publish DonorGate into the errors catalog (F-77ed7f42)."""
+    """Publish DonorGate into the errors catalog (F-77ed7f42).
+
+    Refreshes GATE_BY_ID so id→class lookup sees DONOR (F-b6c11402).
+    """
     import sys
     err = sys.modules.get("armature_core.errors")
     if err is None:
         return
     err.DonorGate = DonorGate
+    if hasattr(err, "refresh_gate_by_id"):
+        err.refresh_gate_by_id()
 
 
 _publish_gate_to_errors_catalog()

@@ -359,6 +359,52 @@ def _bind_reexports():
             globals()[name] = getattr(mod, attr)
 
 
+def _gate_by_id_map():
+    """gate id string → GateFailure subclass, including ROUTE / PAIR / DONOR.
+
+    Built from subclasses present on this module after `_bind_reexports()`, so a
+    halt consumer holding only a receipt's `"gate": "PAIR"` resolves the class
+    without a hand-maintained switch (F-b6c11402).
+    """
+    out = {}
+    for obj in list(globals().values()):
+        if not isinstance(obj, type):
+            continue
+        if not issubclass(obj, GateFailure) or obj is GateFailure:
+            continue
+        gid = getattr(obj, "gate", None)
+        if not isinstance(gid, str) or not gid or gid == "G?":
+            continue
+        # First writer wins; re-exports share the home class identity.
+        out.setdefault(gid, obj)
+    return out
+
+
+#: gate id → GateFailure subclass. Mutated in place by `refresh_gate_by_id` so a
+#: `from armature_core.errors import GATE_BY_ID` binding stays live when ROUTE /
+#: PAIR / DONOR publish after this module's initial load (F-b6c11402).
+GATE_BY_ID = {}
+
+
+def refresh_gate_by_id():
+    """Rebuild GATE_BY_ID in place after spend-boundary homes publish into this catalog.
+
+    Forces the re-export home modules to finish loading when possible, then
+    rewrites the same dict object so imported aliases see ROUTE / PAIR / DONOR.
+    """
+    import importlib
+
+    for mod_name, _attr in _REEXPORTS.values():
+        try:
+            importlib.import_module(mod_name)
+        except Exception:  # noqa: BLE001 — leave unbound; publish hooks retry
+            pass
+    _bind_reexports()
+    GATE_BY_ID.clear()
+    GATE_BY_ID.update(_gate_by_id_map())
+    return GATE_BY_ID
+
+
 def __getattr__(name):
     if name in _REEXPORTS:
         _bind_reexports()
@@ -372,3 +418,4 @@ def __dir__():
 
 
 _bind_reexports()
+refresh_gate_by_id()

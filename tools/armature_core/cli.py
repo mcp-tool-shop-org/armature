@@ -141,6 +141,67 @@ def _cmd_canon_spend(args):
                          "subject": ev.get("subject")})
 
 
+def _cmd_canon_subjects(args):
+    """List census subjects and whether each is ARMED or an identity-only hole (F-1f2888ff)."""
+    from . import canon_census
+
+    table = canon_census.gate_census_table(_load_census(args.census))
+    rows = []
+    for subject in sorted(table):
+        rec = table[subject]
+        surfaces = rec.get("surfaces")
+        armed = surfaces is not None
+        rows.append({
+            "subject": subject,
+            "verdict": "ARMED" if armed else "IDENTITY_ONLY",
+            "surfaces": surfaces,
+            "reason": rec.get("reason"),
+        })
+    if args.json:
+        print(json.dumps(rows, indent=2, default=str))
+    else:
+        for row in rows:
+            print(f"{row['subject']:<16} {row['verdict']:<14} "
+                  f"{row['surfaces'] or '-'}")
+            if row.get("reason") and row["verdict"] == "IDENTITY_ONLY":
+                print(f"  {row['reason']}")
+    return _ok("CANON", {"cmd": "subjects", "n": len(rows),
+                         "subjects": [r["subject"] for r in rows]})
+
+
+def _gates_index():
+    """gate id → SURFACE module name, reverse of `_gates_carried` (F-9a78b722)."""
+    index = {}
+    for name, _purpose in SURFACE:
+        for gid in _gates_carried(name):
+            index.setdefault(gid, name)
+    return index
+
+
+def _cmd_gates(args):
+    """Reverse lookup: halt receipt gate id → owning SURFACE module."""
+    index = _gates_index()
+    if args.gate:
+        mod = index.get(args.gate)
+        if mod is None:
+            known = sorted(index)
+            print(f"unknown gate {args.gate!r}; known: {known}")
+            return 2
+        payload = {"gate": args.gate, "module": mod}
+        if args.json:
+            print(json.dumps(payload, indent=2))
+        else:
+            print(f"{args.gate}  {mod}")
+        return 0
+    rows = [{"gate": g, "module": index[g]} for g in sorted(index)]
+    if args.json:
+        print(json.dumps(rows, indent=2))
+    else:
+        for row in rows:
+            print(f"  {row['gate']:<8} {row['module']}")
+    return 0
+
+
 def _parse_frame(text):
     """`W,H,L` → (width, height, length). argparse eats leading minus signs — pass
     `--frame=-16,480,81` if a signed probe is ever needed."""
@@ -533,17 +594,18 @@ def main(argv=None):
     # (import probe) keeps its name.
     p_canon = sub.add_parser(
         "canon",
-        help="Gate CANON: resolve, coverage, check, or spend",
+        help="Gate CANON: resolve, coverage, check, spend, or list subjects",
         description=(
             "Gate CANON at the command line: resolve a subject to its canon, measure "
-            "coverage, check a prompt, or run the spend gate every payload builder "
-            "calls before authoring a submission."),
+            "coverage, check a prompt, run the spend gate every payload builder "
+            "calls before authoring a submission, or list census subjects."),
     )
     p_canon.add_argument("--roots", action="append", default=None,
                          help="a canon root directory to search; repeatable")
     p_canon.add_argument("--census", default=None, help="override census JSON")
-    canon_sub = p_canon.add_subparsers(dest="canon_cmd", required=True,
-                                       metavar="{resolve,coverage,check,spend}")
+    canon_sub = p_canon.add_subparsers(
+        dest="canon_cmd", required=True,
+        metavar="{resolve,coverage,check,spend,subjects}")
 
     p_res = canon_sub.add_parser(
         "resolve", help="name the canon file a subject resolves to")
@@ -573,7 +635,31 @@ def main(argv=None):
                          help="directory to write the canon evidence JSON into")
     p_spend.set_defaults(_canon_func=_cmd_canon_spend)
 
+    p_subj = canon_sub.add_parser(
+        "subjects",
+        help="list census subjects (ARMED vs IDENTITY_ONLY) from gate_census_table")
+    p_subj.add_argument("--json", action="store_true", help="machine-readable output")
+    p_subj.set_defaults(_canon_func=_cmd_canon_subjects)
+
+    # Gate id → module reverse index over SURFACE + _gates_carried (F-9a78b722).
+    p_gates = sub.add_parser(
+        "gates",
+        help="map a halt receipt gate id to its SURFACE module",
+        description=(
+            "Reverse of `armature modules --json` gates lists: given a gate id "
+            "from a halt record (ROUTE, PAIR, CANON, …), name the module that "
+            "raises it."),
+    )
+    p_gates.add_argument("--gate", default=None,
+                         help="one gate id to resolve (omit to list all)")
+    p_gates.add_argument("--json", action="store_true", help="machine-readable output")
+
     # Gate ROUTE / PAIR — load a saved/API graph and run verify (F-656ac783).
+    from .route_gates import known_hosted_tiers as _known_hosted_tiers
+    _hosted_tier_help = (
+        "hosted tier name when the graph carries no pixel latent; "
+        f"known: {', '.join(_known_hosted_tiers())}"
+    )
     p_ver = sub.add_parser(
         "verify",
         help="Gate ROUTE/PAIR: load a graph and admit it before credits are spent",
@@ -588,7 +674,9 @@ def main(argv=None):
                        help="width,height,length to supply to Gate L "
                             "(argparse eats leading minus signs: pass --frame=W,H,L)")
     p_ver.add_argument("--hosted-tier", default=None, dest="hosted_tier",
-                       help="hosted tier name when the graph carries no pixel latent")
+                       choices=_known_hosted_tiers(),
+                       help=_hosted_tier_help,
+                       metavar="TIER")
     p_ver.add_argument("--allow", action="append", default=None,
                        help="component key with an explicit ruling; repeatable")
     p_ver.add_argument("--attribution", default=None,
@@ -649,6 +737,9 @@ def main(argv=None):
             for m, d in SURFACE:
                 _print_module_row(m, d)
         return 0
+
+    if a.cmd == "gates":
+        return _cmd_gates(a)
 
     if a.cmd == "check":
         rows = [_probe(m) for m, _ in SURFACE]

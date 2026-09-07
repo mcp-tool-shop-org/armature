@@ -32,14 +32,30 @@ from .parts import require_finite
 
 SPEC_VERSION = 1
 
-KNOWN_CHANNELS = ("depth", "normal", "mask", "edge", "pose")
+#: Channels a shot may export. Legacy five plus the authored geometric layouts that
+#: `channels.CHANNEL_CONVENTIONS` names (`softedge` / `canny` / `flow` — NOT partner
+#: HED / OpenCV Canny / flow weights). The convention digests live in `channels`; this
+#: tuple is the shotspec vocabulary. Import-time pin below keeps the three names from
+#: drifting off the convention table (F-98515e19).
+KNOWN_CHANNELS = (
+    "depth", "normal", "mask", "edge", "pose",
+    "softedge", "canny", "flow",
+)
 
 #: Camera models this contract accepts. `orbit` is the E01 turntable. `static` is a
-#: locked-off camera (no azimuth sweep) — a first-class previz need for cutscenes and
-#: held frames. Path/track types wait until framing solvers accept them; unknown names
-#: stay refused so a typo cannot silently fall through to orbit defaults.
-KNOWN_CAMERA_TYPES = ("orbit", "static")
+#: locked-off camera — `azimuth_sweep_deg` defaults to 0 and a non-zero sweep is refused
+#: (F-2f2da5bb); consumers must honour `type` or the zeroed sweep (stage_render is
+#: OUT-OF-DOMAIN). `path` / `track` are keyframed cameras whose `keys` match
+#: `framing.normalize_camera_keys` (F-c3778bcf); framing already solves them. Unknown
+#: names stay refused so a typo cannot silently fall through to orbit defaults.
+KNOWN_CAMERA_TYPES = ("orbit", "static", "path", "track")
 
+#: Keyframe fields `path` / `track` require on every `camera.keys` entry — the same
+#: shape `framing.normalize_camera_keys` reads. Validated here so a typo refuses at
+#: schema load rather than inside the framing solver mid-render.
+CAMERA_PATH_KEY_FIELDS = (
+    "frame", "azimuth_deg", "elevation_deg", "radius", "target",
+)
 #: The render engines a spec may name. `blender_scene.configure_render` assigns
 #: `scene.render.engine = r["engine"]` verbatim, so an unknown identifier is refused by
 #: Blender's own RNA with a `TypeError` from inside the render layer — the loud-not-silent
@@ -120,7 +136,7 @@ SPEC_KEYS = {
     "spec.resolution": ("height", "width"),
     "spec.frames": ("count", "fps"),
     "spec.camera": ("azimuth_start_deg", "azimuth_sweep_deg", "clip_end", "clip_start",
-                    "elevation_deg", "fit_margin", "lens_mm", "radius", "sensor_mm",
+                    "elevation_deg", "fit_margin", "keys", "lens_mm", "radius", "sensor_mm",
                     "target", "type"),
     "spec.subject": ("animation",),
     "spec.depth": ("window",),
@@ -534,6 +550,60 @@ def normalise_spec(raw, spec_path=None):
                  'where': 'spec.camera', 'key': 'type',
                  'value': repr(cam_type),
                  'implemented': list(KNOWN_CAMERA_TYPES)})
+    # Author-supplied camera block (pre-defaults) — static sweep defaulting and
+    # path/track `keys` presence key off what the author wrote, not the merge.
+    raw_cam = raw.get("camera") if isinstance(raw.get("camera"), dict) else {}
+
+    # `static` is locked-off: the orbit DEFAULTS merge would leave azimuth_sweep_deg
+    # at 360 unless the author overrode it, which made `type=static` a label that did
+    # not change the numeric camera model (F-2f2da5bb). Force the default to 0 when
+    # the author omitted the key; refuse a non-zero sweep after the finite check below.
+    if cam_type == "static" and "azimuth_sweep_deg" not in raw_cam:
+        cam["azimuth_sweep_deg"] = 0.0
+
+    # `path` / `track` need keyframes; orbit / static must not carry a silent unused
+    # `keys` block (F-c3778bcf). Framing's `normalize_camera_keys` / `solve_path` are
+    # the consumer — this contract only names the type and requires the keys shape.
+    if cam_type in ("orbit", "static") and "keys" in cam:
+        _refuse(
+            f"spec.camera.type {cam_type!r} does not take camera.keys; keys belong to "
+            f"path/track. Delete keys, or set type to 'path'/'track'",
+            {'clause': 'camera_keys_not_for_type', 'where': 'spec.camera',
+             'key': 'keys', 'type': cam_type,
+             'path_types': ['path', 'track']}
+        )
+    if cam_type in ("path", "track"):
+        keys = cam.get("keys")
+        if not isinstance(keys, list) or not keys:
+            _refuse(
+                f"spec.camera.type {cam_type!r} requires a non-empty camera.keys list "
+                f"(keyframe dicts with {list(CAMERA_PATH_KEY_FIELDS)}); framing."
+                f"normalize_camera_keys is the consumer",
+                {'clause': 'camera_path_keys_required', 'where': 'spec.camera',
+                 'key': 'keys', 'type': cam_type,
+                 'required_fields': list(CAMERA_PATH_KEY_FIELDS),
+                 'got': type(keys).__name__, 'value': repr(keys)[:200]}
+            )
+        for i, key in enumerate(keys):
+            if not isinstance(key, dict):
+                _refuse(
+                    f"spec.camera.keys[{i}] is a {type(key).__name__}, not a keyframe "
+                    f"dict; required fields: {list(CAMERA_PATH_KEY_FIELDS)}",
+                    {'clause': 'camera_path_key_not_a_dict', 'where': 'spec.camera.keys',
+                     'index': i, 'got': type(key).__name__,
+                     'required_fields': list(CAMERA_PATH_KEY_FIELDS)}
+                )
+            missing = [f for f in CAMERA_PATH_KEY_FIELDS if f not in key]
+            if missing:
+                _refuse(
+                    f"spec.camera.keys[{i}] is missing {missing}; required fields: "
+                    f"{list(CAMERA_PATH_KEY_FIELDS)}",
+                    {'clause': 'camera_path_key_missing_field',
+                     'where': 'spec.camera.keys', 'index': i, 'missing': missing,
+                     'required_fields': list(CAMERA_PATH_KEY_FIELDS),
+                     'present_keys': sorted(map(str, key))}
+                )
+
     radius = cam.get("radius")
     # `bool` is a subclass of `int`, so `radius: true` was accepted as a number and
     # resolved to an orbit radius of 1.0. The `target` clause immediately below already
@@ -618,6 +688,19 @@ def normalise_spec(raw, spec_path=None):
         # unchecked on these three for exactly the reason it was unchecked on the five
         # above: the type test says `float` and `float('nan')` is a float.
         _require_finite_number(cam, key, "spec.camera", positive=False)
+
+    # Locked-off means locked: an authored non-zero sweep under type=static is refused
+    # by name so the label cannot disagree with the numeric model (F-2f2da5bb).
+    if cam_type == "static" and float(cam["azimuth_sweep_deg"]) != 0.0:
+        _refuse(
+            f"spec.camera.type is 'static' but azimuth_sweep_deg is "
+            f"{cam['azimuth_sweep_deg']}; a locked-off camera has sweep 0. Use "
+            f"type 'orbit' (or 'path'/'track') for a moving camera, or set "
+            f"azimuth_sweep_deg to 0",
+            {'clause': 'static_camera_nonzero_sweep', 'where': 'spec.camera',
+             'key': 'azimuth_sweep_deg', 'value': cam['azimuth_sweep_deg'],
+             'type': 'static'}
+        )
 
     # The same clause `depth.window` already writes for z_min/z_max. `clip_end` is read by
     # `stage_render.py:171` as a bound (`radius + sphere_r >= float(c['clip_end'])`), so a
@@ -766,3 +849,25 @@ def dump_spec(spec, path):
         json.dump(clean, fh, indent=2, sort_keys=True, allow_nan=False)
         fh.write("\n")
     return path
+
+
+def _pin_known_channels_to_conventions():
+    """KNOWN_CHANNELS must name every CHANNEL_CONVENTIONS key (F-98515e19).
+
+    channels.py owns the convention digests (core-solvers); this module owns the
+    shotspec vocabulary. A new convention without a KNOWN_CHANNELS row would refuse
+    at schema load while encode_* still shipped — the defect this pin closes.
+    """
+    from .channels import CHANNEL_CONVENTIONS
+
+    missing = sorted(set(CHANNEL_CONVENTIONS) - set(KNOWN_CHANNELS))
+    if missing:
+        raise RuntimeError(
+            f"shotspec.KNOWN_CHANNELS is missing CHANNEL_CONVENTIONS name(s) "
+            f"{missing}; extend KNOWN_CHANNELS in the same change that adds a "
+            f"convention. KNOWN_CHANNELS={list(KNOWN_CHANNELS)}; "
+            f"CHANNEL_CONVENTIONS={sorted(CHANNEL_CONVENTIONS)}"
+        )
+
+
+_pin_known_channels_to_conventions()

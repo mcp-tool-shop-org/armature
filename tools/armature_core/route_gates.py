@@ -3775,6 +3775,7 @@ def load_graph(path):
 
 # Publish spend-boundary classes into the errors catalog once this module has
 # finished loading (F-77ed7f42). Safe no-op if errors is absent from sys.modules.
+# Also refreshes GATE_BY_ID so id→class lookup sees ROUTE/PAIR (F-b6c11402).
 def _publish_gates_to_errors_catalog():
     import sys
     err = sys.modules.get("armature_core.errors")
@@ -3782,6 +3783,8 @@ def _publish_gates_to_errors_catalog():
         return
     err.RouteGate = RouteGate
     err.PairGate = PairGate
+    if hasattr(err, "refresh_gate_by_id"):
+        err.refresh_gate_by_id()
 
 
 _publish_gates_to_errors_catalog()
