@@ -244,9 +244,10 @@ jobs:
   # Blender-side coverage is the rig's job, not CI's.
   python-tests:
     runs-on: ubuntu-latest
-    # Suite twice (plain + -O) plus clean-room build/install: tens of minutes; 45 bounds
-    # a hung pip. Platform default without this key is 360 (fetched 2026-09-06).
-    timeout-minutes: 45
+    # Suite twice (plain + -O) plus two clean rooms. 3.13 finishes in ~27 min; 3.11's
+    # -O leg was canceled at 45 min on a1a4b0a (first suite green, -O still running).
+    # 90 bounds a hung pip without cutting the slower floor interpreter off mid-leg.
+    timeout-minutes: 90
     strategy:
       # The two ENDS of the interval pyproject promises: 3.11 is `requires-python`'s floor
       # and 3.13 is the highest classifier. Until v0.3.2 there was no matrix at all and the
