@@ -36,6 +36,8 @@ npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 
 ```bash
 armature check
+armature canon --help
+armature verify --help
 ```
 
 可安装的软件包是 **`armature_core`** ——包括栅栏、框架和转弯求解器，镜头规格合同、通道数学以及有效载荷构建器。它们中的每一个都以纯 CPython 的形式导入，这使得它们可以在没有 Blender 的情况下进行测试和打包。
@@ -53,8 +55,14 @@ plan = turnaround.projection_plan(ortho=True, ortho_scale=1.1235359256161628)
 blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --ortho
 ```
 
-它们停留在仓库中，其中有效的调用是记录下来的那个。
-`armature_core.blender_scene` 是导入 `bpy` 的唯一模块；`armature check` 将其报告为 `needs-blender`，而不是缺陷。`check` 说明了从您运行它的安装中，哪些是真实的情况，而不仅仅是导入的内容：它还会解析函数级别的导入，因此，缺少 OpenCV、Pillow 或 matplotlib 的源代码检出或 `--no-deps` 安装会报告 `needs-cv2` / `needs-PIL` 行，打印 `UNRESOLVED:` 并退出，退出代码为 1——而之前，在某个安装中，如果其绘图函数无法运行，它会打印“所有模块已解析”。
+They stay here in the repository, where the invocation that works is the one written down.
+`armature_core.blender_scene` is the single module that imports `bpy`; `armature check` reports
+it as `needs-blender` rather than as a defect. `check` states what is true of the install you
+ran it from, not merely what imports: it resolves the function-local imports too, so a source
+checkout or a `--no-deps` install missing OpenCV, Pillow or matplotlib reports `needs-cv2` /
+`needs-PIL` rows, prints `UNRESOLVED:` and exits 1 — where it once printed "all modules
+resolved" on an install whose drawing functions could not run. A failing row prints the
+exception type and message; `--json` carries the same rows under `module_rows`.
 
 npm 包是一个**启动器，而不是一个移植版本**：用第二种语言重新实现阈值会导致阈值发生漂移，因此它会转发到包含真实数据的 Python 代码，并拒绝——以响亮、非零的方式，使用唯一可以修复它的命令——而不是在你这边安装任何东西。
 
@@ -72,8 +80,8 @@ npm 包是一个**启动器，而不是一个移植版本**：用第二种语言
 | 花费 | 创始阶段有 22 个测试，每个测试花费 4 个积分；E08–E12 阶段的实际花费为 **0 积分**（GPU 小时计费），低于每个实验设定的上限；**E13 的四个生成是该代码仓库中第一个合作伙伴积分支出，并且在他们之前声明的 424-844 范围内**；E14 的两个生成实际花费了 **0 个合作伙伴积分**，达到其两个生成的上限。 |
 | 许可地图 | 每个采用的依赖项都包含一个**检索到的许可文档**；未验证的内容被视为“无”；通过第三方层进行的路线还包含**每条路线的披露说明**（由导演于 2026-08-12 决定）；该门户网站的既定目的是发布工作室的艺术作品。 |
 | 支出门控 | **CANON 门控** 拒绝提交的付费内容，该内容的标题无法与机器可读的规范对应——表面是行，空占位符是**孔，而不是缺失**，并且会检查两个方向（提示涵盖了规范；提示中的所有内容*都是*规范）。它在创建输出目录**之前**触发，位于七个有效负载构建器中的每一个内部，因为此仓库负责的不可逆步骤是写入有效负载。逃避机制是基于普查的：如果某个主题*具有*规范，则拒绝 `--no-canon`，而不是接受——并且自从第一次健康检查通过后，它会在每次支出时**发出明确的信号**：每个构建器都会打印 `[canon] ARMED: <subject>`，并且在普查逃避时打印 `[canon] UNGATED: <subject> — <the census row's reason>`，因此，构建日志可以区分已批准的孔和规范从未写入的主题；并记录结果，记录在 `gates.CANON` 下，因此，没有任何记录可以留下规范是否已激活或逃避的问题未得到解答。 |
-| 测试 | **7538 个通过测试**（64 个跳过，测量于 2026-09-06，在健康运行结束时——之前 1359 个，第一次通过后 1781 个，在阶段 B 之后 7181 个），在 `-O` 下完全相同；CI 模拟了运行器可以诚实地执行的操作——本地资产**明显跳过**。 |
-| 状态 | **v0.4.0**——健康运行：三个阶段中修复了 832 个问题，每个工具都有一个停止合约，每个拒绝都会说明它测量的内容，以及一个规模是其五倍的测试套件。v0.3.0 为记录添加了一个支出门控和一个自我验证的索引。`armature_core` 以 `armature-studio` 的形式发布到 PyPI，以 `@mcptoolshop/armature-studio` 的形式发布到 npm，并从标签中通过 OIDC 发布，并且没有长期存在的令牌。 |
+| 测试 | **8051 在测试环境中通过**（跳过 59 次，于 2026-09-07 测量，在修复了“feature-execute”引脚问题后——v0.4.0 版本为 7538，Stage D 之后为 7811），在记录了 STATUS 的预演中，在 `-O` 下表现相同；CI 测试展示了测试程序能够真实地执行哪些操作——测试环境中的本地资源**明显跳过**。 |
+| 状态 | **v0.4.0 版本已发布；此版本已过时。** 健康度测试（发现 832 个问题）仍然是已发布的版本。此后：进行了 Stage D 的视觉优化，然后进行了一次功能测试，将一个经过授权的提交者添加到代码库中（`build_submit_payload.py`，模拟运行，测试套件中没有实际的积分），扩展了已安装的 CLI（`canon` / `verify` / `spec` / `donor`），并记录了预演 **34098347849**。在您发布新版本之前，不会标记任何新内容。 |
 
 ### 正在衡量的内容（当前的阶段）
 
@@ -114,7 +122,7 @@ python tools/<name>.py --help                       # the 55 CPython instruments
 blender -b -P tools/<name>.py -- <args>             # the 21 Blender-side instruments (stage_render, the rig_* tools, the
                                                     # sheet composers): headless only; `python tools/<name>.py` on one of
                                                     # these fails with `No module named 'bpy'`
-pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + clean install, site build
+pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + two clean installs (wheel + sdist), site build
 ```
 
 每个工具，通过其运行方式，都有其自己的一行描述：[docs/tools.md](docs/tools.md)（从文档字符串生成，2026-09-05）。
@@ -163,12 +171,25 @@ E:\AI\armature\.venv\Scripts\python.exe -m pytest -q            # from the repo 
 
 完整的策略在 [SECURITY.md](SECURITY.md) 中，它不是基于断言，而是根据实际情况进行衡量。简要说明如下：
 
-- **涉及的数据**——本地磁盘上的网格、渲染、视频、图像和 JSON 文件，以及您通过命令行传递的路径，此外还有 `docs/index/armature.db`，这是一个从该仓库自身的 Markdown 文档中*派生*出的 SQLite 索引。规范资产仅以只读方式从同级目录读取，绝不会写入。
-- **不涉及的数据**——任何类型的凭据：既不读取、也不存储或传输，并且对每个已跟踪的文件进行扫描，以查找提供商前缀的密钥、令牌、私钥块和内联密钥赋值，结果都为零。**不收集或发送任何遥测数据、分析数据或使用情况统计信息；** 因为没有任何内容需要选择退出，所以根本不需要提供选择退出的选项。
-- **网络输出**——在 `tools/` 或 `tests/` 中的任何位置都不会导入任何 Python 网络库。两个工具会通过 shell 命令调用 `curl.exe` 来下载您粘贴的转储文件中列出的文件，这些文件来自您提交的生成内容。除此之外，没有任何其他组件会进行网络调用。
-- **权限**——普通用户权限。不进行权限提升、不安装服务、不写入注册表或系统设置。
-- **潜在风险，公开披露而不是隐瞒**——文件操作不会在沙盒中运行；工具会将数据写入其参数指定的任何位置。意外错误会打印原始回溯信息。有意的拒绝则不会：每个安全检查都会引发一个带有触发该检查的测量值的类型化错误，并且**其中没有任何一个是 `assert`**——该套件会在 CI 中第二次运行 `-O`，以证明它们仍然会引发错误。
-- **支持状态**——`main` 是唯一受支持的状态。没有发布渠道、没有回溯策略、也没有 SLA（服务级别协议）。
+- **Data touched** — meshes, renders, videos, images and JSON on local disk, at paths you pass
+  on the command line, plus `docs/index/armature.db`, a SQLite index *derived* from this repo's
+  own markdown. Canonical assets are consumed read-only from sibling trees and never written to.
+- **Data NOT touched** — no credentials of any kind: none are read, stored or transmitted, and
+  a sweep of every tracked file for provider-prefixed keys, tokens, private-key blocks and
+  inline secret assignments returns zero matches. **No telemetry, analytics or usage counting**
+  is collected or sent; there is no opt-out because there is nothing to opt out of.
+- **Network egress** — no Python networking library is imported anywhere in `tools/` or
+  `tests/`. Two tools shell out to `curl.exe` to download the files listed in a dump *you*
+  paste in, from a generation *you* submitted. Nothing else here makes a network call.
+- **Permissions** — ordinary user permissions. No elevation, no service installation, no
+  registry or system-settings writes.
+- **The sharp edges, disclosed rather than claimed away** — file operations are not sandboxed;
+  a tool writes wherever its arguments say. Unexpected failures print a raw traceback.
+  Deliberate refusals do not: every gate raises a typed error carrying the measurement that
+  fired it, and **none of them is an `assert`** — the suite runs a second time under `-O` in CI
+  to prove they still raise.
+- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.4.0`
+  is current); there is no backport policy and no SLA.
 
 **发布门控。** [SHIP_GATE.md](SHIP_GATE.md) 包含了实际存在的 A–D 四个硬性门控，每一行都附带了相应的证据或说明其被跳过的理由。软性门控项目也如实列出，包括仍然开放的项目。
 

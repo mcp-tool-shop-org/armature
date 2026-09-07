@@ -17,6 +17,20 @@ installs.
   DOC-IMPACT rows: publishing versions, SECURITY provenance (public-only), `requires-python`,
   the ship-gate header, the licence-map reader note, `armature check`'s failing-row cause,
   `verify.ps1`'s two clean installs.
+- **Stage D visual polish** (waves 29–32): 29 of 30 deferred Stage C looks amended, then
+  43 confirming visual findings (3 HIGH) amended — halt-line wrap, argparse groups, sheet
+  provenance clip, in-frame hands, head-crop, cadence representability. Serial floor after
+  pin re-derivation: **7811 passed / 66 skipped**.
+- **Feature pass** (waves 33–37): the irreversible spend now has an in-repo home
+  (`tools/build_submit_payload.py`, dry-run / refuse-without-admission, ceiling ledger,
+  `--uploads`, `--wait`; fetch `--resume`). Installed `armature` grew `canon`, `verify`,
+  `spec check`, `donor check`. OpenPose-18 drawing, metric lift root, GLB animation ingest,
+  `--set` scenery, mocap `--retarget`, FLF2V pair lock, `-m paid`. Confirming audit then
+  executed 69 remaining capabilities. Local serial after pin-fix: **8051 passed / 59 skipped**.
+- **CI:** `pip-audit` on python-tests (setuptools `>=83.0.0,<84`); Dependabot for Actions
+  and pip; rehearsal STATUS recorded as `RUN 34098347849` at throwaway tag
+  `rehearse-390b688` (verify success, publish jobs skipped; tag deleted after the line
+  was written).
 
 ## [0.4.0] — 2026-09-06
 

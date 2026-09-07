@@ -36,6 +36,8 @@ npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 
 ```bash
 armature check
+armature canon --help
+armature verify --help
 ```
 
 インストール可能なパッケージは**`armature_core`**です。これには、ゲート、フレームワーク、およびターンアラウンドソルバー、ショット仕様契約、チャネル数学、およびペイロードビルダーが含まれます。これらのすべては、プレーンなCPythonの下でインポートされます。これにより、Blenderがなくてもテストやパッケージ化が可能になります。
@@ -53,8 +55,8 @@ plan = turnaround.projection_plan(ortho=True, ortho_scale=1.1235359256161628)
 blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --ortho
 ```
 
-それらはリポジトリ内に保存されており、そこで実際に機能するのは、そこに記述されているものです。
-`armature_core.blender_scene`は、`bpy`をインポートする単一のモジュールです。`armature check`は、それを欠陥としてではなく、`needs-blender`として報告します。`check`は、実行したインストールに関して真実であること、単にインポートすることだけではなく、それを記述します。また、関数ローカルのインポートも解決するため、OpenCV、Pillow、またはmatplotlibが欠落しているソースコードのチェックアウトや、`--no-deps`インストールでは、`needs-cv2`/`needs-PIL`行が出力され、`UNRESOLVED:`が出力され、終了コード1で終了します。これは、以前は、描画機能が実行できないインストールで、「すべてのモジュールが解決されました」と出力していたのとは異なります。
+それらはリポジトリ内に保存され、そこで実際に機能するものが、記述されたものになります。
+`armature_core.blender_scene`は、`bpy`をインポートする単一のモジュールです。`armature check`は、それを欠陥としてではなく、`needs-blender`として報告します。`check`は、実行したインストールに関して真であるものを記述します。単にインポートするものを記述するだけではありません。また、関数ローカルのインポートも解決するため、OpenCV、Pillow、またはmatplotlibが欠落しているソースのチェックアウトや`--no-deps`インストールでは、`needs-cv2` / `needs-PIL`行が出力され、`UNRESOLVED:`が出力され、終了コード1で終了します。これは、以前は、描画機能が実行できないインストールで「すべてのモジュールが解決されました」と出力していました。失敗した行は、例外のタイプとメッセージを出力します。`--json`は、`module_rows`の下で同じ行を保持します。
 
 npmパッケージは**ランチャーであり、移植ではありません**。別の言語でしきい値を再実装すると、しきい値が変動するため、真実を保持するPythonに転送し、何らかのものをインストールする代わりに、明確かつ大きなエラーメッセージを表示します。
 
@@ -70,9 +72,9 @@ npmパッケージは**ランチャーであり、移植ではありません**�
 | 経路、ルート | **3つ、測定済み** — **駆動されたルート**（リグレンダリングされたAAPoseスティック→Animate。ショットレベルで証明され、一時停止され、再開時にライセンスがクリアされます）· **自由なルート**（GLBによって作成された開始フレーム→カメラ階層は6.0 / uni_pcベースラインにあります。アイデンティティはアンカーなしで維持され、手作業で作られた世界は2つのシードで維持され、LoRAシーンレバーがライブで測定されます — E14）· **合成されたルート**（作成された参照をホストされたアイデンティティロック階層に組み込みます — E13によって卒業：アイデンティティロックされた、モデルによって決定される映画制作。世界は参照に含まれるものによって導かれます。仕様には注記があります）。 |
 | 使う、費やす。 | 設立時のアークでは、それぞれ4クレジットで22件のプローブが実行されました。E08〜E12のアークでは、**0クレジット**（GPU時間課金）が、実験ごとの上限の下で使用されました。**E13の4つの世代は、リポジトリの最初のパートナークレジット支出であり、事前に指定された424〜844の範囲内です**。E14の2つの世代では、2世代の上限に達し、正確に**0のパートナークレジット**が使用されました。 |
 | ライセンスマップ | 採用されたすべての依存関係には、**取得済みのライセンス文書**が添付されます。検証されていない場合は「NO」として扱われます。また、サードパーティの層を経由する場合、追加で**ルートごとの情報開示**が行われます（2026年8月12日にディレクターによって決定）。ゲートの目的は、スタジオのアート作品を公開することです。 |
-| 消費ゲート | **Gate CANON**は、機械可読なカノンに対して名前を付けることができない対象を持つ、有料の提出物を拒否します。表面は行であり、空の占有物は**欠如ではなく穴**であり、両方の方向がチェックされます（プロンプトはカノンを網羅し、プロンプト内のすべてがカノンです）。これは、出力ディレクトリが作成される**前**に、7つのペイロードビルダーのそれぞれの中で実行されます。なぜなら、このリポジトリが所有する不可逆的なステップは、ペイロードの書き込みだからです。エスケープは、国勢調査によって裏付けられています。カノンを持つ対象に対しては、`--no-canon`が拒否され、受け入れられません。また、最初の健全性チェック以降、**すべての支出で明確に**表示されます。各ビルダーは`[canon] ARMED: <subject>`を出力し、国勢調査のエスケープでは`[canon] UNGATED: <subject> — <the census row's reason>`を出力するため、ビルドログは、カノンが書き込まれなかった対象と、承認された穴を区別し、その結果を`gates.CANON`の下に記録します。これにより、カノンが有効化されたか、エスケープされたかという質問が未解決のまま残されることはありません。 |
-| テスト | **7538（リグで正常に完了）**（64件のスキップ、2026年9月6日の健全性実行の終了時に測定 - それ以前は1359件、最初のパスの後には1781件、ステージBの後には7181件）、`-O`の下で同一です。CIは、ランナーが正直に実行できることを実行します。リグローカルのアセットは**目に見えてスキップされます**。 |
-| 状況 | **v0.4.0** - 健全性実行：3つのステージにわたって832件の不具合が修正され、すべてのインストルメントに対して1つの停止契約が設けられ、測定したものがすべて名前で示され、そのサイズの5倍のスイートが用意されました。v0.3.0は、レコードに支出ゲートと、それ自体を検証するインデックスを与えました。`armature_core`はPyPIに`armature-studio`として、npmに`@mcptoolshop/armature-studio`として出荷され、OIDCによってタグから公開され、どこにも長期間有効なトークンは存在しません。 |
+| 消費ゲート | **Gate CANON**は、機械可読なカノンに対して名前を付けることができない対象を持つ、有料の提出物を拒否します。表面は行であり、空の占有物は**欠如ではなく穴**であり、両方の方向がチェックされます（プロンプトはカノンを網羅し、プロンプト内のすべてがカノンです）。これは、出力ディレクトリが作成される**前**に、7つのペイロードビルダーのそれぞれの中で実行されます。これは、このリポジトリが所有する不可逆的なステップは、ペイロードの書き込みであるためです。エスケープは、国勢調査によって裏付けられています。カノンを持つ対象に対する`--no-canon`は拒否され、受け入れられません。また、最初の健全性チェック以降、**すべての支出で明確に**表示されます。各ビルダーは`[canon] ARMED: <subject>`を出力し、国勢調査のエスケープでは`[canon] UNGATED: <subject> — <the census row's reason>`を出力するため、ビルドログは、カノンが書き込まれなかった対象と、承認された穴を区別し、その結果を`gates.CANON`の下に記録します。そのため、カノンが有効化されたか、エスケープされたかという質問を未解決のままにすることはできません。 |
+| テスト | **8051がリグで実行**（59回のスキップ、2026年9月7日にfeature-executeピン修正後に測定 - v0.4.0では7538、Stage D後では7811）。`-O`の下では、STATUSを記録したリハーサルで同一です。CIは、ランナーが正直に実行できることを実行します。リグローカルのアセットは**目に見えてスキップ**されます。 |
+| 状況 | **v0.4.0はレジストリにあります。このツリーはそれを超えています。** 健全性チェック（832件の検出）は、依然として公開されている状態です。それ以降：Stage Dの視覚的な改善、次に、承認されたインリポジトリのサブミッターを支出に追加する機能パス（`build_submit_payload.py`、ドライラン、スイートにライブクレジットはありません）、インストールされたCLIを拡張（`canon` / `verify` / `spec` / `donor`）、およびリハーサル**34098347849**を記録しました。新しいものは、切り出すまでタグ付けされません。 |
 
 ### 何が測定されているのか（電流の弧）
 
@@ -137,19 +139,19 @@ python tools/<name>.py --help                       # the 55 CPython instruments
 blender -b -P tools/<name>.py -- <args>             # the 21 Blender-side instruments (stage_render, the rig_* tools, the
                                                     # sheet composers): headless only; `python tools/<name>.py` on one of
                                                     # these fails with `No module named 'bpy'`
-pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + clean install, site build
+pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + two clean installs (wheel + sdist), site build
 ```
 
-各ツールは、その実行方法と、独自の1行の説明を持ちます。[docs/tools.md](docs/tools.md)（ドキュメント文字列から生成、2026年9月5日）。
+各ツールは、その実行方法と、独自の1行の説明を持ちます：[docs/tools.md](docs/tools.md)（ドキュメント文字列から生成、2026年9月5日）。
 
-### 停止の読み込み
+### 停止の読み取り
 
-すべてのCPythonインストルメントは、指示どおりに実行された場合は**0**、意図的な拒否（ゲートが発動、前提が失敗、引数が拒否された）の場合は**2**、クラッシュした場合は**1**で終了します。拒否またはクラッシュは、正確に1行の形式`<TOOL>_HALT {json}`を出力し、そのレコードには6つのキー（`tool`、`outcome`、`gate`、`error`、`message`、`evidence`）が含まれます。ここで、`outcome`は3つの文のいずれか（`HALTED — a gate fired`、`REFUSED — the tool declined to proceed`、`FAILED — an unhandled error`), `message`）です。これは拒否自体のテキストであり、`evidence.clause`は、呼び出し側がブランチする機械可読の単語です。句の語彙は、スイートによって保持されます（`tests/test_refusal_clauses.py`）。成功は、ツールが効果によって獲得するシグナルであり（`BUILD_PAYLOAD_OK`、`RIG_OK`、`ENCODE_OK`、…）、終了コードだけではありません。`blender -b -P`は、スクリプトの例外が伝播した場合に0で終了します。そのため、Blender側のツールは、ローカルハンドラーとリグツールの5つを通じて、同じ停止行を伝播します。また、出力しなかったものに隣接して、`halt.json`も書き込みます。CPython契約の唯一の実装は、`armature_core.parts.run_tool_main`です。そのドキュメント文字列は、仕様です。レコードは、厳密なJSONとして、ツールの独自の散文を散文のままにして出力されます。ターミナルのエンコーディングで文字を表現できない場合、その行は、出力の失敗ではなく、その文字に対して`\uXXXX`エスケープにフォールバックし、終了コードもどちらの場合も影響を受けません。
+すべてのCPythonインストルメントは、実行したことを示す場合に**0**、意図的な拒否（ゲートが発動、前提が失敗、引数が拒否された）の場合に**2**、クラッシュの場合に**1**で終了します。拒否またはクラッシュは、正確に1行の形式`<TOOL>_HALT {json}`を出力し、そのレコードには6つのキーが含まれます。`tool`、`outcome`、`gate`、`error`、`message`、`evidence`。その中で、`outcome`は3つの文の1つ（`HALTED — a gate fired`、`REFUSED — the tool declined to proceed`、`FAILED — an unhandled error`), `message`）です。これは拒否自体のテキストであり、`evidence.clause`は、呼び出し側がブランチする機械可読な単語です。句の語彙は、スイートによって保持されます（`tests/test_refusal_clauses.py`）。成功は、ツールが効果によって獲得するセンチネルです（`BUILD_PAYLOAD_OK`、`RIG_OK`、`ENCODE_OK`、…）、終了コードだけではありません。`blender -b -P`は、スクリプトの例外が伝播した場合に0で終了します。そのため、Blender側のツールは、ローカルハンドラーとリグツールの5つを通じて、同じ停止行を保持します。また、出力しなかったものに隣接して`halt.json`を書き込みます。CPython契約の唯一の実装は`armature_core.parts.run_tool_main`です。そのドキュメント文字列は仕様です。レコードは、ツールの独自の散文を散文のままにして、厳密なJSONとして出力されます。ターミナルのエンコーディングで文字を表現できない場合、行は、出力の失敗ではなく、その文字に対して`\uXXXX`エスケープにフォールバックし、終了コードもどちらの方法でも影響を受けません。
 
-ステージCのパス（2026年9月6日）で3つの拒否ファミリーが到着し、どこでも同じように読み込まれます。
+Stage Cパス（2026年9月6日）で到着した3つの拒否ファミリーは、どこでも同じように読み取られます。
 
-- **以前の実行のアーティファクトを上書きするツール** - ビルドのグラフとレコード、レンダリングのフレーム - は、句`output_already_exists`で拒否し、それらに名前を付けます（ビルドは両方のファイルと両方のダイジェストに名前を付けます）。`--overwrite`がそれらを置き換え、成功レコードには、その後、`out_dir_pre_existed`と`overwrote`が含まれます。Gate CANONの`out_dir_not_empty`の下にある唯一の支出ビルダーは、1つ前のゲートで空でない`--out`を拒否し、フラグは受け取りません。
-- **待機するツール** - エンコード、デコード、レンダリング、ダウンロード - は、標準エラーに小文字の進行状況行`<tool> <stage> <done>/<total>  elapsed <e>s  bound <b>s`を、待機の前と後に（および作業がカウント可能な項目の場合は、各項目ごと）に出力します。標準出力には、依然として成功または停止の1行のみが含まれます。各サブプロセスには、作業から派生したバウンドが含まれており、そのバウンドに達すると、名前による拒否（`ffmpeg_exceeded_the_time_bound`、`downloader_exceeded_the_time_bound`）が発生し、ディスク上の部分的な作業に名前が付けられ、再試行は行われません。有料パスでは、再試行は、補償がないクレジットを消費します。
+- **以前の実行のアーティファクトを上書きするツール**（ビルドのグラフとレコード、レンダリングのフレームなど）は、句`output_already_exists`で拒否し、それらに名前を付けます（ビルドは両方のファイルと両方のダイジェストに名前を付けます）。`--overwrite`はそれらを置き換え、成功レコードには`out_dir_pre_existed`と`overwrote`が含まれます。Gate CANONの`out_dir_not_empty`の下にある唯一の支出ビルダーは、1つ前のゲートで空でない`--out`を拒否し、フラグは受け取りません。
+- **待機するツール**（エンコード、デコード、レンダリング、ダウンロードなど）は、待機の前後に（および作業がカウント可能な項目の場合は、各項目ごと）標準エラーに小文字の進行状況行`<tool> <stage> <done>/<total>  elapsed <e>s  bound <b>s`を出力します。標準出力には、依然として成功または停止の行が1つだけ含まれます。各サブプロセスには、作業から派生したバウンドが含まれており、そのバウンドに達した場合、ディスク上の部分的な作業に名前を付け、再試行しない名前による拒否（`ffmpeg_exceeded_the_time_bound`、`downloader_exceeded_the_time_bound`）になります。有料パスでは、再試行は、補償がない支出クレジットを消費します。
 - **出力ディレクトリが存在した後に発動するゲート**は、そのことを伝えます。拒否は、ディレクトリに名前を付け、部分的な作業が含まれており、結果ではないこと、およびサポートされている次のステップを伝えます。
 
 ### スイートの実行
@@ -158,16 +160,16 @@ pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, pac
 E:\AI\armature\.venv\Scripts\python.exe -m pytest -q            # from the repo root, on the repo venv — never the system Python
 ```
 
-3つの環境レバーがあり、すべてオプションです。`PYTHONPATH=E:/AI/record-index`（インデックスがテストするインポートする、関連するワーキングコピー。これがない場合、それらのテストは名前でスキップされます）、`ARMATURE_BLENDER`（Blender駆動のフィクスチャが実行するBlender実行可能ファイル。これがない場合、またはこのリグから実行されない場合、それらのテストは目に見えてスキップされます）、および`ARMATURE_GIT`（パッケージングテストが呼び出すgit）。CIの正確なレシピは、`python-tests`のジョブです。`.github/workflows/ci.yml`。`verify.ps1`は、同じスイートを2回実行します（1回は`-O`の下で）、その後、パッケージビルドを実行します。
+3つの環境レバーがあり、すべてオプションです。`PYTHONPATH=E:/AI/record-index`（インデックステストがインポートする、隣接するワーキングコピー。これがない場合、これらのテストは名前でスキップされます）、`ARMATURE_BLENDER`（Blender駆動のフィクスチャが実行するBlender実行可能ファイル。これがない場合、またはこのリグから実行しない場合、これらのテストは目に見えてスキップされます）、および`ARMATURE_GIT`（パッケージングテストが呼び出すgit）。CIの正確なレシピは、`python-tests`ジョブです。`.github/workflows/ci.yml`。`verify.ps1`は、同じスイートを2回実行します（1回は`-O`の下で）。その後、パッケージをビルドし、2つのクリーンルーム（ホイールとsdist）にインストールします。
 
-シード仕様の`ceiling`ブロックには、バインドする数値が含まれています。`submissions`（アームごとまたはウェーブごとの分割）、`counted_in`、`note`。それらの背後にある修正履歴は、[specs/ceiling-why-machine-readable.md](specs/ceiling-why-machine-readable.md)にあります（2026年9月6日に、仕様内の8つの同一のコピーから移動されました。`specs/*.json`は、80,321バイトから45,585バイトに減少しました）。
+シード仕様の`ceiling`ブロックには、バインドする数値が含まれます。`submissions`、アームごとまたはウェーブごとの分割、`counted_in`、`note`。それらの背後にある修正履歴は、[specs/ceiling-why-machine-readable.md](specs/ceiling-why-machine-readable.md)にあります（2026年9月6日に、仕様内の8つの同一のコピーから移動しました。`specs/*.json`は、80,321バイトから45,585バイトに減少しました）。
 
 | | |
 |---|---|
 | プラットフォーム | リグ上のWindows 11（Omen 45L、RTX 5090）。厳密なテストもCIの`ubuntu-latest`で実行される。Blenderに依存するテストは、Blenderが存在しない場合にサイレントにパスするのではなく、目に見えてスキップされる。 |
-| Python | `>=3.11,<3.15`はパッケージごとです。CIは3.11と3.13を実行し、リグvenvは3.14を実行します。`pip install armature-studio`は、numpy、opencv-python-headless、Pillow、およびmatplotlibをインストールします。これらは、コードが実際にインポートするランタイム依存関係です（ウェーブ3の健全性パス以降に宣言されました。以前は、クリーンなインストールでは、`armature_core`をインポートし、最初の描画呼び出しで失敗していました）。pytestは、唯一のテスト専用の依存関係です。CIは、pose-rasterテストがバイト安定したラスター化をアサートするため、opencvをリグのバージョンにピン留めします。 |
+| Python | パッケージごとに`>=3.11,<3.15`を設定。CIでは3.11と3.13、リグのvenvでは3.14を実行。`pip install armature-studio`はnumpy、opencv-python-headless、Pillow、matplotlibをインストールする。これらはコードが実際にインポートする実行時の依存関係である（wave-3のヘルスパス以降に宣言。クリーンなインストールを使用して`armature_core`をインポートし、最初の描画呼び出しでエラーが発生する）。pytestはテスト専用の依存関係であり、CIではリグのバージョンにopencvを固定する。これは、ポーズラスタテストがバイト単位で安定したラスタライズをアサートするためである。 |
 | Blender | 5.2、ヘッドレスモードのみ。ライブGUIセッションでは、記録されたパラメータなしにアーティファクトが発生し、その出力を再現できないレシピはレシピとはみなされない。 |
-| Node | ランチャー `armature`（`npm/`）は、CI環境で18と22でテストされます。また、`site/`でビルドされるサイトは22です。 |
+| Node | `armature`ランチャー（`npm/`）は、CIで18と22でテストされる。`site/`の下にあるサイトは、22でビルドされる。 |
 | 生成 | Comfy Cloudで実行され、オペレーターによって送信される。レンダリングと測定はローカルで行われる。 |
 
 絶対的なリグパスは、多くのツールやドキュメントに組み込まれている — それらは秘密ではないが、ほとんどのツールを別のマシンで変更せずに実行することはできないことを意味する。
@@ -186,12 +188,25 @@ E:\AI\armature\.venv\Scripts\python.exe -m pytest -q            # from the repo 
 
 完全なポリシーは[SECURITY.md](SECURITY.md)に記載されており、ツリーに対して測定されるのではなく、主張される。要約すると：
 
-- **アクセスされるデータ** — ローカルディスク上のメッシュ、レンダリング、ビデオ、画像、JSON。コマンドラインで指定されたパスに保存されます。さらに、このリポジトリ自身のマークダウンから派生したSQLiteインデックスである`docs/index/armature.db`も含まれます。標準的なアセットは、関連するディレクトリツリーから読み取り専用でアクセスされ、書き込まれることはありません。
-- **アクセスされないデータ** — あらゆる種類の認証情報（ユーザー名、パスワードなど）は一切読み取られず、保存または送信されません。また、追跡されているすべてのファイルに対して、プロバイダーのプレフィックスが付いたキー、トークン、秘密鍵ブロック、インラインシークレット割り当てを検索しても、一致するものはありません。**テレメトリ、分析、使用状況のカウントは一切収集または送信されません。**オプトアウト機能もありません。なぜなら、オプトアウトする対象が存在しないからです。
-- **ネットワークへのデータ送信** — `tools/`または`tests/`内のどこにも、Pythonのネットワークライブラリはインポートされていません。2つのツールが`curl.exe`にアクセスして、*ユーザーが*貼り付けたリストにあるファイルを、*ユーザーが*提出したバージョンからダウンロードします。それ以外の処理でネットワークへの接続が行われることはありません。
-- **権限** — 通常のユーザー権限のみを使用します。管理者権限の昇格、サービスプログラムのインストール、レジストリまたはシステム設定への書き込みは行いません。
-- **潜在的な問題点（隠蔽せず開示）** — ファイル操作はサンドボックス化されていません。ツールは、引数で指定された場所にファイルを書き込みます。予期しないエラーが発生した場合、生のトレースバックが出力されます。意図的な拒否の場合、エラーは出力されません。すべてのゲートは、トリガーとなった測定値を伴う型付きのエラーを発生させます。そして、**それらのどれもが`assert`ではありません**。このスイートは、CI環境で`-O`の下で2回実行され、引き続きエラーが発生することが確認されます。
-- **サポート状況** — `main`のみがサポート対象です。リリースチャンネル、バックポートポリシー、SLA（サービス品質保証）はありません。
+- **Data touched** — meshes, renders, videos, images and JSON on local disk, at paths you pass
+  on the command line, plus `docs/index/armature.db`, a SQLite index *derived* from this repo's
+  own markdown. Canonical assets are consumed read-only from sibling trees and never written to.
+- **Data NOT touched** — no credentials of any kind: none are read, stored or transmitted, and
+  a sweep of every tracked file for provider-prefixed keys, tokens, private-key blocks and
+  inline secret assignments returns zero matches. **No telemetry, analytics or usage counting**
+  is collected or sent; there is no opt-out because there is nothing to opt out of.
+- **Network egress** — no Python networking library is imported anywhere in `tools/` or
+  `tests/`. Two tools shell out to `curl.exe` to download the files listed in a dump *you*
+  paste in, from a generation *you* submitted. Nothing else here makes a network call.
+- **Permissions** — ordinary user permissions. No elevation, no service installation, no
+  registry or system-settings writes.
+- **The sharp edges, disclosed rather than claimed away** — file operations are not sandboxed;
+  a tool writes wherever its arguments say. Unexpected failures print a raw traceback.
+  Deliberate refusals do not: every gate raises a typed error carrying the measurement that
+  fired it, and **none of them is an `assert`** — the suite runs a second time under `-O` in CI
+  to prove they still raise.
+- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.4.0`
+  is current); there is no backport policy and no SLA.
 
 **出荷ゲート。** [SHIP_GATE.md](SHIP_GATE.md)には、実際の状態にある厳格なゲートA〜Dが記載されており、各行は証拠とともにチェックされるか、その妥当性に基づいてスキップされます。ソフトゲートの識別項目も正直にリストされており、まだ解決されていないものも含まれています。
 

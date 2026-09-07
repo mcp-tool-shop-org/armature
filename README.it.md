@@ -37,6 +37,8 @@ npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 
 ```bash
 armature check
+armature canon --help
+armature verify --help
 ```
 
 Il pacchetto installabile è **`armature_core`** — i gate, il sistema di inquadratura e gli algoritmi di calcolo dei movimenti della telecamera, lo script che definisce le specifiche delle riprese, la matematica dei canali e i moduli per la creazione del contenuto. Ognuno di essi importa elementi da un ambiente CPython standard, il che consente di testarli e impacchettarli senza dover avere Blender installato.
@@ -54,8 +56,14 @@ plan = turnaround.projection_plan(ortho=True, ortho_scale=1.1235359256161628)
 blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --ortho
 ```
 
-Questi strumenti rimangono qui, nel repository, dove l'invocazione che funziona è quella scritta.
-`armature_core.blender_scene` è il singolo modulo che importa `bpy`; `armature check` lo segnala come `needs-blender` anziché come un difetto. `check` indica cosa è vero dell'installazione da cui è stato eseguito, non solo cosa importa: risolve anche le importazioni locali alla funzione, quindi un'estrazione del codice sorgente o un'installazione `--no-deps` che manca di OpenCV, Pillow o matplotlib segnala `needs-cv2` / `needs-PIL` righe, stampa `UNRESOLVED:` ed esce con codice 1, mentre in precedenza stampava "tutti i moduli risolti" in un'installazione le cui funzioni di disegno non potevano essere eseguite.
+They stay here in the repository, where the invocation that works is the one written down.
+`armature_core.blender_scene` is the single module that imports `bpy`; `armature check` reports
+it as `needs-blender` rather than as a defect. `check` states what is true of the install you
+ran it from, not merely what imports: it resolves the function-local imports too, so a source
+checkout or a `--no-deps` install missing OpenCV, Pillow or matplotlib reports `needs-cv2` /
+`needs-PIL` rows, prints `UNRESOLVED:` and exits 1 — where it once printed "all modules
+resolved" on an install whose drawing functions could not run. A failing row prints the
+exception type and message; `--json` carries the same rows under `module_rows`.
 
 Il pacchetto npm è un **lanciatore, non una porta**: reimplementare una soglia in un secondo linguaggio è ciò che fa sì che la soglia si sposti; quindi, indirizza verso il Python che contiene la verità e rifiuta — in modo evidente, con un valore diverso da zero, tramite l'unico comando che lo risolve — invece di installare qualcosa per tuo conto.
 
@@ -72,8 +80,8 @@ Fondato il **10-08-2026**. Tredici esperimenti sono stati completati e la tesi �
 | Spesa | 22 prove nell'arco di fondazione a 4 crediti ciascuna; l'arco E08–E12 ha registrato **0 crediti** (addebito per ora di GPU) entro i limiti per esperimento; **le quattro generazioni di E13 rappresentano la prima spesa in crediti del partner nel repository, all'interno dell'intervallo predefinito di 424–844**; le due generazioni di E14 hanno registrato **0 crediti del partner** con un limite di due generazioni, raggiunto esattamente |
 | Mappa delle licenze | ogni dipendenza adottata include un **documento di licenza recuperato**: NON VERIFICATO viene trattato come NO; i percorsi attraverso gli strati di terze parti includono anche una **divulgazione per ogni percorso** (regolamentata dal direttore il 12-08-2026); lo scopo dichiarato del sistema è la pubblicazione delle opere dello studio |
 | Punti di controllo | **Gate CANON** rifiuta un invio a pagamento il cui oggetto non può essere associato a un canone leggibile da una macchina: la superficie è la riga, un elemento nullo è un **buco piuttosto che un'assenza** e entrambe le direzioni vengono verificate (il prompt copre il canone; tutto nel prompt *è* canone). Si attiva **prima** che venga creata la directory di output, all'interno di ciascuno dei sette generatori di payload, perché il passaggio irreversibile di cui questo repository si occupa è la scrittura di un payload. L'escape è supportato da un censimento: `--no-canon` su un oggetto che *ha* un canone viene rifiutato, non accettato, e poiché ha superato il primo controllo di integrità, è **esplicito in ogni operazione**: ogni generatore stampa `[canon] ARMED: <subject>` e, durante l'escape del censimento, stampa `[canon] UNGATED: <subject> — <the census row's reason>`, in modo che un registro di build distingua un buco convalidato da un oggetto il cui canone non è mai stato scritto; e registra il verdetto sotto `gates.CANON`, in modo che nessun record possa lasciare irrisolta la questione se il canone è stato attivato o meno. |
-| Test | **7538 superati nel sistema di test** (64 saltati, misurati il 2026-09-06 alla fine dell'esecuzione dei test di integrità: 1359 prima, 1781 dopo il primo passaggio, 7181 dopo la fase B), identici sotto `-O`; i test di integrità eseguono ciò che un sistema di test può eseguire onestamente: le risorse locali del sistema di test **vengono saltate in modo evidente**. |
-| Stato | **v0.4.0** — l'esecuzione dei test di integrità: 832 problemi risolti in tre fasi, un contratto di interruzione per ogni strumento, ogni rifiuto che indica cosa ha misurato e una suite cinque volte più grande. La v0.3.0 ha fornito al record un punto di controllo e un indice che si verifica da solo. `armature_core` viene inviato a PyPI come `armature-studio` e a npm come `@mcptoolshop/armature-studio`, pubblicato da un tag tramite OIDC senza token a lunga durata. |
+| Test | **Il codice 8051 viene eseguito correttamente sulla piattaforma di test** (59 iterazioni, misurate il 2026-09-07 dopo la correzione del pin per l’esecuzione delle funzionalità — 7538 nella versione 0.4.0, 7811 dopo la fase D), con risultati identici in `-O` durante la simulazione che ha registrato lo stato; i test CI verificano cosa può effettivamente fare un processo — le risorse locali della piattaforma di test **vengono saltate in modo evidente**. |
+| Stato | **Versione 0.4.0 sui repository; questa versione è obsoleta.** L’esecuzione di controllo (832 risultati) rappresenta ancora lo stato pubblicato. Da allora: sono stati apportati miglioramenti visivi nella fase D, quindi è stata eseguita una funzionalità che ha aggiunto un sistema di invio approvato al repository (`build_submit_payload.py`, esecuzione di prova, nessun credito attivo nella suite), è stata ampliata l’interfaccia a riga di comando installata (`canon` / `verify` / `spec` / `donor`) ed è stata registrata la simulazione **34098347849**. Non vengono aggiunte nuove etichette finché non si esegue una nuova versione. |
 
 ### Cosa viene misurato (l'arco corrente)
 
@@ -121,7 +129,7 @@ python tools/<name>.py --help                       # the 55 CPython instruments
 blender -b -P tools/<name>.py -- <args>             # the 21 Blender-side instruments (stage_render, the rig_* tools, the
                                                     # sheet composers): headless only; `python tools/<name>.py` on one of
                                                     # these fails with `No module named 'bpy'`
-pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + clean install, site build
+pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + two clean installs (wheel + sdist), site build
 ```
 
 Ogni strumento, in base a come viene eseguito, con la sua descrizione di una riga: [docs/tools.md](docs/tools.md) (generato dalle docstring, 2026-09-05).
@@ -174,12 +182,25 @@ obblighi di divulgazione dei contenuti AI e la sua politica sui watermark, basat
 
 La politica completa è [SECURITY.md](SECURITY.md), misurata rispetto all'albero piuttosto che affermata. La versione breve:
 
-- **Dati interessati** — mesh, rendering, video, immagini e file JSON sul disco locale, nei percorsi specificati tramite la riga di comando, più `docs/index/armature.db`, un indice SQLite *derivato* dal markdown del presente repository. Le risorse principali vengono utilizzate in modalità sola lettura da directory correlate e non vengono mai scritte.
-- **Dati NON interessati** — nessuna credenziale di alcun tipo: non vengono lette, archiviate o trasmesse e una scansione di tutti i file tracciati alla ricerca di chiavi, token, blocchi di chiave privata e assegnazioni di segreti con prefisso del fornitore restituisce zero corrispondenze. **Non vengono raccolti né inviati dati di telemetria, analisi o conteggio dell'utilizzo**; non è prevista alcuna opzione per disattivare la raccolta dei dati perché non c'è nulla da disattivare.
-- **Comunicazione in uscita dalla rete** — nessuna libreria di rete Python viene importata in `tools/` o `tests/`. Due strumenti eseguono comandi esterni su `curl.exe` per scaricare i file elencati in un dump che *voi* incollate, da una versione che *voi* avete inviato. Nient'altro qui effettua chiamate di rete.
-- **Autorizzazioni** — autorizzazioni utente standard. Nessun aumento dei privilegi, nessuna installazione di servizi, nessuna scrittura nel registro di sistema o nelle impostazioni di sistema.
-- **Aspetti critici, resi noti anziché nascosti** — le operazioni sui file non sono eseguite in un ambiente isolato; uno strumento scrive ovunque lo indichino i suoi argomenti. In caso di errori imprevisti, viene visualizzata una traccia di errore completa. I rifiuti intenzionali non vengono segnalati: ogni controllo genera un errore tipizzato che contiene la misurazione che l'ha attivato e **nessuno di essi è un `assert`**; la suite viene eseguita una seconda volta in `-O` nell'ambiente CI per dimostrare che continuano a generare errori.
-- **Stato del supporto** — `main` è l'unico stato supportato. Nessun canale di rilascio, nessuna politica di backport, nessun SLA.
+- **Data touched** — meshes, renders, videos, images and JSON on local disk, at paths you pass
+  on the command line, plus `docs/index/armature.db`, a SQLite index *derived* from this repo's
+  own markdown. Canonical assets are consumed read-only from sibling trees and never written to.
+- **Data NOT touched** — no credentials of any kind: none are read, stored or transmitted, and
+  a sweep of every tracked file for provider-prefixed keys, tokens, private-key blocks and
+  inline secret assignments returns zero matches. **No telemetry, analytics or usage counting**
+  is collected or sent; there is no opt-out because there is nothing to opt out of.
+- **Network egress** — no Python networking library is imported anywhere in `tools/` or
+  `tests/`. Two tools shell out to `curl.exe` to download the files listed in a dump *you*
+  paste in, from a generation *you* submitted. Nothing else here makes a network call.
+- **Permissions** — ordinary user permissions. No elevation, no service installation, no
+  registry or system-settings writes.
+- **The sharp edges, disclosed rather than claimed away** — file operations are not sandboxed;
+  a tool writes wherever its arguments say. Unexpected failures print a raw traceback.
+  Deliberate refusals do not: every gate raises a typed error carrying the measurement that
+  fired it, and **none of them is an `assert`** — the suite runs a second time under `-O` in CI
+  to prove they still raise.
+- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.4.0`
+  is current); there is no backport policy and no SLA.
 
 **Controllo finale prima della pubblicazione.** [SHIP_GATE.md](SHIP_GATE.md) contiene i controlli rigorosi A–D così come sono effettivamente definiti, con ogni riga verificata insieme alle prove o saltata in base alla sua validità. Gli elementi di identità del controllo meno rigido sono elencati in modo trasparente, incluso quello ancora aperto.
 

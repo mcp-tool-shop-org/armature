@@ -36,6 +36,8 @@ npm install -g @mcptoolshop/armature-studio   # the same command, as a launcher
 
 ```bash
 armature check
+armature canon --help
+armature verify --help
 ```
 
 O pacote instalável é **`armature_core`** — os módulos de definição, os módulos de enquadramento e resolução de inversão, o contrato de especificação de cena, as operações matemáticas dos canais e os criadores de carga. Cada um deles é importado usando CPython padrão, o que permite que sejam testados e empacotados sem a necessidade do Blender.
@@ -53,8 +55,14 @@ plan = turnaround.projection_plan(ortho=True, ortho_scale=1.1235359256161628)
 blender -b -P tools/render_turnaround.py -- --glb subject.glb --out renders --ortho
 ```
 
-Eles permanecem aqui no repositório, onde a invocação que funciona é aquela que foi registrada.
-`armature_core.blender_scene` é o único módulo que importa `bpy`; `armature check` o relata como `needs-blender`, e não como um defeito. `check` declara o que é verdade sobre a instalação em que você o executou, e não apenas o que importa: ele também resolve as importações locais da função, portanto, um checkout de código-fonte ou uma instalação `--no-deps` que não inclua OpenCV, Pillow ou matplotlib relatará `needs-cv2` / `needs-PIL` linhas, imprimirá `UNRESOLVED:` e sairá com código 1 — antes, imprimia "todos os módulos resolvidos" em uma instalação cujas funções de desenho não podiam ser executadas.
+They stay here in the repository, where the invocation that works is the one written down.
+`armature_core.blender_scene` is the single module that imports `bpy`; `armature check` reports
+it as `needs-blender` rather than as a defect. `check` states what is true of the install you
+ran it from, not merely what imports: it resolves the function-local imports too, so a source
+checkout or a `--no-deps` install missing OpenCV, Pillow or matplotlib reports `needs-cv2` /
+`needs-PIL` rows, prints `UNRESOLVED:` and exits 1 — where it once printed "all modules
+resolved" on an install whose drawing functions could not run. A failing row prints the
+exception type and message; `--json` carries the same rows under `module_rows`.
 
 O pacote npm é um **lançador, não uma porta**: reimplementar um limite em uma segunda linguagem é a forma como um limite se desvia, então ele encaminha para o Python que contém a verdade e recusa — de forma clara, com um código de erro diferente de zero, usando o único comando que o corrige — em vez de instalar qualquer coisa em seu nome.
 
@@ -72,8 +80,8 @@ Fundada em **10 de agosto de 2026**. Treze experimentos foram concluídos e a te
 | Gastos | 22 sondas no arco inicial a 4 créditos cada; o arco E08–E12 mediu **0 créditos** (cobrança por hora de GPU) sob tetos por experimento; **as quatro gerações de E13 são os primeiros gastos com créditos de parceiro do repositório, dentro da faixa pré-definida de 424–844**; as duas gerações de E14 mediram **0 créditos de parceiro** em um teto de duas gerações, atingido exatamente |
 | Mapa de licenças | cada dependência adotada possui um **documento de licença recuperado**; NÃO VERIFICADO é tratado como NÃO; caminhos através de camadas de terceiros também possuem **divulgação por caminho** (regra do Diretor, 12 de agosto de 2026); o propósito declarado da porta de entrada é a publicação da arte do estúdio. |
 | Limites de uso | **Gate CANON** rejeita um envio pago cujo assunto não pode ser nomeado em relação a um cânone legível por máquina — a superfície é a linha, um ocupante nulo é um **buraco, e não uma ausência**, e ambas as direções são verificadas (o prompt cobre o cânone; tudo no prompt *é* cânone). Ele é executado **antes** que o diretório de saída seja criado, dentro de cada um dos sete construtores de carga útil, porque o passo irreversível que este repositório executa é escrever uma carga útil. A saída é baseada em dados de censo: `--no-canon` em um assunto que *tem* cânone é rejeitado, não aceito — e, desde o primeiro teste de integridade, é **explícito em cada execução**: cada construtor imprime `[canon] ARMED: <subject>` e, na saída do censo, `[canon] UNGATED: <subject> — <the census row's reason>`, de modo que um log de construção distingue um buraco aprovado de um assunto cujo cânone nunca foi escrito; e registra o resultado em `gates.CANON`, para que nenhum registro deixe em aberto a questão de se o cânone foi ativado ou não. |
-| Testes | **7538 aprovados no ambiente de teste** (64 ignorados, medidos em 2026-09-06, ao final da execução de integridade — 1359 antes, 1781 após a primeira passagem, 7181 após a Fase B), idênticos sob `-O`; os testes de CI executam o que um executor pode fazer honestamente — os recursos locais do ambiente de teste são **ignorar de forma visível**. |
-| Status | **v0.4.0** — a execução de integridade: 832 problemas corrigidos em três fases, um contrato de interrupção para cada instrumento, cada rejeição nomeando o que mediu e um conjunto de testes cinco vezes maior. A v0.3.0 deu ao registro um gatilho de execução e um índice que se verifica. `armature_core` é enviado para o PyPI como `armature-studio` e para o npm como `@mcptoolshop/armature-studio`, publicado a partir de uma tag por meio do OIDC, sem nenhum token de longa duração em nenhum lugar. |
+| Testes | **8051: superou o teste na plataforma** (59 tentativas, medido em 2026-09-07 após a correção do problema no pino de execução da funcionalidade — 7538 na versão v0.4.0, 7811 após a Fase D), idêntico em `-O` no ensaio que registrou o STATUS; os testes de CI avaliam o que um processo pode realmente fazer — os recursos locais da plataforma **são visivelmente ignorados**. |
+| Status | **v0.4.0 nos registros; esta versão já está ultrapassada.** O teste de desempenho (832 resultados) ainda é o estado publicado. Desde então: melhorias visuais na Fase D, depois uma passagem de funcionalidade que adicionou um sistema de envio aprovado no repositório (`build_submit_payload.py`, teste a seco, sem créditos ativos no conjunto), expandiu a CLI instalada (`canon` / `verify` / `spec` / `donor`) e registrou o ensaio **34098347849**. Nada de novo é marcado até que você faça um lançamento. |
 
 ### O que é medido (o arco atual)
 
@@ -128,7 +136,7 @@ python tools/<name>.py --help                       # the 55 CPython instruments
 blender -b -P tools/<name>.py -- <args>             # the 21 Blender-side instruments (stage_render, the rig_* tools, the
                                                     # sheet composers): headless only; `python tools/<name>.py` on one of
                                                     # these fails with `No module named 'bpy'`
-pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + clean install, site build
+pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, package build + two clean installs (wheel + sdist), site build
 ```
 
 Cada ferramenta, pela forma como é executada, com sua própria descrição de uma linha: [docs/tools.md](docs/tools.md) (gerado a partir das docstrings, 2026-09-05).
@@ -186,12 +194,25 @@ nota de divulgação não está completa — a primeira aplicação usa a especi
 A política completa está em [SECURITY.md](SECURITY.md), medida em relação à árvore, e não apenas afirmada.
 Na forma resumida:
 
-- **Dados acessados** — modelos, renderizações, vídeos, imagens e JSON no disco local, nos caminhos que você especifica na linha de comando, mais `docs/index/armature.db`, um índice SQLite *derivado* do próprio arquivo Markdown deste repositório. Os recursos canônicos são consumidos em modo somente leitura a partir de árvores adjacentes e nunca são gravados.
-- **Dados NÃO acessados** — nenhuma credencial de qualquer tipo: nenhuma é lida, armazenada ou transmitida, e uma verificação de todos os arquivos rastreados para identificar chaves, tokens, blocos de chave privada e atribuições de segredos com prefixo do provedor retorna zero correspondências. **Nenhuma telemetria, análise ou contagem de uso** é coletada ou enviada; não há opção de desativação porque não há nada para desativar.
-- **Comunicação de rede** — nenhuma biblioteca de rede Python é importada em nenhum lugar em `tools/` ou `tests/`. Duas ferramentas executam comandos externos para `curl.exe` a fim de baixar os arquivos listados em um arquivo *que você* cola, de uma geração *que você* enviou. Nada mais aqui faz uma chamada de rede.
-- **Permissões** — permissões de usuário comuns. Sem elevação de privilégios, sem instalação de serviço, sem gravações no registro ou nas configurações do sistema.
-- **Os pontos críticos, divulgados em vez de ocultados** — as operações de arquivo não são executadas em um ambiente isolado; uma ferramenta grava onde seus argumentos indicam. Falhas inesperadas imprimem um rastreamento bruto. Recusas deliberadas não: cada barreira gera um erro tipificado que contém a medição que a acionou, e **nenhuma delas é `assert`** — o conjunto de testes é executado uma segunda vez sob `-O` no CI para provar que ainda geram erros.
-- **Status de suporte** — `main` é o único estado suportado. Sem canal de lançamento, sem política de retrocompatibilidade, sem SLA.
+- **Data touched** — meshes, renders, videos, images and JSON on local disk, at paths you pass
+  on the command line, plus `docs/index/armature.db`, a SQLite index *derived* from this repo's
+  own markdown. Canonical assets are consumed read-only from sibling trees and never written to.
+- **Data NOT touched** — no credentials of any kind: none are read, stored or transmitted, and
+  a sweep of every tracked file for provider-prefixed keys, tokens, private-key blocks and
+  inline secret assignments returns zero matches. **No telemetry, analytics or usage counting**
+  is collected or sent; there is no opt-out because there is nothing to opt out of.
+- **Network egress** — no Python networking library is imported anywhere in `tools/` or
+  `tests/`. Two tools shell out to `curl.exe` to download the files listed in a dump *you*
+  paste in, from a generation *you* submitted. Nothing else here makes a network call.
+- **Permissions** — ordinary user permissions. No elevation, no service installation, no
+  registry or system-settings writes.
+- **The sharp edges, disclosed rather than claimed away** — file operations are not sandboxed;
+  a tool writes wherever its arguments say. Unexpected failures print a raw traceback.
+  Deliberate refusals do not: every gate raises a typed error carrying the measurement that
+  fired it, and **none of them is an `assert`** — the suite runs a second time under `-O` in CI
+  to prove they still raise.
+- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.4.0`
+  is current); there is no backport policy and no SLA.
 
 **Barreira de envio.** [SHIP_GATE.md](SHIP_GATE.md) contém as barreiras rígidas A–D conforme estão na realidade, com cada linha sendo verificada com sua evidência ou ignorada com a justificativa correspondente. Os itens de identidade da barreira flexível são listados honestamente, incluindo o que ainda está pendente.
 
