@@ -16,6 +16,13 @@ Expected wall-clock on this rig for a full plain-interpreter pass is about 10–
 advancing past that bound is a stall, not a slow suite; external-binary subprocesses in
 the suite carry a short timeout so a hung `git`/`node`/`bash` raises TimeoutExpired.
 
+Suite selection (wave 34, F-19d81931) — registered in `pytest_configure` below; applied
+mechanically by module path/name in `pytest_collection_modifyitems`:
+
+- `-m paid` / `-m "not blender"` / `-m sheet` / `-m measure` / `-m amend` /
+  `-m control_sequence`
+- `--suite-family=<name>` — second axis that keeps only items carrying that marker
+
 Operator levers (defaults are this rig's paths; set them on any other machine):
 
 - `ARMATURE_BLENDER` — Blender executable; default
@@ -212,6 +219,27 @@ RECORD_FAMILIES = {
     "payloads": (PAYLOAD_RECORDS, PAYLOAD_FIXTURES),
 }
 
+#: Wave 34, F-025b750b — one minimal API-format graph per spend builder, committed under
+#: `tests/fixtures/records/<route>/` and resolved live-or-fixture the same way uploads are.
+#: Paths are `outputs/<route>/<file>` so `_record_paths` strips the leading `outputs/` and
+#: lands on `tests/fixtures/records/<route>/<file>`. The three pre-existing camera/i2v
+#: fixtures under `tests/fixtures/*.api.json` stay; these are the bank that covers the
+#: builders those three never reached.
+API_GRAPH_RECORDS = (
+    "outputs/animate/E08-probe-animate.api.json",
+    "outputs/assembly/S03-assembly.api.json",
+    "outputs/camera_i2v/E12-w3-camera-i2v.api.json",
+    "outputs/cascade/E13-cascade.api.json",
+    "outputs/i2v/E11-w1-probe-i2v.api.json",
+    "outputs/lora_arm/E14-T-camera-i2v.api.json",
+    "outputs/payload/E02-A0.api.json",
+    "outputs/r2v/E13-A1-seed2026081351.api.json",
+    "outputs/t2v/E09-B2-probe-t2v.api.json",
+)
+#: Kept OUT of `RECORD_FAMILIES`: that table's byte-copy / branch-agreement census in
+#: `test_measure_tracking.py` keys a public resolver map of `uploads`/`payloads` only.
+#: These graphs still resolve through the same `_record*` helpers via `api_graph_record`.
+
 
 def repo_file(relpath):
     """An absolute path under the repo root for a `outputs/...`-style relative path.
@@ -322,6 +350,27 @@ def upload_record(relpath):
     absent guard rather than a live divergence.
     """
     return _record(relpath, UPLOAD_FIXTURES)
+
+
+def api_graph_record_paths(relpath):
+    """`(live, fixture)` for one banked spend-builder API graph."""
+    return _record_paths(relpath, PAYLOAD_FIXTURES)
+
+
+def api_graph_record_branch(relpath):
+    """`"live"` / `"fixture"` / `"neither"` for one banked spend-builder API graph."""
+    return _record_branch(relpath, PAYLOAD_FIXTURES)
+
+
+def api_graph_record(relpath):
+    """Resolve one spend-builder API graph: live `outputs/` copy if present, else fixture.
+
+    WAVE 34, F-025b750b — gate_saved_graph / link-round-trip for t2v, r2v, animate,
+    assembly, cascade (and the rest of the nine builders) could not be rehearsed from a
+    clean clone because only three camera/i2v `*.api.json` files lived under
+    `tests/fixtures/`. Same live-or-fixture helper the upload maps and E02 payloads use.
+    """
+    return _record(relpath, PAYLOAD_FIXTURES)
 
 
 @pytest.fixture(scope="session", autouse=True)
@@ -582,3 +631,94 @@ def sheet_font(name, size):
     import sheet_compose
 
     return sheet_compose._font(name, size)
+
+
+# --------------------------------------------------------------- suite selection markers
+#
+# WAVE 34, F-19d81931. The suite had no `-m paid` / `-m "not blender"` / `-m sheet`
+# capability: marks were only parametrize/skipif/usefixtures/xfail, and conftest carried
+# no pytest_configure / addoption / collection_modifyitems. Marker registration strings in
+# pyproject.toml are OUT-OF-DOMAIN for this seat (ci-packaging); registration here is what
+# makes the vocabulary usable without that half.
+
+
+SUITE_MARKERS = (
+    ("paid", "spend builders, fetchers, pre-submit gates, and their argv SUCCESS fixtures"),
+    ("control_sequence", "control-sequence encode / invert / pack instruments"),
+    ("blender", "needs Blender (ARMATURE_BLENDER) or the blender_stub"),
+    ("sheet", "sheet composers and sheet argv SUCCESS fixtures"),
+    ("measure", "measure_* clip/floor/lift/tracking diagnostics"),
+    ("amend", "wave amend pins (test_amend_* / test_instruments_*amend_*)"),
+)
+
+
+def pytest_configure(config):
+    for name, doc in SUITE_MARKERS:
+        config.addinivalue_line("markers", f"{name}: {doc}")
+
+
+def pytest_addoption(parser):
+    parser.addoption(
+        "--suite-family", action="store", default=None,
+        help="keep only tests carrying this suite marker "
+             f"(one of: {', '.join(n for n, _ in SUITE_MARKERS)})")
+
+
+def _module_marker_names(path):
+    """Suite markers derived from a collected module's path/name — never typed per test."""
+    base = os.path.basename(path)
+    stem = base[:-3] if base.endswith(".py") else base
+    marks = set()
+    if stem.startswith("test_amend_") or "amend_w" in stem:
+        marks.add("amend")
+    if (stem.startswith("test_build_") or stem.startswith("test_fetch_")
+            or stem.startswith("test_gate_saved") or stem.startswith("test_gate_b")
+            or stem in ("test_assembly", "test_cascade", "test_r2v_payload",
+                        "test_canon_spend", "test_route_gates", "test_paid_argv_smoke",
+                        "test_api_fixture_bank", "test_encode_control")):
+        marks.add("paid")
+    if stem.startswith("test_measure_") or stem.startswith("test_instruments_measure"):
+        marks.add("measure")
+    if ("sheet" in stem or stem in ("test_sheet_compose", "test_sheet_pairing",
+                                    "test_sheet_sides", "test_sheet_argv_smoke",
+                                    "test_e13_sheet")):
+        marks.add("sheet")
+    if (stem.startswith("test_blender") or stem.startswith("test_render_")
+            or stem in ("test_floor_material", "test_ortho_convention",
+                        "test_plate_composite", "test_pose_arc_roundtrip",
+                        "test_visibility", "test_walk", "test_rig_gates",
+                        "test_rig_character_dispatch", "test_lift_solve",
+                        "test_instrument_exits", "test_turnaround",
+                        "test_turnaround_ortho", "test_turnaround_pin",
+                        "test_framing", "test_pinned_camera", "test_pinned_framing",
+                        "test_startframe", "test_aapose_convention",
+                        "test_openpose_convention")):
+        marks.add("blender")
+    if stem in ("test_encode_control", "test_invert_frames", "test_pack_pose_pack",
+                "test_extract_clip_frames"):
+        marks.add("control_sequence")
+    # Source scan: a module that skipifs on ARMATURE_BLENDER / BLENDER is blender-family
+    # even when its name does not say so.
+    if os.path.isfile(path):
+        try:
+            text = open(path, encoding="utf-8").read(8000)
+        except OSError:
+            text = ""
+        if "ARMATURE_BLENDER" in text or "blender_stub" in text:
+            marks.add("blender")
+    return marks
+
+
+def pytest_collection_modifyitems(config, items):
+    family = config.getoption("--suite-family")
+    kept = []
+    for item in items:
+        path = str(getattr(item, "fspath", "") or getattr(item, "path", ""))
+        for name in _module_marker_names(path):
+            item.add_marker(getattr(pytest.mark, name))
+        if family:
+            if family not in {m.name for m in item.iter_markers()}:
+                continue
+        kept.append(item)
+    if family:
+        items[:] = kept

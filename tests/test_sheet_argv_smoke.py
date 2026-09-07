@@ -564,7 +564,7 @@ def test_the_argv_smoke_population_is_the_plate_parsing_population():
     assert set(SHEETS) == set(PLATE_SHEETS)
 
 
-# ------------------------------------ the 62 with no success fixture, COUNTED not ignored
+# ------------------------------------ the gap with no success fixture, COUNTED not ignored
 #
 # WAVE 12, F-fae3fad4, rule 3. The end-to-end `main(argv)` leg covers 5 of the tools with
 # a command line. That gap was invisible: the file's docstring frames `main(argv)` as one of
@@ -576,9 +576,16 @@ def test_the_argv_smoke_population_is_the_plate_parsing_population():
 # WAVE 16, F-beeab1d0: 31 -> 62, because the population went 36 -> 67. The ceiling is
 # re-derived, never re-typed: `len(set(CN.parser_population(CN.tool_trees())) - set(SHEETS))`
 # reads 62 on 2026-09-04 in this worktree.
+#
+# WAVE 34, F-fbe68663: the fifteen paid CLIs move into `tests/test_paid_argv_smoke.PAID`
+# SUCCESS fixtures, so the gap shrinks 62 -> 47 deliberately. SHEETS stays the plate-sheet
+# five; PAID is the sibling population.
 
 
-NO_SUCCESS_FIXTURE = sorted(set(CLI_TOOLS) - set(SHEETS))
+import test_paid_argv_smoke as _PAID_SMOKE  # noqa: E402
+
+PAID_SUCCESS = set(_PAID_SMOKE.PAID)
+NO_SUCCESS_FIXTURE = sorted(set(CLI_TOOLS) - set(SHEETS) - PAID_SUCCESS)
 
 #: The members of `CLI_TOOLS` that cannot be driven from a CPython process at all, keyed on
 #: the BEHAVIOUR "runs under Blender" (`blender_stub.blender_reach`, wave 12 F-6b3040d1) and
@@ -596,13 +603,17 @@ CPYTHON_CLI_TOOLS = _cpython_cli_tools()
 
 
 def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
-    """62 of 67 on 2026-09-04. A fixture added moves a tool out of this set and into the
-    parametrized success leg above; nothing may move the other way."""
-    assert set(NO_SUCCESS_FIXTURE) | set(SHEETS) == set(CLI_TOOLS)
+    """47 of 67 after wave 34 (was 62 of 67 on 2026-09-04). A fixture added moves a tool
+    out of this set and into SHEETS or PAID_SUCCESS; nothing may move the other way."""
+    covered = set(SHEETS) | PAID_SUCCESS
+    assert set(NO_SUCCESS_FIXTURE) | covered == set(CLI_TOOLS)
     assert set(SHEETS) <= set(CLI_TOOLS), sorted(set(SHEETS) - set(CLI_TOOLS))
-    assert len(NO_SUCCESS_FIXTURE) <= 62, (
+    assert PAID_SUCCESS <= set(CLI_TOOLS), sorted(PAID_SUCCESS - set(CLI_TOOLS))
+    assert len(NO_SUCCESS_FIXTURE) <= 47, (
         f"{len(NO_SUCCESS_FIXTURE)} command-line tools have no end-to-end success fixture; "
-        f"62 was the count on 2026-09-04 and it may only fall: {NO_SUCCESS_FIXTURE}")
+        f"47 was the count after wave 34's paid SUCCESS fixtures and it may only fall: "
+        f"{NO_SUCCESS_FIXTURE}")
+    assert len(PAID_SUCCESS) == 15, sorted(PAID_SUCCESS)
 
 
 def test_the_blender_side_of_the_cli_population_is_the_one_that_cannot_be_driven_here():

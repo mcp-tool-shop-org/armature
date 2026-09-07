@@ -1,0 +1,147 @@
+{
+  "200": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000000.png"
+    }
+  },
+  "201": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000001.png"
+    }
+  },
+  "202": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000002.png"
+    }
+  },
+  "203": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000003.png"
+    }
+  },
+  "204": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000004.png"
+    }
+  },
+  "205": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000005.png"
+    }
+  },
+  "206": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000006.png"
+    }
+  },
+  "207": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000007.png"
+    }
+  },
+  "208": {
+    "class_type": "LoadImage",
+    "inputs": {
+      "image": "0000000000000000000000000000000000000000000000000000000000000008.png"
+    }
+  },
+  "400": {
+    "class_type": "BatchImagesNode",
+    "inputs": {
+      "images.image0": [
+        "200",
+        0
+      ],
+      "images.image1": [
+        "201",
+        0
+      ],
+      "images.image2": [
+        "202",
+        0
+      ]
+    }
+  },
+  "401": {
+    "class_type": "BatchImagesNode",
+    "inputs": {
+      "images.image0": [
+        "203",
+        0
+      ],
+      "images.image1": [
+        "204",
+        0
+      ],
+      "images.image2": [
+        "205",
+        0
+      ]
+    }
+  },
+  "402": {
+    "class_type": "BatchImagesNode",
+    "inputs": {
+      "images.image0": [
+        "206",
+        0
+      ],
+      "images.image1": [
+        "207",
+        0
+      ],
+      "images.image2": [
+        "208",
+        0
+      ]
+    }
+  },
+  "410": {
+    "class_type": "BatchImagesNode",
+    "inputs": {
+      "images.image0": [
+        "400",
+        0
+      ],
+      "images.image1": [
+        "401",
+        0
+      ],
+      "images.image2": [
+        "402",
+        0
+      ]
+    }
+  },
+  "420": {
+    "class_type": "CreateVideo",
+    "inputs": {
+      "fps": 16.0,
+      "bit_depth": 8,
+      "images": [
+        "410",
+        0
+      ]
+    }
+  },
+  "421": {
+    "class_type": "SaveVideo",
+    "inputs": {
+      "filename_prefix": "video/E13_cascade",
+      "format": "auto",
+      "codec": "auto",
+      "video": [
+        "420",
+        0
+      ]
+    }
+  }
+}
