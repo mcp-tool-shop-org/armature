@@ -327,6 +327,32 @@ jobs:
       # `armature check` alone was not enough, is written in the action.
       - uses: ./.github/actions/clean-room
 
+      # THE NODE→PYTHON HANDOFF, once per PR, on the artifact the wheel room just installed.
+      # ci.yml's `launcher` job packs the tarball and runs `--node-selftest` with no Python;
+      # that half cannot see a broken `-m armature_core.cli` spawn. clean-room leaves its
+      # wheel room at `$RUNNER_TEMP/cleanroom` (removed only at the START of a later call),
+      # so the packed shim and an installed wheel meet here under ARMATURE_PYTHON. The
+      # runner's preinstalled node/npm pack; no setup-node. Pin note for tests: this job
+      # joins `npm_pack_jobs()` beside `launcher` — coordinator re-derives NPM_PACK_JOBS_TODAY.
+      - uses: ./.github/actions/npm-clean-room
+        with:
+          python: ${{ runner.temp }}/cleanroom/bin/python
+
+      # Rehearsal obligation is CI-reachable: release.yml's STATUS line must name a completed
+      # Actions run, not NOT YET RUN. A live release:published refuses the same string; this
+      # step makes the debt visible on every PR that touches packaging rather than only after
+      # a tag is cut. Cleared when STATUS records run id + tag.
+      - name: release.yml rehearsal STATUS must be recorded
+        run: |
+          set -eu
+          # Header STATUS comment only — not this step's own error text.
+          if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*NOT YET RUN' .github/workflows/release.yml; then
+            echo "::error::release.yml header STATUS is still unset; rehearse before the next live release."
+            echo "::error::gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true"
+            exit 1
+          fi
+          echo "STATUS line is recorded."
+
   # The launcher is Node, not Python, and it ran as a step of the Python job on one version.
   # `npm/package.json` declares `"node": ">=18"` — a promise npm enforces on a user's machine
   # at install time — and nothing ran 18. Its own job with a 2-entry matrix costs less than

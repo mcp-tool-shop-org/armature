@@ -519,6 +519,23 @@ if ($NoPackage) {
                     }
                     & $shim --node-selftest
                     if ($LASTEXITCODE -ne 0) { return }
+                    # Handoff mirror of `.github/actions/npm-clean-room`'s optional python
+                    # input: the packed shim must reach a real CLI through ARMATURE_PYTHON
+                    # (the repo venv here; the wheel room on CI), not only --node-selftest.
+                    $priorPin = $env:ARMATURE_PYTHON
+                    try {
+                        $env:ARMATURE_PYTHON = $python
+                        & $shim --version
+                        if ($LASTEXITCODE -ne 0) { return }
+                        & $shim check
+                        if ($LASTEXITCODE -ne 0) { return }
+                    } finally {
+                        if ($null -eq $priorPin) {
+                            Remove-Item Env:ARMATURE_PYTHON -ErrorAction SilentlyContinue
+                        } else {
+                            $env:ARMATURE_PYTHON = $priorPin
+                        }
+                    }
                 } finally {
                     if (Test-Path $npmroom) {
                         Remove-Item $npmroom -Recurse -Force -ErrorAction SilentlyContinue

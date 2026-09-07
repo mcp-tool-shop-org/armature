@@ -29,56 +29,18 @@ name: release
 on:
   release:
     types: [published]
-  # THE REHEARSAL, AND THE REF IT CANNOT BE DISPATCHED AT YET.
+  # THE REHEARSAL — first-class, documented, Actions-reachable; not a live public release.
   #
-  # Measured on this tree 2026-09-04, and the earlier form of this block understated it.
-  # `git tag -l` holds swarm-save-1788481819, v0.1.0, v0.1.1, v0.2.0, v0.2.1 and v0.3.0 and
-  # nothing else; `git ls-tree -r --name-only <tag> -- .github/actions` returns ZERO files
-  # for EVERY ONE of the six. So it is not that the actions post-date v0.3.0 -- NO TAG IN
-  # THIS REPOSITORY CARRIES ANY OF THEM. `git show v0.3.0:.github/workflows/release.yml`
-  # has `workflow_dispatch:` with no `inputs:` block beneath it, no `refs/tags/` anywhere,
-  # and `npm publish --provenance --access public` unconditional at its :126.
+  # HISTORY (kept so the next seat does not rediscover it). Measured 2026-09-04: every tag
+  # then on the remote (swarm-save-1788481819, v0.1.0..v0.3.0) carried ZERO files under
+  # `.github/actions/`, and `v0.3.0`'s release.yml declared `workflow_dispatch:` with no
+  # `inputs.rehearse`, no `refs/tags/` gate, and unconditional publishes. Naming any of
+  # those tags on `gh workflow run` either refused the unknown input or ran an ungated
+  # definition. `--ref main` still refuses at the tag gate (deliberate: publish jobs sit
+  # on `needs: verify`, and a branch rehearsal is a partial run).
   #
-  # The consequence for the tag-ref gate below, the visibility gate beside it, the
-  # pre-release gate added in wave 23, `npm-clean-room`, the clean-room action's sdist and
-  # classifier rooms, the `-O` step's `PYTHONOPTIMIZE` env and BOTH arms of the npm
-  # `Publish` branch is unchanged: none of them has ever executed in a
-  # `release: published` run. Nothing green anywhere says
-  # otherwise -- the suite reads these files as TEXT, which is a claim about what they SAY,
-  # not about what they DO on a runner.
-  #
-  # Without a rehearsal, the first real use of roughly two hundred lines of never-executed
-  # shell is the one path in this repository with no compensator -- a defect in it surfaces
-  # AFTER `release: published` has fired, on a tag already cut and public, with both
-  # registries waiting. That is the state this file's header says the release trigger exists
-  # to keep rare, not the state in which to debug a gate.
-  #
-  # WHY NO REF IS NAMED ON THE COMMAND BELOW. This block used to print
-  # `gh workflow run release.yml --ref v0.3.0 -f rehearse=true`, and that command has only
-  # two outcomes, both of which end at the publish steps rather than at a rehearsal: the
-  # dispatch is refused because the workflow AT THAT REF declares no `rehearse` input, and
-  # the operator's next move is the same command without it -- which runs v0.3.0's ungated
-  # definition; or it is accepted and the definition executed is still v0.3.0's, where
-  # `rehearse` guards nothing and `uses: ./.github/actions/*` resolves to files that do not
-  # exist at that ref. The only thing between that command and a live publish today is that
-  # 0.3.0 is already taken on both registries, which is not a gate. Naming ANY of the six
-  # existing tags here has the same shape.
-  #
-  # WHY NOT `--ref main`, WHICH DOES CARRY THE GATES. The tag/ref gate refuses any
-  # `GITHUB_REF` that is not `refs/tags/*`, deliberately and by its own comment ("Dispatch
-  # from a branch and it refuses here"). Since wave 28 it is step 3 of the 12 steps in
-  # `verify` -- checkout, setup-python, TAG GATE, visibility gate, PRE-RELEASE GATE,
-  # Install, sheet-fonts, Suite, Suite under -O, clean-room, npm-clean-room,
-  # upload-artifact -- because all three gates are pure shell over `GITHUB_REF`, two `env:`
-  # values and the two manifests, and nothing downstream depends on their position. So a
-  # `main` dispatch now refuses at step 3, before the Install line, both suite legs and both
-  # clean rooms; it used to run every one of those first and refuse at step 9. Either way
-  # the visibility gate, the pre-release gate and the artifact upload never run on a branch,
-  # so it is still a partial run and still not what the sentence below claims -- it is not
-  # the command this block prints.
-  #
-  # THE ORDERING, which is the actual fix: a tag alone does not fire `release: published`
-  # -- creating the GitHub RELEASE object does. So the rehearsal fits BETWEEN them.
+  # THE ORDERING for a versioned release (tag alone does not fire `release: published` —
+  # creating the GitHub RELEASE object does):
   #
   #   1. cut and push the release tag:  git tag vX.Y.Z && git push origin vX.Y.Z
   #   2. rehearse AT THAT TAG:          gh workflow run release.yml --ref vX.Y.Z -f rehearse=true
@@ -90,12 +52,25 @@ on:
   # on each, so neither registry is reached and the two cannot diverge). If step 2 is red,
   # step 3 never happens and the tag is deletable; after step 3 nothing is.
   #
-  # STATUS: NOT YET RUN, and no ref exists at which it could be. No run id is recorded on
-  # this line because no such run exists; a plausible id beside a verdict would be a
-  # placeholder shaped like evidence. Write the run id and the tag here the first time it is
-  # dispatched, and dispatch again after any change to this workflow or to the actions it
-  # calls, so "exercised" is a fact with a run id rather than an inference from a green
-  # suite.
+  # THROWAWAY REHEARSAL (no version tag, no public release object). A `rehearse-*` tag
+  # that carries current `.github/actions/**` is enough; the tag gate skips version-
+  # equality when `inputs.rehearse` is true and the tag name starts with `rehearse-`,
+  # and both publish jobs stay skipped. Delete the tag when the run is green:
+  #
+  #   git tag rehearse-<shortsha> && git push origin rehearse-<shortsha>
+  #   gh workflow run release.yml --ref rehearse-<shortsha> -f rehearse=true
+  #   git push origin :refs/tags/rehearse-<shortsha>
+  #
+  # Do NOT cut a live public version tag solely to rehearse. Prefer an existing release
+  # tag that already carries the actions (see STATUS) or a throwaway `rehearse-*` tag.
+  #
+  # STATUS: RUN 34073888719 at tag v0.4.0 on 2026-09-07 (workflow_dispatch,
+  # rehearse=true; verify success; pypi+npm skipped — no publish jobs created). First
+  # end-to-end Actions proof; no new public version tag was cut. Re-dispatch after any
+  # change to this workflow or to `.github/actions/{clean-room,npm-clean-room,sheet-fonts}`
+  # (wave-34 handoff + throwaway-tag edits included), and rewrite this line with the new
+  # run id + tag. A live `release: published` refuses while this line still says
+  # NOT YET RUN (STATUS clause in the pre-release gate; ci.yml mirrors the obligation).
   workflow_dispatch:
     inputs:
       rehearse:
@@ -181,10 +156,19 @@ jobs:
         # never the subject. Measured: naming it here failed exactly that test, 1 failed /
         # 5319 passed, while the publish step it judges was untouched.)
         #
+        # THROWAWAY `rehearse-*` TAGS. A rehearsal must not require cutting a live public
+        # version tag. When REHEARSE is the string `true` (workflow_dispatch with
+        # `-f rehearse=true`; empty/null on `release: published`) AND the tag name starts
+        # with `rehearse-`, version-equality is skipped with a notice — publish jobs are
+        # already skipped by `if: ${{ !inputs.rehearse }}`. A version tag still compares.
+        # REHEARSE rides `env:` so this script stays free of `${{ }}` (the discipline below).
+        #
         # No `${{ }}` in this script, deliberately: a runner-side expression is interpolated
         # before the shell sees it, so a gate written with one cannot be exercised by
         # anything but a real release. tests/test_ci_workflows.py extracts this script and
         # RUNS it — branch ref, PR ref, empty ref, matching tag, mismatched tag.
+        env:
+          REHEARSE: ${{ inputs.rehearse }}
         run: |
           case "$GITHUB_REF" in
             refs/tags/*) ;;
@@ -194,12 +178,28 @@ jobs:
               exit 1
               ;;
           esac
-          TAG="${GITHUB_REF_NAME#v}"
+          TAG_NAME="$GITHUB_REF_NAME"
+          TAG="${TAG_NAME#v}"
           PKG=$(python -c "import tomllib;print(tomllib.load(open('pyproject.toml','rb'))['project']['version'])")
           NPM=$(node -p "require('./npm/package.json').version")
-          echo "tag=$TAG pyproject=$PKG npm=$NPM"
-          [ "$TAG" = "$PKG" ] || { echo "::error::tag $TAG != pyproject $PKG"; exit 1; }
-          [ "$PKG" = "$NPM" ] || { echo "::error::pyproject $PKG != npm $NPM"; exit 1; }
+          echo "tag=$TAG pyproject=$PKG npm=$NPM rehearse=${REHEARSE:-<empty>}"
+          case "$REHEARSE" in
+            true)
+              case "$TAG_NAME" in
+                rehearse-*)
+                  echo "::notice::throwaway rehearsal tag $TAG_NAME; skipping version-equality (publish jobs are already skipped)."
+                  ;;
+                *)
+                  [ "$TAG" = "$PKG" ] || { echo "::error::tag $TAG != pyproject $PKG"; exit 1; }
+                  [ "$PKG" = "$NPM" ] || { echo "::error::pyproject $PKG != npm $NPM"; exit 1; }
+                  ;;
+              esac
+              ;;
+            *)
+              [ "$TAG" = "$PKG" ] || { echo "::error::tag $TAG != pyproject $PKG"; exit 1; }
+              [ "$PKG" = "$NPM" ] || { echo "::error::pyproject $PKG != npm $NPM"; exit 1; }
+              ;;
+          esac
       - name: The two workflows must read the same visibility
         # ONE DERIVED FACT, READ IN BOTH FILES. pages.yml treats the repository's visibility
         # as a live state -- its deploy job is fenced
@@ -334,6 +334,24 @@ jobs:
               echo "::notice::$GITHUB_EVENT_NAME carries no release object, so there is no pre-release flag to read; the tag gate above is what constrains this arrival."
               ;;
           esac
+          # REHEARSAL STATUS (same step, not a fourth gate — tests pin exactly three pure-shell
+          # gates in verify). A live release:published refuses while the header STATUS line
+          # still says NOT YET RUN. Match only that comment line, never this script's needle.
+          # On workflow_dispatch the obligation notices and continues so the first proof can
+          # clear the line. ci.yml carries the same STATUS check so the debt is CI-reachable.
+          case "$GITHUB_EVENT_NAME" in
+            release)
+              if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*NOT YET RUN' .github/workflows/release.yml; then
+                echo "::error::release.yml header STATUS is still unset; a live release must not be the first execution of this workflow's gates."
+                echo "::error::Rehearse first: gh workflow run release.yml --ref <tag> -f rehearse=true — then record the run id and tag on the STATUS line."
+                exit 1
+              fi
+              echo "::notice::STATUS is recorded; live release may proceed past the rehearsal obligation."
+              ;;
+            *)
+              echo "::notice::$GITHUB_EVENT_NAME is not release: published; STATUS obligation applies to a live release only."
+              ;;
+          esac
       - name: Install
         # The suite's dependency list is ci.yml's, verbatim including the pins — the
         # release gate runs the SAME suite CI runs, so a shorter list here would mean the
@@ -395,7 +413,14 @@ jobs:
       # been run was `node bin/armature.mjs --node-selftest` out of the checkout. A `bin`
       # map that resolves to nothing installs cleanly and provides no command, and a version
       # on the registry is taken forever.
+      #
+      # `python:` is the wheel room clean-room just left at `$RUNNER_TEMP/cleanroom`: the
+      # packed shim must reach `--version` / `check` through ARMATURE_PYTHON, not only
+      # `--node-selftest`. Empty would leave the release gate weaker than ci.yml's
+      # python-tests handoff on the exact artifact about to publish.
       - uses: ./.github/actions/npm-clean-room
+        with:
+          python: ${{ runner.temp }}/cleanroom/bin/python
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: dist
