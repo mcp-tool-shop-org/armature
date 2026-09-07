@@ -578,8 +578,23 @@ def sha256_file(path):
 #: checked immediately, `--binding` only after `os.makedirs` and a whole import-and-
 #: skeleton pass, and `--envelope-radii` deeper still.
 MODES = ("skeleton", "full")
-BINDINGS = ("auto", "envelope", "rigid")
+#: F-30f9bf58: `hand` = envelope first, then assign still-unweighted finger/toe verts
+#: onto the named extremity bones so Gate N never sees a glTF neutral_bone.
+BINDINGS = ("auto", "envelope", "rigid", "hand")
 ENVELOPE_RADII = ("measured", "default")
+HAND_MODES = sitelist.HAND_MODES  # mitten | articulated
+
+#: F-30f9bf58: toe deform bones (ankle -> measured toe tip). sitelist owns fingers via
+#: HAND_CHAIN; toes stay here because the registered sitelist table ends at the ankle.
+TOE_CHAIN = (
+    sitelist.Bone("toe.L", "ankle.L", "ankle_L", "toe_L", True, False),
+    sitelist.Bone("toe.R", "ankle.R", "ankle_R", "toe_R", True, False),
+)
+TOE_CHAIN_NAMES = tuple(b.name for b in TOE_CHAIN)
+
+#: F-ce65f941: Director-ruled live arm — repair the mesh, then bind the performer.
+LIVE_ARM_STAGES = ("rig_repair", "rig_character")
+PIPELINE_MODES = ("", "repair-bind")
 
 ARGUMENTS = (
     ("--glb", "<path>", True,
@@ -598,10 +613,19 @@ ARGUMENTS = (
     ("--binding", "|".join(BINDINGS), False,
      "how the mesh is attached to the skeleton (default \"rigid\"). READ ONLY ON "
      "--mode=full: on the default skeleton route nothing is bound, and the manifest "
-     "records that this value was not used"),
+     "records that this value was not used. `hand` runs envelope then extremity fill"),
     ("--envelope-radii", "|".join(ENVELOPE_RADII), False,
      "where envelope radii come from (default \"measured\"). Read only when "
-     "--binding=envelope, and therefore only on --mode=full"),
+     "--binding=envelope|hand, and therefore only on --mode=full"),
+    ("--hand-mode", "|".join(HAND_MODES), False,
+     "mitten (default) keeps the 22-bone sitelist; articulated adds sitelist.HAND_CHAIN "
+     "finger bones plus toe.L/toe.R so finger/toe verts can carry named deform groups "
+     "(F-30f9bf58)"),
+    ("--pipeline", "repair-bind", False,
+     "when set to repair-bind, write a stage_manifest.json sequencing the live arm "
+     "rig_repair -> rig_character and record --repaired-from when provided (F-ce65f941)"),
+    ("--repaired-from", "<path>", False,
+     "optional path of the pre-repair GLB when --pipeline=repair-bind; provenance only"),
     ("--measure-only", "(bare flag)", False,
      "measure the subject and write the record, then stop -- no skeleton is built and no "
      "GLB is exported. It is the ONLY bare flag here; every other argument is --key=value"),
@@ -628,11 +652,115 @@ def help_text():
     return "\n".join(lines)
 
 
+def bones_for_hand_mode(hand_mode="mitten"):
+    """Registered bones for this build, optionally with fingers + toes (F-30f9bf58)."""
+    base = list(sitelist.bones_for(hand_mode))
+    if hand_mode == "articulated":
+        base.extend(TOE_CHAIN)
+    return tuple(base)
+
+
+def registered_names_for(hand_mode="mitten"):
+    return tuple(b.name for b in bones_for_hand_mode(hand_mode))
+
+
+def synthesize_finger_marks(marks):
+    """Place finger tip landmarks along a wrist→hand_end fan when absent (F-30f9bf58).
+
+    landmarks.derive does not emit thumb_L / index_L / …; sitelist.HAND_CHAIN still
+    names those tails. A fan in the palm plane keeps the articulated build runnable
+    without inventing a second landmark derivation.
+    """
+    out = dict(marks)
+    finger_order = ("thumb", "index", "middle", "ring", "pinky")
+    for side, sign in (("L", -1.0), ("R", 1.0)):
+        wrist = out.get(f"wrist_{side}")
+        hand_end = out.get(f"hand_end_{side}")
+        if wrist is None or hand_end is None:
+            continue
+        wrist = np.asarray(wrist, dtype=np.float64)
+        hand_end = np.asarray(hand_end, dtype=np.float64)
+        palm = hand_end - wrist
+        length = float(np.linalg.norm(palm))
+        if length < 1e-9:
+            continue
+        forward = palm / length
+        # Lateral axis: prefer world X crossed with forward, fall back to Y.
+        lateral = np.cross(forward, np.array([0.0, 0.0, 1.0]))
+        if float(np.linalg.norm(lateral)) < 1e-9:
+            lateral = np.cross(forward, np.array([0.0, 1.0, 0.0]))
+        lateral = lateral / max(float(np.linalg.norm(lateral)), 1e-12)
+        lateral = lateral * sign
+        for i, name in enumerate(finger_order):
+            key = f"{name}_{side}"
+            if key in out:
+                continue
+            # Spread across the palm; tips near hand_end, thumb slightly shorter.
+            across = (i - 2) / 2.0
+            along = 0.92 if name != "thumb" else 0.72
+            out[key] = (wrist + forward * (length * along)
+                        + lateral * (length * 0.22 * across)).tolist()
+    return out
+
+
+def assign_unweighted_to_nearest_bones(mesh_obj, arm_obj, bone_names, source_verts):
+    """Weight still-unweighted verts onto the nearest named deform bone (F-30f9bf58)."""
+    names = [n for n in bone_names if n in arm_obj.data.bones]
+    if not names:
+        return {"assigned": 0, "bones": [], "note": "no extremity bones on armature"}
+    # Ensure vertex groups exist.
+    existing = {g.name for g in mesh_obj.vertex_groups}
+    for n in names:
+        if n not in existing:
+            mesh_obj.vertex_groups.new(name=n)
+    centers = {}
+    for n in names:
+        b = arm_obj.data.bones[n]
+        centers[n] = 0.5 * (np.array(b.head_local) + np.array(b.tail_local))
+    assigned = 0
+    for i, v in enumerate(mesh_obj.data.vertices):
+        if v.groups:
+            continue
+        p = np.asarray(source_verts[i], dtype=np.float64)
+        best, best_d = None, None
+        for n, c in centers.items():
+            d = float(np.linalg.norm(p - c))
+            if best is None or d < best_d:
+                best, best_d = n, d
+        if best is None:
+            continue
+        mesh_obj.vertex_groups[best].add([i], 1.0, "REPLACE")
+        assigned += 1
+    return {"assigned": assigned, "bones": list(names),
+            "note": "unweighted verts nearest-bone fill after envelope"}
+
+
+def build_stage_manifest(*, glb, out_dir, repaired_from=None, stages=LIVE_ARM_STAGES):
+    """Pure stage manifest for the repair→bind live arm (F-ce65f941)."""
+    return {
+        "tool": "rig_character",
+        "pipeline": "repair-bind",
+        "stages": list(stages),
+        "glb": os.path.abspath(glb) if glb else None,
+        "repaired_from": (os.path.abspath(repaired_from) if repaired_from else None),
+        "out": os.path.abspath(out_dir) if out_dir else None,
+        "next_after_repair": (
+            f"blender -b --factory-startup -P tools/rig_character.py -- "
+            f"--glb=<repaired.glb> --out={out_dir} --mode=full --binding=hand "
+            f"--hand-mode=articulated --pipeline=repair-bind"
+        ),
+        "note": ("Director-ruled live arm: rig_repair then rig_character. This manifest "
+                 "is the sequenced hand-off; diagnose_bone_heat names the same next_tool "
+                 "when heat is empty."),
+    }
+
+
 def parse_args():
     argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     args = {"glb": None, "out": None, "measure_only": False, "bands": 200,
             "name": "performer", "mode": "skeleton", "binding": "rigid",
-            "envelope_radii": "measured"}
+            "envelope_radii": "measured", "hand_mode": "mitten",
+            "pipeline": "", "repaired_from": None}
     #: The flag spellings, for every sentence an operator is sent back with.
     flags = [f for f, _ph, _r, _w in ARGUMENTS]
     bare = {f for f, ph, _r, _w in ARGUMENTS if ph == "(bare flag)"}
@@ -694,12 +822,28 @@ def parse_args():
     for key, flag, known, clause in (
             ("binding", "--binding", BINDINGS, "unknown_binding_mode"),
             ("envelope_radii", "--envelope-radii", ENVELOPE_RADII,
-             "unknown_envelope_radii")):
+             "unknown_envelope_radii"),
+            ("hand_mode", "--hand-mode", HAND_MODES, "unknown_hand_mode")):
         if args[key] not in known:
             raise GateMode(
                 f"unknown {flag}={args[key]!r}; known: {', '.join(known)}",
                 {"clause": clause, key: args[key], "known": list(known),
                  "flag": flag, "where": "parse_args"})
+    pipe = (args.get("pipeline") or "").strip()
+    if pipe and pipe not in ("repair-bind",):
+        raise GateMode(
+            f"unknown --pipeline={args['pipeline']!r}; known: repair-bind "
+            f"(omit the flag for a standalone bind)",
+            {"clause": "unknown_pipeline_mode", "pipeline": args["pipeline"],
+             "known": ["repair-bind"], "flag": "--pipeline", "where": "parse_args"})
+    args["pipeline"] = pipe
+    if args["binding"] == "hand" and args["hand_mode"] != "articulated":
+        raise GateMode(
+            "--binding=hand needs --hand-mode=articulated so finger/toe bones exist for "
+            "the extremity fill; mitten wrists alone recreate the neutral_bone failure",
+            {"clause": "hand_binding_needs_articulated",
+             "binding": args["binding"], "hand_mode": args["hand_mode"],
+             "flag": "--hand-mode", "where": "parse_args"})
     # WAVE 25, F-6e1a9d54's premise made TRUE. This module's named compensator is
     # "delete `--out`", and that statement holds only while every written path resolves
     # UNDER `--out`. `--name` is pasted as the NAME COMPONENT of the exported GLB, and it
@@ -847,7 +991,10 @@ def measure_joint_balls(ob, diagonal):
     return joints.candidate_balls(shells), shells
 
 
-def build_armature(scene, marks, name):
+def build_armature(scene, marks, name, bones=None):
+    """Place edit bones from `bones` (default sitelist.BONES). F-30f9bf58 passes the
+    articulated + toe chain when `--hand-mode=articulated`."""
+    bone_table = tuple(bones) if bones is not None else sitelist.BONES
     arm_data = bpy.data.armatures.new(f"{name}_armature")
     arm_obj = bpy.data.objects.new(f"{name}_rig", arm_data)
     scene.collection.objects.link(arm_obj)
@@ -857,7 +1004,7 @@ def build_armature(scene, marks, name):
     bpy.ops.object.mode_set(mode="EDIT")
     made = {}
     try:
-        for b in sitelist.BONES:
+        for b in bone_table:
             head, tail = marks[b.head], marks[b.tail]
             eb = arm_data.edit_bones.new(b.name)
             eb.head = Vector(head)
@@ -1121,10 +1268,28 @@ def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_mult
                "assignment": diag, "weight_entries_written": written,
                "weight_quantisation": RIGID_WEIGHT_QUANTISATION,
                "radii_source": "measured cross-section (landmarks.bone_radii)"}
+    elif mode == "hand":
+        # F-30f9bf58: envelope for the body, then nearest-bone fill on finger/toe verts
+        # that stick past every envelope — the path that otherwise forces neutral_bone.
+        _, env_rec = apply_binding(mesh_obj, arm_obj, "envelope", source, radii,
+                                   envelope_distance_multiple=envelope_distance_multiple,
+                                   envelope_radii=envelope_radii)
+        extremity = list(sitelist.hand_chain_names()) + list(TOE_CHAIN_NAMES)
+        fill = assign_unweighted_to_nearest_bones(mesh_obj, arm_obj, extremity, source)
+        rec = {
+            "binding": "hand",
+            "operator": "parent_set(ARMATURE_ENVELOPE) + extremity nearest-bone fill",
+            "envelope": env_rec,
+            "extremity_fill": fill,
+            "extremity_bones": extremity,
+            "note": ("hand binding: envelope first, then unweighted finger/toe vertices "
+                     "are assigned to named HAND_CHAIN / toe.* bones so glTF does not "
+                     "invent a neutral_bone Gate N would refuse"),
+        }
     else:
-        raise GateMode(f"unknown binding {mode!r}; known: auto, envelope, rigid",
+        raise GateMode(f"unknown binding {mode!r}; known: {', '.join(BINDINGS)}",
                        {"clause": "unknown_binding_mode",
-                        "binding": mode, "known": ["auto", "envelope", "rigid"]})
+                        "binding": mode, "known": list(BINDINGS)})
     return time.time() - t0, rec
 
 
@@ -1189,7 +1354,8 @@ def weld_seam_splits(mesh_obj):
     return rec
 
 
-def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
+def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured",
+               hand_mode="mitten"):
     """One complete build, from a fresh scene to a rig.
 
     `bind` is REQUIRED and has no default. MEASURED 2026-09-04: it defaulted to `True`,
@@ -1205,6 +1371,9 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
     skeleton. Gate P's liveness clause deliberately does not run there, because there is no
     binding for it to be about; a liveness reading on an unbound mesh would be a check
     reporting on a thing that does not exist yet.
+
+    `hand_mode` (F-30f9bf58): `mitten` keeps sitelist.BONES; `articulated` adds finger
+    bones from sitelist.HAND_CHAIN plus toe.L/toe.R.
     """
     scene = fresh_scene(PROBE_FPS)
     _import = bpy.ops.import_scene.gltf(filepath=glb_path)
@@ -1250,11 +1419,14 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
     balls, shells = measure_joint_balls(mesh_obj, diagonal)
     heuristic_marks = dict(lm["landmarks"])
     snapped, offsets = joints.snap_sites_to_balls(lm, balls)
+    if hand_mode == "articulated":
+        snapped = synthesize_finger_marks(snapped)
     lm["landmarks"] = snapped
     t_balls = time.time() - t0
     ruling = joints.verdict(offsets)
 
-    arm_obj, bone_lengths = build_armature(scene, snapped, name)
+    bone_defs = bones_for_hand_mode(hand_mode)
+    arm_obj, bone_lengths = build_armature(scene, snapped, name, bones=bone_defs)
     radii = landmarks.bone_radii(lm, sitelist.BONES)
 
     gate_p, weights, t_skin, bind_record, normalisation = None, {}, None, None, None
@@ -1296,6 +1468,8 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured"):
         "heuristic_landmarks": heuristic_marks, "joint_balls": balls, "shells": shells,
         "offset_table": offsets, "placement_ruling": ruling, "bound": bind or False,
         "bone_radii": radii, "binding_record": bind_record,
+        "hand_mode": hand_mode,
+        "registered_names": registered_names_for(hand_mode),
         "timings": {"landmarks_s": t_landmarks, "joint_balls_s": t_balls,
                     "bind_s": t_skin},
     }
@@ -1574,7 +1748,8 @@ def export_rigged(ctx, probe, out_path, animated=True):
                           what="the re-imported export")
     arms = [o for o in bpy.data.objects if o.type == "ARMATURE"]
     reimported = sorted(b.name for a in arms for b in a.data.bones)
-    gate_n_post = rig_gates.gate_n_names(reimported, sitelist.ALL_NAMES,
+    registered = ctx.get("registered_names") or sitelist.ALL_NAMES
+    gate_n_post = rig_gates.gate_n_names(reimported, registered,
                                          "the re-imported exported GLB")
 
     # MEASURED 2026-08-11, and it was a gate silently not running. Selecting the re-imported
@@ -1676,17 +1851,19 @@ def run_skeleton(args, out_dir, source_sha, started):
     until he approves the skeleton — so the binding arms do not run and Gate P's liveness
     clause is NOT YET RUN by design, not by omission.
     """
+    hm = args.get("hand_mode") or "mitten"
     first = build_pass(args["glb"], args["name"], args["bands"], "determinism-probe",
-                       bind=False)
+                       bind=False, hand_mode=hm)
     fp_first, offsets_first = first["fingerprint"], first["offset_table"]
     del first
 
-    ctx = build_pass(args["glb"], args["name"], args["bands"], "kept", bind=False)
+    ctx = build_pass(args["glb"], args["name"], args["bands"], "kept", bind=False,
+                     hand_mode=hm)
     gate_d = unbound_determinism_record(
         rig_gates.gate_d_determinism(fp_first, ctx["fingerprint"], ctx["diagonal"]),
         fp_first, ctx["fingerprint"], expect_weights=False)
     gate_n_pre = rig_gates.gate_n_names(
-        [b.name for b in ctx["armature"].data.bones], sitelist.ALL_NAMES,
+        [b.name for b in ctx["armature"].data.bones], ctx["registered_names"],
         "the built armature, before export")
 
     # F-244b2ad5: both `build_pass` calls above refuse an ambiguous or non-finite subject
@@ -1711,8 +1888,9 @@ def run_skeleton(args, out_dir, source_sha, started):
                    "bytes": os.path.getsize(args["glb"])},
         "output": {"path": out_glb, "sha256": sha256_file(out_glb),
                    "bytes": os.path.getsize(out_glb)},
-        "site_to_bone_map": {b.name: b.as_dict() for b in sitelist.BONES},
-        "registered_site_count": len(sitelist.ALL_NAMES),
+        "hand_mode": ctx.get("hand_mode", "mitten"),
+        "site_to_bone_map": {b.name: b.as_dict() for b in bones_for_hand_mode(hm)},
+        "registered_site_count": len(ctx["registered_names"]),
         "premise_2_pre_existing_rig": ctx["premise2"],
         "weld_on_import": ctx["weld_on_import"],
         "weight_normalisation": ctx.get("normalisation"),
@@ -1802,7 +1980,8 @@ def main():
         # left to a default. This call used to pass four positional arguments and let
         # `bind` fall through to `True`, which `apply_binding` refuses by design.
         ctx = build_pass(args["glb"], args["name"], args["bands"], "measure",
-                         bind=args["binding"], envelope_radii=args["envelope_radii"])
+                         bind=args["binding"], envelope_radii=args["envelope_radii"],
+                         hand_mode=args.get("hand_mode") or "mitten")
         rec = {
             "tool": "rig_character", "tool_version": TOOL_VERSION, "mode": "measure-only",
             # WAVE 14, F-252f399d -- see the note on the sibling manifests above.
@@ -1820,6 +1999,7 @@ def main():
             "bone_lengths": ctx["bone_lengths"],
             "binding": args["binding"],
             "envelope_radii": args["envelope_radii"],
+            "hand_mode": ctx.get("hand_mode", "mitten"),
             # A bare `null` beside a gate name is a placeholder shaped like evidence. When
             # the pass really did bind, this is the gate's own record; when it did not, the
             # record says so in the manifest's own NOT YET RUN convention.
@@ -1858,20 +2038,21 @@ def main():
 
     # Two full builds from the same input. The second is the one kept; Gate D compares.
     mode = args["binding"]
+    hm = args.get("hand_mode") or "mitten"
     first = build_pass(args["glb"], args["name"], args["bands"], "determinism-probe",
-                       bind=mode, envelope_radii=args["envelope_radii"])
+                       bind=mode, envelope_radii=args["envelope_radii"], hand_mode=hm)
     fp_first = first["fingerprint"]
     gate_p_first = first["gate_p"]
     del first
 
     ctx = build_pass(args["glb"], args["name"], args["bands"], "kept", bind=mode,
-                     envelope_radii=args["envelope_radii"])
+                     envelope_radii=args["envelope_radii"], hand_mode=hm)
     gate_d = unbound_determinism_record(
         rig_gates.gate_d_determinism(fp_first, ctx["fingerprint"], ctx["diagonal"]),
         fp_first, ctx["fingerprint"], expect_weights=False)
 
     gate_n_pre = rig_gates.gate_n_names(
-        [b.name for b in ctx["armature"].data.bones], sitelist.ALL_NAMES,
+        [b.name for b in ctx["armature"].data.bones], ctx["registered_names"],
         "the built armature, before export")
 
     probe = author_probe(ctx)
@@ -1911,8 +2092,9 @@ def main():
         "source": {"path": args["glb"], "sha256": source_sha,
                    "bytes": os.path.getsize(args["glb"])},
         "output": {"path": out_glb, "sha256": out_sha, "bytes": os.path.getsize(out_glb)},
-        "site_to_bone_map": {b.name: b.as_dict() for b in sitelist.BONES},
-        "registered_site_count": len(sitelist.ALL_NAMES),
+        "hand_mode": hm,
+        "site_to_bone_map": {b.name: b.as_dict() for b in bones_for_hand_mode(hm)},
+        "registered_site_count": len(ctx["registered_names"]),
         "e01_site_count": len(sitelist.E01_SITES),
         "premise_2_pre_existing_rig": ctx["premise2"],
         "weld_on_import": ctx["weld_on_import"],
@@ -1944,9 +2126,18 @@ def main():
     path = os.path.join(out_dir, f"rig_manifest_{tag}.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(manifest, fh, indent=2)
-    print("RIG_CHARACTER_OK " + json.dumps({"mode": "full", "binding": tag,
-                                            "glb": out_glb, "sha256": out_sha,
-                                            "manifest": path}))
+    stage_path = None
+    if args.get("pipeline") == "repair-bind":
+        stage = build_stage_manifest(
+            glb=args["glb"], out_dir=out_dir,
+            repaired_from=args.get("repaired_from"))
+        stage_path = os.path.join(out_dir, "stage_manifest.json")
+        with open(stage_path, "w", encoding="utf-8") as fh:
+            json.dump(stage, fh, indent=2)
+    print("RIG_CHARACTER_OK " + json.dumps({
+        "mode": "full", "binding": tag, "glb": out_glb, "sha256": out_sha,
+        "manifest": path, "hand_mode": hm,
+        "stage_manifest": stage_path}))
 
 
 def halt_outcome(exc):

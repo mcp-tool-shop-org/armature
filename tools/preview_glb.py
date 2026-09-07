@@ -170,7 +170,7 @@ def parse_args():
     p = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument("--glb", required=True,
+    p.add_argument("--glb", action="append", required=True,
                    help="the GLB to look at. READ ONLY -- nothing here writes to it")
     p.add_argument("--out", required=True,
                    help="the directory the four renders and <name>_stats.json are written "
@@ -355,9 +355,13 @@ def gate_previews_written(written):
 
 def main():
     args = parse_args()
+    glbs = list(args.glb)
+    primary_glb = glbs[0]
     bpy.ops.wm.read_factory_settings(use_empty=True)
-    _import = bpy.ops.import_scene.gltf(filepath=args.glb)
-    rc.require_import_status(_import, args.glb, PreviewGlbGate,
+    _import = bpy.ops.import_scene.gltf(filepath=primary_glb)
+    for extra in glbs[1:]:
+        bpy.ops.import_scene.gltf(filepath=extra)
+    rc.require_import_status(_import, primary_glb, PreviewGlbGate,
                              {"who": "preview_glb"})
 
     scn = bpy.context.scene
@@ -373,9 +377,9 @@ def main():
     meshes = blender_scene.render_visible_meshes(scn, all_meshes)
     if not meshes:
         raise PreviewGlbGate(
-            f"{args.glb} imported {len(all_meshes)} mesh object(s) and none of them is "
+            f"{primary_glb} imported {len(all_meshes)} mesh object(s) and none of them is "
             f"render-visible; there is nothing to preview",
-            {"clause": "no_render_visible_mesh", "glb": args.glb,
+            {"clause": "no_render_visible_mesh", "glb": primary_glb,
              "mesh_objects_all": [o.name for o in all_meshes]})
 
     arms = [o for o in bpy.data.objects if o.type == "ARMATURE"]
@@ -388,7 +392,7 @@ def main():
     stats = {
         "tool": "preview_glb",
         "blender": blender_scene.blender_provenance(),
-        "glb": args.glb,
+        "glb": primary_glb,
         "mesh_objects": len(meshes),
         "mesh_objects_all": [o.name for o in all_meshes],
         "mesh_objects_render_visible": [o.name for o in meshes],

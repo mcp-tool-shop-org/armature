@@ -42,6 +42,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import rig_character as rc                                            # noqa: E402
 from armature_core import blender_scene                               # noqa: E402
 from armature_core.errors import ArmatureError                        # noqa: E402
+from render_performer import maybe_compose_panels                     # noqa: E402
 from make_parts_sheet import (ArcDidNotSurvive, arc_liveness,         # noqa: E402
                               articulated_side, light_the_scene,
                               ortho_camera, shoot)
@@ -87,6 +88,10 @@ def parse_args():
                    help="what the AFTER column actually is. Derived from the mesh when "
                         "omitted -- a hard-coded label outlived its route once already and "
                         "described a 4096 bake on a mesh that was never baked.")
+    p.add_argument("--compose", dest="compose", action="store_true", default=True,
+                   help="after panels.json is valid, spawn sheet_compose (default; F-938485d6)")
+    p.add_argument("--no-compose", dest="compose", action="store_false",
+                   help="stop after panels.json")
     return vars(p.parse_args(argv))
 
 
@@ -374,8 +379,12 @@ def main():
             "out": out_dir, "filename": "E07-rig-armature.png", "rows": rows}
     with open(os.path.join(out_dir, "panels.json"), "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
+    compose_rec = maybe_compose_panels(os.path.join(out_dir, "panels.json"),
+                                   compose=bool(args.get("compose", True)))
     print("MAKE_RIG_SHEET_OK " + json.dumps({"max_vertex_motion":
                                              arc["max_vertex_motion"],
+                                             "sheet": compose_rec.get("sheet"),
+                                             "compose": compose_rec,
                                              "rows": len(rows),
                                      "stray_meshes_removed": stray}))
 

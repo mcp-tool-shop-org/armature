@@ -379,7 +379,7 @@ def parse_args():
     ap = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--glb", required=True,
+    ap.add_argument("--glb", action="append", required=False, default=None,
                     help="the STATIC textured character GLB to orbit; read only")
     ap.add_argument("--out", required=True,
                     help="the directory the RGBA view masters and "
@@ -432,12 +432,25 @@ def parse_args():
                     help="parallel projection with ONE ortho_scale shared by every view "
                          "— the sprite shot-set. Absent, the perspective path runs "
                          "unchanged (S04)")
+    ap.add_argument("--roster", default=None,
+                    help="JSON list of {glb, prefix} rendered in ONE Blender session "
+                         "(F-7071dc05 / F-8673b6ad). Implies --ortho and requires "
+                         "--ortho-scale; gates equal pinned ortho_scale across members")
     ap.add_argument("--ortho-scale", type=float, default=None,
                     help="pin the shared ortho_scale instead of solving it: one recorded "
                          "number a whole ROSTER renders on, so relative character heights "
                          "survive into the sheet. Used verbatim; --height-frac does not "
                          "participate. Requires --ortho (S05)")
     a = ap.parse_args(argv)
+    require_roster_pin(a)
+    if not a.roster and not a.glb:
+        raise RenderTurnaroundGate(
+            "one of --glb or --roster is required",
+            {"clause": "glb_or_roster_required"})
+    if a.roster and a.glb:
+        raise RenderTurnaroundGate(
+            "--roster and --glb both set; pass the cast via --roster only",
+            {"clause": "roster_and_glb_both_set"})
 
     # ---- F-f7d1f64f, wave 22. `--prefix` was free text with no `type=`, no `choices=`
     # and no validation, pasted as the NAME COMPONENT of every written view path
@@ -764,6 +777,72 @@ def _predicted_vs_measured(extent, bbox):
     }
 
 
+def resolve_turnaround_subjects(args):
+    """Single --glb list or --roster members for one Blender session (F-7071dc05/F-8673b6ad)."""
+    if getattr(args, "roster", None):
+        members = load_roster(args.roster)
+        return {"mode": "roster", "members": members,
+                "ortho_scale": args.ortho_scale, "ortho_scale_source": "pinned"}
+    glbs = list(args.glb or [])
+    members = [{"glb": g, "prefix": args.prefix, "index": i, "label": None}
+               for i, g in enumerate(glbs)]
+    return {"mode": "glb", "members": members,
+            "ortho_scale": args.ortho_scale,
+            "ortho_scale_source": ("pinned" if args.ortho_scale is not None else None)}
+
+
+def load_roster(path):
+    """Parse --roster JSON: list of {glb, prefix} (F-7071dc05)."""
+    import json as _json
+    with open(path, encoding="utf-8") as fh:
+        raw = _json.load(fh)
+    if not isinstance(raw, list) or not raw:
+        raise RenderTurnaroundGate(
+            "--roster must be a non-empty JSON list of {glb, prefix} objects",
+            {"clause": "roster_not_a_nonempty_list", "roster": path})
+    out = []
+    for i, row in enumerate(raw):
+        if not isinstance(row, dict) or "glb" not in row:
+            raise RenderTurnaroundGate(
+                f"--roster[{i}] needs a glb path",
+                {"clause": "roster_row_missing_glb", "index": i, "row": row})
+        prefix = row.get("prefix") or f"cast{i}"
+        out.append({"glb": row["glb"], "prefix": str(prefix), "index": i,
+                    "label": row.get("label")})
+    return out
+
+
+def require_roster_pin(args):
+    """Roster implies --ortho and a pinned --ortho-scale (F-7071dc05)."""
+    if not getattr(args, "roster", None):
+        return args
+    if not args.ortho:
+        # imply ortho
+        args.ortho = True
+    if args.ortho_scale is None:
+        raise RenderTurnaroundGate(
+            "--roster requires --ortho-scale (one recorded pin shared across members)",
+            {"clause": "roster_requires_ortho_scale", "flag": "--ortho-scale"})
+    return args
+
+
+def gate_roster_scales(member_records, expected_scale):
+    """Every roster member must record the same pinned ortho_scale (F-7071dc05)."""
+    bad = []
+    for rec in member_records:
+        scale = rec.get("ortho_scale")
+        source = rec.get("ortho_scale_source")
+        if scale != expected_scale or source != "pinned":
+            bad.append(rec)
+    if bad:
+        raise RenderTurnaroundGate(
+            "roster members disagree on pinned ortho_scale",
+            {"clause": "roster_ortho_scale_mismatch",
+             "expected": expected_scale, "bad": bad})
+    return {"verdict": "PASS", "ortho_scale": expected_scale,
+            "ortho_scale_source": "pinned", "n_members": len(member_records)}
+
+
 def ortho_scale_record(plan, ortho_scale, height_frac, given_text, sphere_radius):
     """The manifest's account of WHERE this run's shared scale came from, as the two
     mutually exclusive sub-blocks `(solved_for, pinned_as)`. At most one is not None.
@@ -936,14 +1015,33 @@ def main():
     azimuths = TA.orbit_azimuths(a.views, a.azimuth_start, a.sweep)
 
     # ---- fps FIRST, on an empty scene, before the import. glTF key times are seconds.
+    cast = resolve_turnaround_subjects(a)
+    # F-7071dc05 / F-8673b6ad: one Blender session can carry a roster; each member is
+    # imported in turn below. Member 0 seeds the camera solve shared across the cast.
+    roster_member_records = []
+    primary = cast["members"][0]["glb"]
+    if cast["mode"] == "roster":
+        a.prefix = cast["members"][0]["prefix"]
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
     blender_scene.set_frame_rate(scene, a.fps)
-    meshes, arms, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
+    meshes, arms, info = blender_scene.import_glb(primary, expected_fps=a.fps)
+    for member in cast["members"][1:]:
+        blender_scene.import_glb(member["glb"], expected_fps=a.fps)
+        roster_member_records.append({
+            "glb": os.path.abspath(member["glb"]), "prefix": member["prefix"],
+            "index": member["index"], "ortho_scale": cast["ortho_scale"],
+            "ortho_scale_source": cast["ortho_scale_source"] or "pinned"})
+    if cast["mode"] == "roster":
+        roster_member_records.insert(0, {
+            "glb": os.path.abspath(primary), "prefix": a.prefix, "index": 0,
+            "ortho_scale": cast["ortho_scale"],
+            "ortho_scale_source": "pinned"})
+        gate_roster_scales(roster_member_records, cast["ortho_scale"])
     if not meshes:
         raise RenderTurnaroundGate(
-            f"{a.glb} imported no mesh objects; nothing to render",
-            {"clause": "import", "glb": a.glb, "mesh_objects": [],
+            f"{primary} imported no mesh objects; nothing to render",
+            {"clause": "import", "glb": primary, "mesh_objects": [],
              "armatures": [o.name for o in arms]})
 
     engine = select_engine(scene)
@@ -991,11 +1089,11 @@ def main():
     excluded = [o.name for o in meshes if o not in subject]
     if not subject:
         raise RenderTurnaroundGate(
-            f"{a.glb} imported {len(meshes)} mesh object(s) and none of them is "
+            f"{primary} imported {len(meshes)} mesh object(s) and none of them is "
             f"render-visible ({[o.name for o in meshes]}); there is nothing to turn "
             f"around, and framing against hidden geometry would compose a shot of an "
             f"object the renderer will not draw",
-            {"clause": "render visibility", "glb": a.glb,
+            {"clause": "render visibility", "glb": primary,
              "mesh_objects_all": [o.name for o in meshes],
              "mesh_objects_render_visible": []})
 
@@ -1160,8 +1258,9 @@ def main():
         "tool": "render_turnaround", "tool_version": TOOL_VERSION,
         "blender": blender_scene.blender_provenance(),
         "numpy": np.__version__,
-        "source": {"glb": os.path.abspath(a.glb), "sha256": _sha256(a.glb),
-                   "bytes": os.path.getsize(a.glb)},
+        "source": {"glb": os.path.abspath(primary), "sha256": _sha256(primary),
+                   "bytes": os.path.getsize(primary),
+                   "cast": cast, "roster_members": roster_member_records},
         "import_info": dict(info, subject_render_visible=[o.name for o in subject],
                             subject_excluded_not_render_visible=excluded),
         "resolution": [width, height],

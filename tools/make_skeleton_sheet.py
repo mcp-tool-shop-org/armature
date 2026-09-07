@@ -47,6 +47,7 @@ import rig_character  # noqa: E402
 from armature_core import joints, landmarks, sitelist  # noqa: E402
 from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import GateFailure  # noqa: E402
+from render_performer import maybe_compose_panels  # noqa: E402
 from make_parts_sheet import CLAY_STUDIO_LINEAR  # noqa: E402
 
 FULL_W, FULL_H = 900, 1360
@@ -205,6 +206,10 @@ def parse_args():
                    help="horizontal bands the silhouette is read in to place the pivots "
                         "(default 200); the same number make_skeleton_sheet's own "
                         "landmark derivation is bounded by")
+    p.add_argument("--compose", dest="compose", action="store_true", default=True,
+                   help="after panels.json is valid, spawn sheet_compose (default; F-938485d6)")
+    p.add_argument("--no-compose", dest="compose", action="store_false",
+                   help="stop after panels.json; operator runs sheet_compose by hand")
     return p.parse_args(argv)
 
 
@@ -505,9 +510,12 @@ def main():
     # above and none of it reached the line, so a run in which every joint snapped and a
     # run assembled from a degenerate table read identically to a wrapper. The counts
     # are the sheet's own summary, from the same objects the record carries.
+    compose_rec = maybe_compose_panels(path, compose=bool(getattr(args, "compose", True)))
     print("MAKE_SKELETON_SHEET_OK " + json.dumps({
         "tool": "make_skeleton_sheet",
         "json": path,
+        "sheet": compose_rec.get("sheet"),
+        "compose": compose_rec,
         "gate_SKELETON_SHEET": {"n_matched": gate_snap["n_matched"],
                                 "n_snappable": gate_snap["n_snappable"],
                                 "unmatched": gate_snap["unmatched"]},
