@@ -264,7 +264,7 @@ def parse_args(argv=None):
                          "rebuild over an earlier build refuses by name "
                          "(`output_already_exists`) and names both digests")
     build_opts.add_argument("--seed", type=int, default=None,
-                    help="the seed to submit; omitted, the first seed in --seeds-registry "
+                    help="the seed to submit; omitted, the first seed in --seeds "
                          "is used. Gate S refuses an unregistered number either way")
     build_opts.add_argument("--negative-source", default=None,
                     help="path to Wan's shared_config.py; the negative is READ from it "
@@ -273,9 +273,11 @@ def parse_args(argv=None):
                     help="E08's committed payload record. The prompt and negative built "
                          "here are compared byte for byte against it and the build halts "
                          "on any drift — 'pinned verbatim' is a measurement, not a claim")
-    build_opts.add_argument("--seeds-registry", default=None,
+    build_opts.add_argument("--seeds", "--seeds-registry", dest="seeds", default=None,
                     help="the committed seed registration Gate S checks --seed against, and "
-                         "the list the default seed is taken from")
+                         "the list the default seed is taken from. "
+                         "--seeds-registry is a deprecated alias for one wave "
+                         "(wave 37, F-49ed6f1d)")
     build_opts.add_argument("--experiment", default=EXPERIMENT,
                     help="names the output files and the server-side filename prefixes "
                          "(default: %(default)s)")
@@ -624,12 +626,12 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
         # the 4 sites, and an operator hitting it on three of the four routes got a halt a
         # wrapper cannot classify.
         raise PayloadError(
-            "no --seed and no --seeds-registry: this experiment pre-registered no seeds, "
+            "no --seed and no --seeds: this experiment pre-registered no seeds, "
             "so there is no committed number to default to, and Gate S refuses a seed "
-            "varied without a registration. Pass --seeds-registry with the experiment's "
+            "varied without a registration. Pass --seeds with the experiment's "
             "committed list, or pass --seed with a number that is on it",
             {"gate": "PAYLOAD", "andon": "seed_registration",
-             "clause": "no_seed_and_no_registration", "flag": "--seeds-registry",
+             "clause": "no_seed_and_no_registration", "flag": "--seeds",
              "registered": list(registry or [])})
     seed_used = seed if seed is not None else sorted(registry)[0]
     gate_s = gates.gate_s_seed_registration(seed_used, registry, experiment,
@@ -889,12 +891,13 @@ def main(argv=None):
              "clause": "uploads_carry_no_start_frame", "flag": "--uploads",
              "path": os.path.abspath(a.uploads)})
 
+    a.seeds_registry = a.seeds  # compat alias for one wave
     registry = None
-    if a.seeds_registry:
+    if a.seeds:
         # ONE reader, eight callers (wave 16, F-0682bd00). The bare `json.load(fh)["seeds"]`
         # this replaces raised a stdlib KeyError naming a key and nothing else on a
         # registration with no `seeds` key.
-        registry = read_seed_registration(a.seeds_registry, flag="--seeds-registry")
+        registry = read_seed_registration(a.seeds, flag="--seeds")
 
     if not a.negative_source:
         raise PayloadError(

@@ -1,7 +1,7 @@
 {
   "catalog": "armature spend-path route index",
-  "updated": "2026-09-06",
-  "note": "Machine-readable operator index: experiment → builder → seeds → admission defaults → fetch profile. Narrative lives in docs/experiments/; this file is what a seat lists before spending. Wave 35, F-fb6e1577 / F-dfbc5d79.",
+  "updated": "2026-09-07",
+  "note": "Machine-readable operator index: experiment → builder → seeds → admission defaults → fetch profile → control_spec. Narrative lives in docs/experiments/; this file is what a seat lists before spending. Wave 35 F-fb6e1577 / F-dfbc5d79; wave 37 F-966d9a73 assembly/cascade rows + admit defaults; F-fe345ff9 control_spec / retired_control_specs.",
   "fetch_profiles": "tools/fetch_run.py::ROUTE_FETCH_PROFILES",
   "dispatcher": "tools/build_routes_payload.py",
   "routes": [
@@ -11,9 +11,13 @@
       "status": "live",
       "builder": "tools/build_payload.py",
       "seeds": null,
-      "admission": {"experiment": "E02", "stage": "control"},
+      "admission": {
+        "experiment": "E02",
+        "stage": "control"
+      },
       "fetch_profile": "e02",
-      "notes": "General per-experiment builder; --experiment picks the trajectory table."
+      "notes": "General per-experiment builder; --experiment picks the trajectory table.",
+      "control_spec": "specs/E02-control-blackguard.json"
     },
     {
       "id": "E03",
@@ -21,9 +25,13 @@
       "status": "live",
       "builder": "tools/build_payload.py",
       "seeds": null,
-      "admission": {"experiment": "E03", "stage": "authored-motion"},
+      "admission": {
+        "experiment": "E03",
+        "stage": "authored-motion"
+      },
       "fetch_profile": "e02",
-      "notes": "Control specs under specs/E03-*.json; builder is build_payload."
+      "notes": "E03 arms live via build_payload trajectory table + uploads fixtures. specs/E03-posearc.json and specs/E03-static.json are retired-control-specs (see catalog.retired_control_specs); they are not spend inputs.",
+      "control_spec": null
     },
     {
       "id": "E04",
@@ -31,9 +39,13 @@
       "status": "live",
       "builder": "tools/build_payload.py",
       "seeds": null,
-      "admission": {"experiment": "E04", "stage": "between-generation-floor"},
+      "admission": {
+        "experiment": "E04",
+        "stage": "between-generation-floor"
+      },
       "fetch_profile": "e02",
-      "notes": "Uses build_payload trajectory table."
+      "notes": "Uses build_payload trajectory table.",
+      "control_spec": null
     },
     {
       "id": "E06",
@@ -41,9 +53,13 @@
       "status": "live",
       "builder": "tools/build_payload.py",
       "seeds": null,
-      "admission": {"experiment": "E06", "stage": "reference-onto-schematic"},
+      "admission": {
+        "experiment": "E06",
+        "stage": "reference-onto-schematic"
+      },
       "fetch_profile": "e02",
-      "notes": "Uses build_payload trajectory table."
+      "notes": "Uses build_payload trajectory table.",
+      "control_spec": null
     },
     {
       "id": "E08",
@@ -51,7 +67,10 @@
       "status": "live",
       "builder": "tools/build_animate_payload.py",
       "seeds": "specs/E08-seeds.json",
-      "admission": {"experiment": "E08", "stage": "probe"},
+      "admission": {
+        "experiment": "E08",
+        "stage": "probe"
+      },
       "fetch_profile": "animate",
       "notes": "WanAnimate route; default length 65."
     },
@@ -61,7 +80,10 @@
       "status": "live",
       "builder": "tools/build_t2v_payload.py",
       "seeds": "specs/E09-A3-seeds.json",
-      "admission": {"experiment": "E09", "stage": "B2"},
+      "admission": {
+        "experiment": "E09",
+        "stage": "B2"
+      },
       "fetch_profile": "t2v",
       "fetch_tool": "tools/fetch_t2v_run.py",
       "notes": "T2V A3; Gate ORDER via fetch_t2v_run. Also specs/E09-seeds.json for earlier stage."
@@ -72,7 +94,10 @@
       "status": "live",
       "builder": "tools/build_animate_payload.py",
       "seeds": "specs/E10-seeds.json",
-      "admission": {"experiment": "E10", "stage": "densified"},
+      "admission": {
+        "experiment": "E10",
+        "stage": "densified"
+      },
       "fetch_profile": "animate",
       "notes": "Densified driving: same animate builder at length 81. SEEDS_REGISTRY_BY_EXPERIMENT['E10'] binds Gate S (F-cb85098b)."
     },
@@ -82,7 +107,10 @@
       "status": "live",
       "builder": "tools/build_i2v_payload.py",
       "seeds": "specs/E11-seeds.json",
-      "admission": {"experiment": "E11", "stage": "probe"},
+      "admission": {
+        "experiment": "E11",
+        "stage": "probe"
+      },
       "fetch_profile": "i2v",
       "notes": "No-control i2v route."
     },
@@ -92,7 +120,10 @@
       "status": "live",
       "builder": "tools/build_camera_i2v_payload.py",
       "seeds": "specs/E12-seeds.json",
-      "admission": {"experiment": "E12", "stage": "camera"},
+      "admission": {
+        "experiment": "E12",
+        "stage": "camera"
+      },
       "fetch_profile": "camera_i2v",
       "notes": "Camera i2v; E14 LoRA arms measure against this baseline."
     },
@@ -102,10 +133,42 @@
       "status": "live",
       "builder": "tools/build_r2v_payload.py",
       "seeds": "specs/E13-seeds.json",
-      "admission": {"experiment": "E13", "stage": "composed"},
+      "admission": {
+        "experiment": "E13",
+        "stage": "composed"
+      },
       "fetch_profile": "r2v",
-      "related": ["tools/build_assembly_payload.py", "tools/build_cascade_payload.py"],
+      "related": [
+        "assembly",
+        "cascade"
+      ],
       "notes": "Composed r2v; assembly/cascade author the A2 reference VIDEO."
+    },
+    {
+      "id": "assembly",
+      "experiment": "E13",
+      "status": "live",
+      "builder": "tools/build_assembly_payload.py",
+      "seeds": null,
+      "admission": {
+        "experiment": "E13",
+        "stage": "assembly"
+      },
+      "fetch_profile": "assembly",
+      "notes": "A2 reference-video author (flat BatchImages chain, slot-capped). Wave 37 F-966d9a73."
+    },
+    {
+      "id": "cascade",
+      "experiment": "E13",
+      "status": "live",
+      "builder": "tools/build_cascade_payload.py",
+      "seeds": null,
+      "admission": {
+        "experiment": "E13",
+        "stage": "cascade"
+      },
+      "fetch_profile": "cascade",
+      "notes": "A2 reference-video author (supported length via cascade). Wave 37 F-966d9a73."
     },
     {
       "id": "E14",
@@ -113,7 +176,10 @@
       "status": "live",
       "builder": "tools/build_lora_arm_payload.py",
       "seeds": "specs/E14-seeds.json",
-      "admission": {"experiment": "E14", "stage": "lora-bakeoff"},
+      "admission": {
+        "experiment": "E14",
+        "stage": "lora-bakeoff"
+      },
       "fetch_profile": "lora_arm",
       "notes": "Style LoRA on E12 baseline."
     },
@@ -145,7 +211,7 @@
       "seeds": null,
       "admission": null,
       "fetch_profile": null,
-      "notes": "Last gate before paid submission. experiment/stage from --record when present."
+      "notes": "Last gate before paid submission. `routes admit E13 -- ...` injects admission.experiment/stage from the catalog when omitted; --record still wins."
     },
     {
       "id": "fetch",
@@ -176,6 +242,23 @@
       "admission": null,
       "fetch_profile": null,
       "notes": "Authors --uploads maps for i2v/camera/animate/assembly/cascade/r2v_a2."
+    }
+  ],
+  "retired_control_specs": [
+    {
+      "path": "specs/E01-anchor-blackguard.json",
+      "status": "retired-control-spec",
+      "reason": "E01 character-arm shot record; no owned builder opens this filename. Live E01 framing consumer is specs/E01-anchor.json (instruments). Not a spend input."
+    },
+    {
+      "path": "specs/E03-posearc.json",
+      "status": "retired-control-spec",
+      "reason": "Historical E03 B1 shot record. build_payload E03 arms use uploads maps / source_dir paths, not this JSON. Not a Gate S/CANON spend input."
+    },
+    {
+      "path": "specs/E03-static.json",
+      "status": "retired-control-spec",
+      "reason": "Historical E03 B3 discriminator shot record. Same as E03-posearc: not opened by any owned builder."
     }
   ]
 }

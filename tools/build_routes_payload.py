@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
-TOOL_VERSION = "W35.1"
+TOOL_VERSION = "W37.1"
 ROUTES_CATALOG = os.path.join(
     os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
     "specs", "routes.json")
@@ -145,16 +145,10 @@ def cmd_dispatch(args):
              "clause": "route_has_no_builder", "route": args.route})
     forward = list(args.forward or [])
     # Seed default when the catalog names one and the operator did not.
+    # Wave 37, F-49ed6f1d: every builder accepts --seeds (seeds-registry is alias only).
     seeds = row.get("seeds")
     if seeds and not any(a.startswith("--seeds") for a in forward):
-        # animate / i2v / camera_i2v / lora_arm take --seeds-registry; t2v / r2v take --seeds.
-        base = os.path.basename(builder)
-        if base in ("build_animate_payload.py", "build_i2v_payload.py",
-                    "build_camera_i2v_payload.py", "build_lora_arm_payload.py"):
-            flag = "--seeds-registry"
-        else:
-            flag = "--seeds"
-        forward = [f"{flag}={seeds}", *forward]
+        forward = [f"--seeds={seeds}", *forward]
     print("ROUTES_DISPATCH " + json.dumps({
         "route": args.route, "builder": builder, "seeds": seeds,
         "admission": row.get("admission"), "fetch_profile": row.get("fetch_profile"),
@@ -162,8 +156,40 @@ def cmd_dispatch(args):
     return _forward(builder, forward, dry_run=args.dry_run)
 
 
+def _has_flag(forward, name):
+    """True when argv already carries --name or --name=..."""
+    prefix = f"--{name}"
+    return any(a == prefix or a.startswith(prefix + "=") for a in forward)
+
+
 def cmd_admit(args):
-    return _forward("gate_saved_graph.py", args.forward, dry_run=args.dry_run)
+    """Forward to gate_saved_graph; optional route id injects admission defaults.
+
+    Wave 37, F-966d9a73: `routes admit E13 -- --saved=...` applies the catalog's
+    admission.experiment/stage the same way dispatch applies seeds, unless the
+    operator already passed those flags (or --record, which supplies labels).
+    """
+    forward = list(args.forward or [])
+    route_id = getattr(args, "route", None)
+    injected = {}
+    if route_id:
+        doc = load_catalog(args.catalog)
+        row = find_route(doc, route_id)
+        admission = row.get("admission") if isinstance(row.get("admission"), dict) else {}
+        if (admission.get("experiment") is not None
+                and not _has_flag(forward, "experiment")
+                and not _has_flag(forward, "record")):
+            forward = [f"--experiment={admission['experiment']}", *forward]
+            injected["experiment"] = admission["experiment"]
+        if (admission.get("stage") is not None
+                and not _has_flag(forward, "stage")
+                and not _has_flag(forward, "record")):
+            forward = [f"--stage={admission['stage']}", *forward]
+            injected["stage"] = admission["stage"]
+        print("ROUTES_ADMIT " + json.dumps({
+            "route": route_id, "admission": admission, "injected": injected,
+            "forward": forward}, ensure_ascii=False))
+    return _forward("gate_saved_graph.py", forward, dry_run=args.dry_run)
 
 
 def cmd_fetch(args):
@@ -174,6 +200,26 @@ def cmd_fetch(args):
         tool = "fetch_t2v_run.py"
         forward = [a for a in forward if a != "--t2v" and not a.startswith("--t2v=")]
     return _forward(tool, forward, dry_run=args.dry_run)
+
+
+def cmd_ledger(args):
+    """Read-only spend ledger / remaining view (wave 37, F-39aabdbf)."""
+    from build_submit_payload import (  # noqa: WPS433
+        default_ledger_path, ledger_report, load_ledger)
+    from build_assembly_payload import read_seed_registration_budget  # noqa: WPS433
+
+    if not os.path.isfile(args.seeds):
+        raise RoutesGate(
+            f"--seeds {args.seeds!r} is not a file",
+            {"gate": "ROUTES", "andon": "RoutesGate",
+             "clause": "input_missing", "flag": "--seeds",
+             "path": os.path.abspath(args.seeds)})
+    budget = read_seed_registration_budget(args.seeds, flag="--seeds")
+    ledger_path = os.path.abspath(args.ledger or default_ledger_path(args.seeds))
+    ledger = load_ledger(ledger_path)
+    report = ledger_report(budget, ledger, arm=args.arm)
+    print("ROUTES_LEDGER_OK " + json.dumps(report, ensure_ascii=False))
+    return 0
 
 
 def main(argv=None):
@@ -189,7 +235,7 @@ def main(argv=None):
     ap.add_argument("--catalog", default=None,
                     help=f"routes catalog JSON (default: {ROUTES_CATALOG})")
     sub = ap.add_subparsers(dest="cmd", required=True,
-                            metavar="{list,show,dispatch,admit,fetch}")
+                            metavar="{list,show,dispatch,admit,fetch,ledger}")
 
     p = sub.add_parser("list", help="print every catalog row")
     p.add_argument("--live-only", action="store_true",
@@ -197,7 +243,7 @@ def main(argv=None):
     p.set_defaults(func=cmd_list)
 
     p = sub.add_parser("show", help="print one catalog row")
-    p.add_argument("route", help="route id (E08, E10, admit, …)")
+    p.add_argument("route", help="route id (E08, E10, assembly, admit, …)")
     p.set_defaults(func=cmd_show)
 
     p = sub.add_parser(
@@ -207,14 +253,22 @@ def main(argv=None):
                     "Pass --dry-run before the route id.")
     p.add_argument("--dry-run", action="store_true",
                    help="print the command that would run; do not exec")
-    p.add_argument("route", help="live experiment id (E08, E10, E11, …)")
+    p.add_argument("route", help="live experiment id (E08, E10, assembly, …)")
     p.add_argument("forward", nargs=argparse.REMAINDER,
                    help="args after -- passed to the builder")
     p.set_defaults(func=cmd_dispatch)
 
-    p = sub.add_parser("admit", help="forward to gate_saved_graph")
+    p = sub.add_parser(
+        "admit",
+        help="forward to gate_saved_graph (optional --route injects admission defaults)",
+        description="Forward to gate_saved_graph. Optional --route=E13 applies "
+                    "catalog admission.experiment/stage when those flags are omitted "
+                    "(wave 37, F-966d9a73). Keep `admit -- --saved=...` working.")
     p.add_argument("--dry-run", action="store_true",
                    help="print the command that would run; do not exec")
+    p.add_argument("--route", default=None,
+                   help="catalog route id whose admission.experiment/stage are injected "
+                        "when --experiment/--stage/--record are omitted")
     p.add_argument("forward", nargs=argparse.REMAINDER,
                    help="args after -- passed to gate_saved_graph")
     p.set_defaults(func=cmd_admit)
@@ -226,14 +280,27 @@ def main(argv=None):
                    help="args after -- passed to the fetcher")
     p.set_defaults(func=cmd_fetch)
 
+    p = sub.add_parser(
+        "ledger",
+        help="show spend-ledger remaining against ceiling.submissions / per_arm "
+             "(read-only; never POSTs)")
+    p.add_argument("--seeds", required=True,
+                   help="committed seed registration declaring ceiling.*")
+    p.add_argument("--ledger", default=None,
+                   help="spend ledger JSON (default: <seeds-stem>-spend-ledger.json)")
+    p.add_argument("--arm", default=None,
+                   help="optional arm id when ceiling.per_arm is declared")
+    p.set_defaults(func=cmd_ledger)
+
     args = ap.parse_args(argv)
     # Strip a leading bare '--' used as an argv separator.
     if getattr(args, "forward", None) is not None and args.forward[:1] == ["--"]:
         args.forward = args.forward[1:]
     code = args.func(args)
-    if code == 0 and args.cmd in ("list", "show"):
+    if code == 0 and args.cmd in ("list", "show", "ledger"):
         pass
-    elif code == 0 and args.cmd in ("dispatch", "admit", "fetch") and args.dry_run:
+    elif code == 0 and args.cmd in ("dispatch", "admit", "fetch") and getattr(
+            args, "dry_run", False):
         print("ROUTES_OK " + json.dumps({"cmd": args.cmd, "dry_run": True,
                                          "tool_version": TOOL_VERSION}))
     elif code == 0:

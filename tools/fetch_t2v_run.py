@@ -307,10 +307,22 @@ def main(argv=None):
                     help="replace an existing run directory at --out. Without it a "
                          "re-fetch into a used directory refuses by name "
                          "(`output_already_exists`) rather than blending two runs")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue a PARTIAL fetch: re-plan from --dump, download only "
+                         "missing or empty jobs, then re-arm verify_downloads + Gate "
+                         "ORDER (wave 37, F-520d6fd1). Mutually exclusive with --force. "
+                         "(_urls.json is ephemeral here; the dump is the durable plan)")
     ap.add_argument("--prompt-id", default=None,
                     help="the cloud prompt id, recorded in download_manifest.json so a run "
                          "directory can be tied back to the submission that produced it")
     a = ap.parse_args(argv)
+    if a.force and a.resume:
+        raise FetchHalt(
+            "--force and --resume cannot be combined: --force replaces the run "
+            "directory, --resume continues from the dump plan. Pick one",
+            {"gate": "FETCH", "andon": "FetchHalt",
+             "clause": "force_and_resume_conflict",
+             "flags": ["--force", "--resume"]})
 
     results = read_results_dump(a.dump, flag="--dump", exc=FetchHalt)
     try:
@@ -319,10 +331,9 @@ def main(argv=None):
         # The operator's own input, named in the receipt: the halt is about THIS dump.
         exc.evidence["dump"] = os.path.abspath(a.dump)
         raise
-    # Wave 35, F-0bd5c9c9: explicit used--out refusal (matches fetch_run --force). The
-    # plan-to-disk clause remains the second line of defence for stale frames inside a
-    # partially cleaned directory.
-    if os.path.isdir(a.out) and not a.force:
+    # Wave 35, F-0bd5c9c9 / wave 37, F-520d6fd1: used--out refusal unless --force or
+    # --resume. plan-to-disk remains the second line of defence.
+    if os.path.isdir(a.out) and not a.force and not a.resume:
         prior = sorted(
             n for n in os.listdir(a.out)
             if os.path.isfile(os.path.join(a.out, n)) or os.path.isdir(os.path.join(a.out, n)))
@@ -330,11 +341,12 @@ def main(argv=None):
             raise FetchHalt(
                 f"--out {a.out!r} already holds {len(prior)} entr(y/ies) from an earlier "
                 f"fetch ({', '.join(prior[:8])}{'…' if len(prior) > 8 else ''}). A "
-                f"re-fetch without --force would blend two runs under one receipt. Pass "
-                f"--force to replace, or point --out at a directory of its own",
+                f"re-fetch without --force/--resume would blend two runs under one "
+                f"receipt. Pass --resume to continue, --force to replace, or point "
+                f"--out at a directory of its own",
                 {"gate": "FETCH", "andon": "FetchHalt",
                  "clause": "output_already_exists", "out": os.path.abspath(a.out),
-                 "already_present": prior, "flag": "--force"})
+                 "already_present": prior, "flag": "--force|--resume"})
     # ---- Gate FETCH · ANDON, wave 25 (F-edf3a80b). The sibling's ONE implementation,
     # imported like `download` itself rather than spelled again, armed above the first
     # `os.makedirs` so a rig with no downloader leaves no run directory behind.
@@ -343,24 +355,42 @@ def main(argv=None):
     with open(os.path.join(a.out, "download_manifest.json"), "w", encoding="utf-8") as fh:
         json.dump({"tool": "fetch_t2v_run", "tool_version": TOOL_VERSION,
                    "prompt_id": a.prompt_id, "n_results": len(results),
+                   "resume": bool(a.resume),
                    "order_rule": ("the results array's order is the temporal order; the "
                                   "cloud filenames are content hashes and sorting them "
                                   "shuffles the clip"),
                    "files": [{k: v for k, v in j.items() if k != "url"} for j in jobs]},
                   fh, indent=2)
-    # ---- wave 22, F-894dffb2. Both return values were DISCARDED. `fetch_run.download`
-    # returns `(proc, {"gate": "FETCH", "clause": "downloader_job_exits", "record": ...,
-    # "jobs": n, "verdict": ...})` and the sibling prints it as `gate_EXITS` in FETCH_RUN_OK
-    # (`fetch_run.py`), while FETCH_T2V_OK carried `gate_ORDER` and `gate_FETCH` and no
-    # `gate_EXITS`, and nothing wrote the receipt into any of the four JSON records this
-    # tool leaves in the run root. Stated as the bound: the gate itself still RAISES inside
-    # `download`, so this was a missing RECEIPT rather than a missing check — but the two
-    # fetchers printed different evidence for the same shared andon, and this module's own
-    # docstring explains at length that the pwsh process code CANNOT see a failed curl in a
-    # `-Parallel` runspace and that the per-job record is therefore the only evidence the
-    # gate decides on. A later session reading this run's receipts could not tell a gate
-    # that passed from a gate that was never run.
-    _proc, gate_exits = download(jobs, out=a.out)
+    # Wave 37, F-520d6fd1: --resume skips present non-empty outs; verify still sees
+    # the full plan. `_urls.json` stays ephemeral — the dump is the durable plan here.
+    download_jobs = jobs
+    if a.resume:
+        download_jobs = [
+            j for j in jobs
+            if not (os.path.isfile(j["out"]) and os.path.getsize(j["out"]) > 0)]
+    if a.resume and not download_jobs:
+        gate_exits = {"gate": "FETCH", "clause": "downloader_job_exits",
+                      "record": None, "jobs": 0, "n_recorded": 0, "n_unrecorded": 0,
+                      "resume_skipped": len(jobs), "resume_needed": 0,
+                      "verdict": "resume: 0 job(s) still needed; verify_downloads only"}
+    else:
+        # ---- wave 22, F-894dffb2. Both return values were DISCARDED. `fetch_run.download`
+        # returns `(proc, {"gate": "FETCH", "clause": "downloader_job_exits", "record": ...,
+        # "jobs": n, "verdict": ...})` and the sibling prints it as `gate_EXITS` in FETCH_RUN_OK
+        # (`fetch_run.py`), while FETCH_T2V_OK carried `gate_ORDER` and `gate_FETCH` and no
+        # `gate_EXITS`, and nothing wrote the receipt into any of the four JSON records this
+        # tool leaves in the run root. Stated as the bound: the gate itself still RAISES inside
+        # `download`, so this was a missing RECEIPT rather than a missing check — but the two
+        # fetchers printed different evidence for the same shared andon, and this module's own
+        # docstring explains at length that the pwsh process code CANNOT see a failed curl in a
+        # `-Parallel` runspace and that the per-job record is therefore the only evidence the
+        # gate decides on. A later session reading this run's receipts could not tell a gate
+        # that passed from a gate that was never run.
+        _proc, gate_exits = download(download_jobs, out=a.out)
+        if a.resume:
+            gate_exits = dict(gate_exits)
+            gate_exits["resume_skipped"] = len(jobs) - len(download_jobs)
+            gate_exits["resume_needed"] = len(download_jobs)
     # The receipt SURVIVES THE PROCESS. The manifest is written above rather than here so it
     # outlives a halt inside `download`; the gates block is added once the gate has actually
     # run, which is the only moment it can be recorded honestly.

@@ -645,11 +645,24 @@ def _partial_sentence(run_dir, planned):
         f"{run_dir!r} now holds a PARTIAL fetch — {landed} of {len(rows)} planned file(s) "
         f"are present — and it is not a result: nothing downstream should measure it. "
         f"`urls.json` beside them still names every planned job, so the plan survives. The "
-        f"supported next step is to CLEAR the run directory and re-fetch: a re-run into this "
+        f"supported next step is `--resume` (re-read urls.json, download only missing or "
+        f"empty jobs) or `--force` (replace the run directory). A bare re-run into this "
         f"directory as it stands finds the earlier run's frames already in place, satisfies "
         f"the plan-to-disk clause, and prints a green receipt over a mixture of two fetches "
         f"(the re-use case this module records as un-backstopped)."
     )
+
+
+def jobs_still_needed(planned):
+    """Jobs whose `out` is missing or empty — the --resume download set (F-520d6fd1)."""
+    needed = []
+    for job in planned:
+        if not isinstance(job, dict):
+            continue
+        out = job.get("out")
+        if not out or not os.path.isfile(out) or os.path.getsize(out) <= 0:
+            needed.append(job)
+    return needed
 
 
 def download(manifest_path, exits_path=None, record_urls=True):
@@ -862,10 +875,9 @@ def download(manifest_path, exits_path=None, record_urls=True):
             f"{proc.returncode}, because a native non-zero exit inside a -Parallel runspace "
             f"does not reach it; without this record every curl in a fetch could fail under "
             f"a printed FETCH_RUN_OK. "
-            # ---- wave 28, F-073cdeed: what the operator NOW HOLDS and what to do about it.
-            # This refusal told them everything about why the check exists and nothing about
-            # their own state, and there is no `--resume`, `--clean` or `--force` in either
-            # fetcher's parser (measured), so the only way forward is stated in words.
+            # ---- wave 28, F-073cdeed / wave 37, F-520d6fd1: what the operator NOW HOLDS
+            # and what to do about it. `--resume` and `--force` are the supported next
+            # steps; a bare re-run into a used directory is still the un-backstopped case.
             + _partial_sentence(dest, planned),
             dict(base, clause="downloader_job_exit_nonzero", failed=failed,
                  unrecorded=unrecorded, partial=_partial_state(planned)))
@@ -1227,7 +1239,19 @@ def main(argv=None):
                          "(`output_already_exists`) rather than blending two runs "
                          "(wave 35, F-0bd5c9c9; fetch_t2v_run refuses a used --out the "
                          "same way via plan-to-disk / --force)")
+    ap.add_argument("--resume", action="store_true",
+                    help="continue a PARTIAL fetch: re-read urls.json when present, "
+                         "download only missing or empty planned jobs, then re-arm "
+                         "verify_downloads (wave 37, F-520d6fd1). Mutually exclusive "
+                         "with --force")
     a = ap.parse_args(argv)
+    if a.force and a.resume:
+        raise FetchHalt(
+            "--force and --resume cannot be combined: --force replaces the run "
+            "directory, --resume continues the durable urls.json plan. Pick one",
+            {"gate": "FETCH", "andon": "FetchHalt",
+             "clause": "force_and_resume_conflict",
+             "flags": ["--force", "--resume"]})
     # Wave 35, F-b68afab7 — named route profile fills missing tap flags.
     if a.route:
         profile = ROUTE_FETCH_PROFILES[a.route]
@@ -1332,9 +1356,9 @@ def main(argv=None):
     results = read_results_dump(a.dump, flag="--dump")
 
     base = os.path.join(a.root, a.run)
-    # Wave 35, F-0bd5c9c9: refuse a silent blend with an earlier fetch's frames.
-    # fetch_t2v_run refuses a used --out the same way (plan-to-disk + --force).
-    if os.path.isdir(base) and not a.force:
+    # Wave 35, F-0bd5c9c9 / wave 37, F-520d6fd1: refuse a silent blend unless --force
+    # (replace) or --resume (continue the durable urls.json plan).
+    if os.path.isdir(base) and not a.force and not a.resume:
         prior = sorted(
             n for n in os.listdir(base)
             if os.path.isfile(os.path.join(base, n)) or os.path.isdir(os.path.join(base, n)))
@@ -1342,28 +1366,64 @@ def main(argv=None):
             raise FetchHalt(
                 f"--root/--run {base!r} already holds {len(prior)} entr(y/ies) from an "
                 f"earlier fetch ({', '.join(prior[:8])}{'…' if len(prior) > 8 else ''}). "
-                f"A re-fetch without --force would blend two runs under one receipt. Pass "
-                f"--force to replace, or point --run at a directory of its own. "
-                f"fetch_t2v_run refuses a used --out the same way",
+                f"A re-fetch without --force/--resume would blend two runs under one "
+                f"receipt. Pass --resume to continue urls.json, --force to replace, or "
+                f"point --run at a directory of its own. fetch_t2v_run refuses a used "
+                f"--out the same way",
                 {"gate": "FETCH", "andon": "FetchHalt",
                  "clause": "output_already_exists", "out": os.path.abspath(base),
-                 "already_present": prior, "flag": "--force"})
+                 "already_present": prior, "flag": "--force|--resume"})
     # The plan raises before anything is created, so a dump this tool cannot sort leaves
     # no run directory to be read later as a run that happened.
     jobs, counts = plan(results, base, a.run, node_dir, video_nodes)
-
-    for _, out in jobs:
-        os.makedirs(os.path.dirname(out), exist_ok=True)
+    planned_docs = [{"url": u, "out": os.path.abspath(o)} for u, o in jobs]
     manifest = os.path.join(base, "urls.json")
-    with open(manifest, "w", encoding="utf-8") as fh:
-        json.dump([{"url": u, "out": os.path.abspath(o)} for u, o in jobs], fh,
-                  indent=2, ensure_ascii=False)
 
-    _proc, gate_exits = download(manifest)
+    if a.resume and os.path.isfile(manifest):
+        try:
+            with open(manifest, encoding="utf-8") as fh:
+                prior_plan = json.load(fh)
+        except (OSError, ValueError) as exc:
+            raise FetchHalt(
+                f"--resume: urls.json at {manifest!r} cannot be read "
+                f"({type(exc).__name__}: {exc})",
+                {"gate": "FETCH", "andon": "FetchHalt",
+                 "clause": "resume_urls_unreadable", "path": os.path.abspath(manifest),
+                 "error": type(exc).__name__}) from exc
+        if isinstance(prior_plan, list) and prior_plan:
+            planned_docs = prior_plan
+
+    for job in planned_docs:
+        out = job.get("out") if isinstance(job, dict) else None
+        if out:
+            os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(manifest, "w", encoding="utf-8") as fh:
+        json.dump(planned_docs, fh, indent=2, ensure_ascii=False)
+
+    download_docs = jobs_still_needed(planned_docs) if a.resume else planned_docs
+    if a.resume and not download_docs:
+        # Everything planned is already present; fall through to verify only.
+        gate_exits = {"gate": "FETCH", "clause": "downloader_job_exits",
+                      "record": None, "jobs": 0, "n_recorded": 0, "n_unrecorded": 0,
+                      "verdict": "resume: 0 job(s) still needed; verify_downloads only"}
+    else:
+        if a.resume:
+            resume_manifest = os.path.join(base, "urls.resume.json")
+            with open(resume_manifest, "w", encoding="utf-8") as fh:
+                json.dump(download_docs, fh, indent=2, ensure_ascii=False)
+            _proc, gate_exits = download(resume_manifest)
+            gate_exits = dict(gate_exits)
+            gate_exits["resume_skipped"] = len(planned_docs) - len(download_docs)
+            gate_exits["resume_needed"] = len(download_docs)
+        else:
+            _proc, gate_exits = download(manifest)
     mapped = sorted({os.path.join(base, sub) for sub in node_dir.values()})
+    # Verify the FULL plan (urls.json), not only the resume subset.
+    verify_jobs = [(j.get("url"), j.get("out")) for j in planned_docs
+                   if isinstance(j, dict) and j.get("out")]
     # The LABELLED rules (wave 22, F-a25a7db9), so the receipt records which exemption
     # tolerated what and whether that rule can name the run it is about.
-    landed = verify_downloads(jobs, directories=mapped, root=base,
+    landed = verify_downloads(verify_jobs, directories=mapped, root=base,
                               root_exempt=derived_root_artifact_rules(a.run))
 
     # Counted from the PLAN, never from the directory. The two numbers used to be computed
@@ -1371,7 +1431,7 @@ def main(argv=None):
     # non-cleaned run directory disagreed with itself in a green receipt and nobody was
     # asked to compare them. The stray that made that possible now raises above this line.
     got = {sub: 0 for sub in node_dir.values()}
-    for _, out in jobs:
+    for _, out in verify_jobs:
         sub = os.path.basename(os.path.dirname(os.path.abspath(out)))
         if sub in got:
             got[sub] += 1
@@ -1379,13 +1439,15 @@ def main(argv=None):
     # the directory: a bare `os.listdir(base)` filtered to the video extensions, so a prior
     # run's video left in a re-used --out was printed as THIS run's. The video jobs are the
     # ones the plan writes to the run root itself rather than into a mapped subdirectory.
-    vids = sorted(os.path.basename(o) for _, o in jobs
+    vids = sorted(os.path.basename(o) for _, o in verify_jobs
                   if os.path.dirname(os.path.abspath(o)) == os.path.abspath(base))
     # The SUCCESS half of the exit convention (wave 10). `<PREFIX>_OK ` uses the SAME
     # prefix this file's `__main__` block prints on a halt, so one AST read of that block
     # derives both directions of the census. The tree spelled this four ways before.
-    print("FETCH_RUN_OK " + json.dumps({"path": base, 
+    print("FETCH_RUN_OK " + json.dumps({"path": base,
         "run": a.run, "dir": base, "by_node": counts, "downloaded": got, "video": vids,
+        "resume": bool(a.resume),
+        "resume_needed": gate_exits.get("resume_needed"),
         "gate_FETCH": landed["verdict"], "gate_EXITS": gate_exits["verdict"]}))
     return 0
 

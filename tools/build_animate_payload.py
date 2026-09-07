@@ -250,7 +250,7 @@ def parse_args(argv=None):
                          "rebuild over an earlier build refuses by name "
                          "(`output_already_exists`) and names both digests")
     build_opts.add_argument("--seed", type=int, default=None,
-                    help="the seed to submit; omitted, the first seed in --seeds-registry "
+                    help="the seed to submit; omitted, the first seed in --seeds "
                          "is used. Gate S refuses an unregistered number either way")
     build_opts.add_argument("--negative-source", default=None,
                     help="path to Wan's shared_config.py; the negative is read from it "
@@ -270,10 +270,12 @@ def parse_args(argv=None):
                          "contradicts the file raises `fit_disagrees_with_the_file` "
                          "(the clause `build_i2v_payload`'s start-frame path already "
                          "carries)")
-    build_opts.add_argument("--seeds-registry", default=None,
+    build_opts.add_argument("--seeds", "--seeds-registry", dest="seeds", default=None,
                     help="the committed seed registration Gate S checks --seed against, and "
                          "the list the default seed is taken from. Omitted, defaults from "
-                         "SEEDS_REGISTRY_BY_EXPERIMENT for E08/E10")
+                         "SEEDS_REGISTRY_BY_EXPERIMENT for E08/E10. "
+                         "--seeds-registry is a deprecated alias for one wave "
+                         "(wave 37, F-49ed6f1d)")
     build_opts.add_argument("--experiment", default=EXPERIMENT,
                     help="names the output files and the server-side filename prefixes; "
                          "E10 selects specs/E10-seeds.json and length 81 when those flags "
@@ -508,12 +510,12 @@ def build(uploads, seed, negative, positive, registry, reference_fit,
         # the 4 sites, and an operator hitting it on three of the four routes got a halt a
         # wrapper cannot classify.
         raise PayloadError(
-            "no --seed and no --seeds-registry: this experiment pre-registered no seeds, "
+            "no --seed and no --seeds: this experiment pre-registered no seeds, "
             "so there is no committed number to default to, and Gate S refuses a seed "
-            "varied without a registration. Pass --seeds-registry with the experiment's "
+            "varied without a registration. Pass --seeds with the experiment's "
             "committed list, or pass --seed with a number that is on it",
             {"gate": "PAYLOAD", "andon": "seed_registration",
-             "clause": "no_seed_and_no_registration", "flag": "--seeds-registry",
+             "clause": "no_seed_and_no_registration", "flag": "--seeds",
              "registered": list(registry or [])})
     seed_used = seed if seed is not None else sorted(registry)[0]
     gate_s = gates.gate_s_seed_registration(seed_used, registry, experiment,
@@ -726,19 +728,21 @@ def main(argv=None):
     out = os.path.abspath(a.out)
     if a.length is None:
         a.length = E10_LENGTH if a.experiment == "E10" else LENGTH
-    if a.seeds_registry is None:
-        a.seeds_registry = SEEDS_REGISTRY_BY_EXPERIMENT.get(a.experiment)
+    if a.seeds is None:
+        a.seeds = SEEDS_REGISTRY_BY_EXPERIMENT.get(a.experiment)
+    # Compat: older call sites still read seeds_registry.
+    a.seeds_registry = a.seeds
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
     require_uploads(uploads, a.uploads)
 
     registry = None
-    if a.seeds_registry:
+    if a.seeds:
         # ONE reader, eight callers (wave 16, F-0682bd00). The bare `json.load(fh)["seeds"]`
         # this replaces raised a stdlib KeyError naming a key and nothing else on a
         # registration with no `seeds` key. E10 defaults to specs/E10-seeds.json (F-cb85098b).
-        registry = read_seed_registration(a.seeds_registry, flag="--seeds-registry")
+        registry = read_seed_registration(a.seeds, flag="--seeds")
 
     neg_path = a.negative_source
     if not neg_path:
@@ -759,8 +763,8 @@ def main(argv=None):
                      experiment=a.experiment, length=a.length, fps=a.fps,
                      reference_file=a.reference_file)
     meta["gate_CANON"] = canon_ev
-    meta["seeds_registry"] = (os.path.abspath(a.seeds_registry)
-                              if a.seeds_registry else None)
+    meta["seeds"] = os.path.abspath(a.seeds) if a.seeds else None
+    meta["seeds_registry"] = meta["seeds"]
     meta["prompt_record"] = {
         "identity_clause_source": TWIN_PROMPT_JSON,
         "identity_clause_original": ident_original,

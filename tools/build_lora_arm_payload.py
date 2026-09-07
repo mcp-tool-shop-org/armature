@@ -64,7 +64,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, disclosure_lines, fetch_recipe, read_seed_registration)
+    canonical_payload_digest, disclosure_lines, fetch_recipe,
+    gate_output_not_overwritten, read_seed_registration)
 from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateCanon, GateFailure, GateSSeedRegistration)
@@ -529,7 +530,7 @@ def gate_s(graph, registry_path, seed):
     # the DISARMING form of the same defect: a registration with no `seeds` key became an
     # empty list, and this gate then reported the operator's seed as unregistered rather
     # than the file as unreadable — a default answering a question the reader never asked.
-    registered = read_seed_registration(registry_path, flag="--seeds-registry")
+    registered = read_seed_registration(registry_path, flag="--seeds")
     live = [(nid, n["inputs"].get("noise_seed")) for nid, n in graph.items()
             if isinstance(n, dict) and n.get("class_type") == "KSamplerAdvanced"
             and (n.get("inputs") or {}).get("add_noise") == "enable"]
@@ -872,13 +873,21 @@ def main(argv=None):
                     help="which LoRA this arm inserts; each arm names one file in the "
                          "licence map's E14 field")
     output_opts.add_argument("--out", required=True,
-                    help="the directory the graph and its payload record are written into")
-    build_opts.add_argument("--seeds-registry", required=True,
-                    help="the committed seed registration Gate S checks --seed against")
+                    help="the directory the graph and its payload record are written into; "
+                         "an existing build there is refused unless --overwrite is passed")
+    output_opts.add_argument("--overwrite", action="store_true",
+                    help="replace an existing graph/record pair in --out. Without it a "
+                         "rebuild refuses by name (`output_already_exists`) "
+                         "(wave 37, F-7bdf1b38)")
+    build_opts.add_argument("--seeds", "--seeds-registry", dest="seeds", required=True,
+                    help="the committed seed registration Gate S checks --seed against "
+                         "(--seeds-registry is a deprecated alias for one wave)")
     build_opts.add_argument("--seed", type=int, required=True,
-                    help="the seed to submit; it must appear in --seeds-registry")
+                    help="the seed to submit; it must appear in --seeds")
     add_spend_flags(ap)
     args = ap.parse_args(argv)
+    # Compat shim: older call sites and tests still read args.seeds_registry.
+    args.seeds_registry = args.seeds
 
     base = load_base(args.base)
     # BEFORE anything is read out of the graph and before `os.makedirs` — a BANNED tier
@@ -943,8 +952,13 @@ def main(argv=None):
     route = route_gates.verify(built, **verify_kwargs)
     disclosure_block = disclosure(args.arm, attribution, route)
 
-    os.makedirs(args.out, exist_ok=True)
     graph_path = os.path.join(args.out, f"E14-{args.arm}-camera-i2v.api.json")
+    record_path = os.path.join(args.out, f"E14-{args.arm}-payload-record.json")
+    # Wave 37, F-7bdf1b38: same overwrite shape as generation builders.
+    gate_overwrite = gate_output_not_overwritten(
+        [graph_path, record_path], args.out, args.overwrite,
+        ArmatureError, gate="PAYLOAD")
+    os.makedirs(args.out, exist_ok=True)
     with open(graph_path, "w", encoding="utf-8") as fh:
         json.dump(built, fh, indent=2, ensure_ascii=False)
 
@@ -972,7 +986,10 @@ def main(argv=None):
         "prompt_nodes": prompt_nodes,
         "gates": {"LEDGER": ledger, "PAIR_TIER": tier, "S": seed_ev, "ROUTE": route,
                   "CANON": canon_ev, "CANON_graph_text": gate_canon_graph,
-                  "BASE_LICENCE": base_licence},
+                  "BASE_LICENCE": base_licence,
+                  "PAYLOAD_overwrite": gate_overwrite},
+        "out_dir_pre_existed": gate_overwrite["out_dir_pre_existed"],
+        "overwrote": gate_overwrite["overwrote"],
         "graph": os.path.abspath(graph_path),
         # The bytes on disk. KEPT under its own name, and it is NOT the tie: this hashes
         # the PRETTY-PRINTED file, while `gate_saved_graph.route_facts` compares the
@@ -991,7 +1008,6 @@ def main(argv=None):
         node_map={}, video_nodes=("81",),
         root_hint="outputs/E14/runs",
         taps=[{"node": "81", "class_type": "SaveVideo", "subdir": None}]))
-    record_path = os.path.join(args.out, f"E14-{args.arm}-payload-record.json")
     with open(record_path, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2, ensure_ascii=False)
 

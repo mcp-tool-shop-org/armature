@@ -94,7 +94,7 @@ from armature_core.errors import (  # noqa: E402
 # not a third implementation.
 from build_assembly_payload import (  # noqa: E402
     canonical_payload_digest, comfy_cloud_oss_disclosure, disclosure_lines,
-    fetch_recipe, frame_order, gate_slot_frame_index)
+    fetch_recipe, frame_order, gate_output_not_overwritten, gate_slot_frame_index)
 
 WIDTH, HEIGHT, LENGTH, FPS = 480, 832, 33, 16
 SEED = 654654950714624  # pinned from the saved graph, so A0's three repeats are identical
@@ -969,7 +969,11 @@ def main(argv=None):
     output_opts.add_argument("--out", required=True,
                     help="the directory the graph and its metadata record are written into. "
                          "Gate OUT checks the two are distinct paths in one directory before "
-                         "anything is created")
+                         "anything is created; an existing pair is refused unless "
+                         "--overwrite is passed (wave 37, F-61ffd3fa)")
+    output_opts.add_argument("--overwrite", action="store_true",
+                    help="replace an existing graph/record pair derived from --out. "
+                         "Without it a rebuild refuses by name (`output_already_exists`)")
     # Gate S is what makes this flag safe to exist. Any seed given here is checked against
     # the experiment's committed list before a payload is built, and an experiment that
     # pre-registered no seeds refuses the flag outright.
@@ -988,6 +992,10 @@ def main(argv=None):
     # ---- Gate OUT · ANDON, before Gate CANON's own "leaves no output directory" clause
     # and before anything is created. The two artifacts of one build are two paths.
     gpath, mpath, gate_out = gate_out_paths(a.out)
+    # Wave 37, F-61ffd3fa: same overwrite shape as generation builders (wave 35).
+    gate_overwrite = gate_output_not_overwritten(
+        [gpath, mpath], os.path.dirname(gpath) or ".", a.overwrite,
+        PayloadError, gate="PAYLOAD")
 
     cfg = gate_experiment_arm(a.experiment, a.arm)
     arm_cfg = cfg["arms"][a.arm]
@@ -1012,6 +1020,10 @@ def main(argv=None):
     gate_canon_ships_what_it_gated(positive, meta.get("positive"))
     meta["gate_CANON"] = canon_ev
     meta["gate_OUT"] = gate_out
+    meta["gates"] = dict(meta.get("gates") or {})
+    meta["gates"]["PAYLOAD_overwrite"] = gate_overwrite
+    meta["out_dir_pre_existed"] = gate_overwrite["out_dir_pre_existed"]
+    meta["overwrote"] = gate_overwrite["overwrote"]
     os.makedirs(os.path.dirname(gpath), exist_ok=True)
     with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=2, ensure_ascii=False)

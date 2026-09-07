@@ -43,5 +43,7 @@
     "samples": 1,
     "filter_size": 0.01,
     "film_transparent": true
-  }
+  },
+  "_status": "retired-control-spec",
+  "_retired_note": "E01 character-arm shot record; no owned builder opens this filename. Not a spend input. See specs/routes.json retired_control_specs."
 }

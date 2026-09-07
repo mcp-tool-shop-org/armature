@@ -41,9 +41,11 @@ from build_assembly_payload import (  # noqa: E402
 from gate_saved_graph import (  # noqa: E402
     _as_api_graph, _as_saved_graph, route_facts)
 
-TOOL_VERSION = "W34.1"
+TOOL_VERSION = "W37.1"
 DEFAULT_BASE_URL = "https://cloud.comfy.org"
 DEFAULT_API_KEY_ENV = "COMFY_CLOUD_API_KEY"
+DEFAULT_WAIT_TIMEOUT_S = 900
+DEFAULT_WAIT_INTERVAL_S = 5
 
 
 class SubmitGate(RouteGate):
@@ -53,7 +55,7 @@ class SubmitGate(RouteGate):
 
 
 class CeilingBudget(RouteGate):
-    """Gate CEILING_BUDGET — next submission would exceed ceiling.submissions."""
+    """Gate CEILING_BUDGET — next submission would exceed ceiling.submissions / per_arm."""
 
     gate = "CEILING_BUDGET"
 
@@ -110,35 +112,135 @@ def load_ledger(path):
     return doc
 
 
-def live_submission_count(ledger):
-    """Count spends that actually left the rig (exclude dry_run rows)."""
+def live_submission_count(ledger, *, arm=None):
+    """Count spends that actually left the rig (exclude dry_run rows).
+
+    Wave 37, F-fcc2d66d: when `arm` is given, count only rows whose `arm` matches so
+    ceiling.per_arm can bound one arm without inventing a second ledger.
+    """
     n = 0
     for row in ledger.get("submissions") or []:
-        if isinstance(row, dict) and row.get("dry_run"):
+        if not isinstance(row, dict) or row.get("dry_run"):
+            continue
+        if arm is not None and row.get("arm") != arm:
             continue
         n += 1
     return n
 
 
-def gate_ceiling_budget(budget, ledger):
-    """Refuse when the next live submission would exceed ceiling.submissions."""
+def per_arm_map(budget):
+    """Return ceiling.per_arm when it is a non-empty mapping of arm -> positive int."""
+    ceiling = budget.get("ceiling") if isinstance(budget, dict) else None
+    if not isinstance(ceiling, dict):
+        return None
+    raw = ceiling.get("per_arm")
+    if not isinstance(raw, dict) or not raw:
+        return None
+    return raw
+
+
+def gate_ceiling_budget(budget, ledger, arm=None):
+    """Refuse when the next live submission would exceed ceiling.submissions / per_arm.
+
+    Wave 37, F-fcc2d66d: total submissions stay the outer bound; when ceiling.per_arm is
+    present the caller must name `--arm` and that arm's live count is checked too.
+    """
     ceiling = int(budget["submissions"])
     spent = live_submission_count(ledger)
     remaining = ceiling - spent
+    arms = per_arm_map(budget)
     ev = {"gate": "CEILING_BUDGET", "andon": "CeilingBudget",
           "ceiling_submissions": ceiling, "submissions_spent": spent,
           "remaining_before": remaining, "ledger": ledger.get("path"),
-          "seeds": budget["path"]}
+          "seeds": budget["path"], "arm": arm,
+          "per_arm": dict(arms) if arms else None}
+    if arms is not None and arm is None:
+        raise CeilingBudget(
+            f"ceiling.per_arm is declared ({sorted(arms)}) and --arm was not given. "
+            f"Without an arm this tool cannot tell which per-arm bound the next spend "
+            f"counts against; pass --arm=<id> (one of {sorted(arms)})",
+            dict(ev, clause="arm_required_when_per_arm_present",
+                 known_arms=sorted(arms)))
+    if arms is not None and arm not in arms:
+        raise CeilingBudget(
+            f"--arm={arm!r} is not a key of ceiling.per_arm ({sorted(arms)}). "
+            f"A spend against an unnamed arm cannot be held to the per-arm bound",
+            dict(ev, clause="arm_not_in_per_arm", known_arms=sorted(arms),
+                 supplied_arm=arm))
     if remaining < 1:
         raise CeilingBudget(
             f"ceiling.submissions is {ceiling} and the ledger at {ledger.get('path')!r} "
             f"already records {spent} live submission(s); the next spend would exceed the "
             f"bound. Spent credits have no compensator",
             dict(ev, clause="ceiling_exhausted"))
+    if arms is not None:
+        arm_ceiling = arms[arm]
+        if (not isinstance(arm_ceiling, int) or isinstance(arm_ceiling, bool)
+                or arm_ceiling < 1):
+            raise CeilingBudget(
+                f"ceiling.per_arm[{arm!r}] is {arm_ceiling!r} "
+                f"({type(arm_ceiling).__name__}); a per-arm bound must be a positive int",
+                dict(ev, clause="per_arm_ceiling_not_a_positive_int",
+                     arm_ceiling=arm_ceiling))
+        arm_spent = live_submission_count(ledger, arm=arm)
+        arm_remaining = arm_ceiling - arm_spent
+        ev["arm_ceiling"] = arm_ceiling
+        ev["arm_submissions_spent"] = arm_spent
+        ev["arm_remaining_before"] = arm_remaining
+        if arm_remaining < 1:
+            raise CeilingBudget(
+                f"ceiling.per_arm[{arm!r}] is {arm_ceiling} and the ledger already "
+                f"records {arm_spent} live submission(s) for that arm; the next spend "
+                f"would exceed the per-arm bound (total remaining {remaining}). Spent "
+                f"credits have no compensator",
+                dict(ev, clause="per_arm_ceiling_exhausted"))
+        ev["clause"] = "ceiling_allows"
+        ev["verdict"] = (
+            f"{spent} of {ceiling} submission(s) spent ({remaining} remain); "
+            f"arm {arm!r}: {arm_spent} of {arm_ceiling} ({arm_remaining} remain)")
+        return ev
     ev["clause"] = "ceiling_allows"
     ev["verdict"] = (
         f"{spent} of {ceiling} submission(s) spent; {remaining} remain before this one")
     return ev
+
+
+def ledger_report(budget, ledger, *, arm=None):
+    """Read-only ceiling / remaining view for the operator-facing ledger command."""
+    arms = per_arm_map(budget)
+    spent = live_submission_count(ledger)
+    ceiling = int(budget["submissions"])
+    report = {
+        "ledger": ledger.get("path"),
+        "seeds": budget.get("path"),
+        "missing_ledger": bool(ledger.get("missing")),
+        "ceiling_submissions": ceiling,
+        "submissions_spent": spent,
+        "remaining": ceiling - spent,
+        "per_arm": None,
+        "arm": arm,
+    }
+    if arms:
+        per = {}
+        for name, bound in arms.items():
+            n = live_submission_count(ledger, arm=name)
+            per[name] = {"ceiling": bound, "spent": n,
+                         "remaining": (bound - n) if isinstance(bound, int) else None}
+        report["per_arm"] = per
+        if arm is not None and arm in per:
+            report["arm_view"] = per[arm]
+    # Re-use the gate for the same evidence shape; dry view never raises on exhausted
+    # when we only want the numbers — call gate only when remaining allows, else copy.
+    try:
+        ev = gate_ceiling_budget(budget, ledger, arm=arm)
+        report["ceiling_gate"] = {"clause": ev.get("clause"), "verdict": ev.get("verdict")}
+    except CeilingBudget as exc:
+        report["ceiling_gate"] = {
+            "clause": (exc.evidence or {}).get("clause"),
+            "verdict": str(exc),
+            "exhausted": True,
+        }
+    return report
 
 
 def gate_admission_matches(admission_path, api_path, saved_path, api_graph):
@@ -278,6 +380,125 @@ def post_prompt(api_graph, *, base_url, api_key, body_path):
              "stdout": (proc.stdout or "")[:500]}) from exc
 
 
+def _curl_get_json(url, *, api_key):
+    """GET JSON via curl.exe — same egress style as POST; no Python networking."""
+    cmd = [
+        "curl.exe", "-sS", "-L", "--fail-with-body",
+        "-X", "GET", url,
+        "-H", f"X-API-Key: {api_key}",
+    ]
+    proc = subprocess.run(cmd, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        raise SubmitGate(
+            f"Comfy Cloud GET {url!r} failed (curl exit {proc.returncode}): "
+            f"{(proc.stderr or proc.stdout or '')[:500]}",
+            {"gate": "SUBMIT", "andon": "SubmitGate",
+             "clause": "cloud_history_get_failed", "url": url,
+             "curl_exit": proc.returncode,
+             "stderr": (proc.stderr or "")[:500],
+             "stdout": (proc.stdout or "")[:500]})
+    try:
+        return json.loads(proc.stdout)
+    except json.JSONDecodeError as exc:
+        raise SubmitGate(
+            f"Comfy Cloud GET returned non-JSON ({exc}): {(proc.stdout or '')[:300]}",
+            {"gate": "SUBMIT", "andon": "SubmitGate",
+             "clause": "cloud_history_unreadable", "url": url,
+             "stdout": (proc.stdout or "")[:500]}) from exc
+
+
+def history_entry_complete(entry):
+    """True when a /api/history/{prompt_id} entry looks finished."""
+    if not isinstance(entry, dict):
+        return False
+    status = entry.get("status")
+    if isinstance(status, dict):
+        if status.get("completed") is True:
+            return True
+        if str(status.get("status_str") or "").lower() in ("success", "error", "failed"):
+            return True
+    if entry.get("outputs"):
+        return True
+    return False
+
+
+def poll_history(prompt_id, *, base_url, api_key, timeout_s, interval_s):
+    """Bounded poll of /api/history/{prompt_id} via curl.exe (wave 37, F-0fc24d24)."""
+    import time
+
+    url = base_url.rstrip("/") + f"/api/history/{prompt_id}"
+    deadline = time.monotonic() + max(1, int(timeout_s))
+    interval = max(1, int(interval_s))
+    polls = 0
+    last = None
+    while True:
+        polls += 1
+        last = _curl_get_json(url, api_key=api_key)
+        entry = None
+        if isinstance(last, dict):
+            entry = last.get(prompt_id) if prompt_id in last else last
+        if history_entry_complete(entry):
+            return {"prompt_id": prompt_id, "url": url, "polls": polls,
+                    "completed": True, "history": last,
+                    "verdict": f"history complete after {polls} poll(s)"}
+        if time.monotonic() >= deadline:
+            raise SubmitGate(
+                f"--wait: /api/history/{prompt_id} did not complete within "
+                f"{timeout_s}s ({polls} poll(s)). The spend already left the rig; "
+                f"re-poll by hand or fetch once a dump exists. No automatic retry "
+                f"beyond this bound",
+                {"gate": "SUBMIT", "andon": "SubmitGate",
+                 "clause": "wait_exceeded_the_time_bound",
+                 "prompt_id": prompt_id, "url": url, "polls": polls,
+                 "timeout_s": timeout_s, "interval_s": interval})
+        time.sleep(interval)
+
+
+def default_spend_receipt_path(record_path, ledger_path, prompt_id):
+    """Sibling spend receipt beside --record when given, else beside the ledger."""
+    safe = "".join(c if c.isalnum() or c in "-_" else "_" for c in str(prompt_id))[:80]
+    if record_path:
+        stem, _ = os.path.splitext(os.path.abspath(record_path))
+        return f"{stem}-spend-{safe}.json"
+    parent = os.path.dirname(os.path.abspath(ledger_path)) or "."
+    return os.path.join(parent, f"spend-{safe}.json")
+
+
+def write_spend_receipt(path, receipt):
+    """Write the post-credit spend receipt (prompt_id + dump hint) to disk."""
+    os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(receipt, fh, indent=2, ensure_ascii=False)
+    return os.path.abspath(path)
+
+
+def merge_spend_into_record(record_path, spend_block):
+    """Merge `spend` onto the builder payload record (wave 37, F-b64e4ff5)."""
+    path = os.path.abspath(record_path)
+    try:
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+    except (OSError, ValueError) as exc:
+        raise SubmitGate(
+            f"--write-record cannot read --record {record_path!r} "
+            f"({type(exc).__name__}: {exc})",
+            {"gate": "SUBMIT", "andon": "SubmitGate",
+             "clause": "write_record_unreadable", "path": path,
+             "error": type(exc).__name__}) from exc
+    if not isinstance(doc, dict):
+        raise SubmitGate(
+            f"--write-record: --record {record_path!r} is a {type(doc).__name__}, "
+            f"not an object that can carry a spend/ key",
+            {"gate": "SUBMIT", "andon": "SubmitGate",
+             "clause": "write_record_not_a_mapping", "path": path,
+             "read_as": type(doc).__name__})
+    doc = dict(doc)
+    doc["spend"] = dict(spend_block)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(doc, fh, indent=2, ensure_ascii=False)
+    return path
+
+
 def parse_frame(text):
     if text is None:
         return None
@@ -297,16 +518,52 @@ def parse_frame(text):
     return tuple(parts)
 
 
+def cmd_ledger(argv):
+    """Read-only ledger / remaining view — never POSTs, never appends (F-39aabdbf)."""
+    ap = argparse.ArgumentParser(
+        prog="build_submit_payload.py ledger",
+        description=(
+            "Show spend-ledger counts against ceiling.submissions / per_arm. "
+            "Read-only: never POSTs and never appends."))
+    ap.add_argument("--seeds", required=True,
+                    help="committed seed registration that declares ceiling.*")
+    ap.add_argument("--ledger", default=None,
+                    help="spend ledger JSON (default: <seeds-stem>-spend-ledger.json)")
+    ap.add_argument("--arm", default=None,
+                    help="optional arm id when ceiling.per_arm is declared")
+    a = ap.parse_args(argv)
+    if not os.path.isfile(a.seeds):
+        raise SubmitGate(
+            f"--seeds {a.seeds!r} is not a file",
+            {"gate": "SUBMIT", "andon": "SubmitGate",
+             "clause": "input_missing", "flag": "--seeds",
+             "path": os.path.abspath(a.seeds)})
+    budget = read_seed_registration_budget(a.seeds, flag="--seeds")
+    ledger_path = os.path.abspath(a.ledger or default_ledger_path(a.seeds))
+    ledger = load_ledger(ledger_path)
+    report = ledger_report(budget, ledger, arm=a.arm)
+    print("SUBMIT_LEDGER_OK")
+    print(json.dumps(report, indent=2, ensure_ascii=False))
+    return 0
+
+
 def main(argv=None):
+    argv = list(sys.argv[1:] if argv is None else argv)
+    # Wave 37, F-39aabdbf: read-only ledger subcommand (never POST / never append).
+    if argv[:1] == ["ledger"]:
+        return cmd_ledger(argv[1:])
+
     ap = argparse.ArgumentParser(
         description=(
             "Submit an admitted API graph to Comfy Cloud after re-arming Gates ROUTE/S/L "
-            "and counting the spend against ceiling.submissions. The irreversible step "
-            "lives here — not in a session MCP call outside the tree."),
+            "and counting the spend against ceiling.submissions / per_arm. The irreversible "
+            "step lives here — not in a session MCP call outside the tree. "
+            "Subcommand: `ledger` shows remaining budget without spending."),
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "ROUTE: the sanctioned spend path — admission digest match, in-process "
-            "re-arm of verify+Gate S/L, ceiling.submissions ledger, then curl POST.\n"
+            "re-arm of verify+Gate S/L, ceiling.submissions (+ per_arm) ledger, then "
+            "curl POST; optional --wait polls /api/history/{prompt_id}.\n"
             "\n"
             "WHAT A REFUSAL COSTS: no credit is spent and no live ledger row is written. "
             "Use --dry-run to rehearse every gate without POSTing."))
@@ -318,16 +575,33 @@ def main(argv=None):
                     help="gate_saved_graph admission JSON whose digests must match "
                          "--api/--saved")
     ap.add_argument("--seeds", required=True,
-                    help="committed seed registration; also supplies ceiling.submissions")
+                    help="committed seed registration; also supplies ceiling.submissions "
+                         "/ ceiling.per_arm")
     ap.add_argument("--record", default=None,
                     help="builder payload record for route_facts (attribution / "
-                         "carries_no_sampler)")
+                         "carries_no_sampler); also the target for --write-record")
     ap.add_argument("--ledger", default=None,
                     help="spend ledger JSON (default: <seeds-stem>-spend-ledger.json "
                          "beside --seeds)")
+    ap.add_argument("--arm", default=None,
+                    help="arm id counted against ceiling.per_arm when that map is "
+                         "present (wave 37, F-fcc2d66d); required then, recorded on "
+                         "every live ledger row")
     ap.add_argument("--dry-run", action="store_true",
                     help="arm every gate and print the receipt; do NOT POST and do NOT "
-                         "append a live ledger row")
+                         "append a live ledger row / spend receipt")
+    ap.add_argument("--wait", action="store_true",
+                    help="after a live POST, poll /api/history/{prompt_id} via curl.exe "
+                         "until complete or --wait-timeout (wave 37, F-0fc24d24). "
+                         "Default off so dry-run/CI stay offline")
+    ap.add_argument("--wait-timeout", type=int, default=DEFAULT_WAIT_TIMEOUT_S,
+                    help=f"seconds to poll under --wait (default: {DEFAULT_WAIT_TIMEOUT_S})")
+    ap.add_argument("--wait-interval", type=int, default=DEFAULT_WAIT_INTERVAL_S,
+                    help=f"seconds between history polls (default: {DEFAULT_WAIT_INTERVAL_S})")
+    ap.add_argument("--write-record", action="store_true",
+                    help="merge prompt_id / dump hint into --record under spend/ "
+                         "(wave 37, F-b64e4ff5). A sibling spend receipt is always "
+                         "written on a live success; dry-run touches neither")
     ap.add_argument("--base-url", default=DEFAULT_BASE_URL,
                     help=f"Comfy Cloud base URL (default: {DEFAULT_BASE_URL})")
     ap.add_argument("--api-key-env", default=DEFAULT_API_KEY_ENV,
@@ -352,6 +626,12 @@ def main(argv=None):
                 {"gate": "SUBMIT", "andon": "SubmitGate",
                  "clause": "input_missing", "flag": flag,
                  "path": os.path.abspath(path)})
+    if a.write_record and not a.record:
+        raise SubmitGate(
+            "--write-record needs --record (the builder payload record to merge "
+            "spend/ onto)",
+            {"gate": "SUBMIT", "andon": "SubmitGate",
+             "clause": "write_record_needs_record", "flag": "--write-record"})
 
     api = _as_api_graph(RG.load_graph(a.api), path=a.api)
     saved = _as_saved_graph(RG.load_graph(a.saved), path=a.saved)
@@ -360,7 +640,7 @@ def main(argv=None):
         a.admission, a.api, a.saved, api)
     budget = read_seed_registration_budget(a.seeds, flag="--seeds")
     ledger = load_ledger(ledger_path)
-    ceiling_ev = gate_ceiling_budget(budget, ledger)
+    ceiling_ev = gate_ceiling_budget(budget, ledger, arm=a.arm)
     gates = rearm_gates(
         saved, api, a.seeds, record_path=a.record,
         hosted_tier=a.hosted_tier, frame=frame)
@@ -373,6 +653,7 @@ def main(argv=None):
         "admission": os.path.abspath(a.admission),
         "seeds": os.path.abspath(a.seeds),
         "ledger": ledger_path,
+        "arm": a.arm,
         "gates": {
             "ADMISSION": admission_ev,
             "CEILING_BUDGET": ceiling_ev,
@@ -396,6 +677,9 @@ def main(argv=None):
             "gate_ROUTE": gates["ROUTE"].get("verdict"),
             "gate_S": gates["S"].get("verdict"),
             "prompt_id": None,
+            "arm": a.arm,
+            "wait": bool(a.wait),
+            "write_record": bool(a.write_record),
         }, indent=2, ensure_ascii=False))
         return 0
 
@@ -409,7 +693,7 @@ def main(argv=None):
 
     # Count again immediately before POST — refuse if another spend landed.
     ledger = load_ledger(ledger_path)
-    ceiling_ev = gate_ceiling_budget(budget, ledger)
+    ceiling_ev = gate_ceiling_budget(budget, ledger, arm=a.arm)
 
     with tempfile.TemporaryDirectory(prefix="armature-submit-") as tmp:
         body_path = os.path.join(tmp, "prompt.json")
@@ -424,6 +708,18 @@ def main(argv=None):
              "clause": "cloud_response_no_prompt_id",
              "keys": sorted(map(str, response))[:40]})
 
+    wait_ev = None
+    dump_hint = (
+        f"{a.base_url.rstrip('/')}/api/history/{prompt_id} "
+        f"(save the JSON dump, then fetch_run --dump=<that> --record=...)")
+    if a.wait:
+        wait_ev = poll_history(
+            prompt_id, base_url=a.base_url, api_key=api_key,
+            timeout_s=a.wait_timeout, interval_s=a.wait_interval)
+        dump_hint = (
+            f"history complete; dump from {wait_ev['url']} then "
+            f"fetch_run/--record against that dump")
+
     entry = {
         "utc": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "prompt_id": prompt_id,
@@ -432,22 +728,52 @@ def main(argv=None):
         "admission": os.path.abspath(a.admission),
         "seeds": os.path.abspath(a.seeds),
         "seed": a.seed,
+        "arm": a.arm,
         "base_url": a.base_url.rstrip("/"),
+        "dump_hint": dump_hint,
     }
     append_ledger(ledger_path, entry, dry_run=False)
     receipt["prompt_id"] = prompt_id
+    receipt["dump_hint"] = dump_hint
     receipt["gates"]["CEILING_BUDGET"] = ceiling_ev
+    if wait_ev is not None:
+        receipt["wait"] = {
+            "polls": wait_ev["polls"], "url": wait_ev["url"],
+            "verdict": wait_ev["verdict"]}
+
+    spend_block = {
+        "prompt_id": prompt_id,
+        "utc": entry["utc"],
+        "arm": a.arm,
+        "payload_sha256": receipt["payload_sha256"],
+        "ledger": ledger_path,
+        "dump_hint": dump_hint,
+        "base_url": a.base_url.rstrip("/"),
+        "tool": "submit_comfy_cloud",
+        "tool_version": TOOL_VERSION,
+    }
+    receipt_path = write_spend_receipt(
+        default_spend_receipt_path(a.record, ledger_path, prompt_id), spend_block)
+    receipt["spend_receipt"] = receipt_path
+    if a.write_record:
+        merge_spend_into_record(a.record, spend_block)
+        receipt["record_spend_merged"] = os.path.abspath(a.record)
 
     print("SUBMIT_COMFY_CLOUD_OK")
     print(json.dumps({
         "path": ledger_path,
         "dry_run": False,
         "prompt_id": prompt_id,
+        "arm": a.arm,
         "payload_sha256": receipt["payload_sha256"],
         "ceiling": ceiling_ev["verdict"],
         "admission": admission_ev["verdict"],
         "gate_ROUTE": gates["ROUTE"].get("verdict"),
         "gate_S": gates["S"].get("verdict"),
+        "dump_hint": dump_hint,
+        "spend_receipt": receipt_path,
+        "wait": receipt.get("wait"),
+        "record_spend_merged": receipt.get("record_spend_merged"),
     }, indent=2, ensure_ascii=False))
     return 0
 

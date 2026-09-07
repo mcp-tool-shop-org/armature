@@ -35,9 +35,10 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.route_gates import RouteGate  # noqa: E402
-from build_assembly_payload import FRAME_KEY, frame_order  # noqa: E402
+from build_assembly_payload import (  # noqa: E402
+    FRAME_KEY, frame_order, gate_output_not_overwritten)
 
-TOOL_VERSION = "W34.1"
+TOOL_VERSION = "W37.1"
 DEFAULT_BASE_URL = "https://cloud.comfy.org"
 DEFAULT_API_KEY_ENV = "COMFY_CLOUD_API_KEY"
 
@@ -221,7 +222,11 @@ def main(argv=None):
     ap.add_argument("--route", required=True, choices=ROUTES,
                     help="which builder schema to emit")
     ap.add_argument("--out", required=True,
-                    help="path of the uploads JSON this tool writes")
+                    help="path of the uploads JSON this tool writes; an existing file is "
+                         "refused unless --overwrite is passed (wave 37, F-7bdf1b38)")
+    ap.add_argument("--overwrite", action="store_true",
+                    help="replace an existing uploads map at --out. Without it a re-author "
+                         "refuses by name (`output_already_exists`)")
     ap.add_argument("--dry-run", action="store_true",
                     help="emit sha256+ext server names without contacting the cloud")
     ap.add_argument("--start-frame", default=None,
@@ -244,6 +249,11 @@ def main(argv=None):
 
     uploads, meta = build_map(a)
     out = os.path.abspath(a.out)
+    paths = [out]
+    if a.meta_out:
+        paths.append(os.path.abspath(a.meta_out))
+    gate_overwrite = gate_output_not_overwritten(
+        paths, os.path.dirname(out) or ".", a.overwrite, UploadGate, gate="UPLOAD")
     os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
     with open(out, "w", encoding="utf-8") as fh:
         json.dump(uploads, fh, indent=2, ensure_ascii=False)
@@ -260,6 +270,8 @@ def main(argv=None):
         "dry_run": bool(a.dry_run),
         "n_keys": len(uploads),
         "keys": sorted(uploads, key=lambda k: (str(k),)),
+        "out_dir_pre_existed": gate_overwrite["out_dir_pre_existed"],
+        "overwrote": gate_overwrite["overwrote"],
     }, indent=2, ensure_ascii=False))
     return 0
 

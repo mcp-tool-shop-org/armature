@@ -57,5 +57,7 @@
       3.1811180114746094,
       3.363515615463257
     ]
-  }
+  },
+  "_status": "retired-control-spec",
+  "_retired_note": "Historical E03 B3 discriminator shot record; no owned builder opens this file. See specs/routes.json retired_control_specs."
 }
