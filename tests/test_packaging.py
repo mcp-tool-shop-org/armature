@@ -1364,7 +1364,7 @@ def test_every_spend_and_fetch_tool_prints_the_success_line_its_halt_prefix_name
     """
     has_main, prefix, _ = _exit_convention(os.path.join(REPO, "tools", filename))
     assert has_main and prefix, filename
-    wanted = re.compile(r"^" + re.escape(prefix) + r"_OK\s")
+    wanted = re.compile(r"^" + re.escape(prefix) + r"_OK(\s|$)")
     lines = _success_lines(filename)
     assert any(wanted.match(l) for l in lines), (
         f"{filename} halts as `{prefix}_HALT` and has no `{prefix}_OK ` line; the printed "

@@ -1249,7 +1249,12 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # what moved.
     #   ⚠ As the note above says: the reasons here name no `<file>.py:<n>`, deliberately.
     ('test_instruments_amend_w10', 'rig_repair.py', 157),
-    ('test_render_visibility', 'preview_walk.py', 159),
+    # WAVE 32 (instruments): preview_glb head_framing and preview_walk WORLD_LINEAR
+    # import pushed two cited lines onto blanks; one prior preview_walk row went
+    # live again and is deleted below. Numbers survive only as the measurement.
+    ('test_instruments_amend_w14', 'preview_glb.py', 166),
+    ('test_instruments_amend_w22', 'preview_glb.py', 65),
+    ('test_pinned_framing', 'preview_walk.py', 93),
     # WAVE 28 (instruments-measure): THREE ROWS DELETED, in the commit that made them live
     # again — this table's own stated rule, and the same shape core-gates and core-solvers
     # each applied once in wave 25. The help-text work (F-3ce0db92) added lines to 36
@@ -1271,7 +1276,8 @@ TESTS_STALE_ANCHORS_RECORDED = {
     ('test_alpha_law', 'composite_reference.py', 211),
     ('test_amend_w14_core_gates', 'stage_render.py', 370),
     ('test_amend_w16_core_solvers', 'measure_lift.py', 481),
-    ('test_clipstats', 'make_startframe_sheet.py', 236),
+    # WAVE 32: make_startframe_sheet TrueType routing made this cited line live
+    # again; row deleted in the same commit (this table's own rule).
     ('test_gates', 'sheet_compose.py', 57),
     ('test_lift_solve', 'measure_lift.py', 481),
     ('test_amend_w16_core_solvers', 'lift_solve.py', 307),

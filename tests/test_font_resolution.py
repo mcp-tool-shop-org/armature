@@ -29,6 +29,7 @@ own first.
 """
 
 import os
+import re
 import sys
 
 import pytest
@@ -264,7 +265,10 @@ def _modules_binding_the_shared_resolver():
         if stem == "sheet_compose":
             continue
         with open(path, encoding="utf-8") as fh:
-            if "_font" in fh.read():
+            # Word-bounded `_font` only. Wave 32 imported `font as sheet_font` on
+            # several sheet tools; a substring match would count those as fixture
+            # targets even though they do not bind `_font`.
+            if re.search(r"\b_font\b", fh.read()):
                 found.append(stem)
     return found
 

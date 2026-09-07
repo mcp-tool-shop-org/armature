@@ -100,14 +100,15 @@ def test_the_cut_frame_is_the_one_the_caller_named(tmp_path):
     """By PIXEL, not by name. On a directory numbered from 1, `--boxes=2:` used to cut
     `00003.png` — the third position — and the strip is the only place that shows it.
 
-    The tile is pasted at `(gap, LABEL_H + gap)` = (8, 24) and every label is drawn BELOW
-    it, so that pixel is the crop's own top-left and nothing else.
+    The tile is pasted at `(gap, TITLE_H + gap)` = (8, 26); labels sit BELOW it, so
+    that pixel is the crop's own top-left and nothing else. Wave 32 (F-559f46b1)
+    added TITLE_H above the tiles; the pre-wave-32 paste was (8, 24).
     """
     frames = _frames(tmp_path, [1, 2, 3])
     out = tmp_path / "strip.png"
     C.main([f"--frames={frames}", f"--out={out}", "--boxes=2:0,0,20,20", "--scale=1"])
     strip = np.asarray(Image.open(out).convert("RGB"))
-    assert tuple(int(v) for v in strip[24, 8]) == (80, 0, 0), strip[24, 8]   # 40 * 2
+    assert tuple(int(v) for v in strip[26, 8]) == (80, 0, 0), strip[26, 8]   # 40 * 2
 
 
 def test_the_sidecar_records_the_number_and_the_file(tmp_path):

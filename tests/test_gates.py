@@ -1265,9 +1265,10 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree by calling `family_raise_count()` — never a sum of branches
     # (core-solvers 370 and core-gates 353 were each branch-local; core-gates folded `shotspec`'s 22 raises
     # into one helper while core-solvers added five).
-    assert total == 358, (
-        f"{total} family raises in armature_core; this pin asserts 358, MEASURED on the wave-25 merged "
-        f"tree. This is the denominator every ratio below is quoted against — re-measure it deliberately")
+    assert total == 359, (
+        f"{total} family raises in armature_core; this pin asserts 359, MEASURED on the wave-32 merged "
+        f"tree (draw_frame now raises ConventionError on a blank plate, F-eab59919). This is the "
+        f"denominator every ratio below is quoted against — re-measure it deliberately")
 
 
 def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():

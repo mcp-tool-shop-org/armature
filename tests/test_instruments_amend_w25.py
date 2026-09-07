@@ -714,10 +714,10 @@ def test_the_payload_of_the_rewritten_sentinel_is_a_dict_literal():
 
 
 #: The `_OK` lines OUTSIDE this domain whose payload is not `json.dumps`, measured
-#: 2026-09-05. Posted, not fixed: eleven are instruments-measure's or builders'.
+#: 2026-09-07 on the wave-32 merge. Builders path-only OK lines now carry
+#: json.dumps({"path": ...}); SAVED_ADMISSION_OK is a sentinel on its own line.
 OK_LINES_NOT_JSON_ELSEWHERE = [
-    "build_assembly_payload.py", "build_cascade_payload.py", "build_lora_arm_payload.py",
-    "build_r2v_payload.py", "composite_reference.py", "extract_clip_frames.py",
+    "composite_reference.py", "extract_clip_frames.py", "gate_saved_graph.py",
     "make_cast_sheet.py", "make_e13_sheet.py", "make_hole_survey.py",
     "make_shotset_sheet.py", "measure_cascade_clip.py", "rig_sheet_compose.py",
     "sheet_compose.py",

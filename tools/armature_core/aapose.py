@@ -534,7 +534,7 @@ def _compare_against_record(label, keypoint_count, limb_seq, palette, record):
 #: "a drawing constant": a module-level constant one of them reads decides what is drawn,
 #: whatever it is called and whenever it was added.
 PIXEL_WRITERS = ("blank_canvas", "draw_body", "draw_hand", "draw_frame", "stickwidth",
-                 "hand_stickwidth")
+                 "hand_stickwidth", "_hand_detector_zero")
 
 
 def drawing_constants():

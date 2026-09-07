@@ -340,7 +340,7 @@ def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
         raise CadenceGate(
             f"frame {i}: the gait advances {d:.3f} of a cycle in one frame "
             f"({len(over)}/{len(du)} intervals over {MAX_CYCLES_PER_FRAME} in magnitude, "
-            f"worst {worst:.3f}; see evidence)",
+            f"worst {worst:.3f}) and cannot be represented at this frame rate",
             ev)
 
     ev["verdict"] = (f"{len(du)} frame interval(s), the largest advancing {worst:.3f} of "

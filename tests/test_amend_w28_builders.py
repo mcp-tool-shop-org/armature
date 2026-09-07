@@ -23,6 +23,7 @@ The rules this wave carries, on top of wave 18's five, wave 22's one and wave 24
 
 import ast
 import json
+import re
 import os
 import subprocess
 import sys
@@ -342,14 +343,17 @@ def test_the_paid_route_prints_its_disclosure_above_its_success_line(tmp_path, c
     lines = printed.splitlines()
     ok = next(i for i, ln in enumerate(lines) if ln.startswith("BUILD_R2V_OK"))
     above = "\n".join(lines[:ok])
+    above_flat = re.sub(r"\s+", " ", above)
 
     assert "TRAINING USE:" in above
     assert "AI CONTENT DISCLOSURE:" in above
     assert "WATERMARK:" in above
-    # the three obligations in the licence map's OWN words, not this builder's
-    assert "machine-learning and artificial-intelligence technologies" in above
-    assert "clearly and conspicuously disclose" in above
-    assert "watermark=False` was sent" in above
+    # the three obligations in the licence map's OWN words, not this builder's.
+    # Wave 32 wraps disclosure at 78 cols with a hanging indent (F-fd2be19e);
+    # collapse whitespace so a wrap inside a phrase still counts as above the OK line.
+    assert "machine-learning and artificial-intelligence technologies" in above_flat
+    assert "clearly and conspicuously disclose" in above_flat
+    assert "watermark=False` was sent" in above_flat
     # and each names the document it is grounded in
     assert above.count("Wan ToS") >= 3
 

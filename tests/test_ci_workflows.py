@@ -2887,6 +2887,8 @@ GUARDED_TODAY = [
     "tools/build_payload.py",
     "tools/build_r2v_payload.py",
     "tools/build_t2v_payload.py",
+    "tools/encode_control.py",
+    "tools/extract_clip_frames.py",
     "tools/fetch_run.py",
     # `fetch_t2v_run.py` is NOT here: the wave-16 fetcher census joins its path from a
     # variable (`for name in FETCHERS`), which this walk deliberately does not resolve —
@@ -2894,9 +2896,12 @@ GUARDED_TODAY = [
     # measurement rather than an oversight.
     "tools/gate_saved_graph.py",
     "tools/make_crop_strip.py",
+    "tools/make_overlay_sheet.py",
     "tools/make_test_armature.py",
+    "tools/make_zoom_sheet.py",
     # WAVE 16 (core-solvers, SEAM 11 §5) — see the note above `aapose.py`.
     "tools/measure_cascade_clip.py",
+    "tools/measure_floor.py",
     # WAVE 22 (instruments, F-7cd1b3b7 / F-f7d1f64f) added `tools/pack_pose_pack.py` here:
     # the amend module and `tests/conftest.py`'s SEAM-1 bridge opened it by path to read the
     # `single_path_segment` copy SEAM 1 homes in `armature_core.parts`. WAVE-22 MERGE
