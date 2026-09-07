@@ -413,15 +413,19 @@ def test_the_E14_arms_own_lines_are_unchanged_by_the_lift():
                               "source": "docs/license-map.md"}]}
     lines = BAP.disclosure_lines(block)
     assert lines[0] == "  ROUTE: V"
-    assert lines[1] == (
-        "  CREDIT OBLIGATION: this arm credits renderartist - credit the creator "
-        "[credit; published footage from this arm; source docs/license-map.md; component "
-        "technically_color]")
+    joined = " ".join(ln.strip() for ln in lines[1:])
+    assert "CREDIT OBLIGATION: this arm credits renderartist - credit the creator" in joined
+    assert "published footage from this arm" in joined
+    assert "docs/license-map.md" in joined
+    assert "technically_color]" in joined
+    assert all(len(ln) <= 78 for ln in lines), lines
     empty = BAP.disclosure_lines({"route_verdict": "V",
                                   "credit_obligation": {"text": "none ruled"},
                                   "obligations": []})
-    assert empty[1] == ("  CREDIT OBLIGATION: none - the licence map rules no CONDITIONAL "
-                        "component in this arm's graph (none ruled)")
+    empty_joined = " ".join(ln.strip() for ln in empty[1:])
+    assert "CREDIT OBLIGATION: none - the licence map rules no CONDITIONAL" in empty_joined
+    assert "component in this arm's graph (none ruled)" in empty_joined
+    assert all(len(ln) <= 78 for ln in empty), empty
 
 
 # ===========================================================================
@@ -456,7 +460,8 @@ def test_the_route_report_names_the_values_it_judged(tmp_path, tool, frames, pre
     assert "wan 4n+1" in legality, "the rule that judged it is named"
 
     components = next(ln for ln in proc.stdout.splitlines()
-                      if ln.startswith("route components"))
+                      if ln.startswith("route ") and "components" in ln)
+    assert components.startswith("route            components"), components
     assert "EMPTY SET examined, not a check skipped" in components, components
     assert "loads no weights" in components
 

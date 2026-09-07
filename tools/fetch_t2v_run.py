@@ -289,14 +289,11 @@ def main(argv=None):
             "Retrieve one t2v generation's frames and donor video into a run directory, "
             "prove that what landed is what the dump planned, and vouch for the frames' "
             "temporal ORDER before printing a receipt. Runs AFTER the credits are spent."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: the t2v retrieval. The cloud's filenames are content hashes, so sorting "
-            "them shuffles the clip - the results ARRAY's order is the temporal order, and "
-            "Gate ORDER measures that claim against a hash-sorted permutation of the same "
-            "frames rather than asserting it. WHAT A REFUSAL COSTS: the generation is "
-            "already billed; a refusal costs only the fetch, and the frames plus the "
-            "evidence file are left on disk so the measurement that fired it can be read "
-            "without re-fetching. It never retries for you."))
+                "ROUTE: the t2v retrieval. The cloud's filenames are content hashes, so sorting them shuffles the clip - the results ARRAY's order is the temporal order, and Gate ORDER measures that claim against a hash-sorted permutation of the same frames rather than asserting it.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: the generation is already billed; a refusal costs only the fetch, and the frames plus the evidence file are left on disk so the measurement that fired it can be read without re-fetching. It never retries for you."))
     ap.add_argument("--dump", required=True,
                     help="the results JSON the cloud returned for this prompt; every "
                          "download is planned from it and from nothing else")
@@ -351,7 +348,7 @@ def main(argv=None):
         manifest_doc = json.load(fh)
     manifest_doc["gates"] = {"EXITS": gate_exits}
     with open(manifest_path, "w", encoding="utf-8") as fh:
-        json.dump(manifest_doc, fh, indent=2)
+        json.dump(manifest_doc, fh, indent=2, ensure_ascii=False)
 
     # Gate FETCH · ANDON, carried from `fetch_run.verify_downloads` rather than written a
     # second time. This tool had NO plan-to-disk check: the frame population came from
@@ -378,11 +375,11 @@ def main(argv=None):
         manifest[f] = {"sha256": hashlib.sha256(open(p, "rb").read()).hexdigest(),
                        "bytes": os.path.getsize(p)}
     with open(os.path.join(a.out, "lossless_manifest.json"), "w", encoding="utf-8") as fh:
-        json.dump(manifest, fh, indent=2)
+        json.dump(manifest, fh, indent=2, ensure_ascii=False)
 
     ev = order_evidence(a.out)
     with open(os.path.join(a.out, "frame_order_evidence.json"), "w", encoding="utf-8") as fh:
-        json.dump(ev, fh, indent=2)
+        json.dump(ev, fh, indent=2, ensure_ascii=False)
 
     # ---- wave 22, F-c03a23c5. A `zero_length_frames` clause stood here and COULD NOT FIRE.
     # `verify_downloads(jobs, directories=[...], root=a.out)` above already raises when any
@@ -410,7 +407,7 @@ def main(argv=None):
         # The SUCCESS half of the exit convention (wave 10). `<PREFIX>_OK ` uses the SAME
     # prefix this file's `__main__` block prints on a halt, so one AST read of that block
     # derives both directions of the census. The tree spelled this four ways before.
-    print("FETCH_T2V_OK " + json.dumps({
+    print("FETCH_T2V_OK " + json.dumps({"path": a.out, 
         "frames": len(frames), "out": a.out,
         "array_order_mean_diff": order["array_order_mean_diff"],
         "hash_sorted_mean_diff": order["hash_sorted_mean_diff"],

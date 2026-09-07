@@ -365,60 +365,62 @@ def parse_args(argv=None):
             "Build and gate the Fun-Camera i2v route's API graph: one start frame plus a "
             "camera trajectory, pinned against wave 1's committed record. Writes the graph "
             "and its payload record; submits nothing."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: E12's camera arm, and the baseline E14's LoRA arms are measured against. "
-            "The trajectory is pinned to --w1-record and every DELIBERATE_BREAK is REQUIRED "
-            "to have actually happened - a report describing a correction that did not occur "
-            "is the failure shape this ledger exists to refuse. WHAT A REFUSAL COSTS: "
-            "nothing but your time; it is spent here rather than on a submission."))
-    ap.add_argument("--uploads", required=True, help="JSON: {start_frame: <server name>}")
-    ap.add_argument("--out", required=True,
+                "ROUTE: E12's camera arm, and the baseline E14's LoRA arms are measured against. The trajectory is pinned to --w1-record and every DELIBERATE_BREAK is REQUIRED to have actually happened - a report describing a correction that did not occur is the failure shape this ledger exists to refuse.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: nothing but your time; it is spent here rather than on a submission."))
+    build_opts = ap.add_argument_group("build")
+    output_opts = ap.add_argument_group("output")
+
+    build_opts.add_argument("--uploads", required=True, help="JSON: {start_frame: <server name>}")
+    output_opts.add_argument("--out", required=True,
                     help="the directory the graph and its payload record are written into, "
                          "created below the last gate so a refusal leaves nothing behind")
-    ap.add_argument("--seed", type=int, default=None,
+    build_opts.add_argument("--seed", type=int, default=None,
                     help="the seed to submit; omitted, the first seed in --seeds-registry "
                          "is used. Gate S refuses an unregistered number either way")
-    ap.add_argument("--negative-source", default=None,
+    build_opts.add_argument("--negative-source", default=None,
                     help="path to Wan's shared_config.py; the base negative is READ from it "
                          "rather than retyped, then extended")
-    ap.add_argument("--w1-record", required=True,
+    build_opts.add_argument("--w1-record", required=True,
                     help="wave 1's committed payload record. The trajectory is pinned "
                          "against it, the four DELIBERATE_BREAKS are required to have "
                          "actually happened, and the positive is required to DIFFER")
-    ap.add_argument("--start-frame", default=None,
+    build_opts.add_argument("--start-frame", default=None,
                     help="path to the LOCAL re-authored start frame. Required: this is the "
                          "single load-bearing control input of an i2v route, and CLAUDE.md "
                          "requires every generation to record its control-input hashes. "
                          "The tool hashes the file itself; it does not accept a typed "
                          "digest as the record")
-    ap.add_argument("--start-frame-sha256", default=None,
+    build_opts.add_argument("--start-frame-sha256", default=None,
                     help="OPTIONAL cross-check only. When given it must equal the sha256 "
                          "the tool computes from --start-frame, or the build halts. It is "
                          "never the recorded value: a digest nothing checks is worse than "
                          "an absent one")
-    ap.add_argument("--seeds-registry", default=None,
+    build_opts.add_argument("--seeds-registry", default=None,
                     help="the committed seed registration Gate S checks --seed against, and "
                          "the list the default seed is taken from")
-    ap.add_argument("--experiment", default=EXPERIMENT,
+    build_opts.add_argument("--experiment", default=EXPERIMENT,
                     help="names the output files and the server-side filename prefixes "
                          "(default: %(default)s)")
-    ap.add_argument("--length", type=int, default=LENGTH,
+    build_opts.add_argument("--length", type=int, default=LENGTH,
                     help="frame count, checked by Gate L and Gate ROUTE (argparse eats "
                          "leading minus signs, so pass flags as --flag=value) "
                          "(default: %(default)s)")
-    ap.add_argument("--fps", type=float, default=FPS,
+    build_opts.add_argument("--fps", type=float, default=FPS,
                     help="the CreateVideo rate (default: %(default)s). Presentation only - "
                          "it is downstream of VAEDecode and changes no generated pixel")
-    ap.add_argument("--cfg", type=float, default=None,
+    build_opts.add_argument("--cfg", type=float, default=None,
                     help="move the sampler cfg off wave 1's value. The ledger then REQUIRES "
                          "it to actually differ, and requires every trajectory field not "
                          "named here to still match wave 1's")
-    ap.add_argument("--sampler", default=None,
+    build_opts.add_argument("--sampler", default=None,
                     help="move the sampler_name off wave 1's value, same contract as --cfg")
-    ap.add_argument("--trajectory-source", default=None,
+    build_opts.add_argument("--trajectory-source", default=None,
                     help="where the overridden values come from, into the record - a number "
                          "with no history is indistinguishable from a typo a month later")
-    ap.add_argument("--wave", type=int, default=WAVE,
+    build_opts.add_argument("--wave", type=int, default=WAVE,
                     help="which wave of the experiment this is. Labels the graph and "
                          "record filenames, the record's own `wave` field and the cloud "
                          "output prefixes; a baked constant here writes plausible labels "
@@ -1327,7 +1329,7 @@ def main(argv=None):
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
     print(canon_line(canon_ev))
-    print("BUILD_CAMERA_I2V_OK " + json.dumps({
+    print("BUILD_CAMERA_I2V_OK " + json.dumps({"path": gpath, 
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
         "resolution": meta["resolution"], "length": meta["length"], "fps": meta["fps"],
         "camera_pose": CAMERA_POSE, "experts": [UNET_HIGH, UNET_LOW],
@@ -1353,3 +1355,4 @@ if __name__ == "__main__":
     from armature_core.parts import run_tool_main  # noqa: E402
 
     run_tool_main(main, "BUILD_CAMERA_I2V")
+

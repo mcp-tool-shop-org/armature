@@ -137,9 +137,8 @@ def test_assembly_route_reaches_admission_when_the_record_says_no_sampler(tmp_pa
                      f"--out={out}", f"--record={record}", "--frame=832,480,81"]) == 0
 
     # The receipt is read BACK off the printed line, not off the return value.
-    line = [ln for ln in capsys.readouterr().out.splitlines()
-            if ln.startswith("SAVED_ADMISSION_OK ")][0]
-    printed = json.loads(line[len("SAVED_ADMISSION_OK "):])
+    from conftest import load_ok_payload
+    printed = load_ok_payload(capsys.readouterr().out)
     assert printed["route_facts"]["carries_no_sampler"] is True
     assert printed["route_facts"]["record"] == os.path.abspath(str(record))
     written = json.loads(out.read_text(encoding="utf-8"))
@@ -166,9 +165,8 @@ def test_conditional_component_is_admitted_on_the_credit_its_builder_recorded(
     assert GSG.main([f"--saved={saved}", f"--api={api}", f"--seeds={seeds}",
                      f"--out={out}", f"--record={record}", "--frame=832,480,81"]) == 0
 
-    line = [ln for ln in capsys.readouterr().out.splitlines()
-            if ln.startswith("SAVED_ADMISSION_OK ")][0]
-    printed = json.loads(line[len("SAVED_ADMISSION_OK "):])
+    from conftest import load_ok_payload
+    printed = load_ok_payload(capsys.readouterr().out)
     assert printed["route_facts"]["attribution"] == ["technically_color"]
     written = json.loads(out.read_text(encoding="utf-8"))
     assert written["route_facts"]["attribution"] == [entry]

@@ -856,25 +856,26 @@ def main(argv=None):
             "Build and gate ONE E14 bake-off arm: the byte-pinned E12 baseline graph with "
             "exactly two style-LoRA nodes inserted. Writes the graph and its payload record; "
             "submits nothing."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: E14, one style LoRA at its trained strength on a baseline that already "
-            "holds. 'Exactly two insertions' is a property of the code here, not a sentence "
-            "in a report: the ledger sorts every difference from the baseline into "
-            "NAMED_BREAK / OUTPUT_ROUTING / UNNAMED and RAISES on the third, and on a named "
-            "break that did not happen. WHAT A REFUSAL COSTS: nothing but your time. WHAT "
-            "THIS ROUTE COSTS ITS USER: arm T's LoRA is the one CONDITIONAL licence row in "
-            "this repo - the credit obligation is printed above BUILD_LORA_ARM_OK and Gate "
-            "ROUTE refuses a build whose record does not carry it."))
-    ap.add_argument("--base", required=True,
+                "ROUTE: E14, one style LoRA at its trained strength on a baseline that already holds. 'Exactly two insertions' is a property of the code here, not a sentence in a report: the ledger sorts every difference from the baseline into NAMED_BREAK / OUTPUT_ROUTING / UNNAMED and RAISES on the third, and on a named break that did not happen.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: nothing but your time.\n"
+                "\n"
+                "WHAT THIS ROUTE COSTS ITS USER: arm T's LoRA is the one CONDITIONAL licence row in this repo - the credit obligation is printed above BUILD_LORA_ARM_OK and Gate ROUTE refuses a build whose record does not carry it."))
+    build_opts = ap.add_argument_group("build")
+    output_opts = ap.add_argument_group("output")
+
+    build_opts.add_argument("--base", required=True,
                     help="the byte-pinned E12 wave-3 seed-1 API graph")
-    ap.add_argument("--arm", required=True, choices=sorted(ARMS),
+    build_opts.add_argument("--arm", required=True, choices=sorted(ARMS),
                     help="which LoRA this arm inserts; each arm names one file in the "
                          "licence map's E14 field")
-    ap.add_argument("--out", required=True,
+    output_opts.add_argument("--out", required=True,
                     help="the directory the graph and its payload record are written into")
-    ap.add_argument("--seeds-registry", required=True,
+    build_opts.add_argument("--seeds-registry", required=True,
                     help="the committed seed registration Gate S checks --seed against")
-    ap.add_argument("--seed", type=int, required=True,
+    build_opts.add_argument("--seed", type=int, required=True,
                     help="the seed to submit; it must appear in --seeds-registry")
     add_spend_flags(ap)
     args = ap.parse_args(argv)
@@ -1008,7 +1009,7 @@ def main(argv=None):
     # The SUCCESS half of the exit convention (wave 10). `<PREFIX>_OK ` uses the SAME
     # prefix this file's `__main__` block prints on a halt; this tool printed no success
     # sentinel at all, so a wrapper could not tell a completed build from a silent one.
-    print(f"BUILD_LORA_ARM_OK {graph_path}")
+    print("BUILD_LORA_ARM_OK " + json.dumps({"path": graph_path}, ensure_ascii=False))
     return 0
 
 
@@ -1025,3 +1026,4 @@ if __name__ == "__main__":
     from armature_core.parts import run_tool_main  # noqa: E402
 
     run_tool_main(main, "BUILD_LORA_ARM")
+

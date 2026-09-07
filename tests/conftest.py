@@ -41,6 +41,7 @@ Skip families, one sentence each:
 
 import copy
 import importlib.util
+import json
 import os
 import sys
 import types
@@ -56,6 +57,37 @@ REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BLENDER = os.environ.get(
     "ARMATURE_BLENDER", r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 )
+
+
+def load_ok_payload(text, prefix="SAVED_ADMISSION_OK"):
+    """Parse a builders OK receipt: one-line JSON or sentinel + pretty body (wave 32)."""
+    lines = text.splitlines()
+    for i, ln in enumerate(lines):
+        if ln.startswith(prefix + " "):
+            rest = ln[len(prefix) + 1:].lstrip()
+            if rest.startswith("{"):
+                acc = [rest]
+                if rest.count("{") == rest.count("}") and rest.rstrip().endswith("}"):
+                    return json.loads(rest)
+                for cont in lines[i + 1:]:
+                    acc.append(cont)
+                    try:
+                        return json.loads("\n".join(acc))
+                    except json.JSONDecodeError:
+                        continue
+                raise AssertionError(f"{prefix}: truncated JSON on sentinel line")
+        if ln == prefix:
+            acc = []
+            for cont in lines[i + 1:]:
+                if not acc and cont and not cont.lstrip().startswith(("{", "[", '"')):
+                    break
+                acc.append(cont)
+                try:
+                    return json.loads("\n".join(acc))
+                except json.JSONDecodeError:
+                    continue
+            raise AssertionError(f"{prefix}: no JSON body after sentinel")
+    raise AssertionError(f"missing {prefix}")
 
 
 @pytest.fixture(scope="module")

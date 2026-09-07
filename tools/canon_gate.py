@@ -180,13 +180,11 @@ def main(argv=None):
             "Gate CANON at the command line: resolve a subject to its canon, measure a "
             "canon's coverage, check a prompt against one, or run the SPEND gate every "
             "payload builder calls before it authors a submission."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: Gate CANON, the check that a prompt about a character is grounded in "
-            "that character's canon rather than improvised at the keyboard. `spend` is the "
-            "subcommand the builders themselves call - what it refuses here, it refuses "
-            "there. WHAT A REFUSAL COSTS: nothing but your time. Read the halt line's "
-            "`clause`; a refusal is not worked around by pasting the refused phrases into "
-            "--canon-prompt, because the SHIPPED prompt is what is gated."))
+                "ROUTE: Gate CANON, the check that a prompt about a character is grounded in that character's canon rather than improvised at the keyboard. `spend` is the subcommand the builders themselves call - what it refuses here, it refuses there.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: nothing but your time. Read the halt line's `clause`; a refusal is not worked around by pasting the refused phrases into --canon-prompt, because the SHIPPED prompt is what is gated."))
     ap.add_argument("--roots", action="append", default=None,
                     help="a canon root directory to search; repeatable. Omitted, this "
                          "tool's own recorded roots are used")

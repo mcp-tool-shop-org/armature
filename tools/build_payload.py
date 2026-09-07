@@ -937,16 +937,18 @@ def main(argv=None):
         description=(
             "Build and gate one experiment arm's API graph from this repo's recorded "
             "trajectories. Writes the graph and its metadata record; submits nothing."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: the general per-experiment builder - --experiment picks the recorded "
-            "trajectory table and --arm picks the arm inside it. WHAT A REFUSAL COSTS: "
-            "nothing but your time, and Gate CANON's invariant holds throughout - a refuse "
-            "leaves no output directory behind for a later step to read as a run that "
-            "happened."))
-    ap.add_argument("--experiment", default="E02", choices=sorted(EXPERIMENTS),
+                "ROUTE: the general per-experiment builder - --experiment picks the recorded trajectory table and --arm picks the arm inside it.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: nothing but your time, and Gate CANON's invariant holds throughout - a refuse leaves no output directory behind for a later step to read as a run that happened."))
+    build_opts = ap.add_argument_group("build")
+    output_opts = ap.add_argument_group("output")
+
+    build_opts.add_argument("--experiment", default="E02", choices=sorted(EXPERIMENTS),
                     help="which recorded experiment's trajectory table to build from "
                          "(default: %(default)s)")
-    ap.add_argument("--arm", required=True,
+    build_opts.add_argument("--arm", required=True,
                     choices=sorted({a for e in EXPERIMENTS.values() for a in e["arms"]}),
                     help="NOTE: these choices are the UNION across every experiment, "
                          "not the "
@@ -954,14 +956,14 @@ def main(argv=None):
                          "against another flag. 30 of the 40 pairs it accepts are invalid, "
                          "and `gate_experiment_arm` refuses them by name, listing the arms "
                          "that experiment actually carries")
-    ap.add_argument("--out", required=True,
+    output_opts.add_argument("--out", required=True,
                     help="the directory the graph and its metadata record are written into. "
                          "Gate OUT checks the two are distinct paths in one directory before "
                          "anything is created")
     # Gate S is what makes this flag safe to exist. Any seed given here is checked against
     # the experiment's committed list before a payload is built, and an experiment that
     # pre-registered no seeds refuses the flag outright.
-    ap.add_argument("--seed", type=int, default=None,
+    build_opts.add_argument("--seed", type=int, default=None,
                     help="pre-registered seed; refused by Gate S if not on the "
                          "experiment's committed list")
     add_spend_flags(ap)
@@ -1002,16 +1004,16 @@ def main(argv=None):
     meta["gate_OUT"] = gate_out
     os.makedirs(os.path.dirname(gpath), exist_ok=True)
     with open(gpath, "w", encoding="utf-8") as fh:
-        json.dump(wf, fh, indent=1)
+        json.dump(wf, fh, indent=2, ensure_ascii=False)
     with open(mpath, "w", encoding="utf-8") as fh:
-        json.dump(meta, fh, indent=2)
+        json.dump(meta, fh, indent=2, ensure_ascii=False)
     print(canon_line(canon_ev))
     # The SUCCESS half of the exit convention (wave 10). The failure half already agrees
     # across all 13 CPU tools — `<PREFIX>_HALT` and 2-vs-1 — while the success line was
     # spelled four different ways. It is `<PREFIX>_OK ` now, with the SAME prefix this
     # file's `__main__` block prints on a halt, so one AST read of that block derives both
     # directions of the census.
-    print("BUILD_PAYLOAD_OK " + json.dumps({
+    print("BUILD_PAYLOAD_OK " + json.dumps({"path": gpath, 
         "experiment": a.experiment, "arm": a.arm, "nodes": len(wf), "gate_L": "PASS",
         "reference": meta["reference_image"],
         "control_distinct_images": (
@@ -1033,3 +1035,4 @@ if __name__ == "__main__":
     from armature_core.parts import run_tool_main  # noqa: E402
 
     run_tool_main(main, "BUILD_PAYLOAD")
+

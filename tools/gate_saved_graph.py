@@ -1148,14 +1148,11 @@ def main(argv=None):
             "and admit it for submission. Compares the two files value by value and link by "
             "link, re-runs Gates ROUTE / S / L on the saved side, and writes the admission "
             "record a spend is later reconciled against."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: the last gate before a paid submission. Everything it checks, it checks "
-            "on the file the CLOUD holds, not on the one the builder wrote - the two are "
-            "different objects and only one of them gets generated from. WHAT A REFUSAL "
-            "COSTS: the run does not submit, and no admission record is written; that is "
-            "cheaper than the alternative, because a submission on this tree's paid tier is "
-            "billed per attempt and spent credits have no compensator. Read the halt line's "
-            "`clause` first - it names which of the checks fired."))
+                "ROUTE: the last gate before a paid submission. Everything it checks, it checks on the file the CLOUD holds, not on the one the builder wrote - the two are different objects and only one of them gets generated from.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: the run does not submit, and no admission record is written; that is cheaper than the alternative, because a submission on this tree's paid tier is billed per attempt and spent credits have no compensator. Read the halt line's `clause` first - it names which of the checks fired."))
     ap.add_argument("--saved", required=True,
                     help="the SAVE-format .json the cloud converted and holds - the file "
                          "that will actually be run")
@@ -1434,7 +1431,10 @@ def main(argv=None):
     with open(a.out, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2, ensure_ascii=False)
 
-    print("SAVED_ADMISSION_OK " + json.dumps({
+    # Wave 32, F-32072072 / F-402fd2b8 — sentinel alone; pretty body; ASCII dash; path key.
+    print("SAVED_ADMISSION_OK")
+    print(json.dumps({
+        "path": a.out,
         "round_trip_values_compared": equality["n_values_compared"],
         "links_compared": topology["n_links"],
         "optional_sockets_empty_in_both": topology["optional_sockets_empty_in_both"],
@@ -1446,14 +1446,14 @@ def main(argv=None):
         "gate_ROUTE": gate_route["verdict"], "gate_S": gate_s["verdict"],
         "gate_OUT": gate_out["verdict"],
         "gate_L": (f"{', '.join(shapes)} legal "
-                   f"({gate_route['frame_legality_verdict']}) — "
+                   f"({gate_route['frame_legality_verdict']}) - "
                    f"{gate_l_source['verdict']}"),
         "gate_L_frame_source": ("supplied and agreed"
                                 if gate_l_source["independently_checked"] else
                                 "hosted tier: pixel clause inapplicable"
                                 if a.hosted_tier else
                                 "graph alone, no independent frame supplied"),
-        "record": a.out}))
+        "record": a.out}, indent=2, ensure_ascii=False))
     return 0
 
 

@@ -382,6 +382,38 @@ def gate_output_not_overwritten(paths, out, overwrite, exc, gate="PAYLOAD"):
     return ev
 
 
+def _wrap_disclosure_line(line, width=78):
+    """Wrap one disclosure line on ``; `` / `` - `` (else space) so col 80 never mid-words."""
+    if len(line) <= width:
+        return [line]
+    hang = "    "
+    out = []
+    remaining = line
+    while len(remaining) > width:
+        window = remaining[: width + 1]
+        break_at = max(window.rfind("; "), window.rfind(" - "))
+        if break_at < width // 3:
+            break_at = remaining.rfind(" ", 0, width)
+        if break_at <= 0:
+            break_at = width
+        if remaining.startswith(hang) is False and break_at < len(remaining):
+            if remaining[break_at: break_at + 3] == " - ":
+                cut = break_at + 3
+            elif remaining[break_at: break_at + 2] == "; ":
+                cut = break_at + 2
+            elif remaining[break_at] == " ":
+                cut = break_at + 1
+            else:
+                cut = break_at
+        else:
+            cut = break_at
+        out.append(remaining[:cut].rstrip())
+        remaining = hang + remaining[cut:].lstrip()
+    if remaining:
+        out.append(remaining)
+    return out
+
+
 def disclosure_lines(block):
     """The operator-facing lines for a per-route disclosure block, one per obligation.
 
@@ -397,6 +429,9 @@ def disclosure_lines(block):
     E14 arm still prints `CREDIT OBLIGATION:` and the E13 route prints the words that belong to
     ITS tier. It returns lines rather than printing them so a test can read the words back
     without a capture — the property the original had and keeps.
+
+    Wave 32, F-fd2be19e — long obligation strings wrap on ``; `` / `` - `` at ≤78 columns
+    rather than mid-word at the terminal edge.
     """
     out = [f"  ROUTE: {block.get('route_verdict')}"]
     obligations = block.get("obligations") or []
@@ -406,20 +441,21 @@ def disclosure_lines(block):
         if reason is None:
             reason = (f"the licence map rules no CONDITIONAL component in this arm's graph "
                       f"({(block.get('credit_obligation') or {}).get('text')})")
-        out.append(f"  {block.get('empty_label', 'CREDIT OBLIGATION')}: none - {reason}")
+        out.extend(_wrap_disclosure_line(
+            f"  {block.get('empty_label', 'CREDIT OBLIGATION')}: none - {reason}"))
         return out
     for ob in obligations:
         kind = str(ob.get("kind") or "obligation")
         if kind == "credit":
-            # byte-for-byte the line wave 14 shipped for the arm that credits a creditor
-            out.append(
+            raw = (
                 f"  CREDIT OBLIGATION: this arm credits {ob['creditor']} - {ob['text']} "
                 f"[{ob['kind']}; {ob['applies_to']}; source {ob['source']}; component "
                 f"{ob['component']}]")
         else:
-            out.append(
+            raw = (
                 f"  {kind.upper().replace('_', ' ')}: {ob['text']} "
                 f"[{ob['applies_to']}; source {ob['source']}]")
+        out.extend(_wrap_disclosure_line(raw))
     return out
 
 
@@ -452,7 +488,9 @@ def route_report_lines(gate_route):
     n_components = len(gate_route["components"])
     n_seeds = len(gate_route["seeds"])
     n_latents = len(gate_route["latents"])
-    line = (f"route components {n_components}  seeds {n_seeds}  latents {n_latents}")
+    # Wave 32, F-8d31935f — same 17-col gutter as build_r2v_payload's `route` row.
+    line = (f"route            components {n_components}  seeds {n_seeds}  "
+            f"latents {n_latents}")
     if not (n_components or n_seeds or n_latents):
         line += ("  (each an EMPTY SET examined, not a check skipped: this chain loads no "
                  "weights, carries no sampler and pins no latent)")
@@ -884,34 +922,39 @@ def build_and_write(argv=None):
             "Build and gate the FLAT frames->VIDEO chain (LoadImage x N -> BatchImagesNode "
             "-> CreateVideo -> SaveVideo) from an upload map. Writes the API graph and its "
             "payload record; submits nothing and loads no weights."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
             "ROUTE: S03 Task C, the assembly chain. It is BOUNDED at "
             f"{MEASURED_FLAT_SLOT_MAX} slots - the largest flat batch anyone has seen "
             "execute - because the 81-slot form was falsified after passing the round trip "
             "and Gate ROUTE with zero warnings. Use build_cascade_payload for a clip of any "
-            "length. WHAT A REFUSAL COSTS: nothing but your time; the frames these graphs "
+            "length.\n"
+            "\n"
+            "WHAT A REFUSAL COSTS: nothing but your time; the frames these graphs "
             "carry feed the paid E13 A2 arm's reference video, so every gate here runs "
             "before a credit is spent downstream."))
-    ap.add_argument("--uploads", required=True,
-                    help="the upload step's JSON: local frame filename -> the server's "
-                         "content-addressed name. Keys must be zero-padded frame names "
-                         "with no gaps; the LOCAL name is the frame order")
-    ap.add_argument("--out", required=True,
-                    help="the directory the graph and its payload record are written into. "
-                         "Created below the last gate, so a refusal leaves nothing behind; "
-                         "an existing build there is refused unless --overwrite is passed")
-    ap.add_argument("--overwrite", action="store_true",
-                    help="replace an existing graph/record pair in --out. Without it a "
-                         "rebuild over an earlier build refuses by name "
-                         "(`output_already_exists`) and names both digests")
-    ap.add_argument("--fps", type=float, default=16.0,
-                    help=f"the CreateVideo rate, inside its measured contract "
-                         f"{CREATE_VIDEO_FPS_RANGE} (default: %(default)s). Presentation "
-                         f"only - it is downstream of the frames and changes no pixel")
-    ap.add_argument("--prefix", default="video/S03_assembly",
-                    help="the server-side filename prefix for the saved video "
-                         "(default: %(default)s)")
-    ap.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
+    build_opts = ap.add_argument_group("build")
+    output_opts = ap.add_argument_group("output")
+    build_opts.add_argument("--uploads", required=True,
+                       help="the upload step's JSON: local frame filename -> the server's "
+                            "content-addressed name. Keys must be zero-padded frame names "
+                            "with no gaps; the LOCAL name is the frame order")
+    output_opts.add_argument("--out", required=True,
+                        help="the directory the graph and its payload record are written into. "
+                             "Created below the last gate, so a refusal leaves nothing behind; "
+                             "an existing build there is refused unless --overwrite is passed")
+    output_opts.add_argument("--overwrite", action="store_true",
+                        help="replace an existing graph/record pair in --out. Without it a "
+                             "rebuild over an earlier build refuses by name "
+                             "(`output_already_exists`) and names both digests")
+    build_opts.add_argument("--fps", type=float, default=16.0,
+                       help=f"the CreateVideo rate, inside its measured contract "
+                            f"{CREATE_VIDEO_FPS_RANGE} (default: %(default)s). Presentation "
+                            f"only - it is downstream of the frames and changes no pixel")
+    build_opts.add_argument("--prefix", default="video/S03_assembly",
+                       help="the server-side filename prefix for the saved video "
+                            "(default: %(default)s)")
+    build_opts.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
@@ -1042,9 +1085,9 @@ def build_and_write(argv=None):
     # Below the last in-tool gate: a refuse leaves no output directory.
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     with open(graph_path, "w", encoding="utf-8") as fh:
-        json.dump(wf, fh, indent=1)
+        json.dump(wf, fh, indent=2, ensure_ascii=False)
     with open(record_path, "w", encoding="utf-8") as fh:
-        json.dump(record, fh, indent=1)
+        json.dump(record, fh, indent=2, ensure_ascii=False)
 
     print(f"nodes            {len(wf)}")
     print(f"paid-node gate   {gate_paid['verdict']}")
@@ -1057,7 +1100,8 @@ def build_and_write(argv=None):
     # receipt, so two runs into one `--out` are distinguishable in a scrollback.
     print(f"payload sha256   {record['payload_sha256']}")
     print(f"overwrite        {gate_overwrite['verdict']}")
-    print(f"BUILD_ASSEMBLY_OK {graph_path}")
+    # Wave 32, F-3e310dc1 / F-8d31935f — same OK LOOK as the JSON family (`path` key).
+    print("BUILD_ASSEMBLY_OK " + json.dumps({"path": graph_path}, ensure_ascii=False))
     return wf
 
 
@@ -1080,3 +1124,4 @@ if __name__ == "__main__":
     from armature_core.parts import run_tool_main  # noqa: E402
 
     run_tool_main(main, "BUILD_ASSEMBLY")
+

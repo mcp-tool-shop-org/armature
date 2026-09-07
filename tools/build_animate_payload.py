@@ -219,31 +219,33 @@ def parse_args(argv=None):
         description=(
             "Build and gate the WanAnimate route's API graph from an uploaded reference and "
             "pose pack. Writes the graph and its payload record; submits nothing."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: E08's Animate arm - a pose sequence driving a reference character. The "
-            "served Animate template is a REFERENCE, never a route (it wires the banned "
-            "detector tier), so this graph is built here and gated here. WHAT A REFUSAL "
-            "COSTS: nothing but your time; every gate runs before anything is submitted, "
-            "and this route's frames are generator-legal or they are refused."))
-    ap.add_argument("--uploads", required=True,
+                "ROUTE: E08's Animate arm - a pose sequence driving a reference character. The served Animate template is a REFERENCE, never a route (it wires the banned detector tier), so this graph is built here and gated here.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: nothing but your time; every gate runs before anything is submitted, and this route's frames are generator-legal or they are refused."))
+    build_opts = ap.add_argument_group("build")
+    output_opts = ap.add_argument_group("output")
+
+    build_opts.add_argument("--uploads", required=True,
                     help="JSON: {reference, pose_pack, pose_frames}")
-    ap.add_argument("--out", required=True,
+    output_opts.add_argument("--out", required=True,
                     help="the directory the graph and its payload record are written into, "
                          "created below the last gate so a refusal leaves nothing behind")
-    ap.add_argument("--seed", type=int, default=None,
+    build_opts.add_argument("--seed", type=int, default=None,
                     help="the seed to submit; omitted, the first seed in --seeds-registry "
                          "is used. Gate S refuses an unregistered number either way")
-    ap.add_argument("--negative-source", default=None,
+    build_opts.add_argument("--negative-source", default=None,
                     help="path to Wan's shared_config.py; the negative is read from it "
                          "rather than retyped")
-    ap.add_argument("--reference-fit", default="as-is", choices=("as-is", "letterbox"),
+    build_opts.add_argument("--reference-fit", default="as-is", choices=("as-is", "letterbox"),
                     help="'as-is' hands the reference to the node unchanged and lets it "
                          "center-crop; 'letterbox' names a pre-fitted reference, which "
                          "ASSERTS the file is already the generation frame. Pass "
                          "--reference-file to have that assertion MEASURED against the "
                          "artifact; without it the record says DECLARED-not-measured "
                          "rather than stating the fit as a fact")
-    ap.add_argument("--reference-file", default=None,
+    build_opts.add_argument("--reference-file", default=None,
                     help="the LOCAL path of the reference image that was uploaded. "
                          "`--uploads` carries only the server-side name, so without this "
                          "nothing here can open the file the record describes. Given, the "
@@ -251,15 +253,15 @@ def parse_args(argv=None):
                          "contradicts the file raises `fit_disagrees_with_the_file` "
                          "(the clause `build_i2v_payload`'s start-frame path already "
                          "carries)")
-    ap.add_argument("--seeds-registry", default=None,
+    build_opts.add_argument("--seeds-registry", default=None,
                     help="the committed seed registration Gate S checks --seed against, and "
                          "the list the default seed is taken from")
-    ap.add_argument("--experiment", default=EXPERIMENT,
+    build_opts.add_argument("--experiment", default=EXPERIMENT,
                     help="names the output files and the server-side filename prefixes")
-    ap.add_argument("--length", type=int, default=LENGTH,
+    build_opts.add_argument("--length", type=int, default=LENGTH,
                     help="frame count; Gate L and Gate ROUTE both check it (argparse eats "
                          "leading minus signs, so pass flags as --flag=value)")
-    ap.add_argument("--fps", type=float, default=FPS,
+    build_opts.add_argument("--fps", type=float, default=FPS,
                     help="the CreateVideo rate. Presentation only — it is downstream of "
                          "VAEDecode and cannot change a generated pixel")
     add_spend_flags(ap)
@@ -744,7 +746,7 @@ def main(argv=None):
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
     print(canon_line(canon_ev))
-    print("BUILD_ANIMATE_OK " + json.dumps({
+    print("BUILD_ANIMATE_OK " + json.dumps({"path": gpath, 
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
         "length": meta["length"], "fps": meta["fps"],
         "payload_sha256": meta["payload_sha256"][:32],
@@ -767,3 +769,4 @@ if __name__ == "__main__":
     from armature_core.parts import run_tool_main  # noqa: E402
 
     run_tool_main(main, "BUILD_ANIMATE")
+

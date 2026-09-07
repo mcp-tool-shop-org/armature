@@ -453,23 +453,25 @@ def build_and_write(argv=None):
             "Build and gate ONE E13 submission for the wan2.7-r2v hosted partner tier - the "
             "only route in this repo that bills per submission. Writes the API graph and its "
             "payload record; submits nothing."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: E13, the composed route - a GLB-staged performance carried into video "
-            "through a reference slot (A1: four composited kit views; A2: a reference VIDEO "
-            "constructed in-graph by the cascade). WHAT A REFUSAL COSTS: nothing but your "
-            "time, and that is the point - every gate here runs BEFORE a credit is spent, "
-            "and spent credits have no compensator. WHAT THIS ROUTE COSTS ITS USER: the "
-            "disclosure lines printed above BUILD_R2V_OK, per CLAUDE.md's per-route "
-            "disclosure ruling - read them before you submit."))
-    ap.add_argument("--arm", required=True, choices=("A1", "A2"),
+                "ROUTE: E13, the composed route - a GLB-staged performance carried into video through a reference slot (A1: four composited kit views; A2: a reference VIDEO constructed in-graph by the cascade).\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: nothing but your time, and that is the point - every gate here runs BEFORE a credit is spent, and spent credits have no compensator.\n"
+                "\n"
+                "WHAT THIS ROUTE COSTS ITS USER: the disclosure lines printed above BUILD_R2V_OK, per CLAUDE.md's per-route disclosure ruling - read them before you submit."))
+    build_opts = ap.add_argument_group("build")
+    output_opts = ap.add_argument_group("output")
+
+    build_opts.add_argument("--arm", required=True, choices=("A1", "A2"),
                     help="A1 feeds the reference IMAGE slots from --refs; A2 feeds the "
                          "reference VIDEO slot from a cascade built in this same graph "
                          "out of --uploads")
-    ap.add_argument("--seed", type=int, required=True,
+    build_opts.add_argument("--seed", type=int, required=True,
                     help="the seed to submit. It must appear in --seeds: Gate S refuses an "
                          "unregistered number before anything is written")
-    ap.add_argument("--seeds", required=True, help="the committed seed registration")
-    ap.add_argument("--prompt-file", required=True,
+    build_opts.add_argument("--seeds", required=True, help="the committed seed registration")
+    build_opts.add_argument("--prompt-file", required=True,
                     help="JSON carrying `prompt` and `negative_prompt`. The SHIPPED prompt "
                          "is what Gate CANON gates, so a refusal cannot be worked around "
                          "with --canon-prompt")
@@ -486,28 +488,28 @@ def build_and_write(argv=None):
     # "a check that cannot fail is not a check" — and wiring a bypass around another
     # domain's gate is not this fix. The half of F-5fd16451 that IS open here is the
     # printed digest below, so two runs are distinguishable in a scrollback.
-    ap.add_argument("--out", required=True,
+    output_opts.add_argument("--out", required=True,
                     help="the directory the graph and its payload record are written into. "
                          "Created below the last gate, so a refusal leaves nothing behind; "
                          "Gate CANON refuses a --out that already holds entries, so a "
                          "rebuild goes to a fresh directory")
-    ap.add_argument("--refs", default=None, help="A1: the reference record JSON")
-    ap.add_argument("--uploads", default=None, help="A2: the frame uploads map JSON")
-    ap.add_argument("--resolution", default="720P",
+    build_opts.add_argument("--refs", default=None, help="A1: the reference record JSON")
+    build_opts.add_argument("--uploads", default=None, help="A2: the frame uploads map JSON")
+    build_opts.add_argument("--resolution", default="720P",
                     help=f"one of {tier_rules['resolutions']} - the tier's own enum, "
                          f"measured by {tier_rules['measured']}. Gate L refuses anything "
                          f"else by name (default: %(default)s)")
-    ap.add_argument("--ratio", default="16:9",
+    build_opts.add_argument("--ratio", default="16:9",
                     help=f"one of {tier_rules['ratios']} - the tier's own enum. Gate L "
                          f"refuses anything else by name (default: %(default)s)")
-    ap.add_argument("--duration", type=int, default=5,
+    build_opts.add_argument("--duration", type=int, default=5,
                     help=f"clip seconds, inside the tier's bound "
                          f"{tier_rules['duration_s']} inclusive (default: %(default)s)")
-    ap.add_argument("--group", type=int, default=AS.GROUP_SIZE,
+    build_opts.add_argument("--group", type=int, default=AS.GROUP_SIZE,
                     help="A2 only: frames per BatchImagesNode in the in-graph cascade. The "
                          "slot ceiling gate checks it against the cascade's own constant "
                          "(default: %(default)s)")
-    ap.add_argument("--prefix", default=None,
+    build_opts.add_argument("--prefix", default=None,
                     help="the server-side filename prefix for the saved video; defaults to "
                          "video/E13_<arm>_seed<seed>, so two arms cannot write to one path")
     add_spend_flags(ap)
@@ -669,9 +671,9 @@ def build_and_write(argv=None):
     record_path = os.path.join(out, f"E13-{a.arm}-seed{a.seed}-payload-record.json")
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     with open(graph_path, "w", encoding="utf-8") as fh:
-        json.dump(wf, fh, indent=1)
+        json.dump(wf, fh, indent=2, ensure_ascii=False)
     with open(record_path, "w", encoding="utf-8") as fh:
-        json.dump(record, fh, indent=1)
+        json.dump(record, fh, indent=2, ensure_ascii=False)
 
     print(canon_line(canon_ev))
     print(f"arm              {a.arm}")
@@ -695,7 +697,7 @@ def build_and_write(argv=None):
     # renderer, imported, not respelled.
     for line in disclosure_lines(disclosure_block):
         print(line)
-    print(f"BUILD_R2V_OK     {graph_path}")
+    print("BUILD_R2V_OK " + json.dumps({"path": graph_path}, ensure_ascii=False))
     return wf, record
 
 
@@ -718,3 +720,4 @@ if __name__ == "__main__":
     from armature_core.parts import run_tool_main  # noqa: E402
 
     run_tool_main(main, "BUILD_R2V")
+
