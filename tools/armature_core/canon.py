@@ -117,14 +117,15 @@ def add_spend_flags(parser):
     row added or renamed cannot leave the text behind.
     """
     known = ", ".join(sorted(canon_census.gate_census_table()))
-    parser.add_argument(
+    group = parser.add_argument_group("Gate CANON")
+    group.add_argument(
         "--subject",
         default=None,
         help=(f"which character this payload is of, named by census id ({known}). "
               f"Omitting this refuses at Gate CANON rather than at argparse, so the "
               f"refusal names the gate a spend has to pass"),
     )
-    parser.add_argument(
+    group.add_argument(
         "--no-canon",
         dest="no_canon",
         action="store_true",
@@ -132,7 +133,7 @@ def add_spend_flags(parser):
               "surfaces file at all. Census-backed — permitted only on a subject whose "
               "surfaces path is None, and REFUSED on a subject that has canon"),
     )
-    parser.add_argument(
+    group.add_argument(
         "--canon-prompt",
         default=None,
         help=("the text Gate CANON's router checks, when that differs from the text being "
