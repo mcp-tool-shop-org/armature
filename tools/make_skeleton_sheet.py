@@ -47,6 +47,7 @@ import rig_character  # noqa: E402
 from armature_core import joints, landmarks, sitelist  # noqa: E402
 from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import GateFailure  # noqa: E402
+from make_parts_sheet import CLAY_STUDIO_LINEAR  # noqa: E402
 
 FULL_W, FULL_H = 900, 1360
 INSET = 620
@@ -58,8 +59,12 @@ INSET = 620
 #: as the error it is. The comparison is only worth looking at if the miss is in shot.
 INSET_HEIGHT_FRACTION = 0.20
 
-BEFORE_RGB = (1.00, 0.42, 0.16)   # the heuristic placement
+#: Cool magenta — separates from terracotta (F-02ab94ad). Warm orange was same-hue as the body.
+BEFORE_RGB = (0.95, 0.20, 0.90)
 AFTER_RGB = (0.10, 0.85, 1.00)    # the placement measured off the sculpted balls
+#: On-sheet unmatched caption stays short (F-3aec0c43); long reason rides panels.json.
+UNMATCHED_LABEL_SUFFIX = "— NO MATCH"
+UNMATCHED_DETAIL = "NO BALL MATCHED, heuristic placement"
 
 #: The six joints the insets show, in body order. One side only — the panels are already
 #: six wide, and the offset table in the report carries both sides.
@@ -129,10 +134,10 @@ def gate_any_pivot_matched(table):
 
 
 def inset_panel_label(joint, site, table):
-    """The panel's label, which says when its two rows are the same picture."""
+    """The panel's on-sheet caption — short when unmatched (F-3aec0c43)."""
     if table.get(site, {}).get("matched"):
         return joint
-    return f"{joint} - NO BALL MATCHED, heuristic placement"
+    return f"{joint} {UNMATCHED_LABEL_SUFFIX}"
 
 
 def inset_record(joint, site, table, *, body, before, after):
@@ -140,7 +145,8 @@ def inset_record(joint, site, table, *, body, before, after):
 
     The sheet used to read only `after` and the offset fraction, so `matched` and `reason`
     never reached the emitted spec and an unmatched joint was indistinguishable from a
-    joint that had needed no correction.
+    joint that had needed no correction. The long unmatched spelling lives here as
+    `unmatched_detail`, not in the on-sheet caption (F-3aec0c43).
     """
     rec = table.get(site, {})
     out = {"body": body, "before": before, "after": after,
@@ -148,8 +154,10 @@ def inset_record(joint, site, table, *, body, before, after):
            "matched": bool(rec.get("matched")),
            "label": inset_panel_label(joint, site, table),
            "offset_frac": rec.get("offset_as_fraction_of_segment")}
-    if not out["matched"] and rec.get("reason"):
-        out["reason"] = rec["reason"]
+    if not out["matched"]:
+        out["unmatched_detail"] = UNMATCHED_DETAIL
+        if rec.get("reason"):
+            out["reason"] = rec["reason"]
     return out
 
 
@@ -277,7 +285,7 @@ def light_the_scene(scene):
     scene.world = world
     world.use_nodes = True
     bg = world.node_tree.nodes["Background"]
-    bg.inputs[0].default_value = (0.30, 0.30, 0.32, 1.0)
+    bg.inputs[0].default_value = (*CLAY_STUDIO_LINEAR, 1.0)
     bg.inputs[1].default_value = 1.0
     for name, energy, rot in (("key", 3.4, (52, 0, 26)), ("fill", 1.3, (62, 0, -134)),
                               ("rim", 2.1, (74, 0, 178))):

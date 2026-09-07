@@ -51,7 +51,7 @@ import rig_character  # noqa: E402
 from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 from make_parts_sheet import (ArcDidNotSurvive, arc_liveness,        # noqa: E402,F401
-                              articulated_side, side_word)
+                              articulated_side, CLAY_STUDIO_LINEAR, side_word)
 
 FULL_W, FULL_H = 780, 1180
 INSET = 560
@@ -165,7 +165,7 @@ def light_the_scene(scene):
     scene.world = world
     world.use_nodes = True
     bg = world.node_tree.nodes["Background"]
-    bg.inputs[0].default_value = (0.30, 0.30, 0.32, 1.0)
+    bg.inputs[0].default_value = (*CLAY_STUDIO_LINEAR, 1.0)
     bg.inputs[1].default_value = 1.0
     for name, energy, rot in (("key", 3.4, (52, 0, 26)), ("fill", 1.3, (62, 0, -134)),
                               ("rim", 2.1, (74, 0, 178))):

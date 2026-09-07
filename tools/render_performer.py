@@ -64,6 +64,8 @@ from armature_core import blender_scene, framing, parts  # noqa: E402
 # `rig_bake`'s and `make_parts_sheet`'s -- one implementation, imported.
 import rig_character as rc  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+# Control/performer plate — ONE name with render_turnaround (F-cade389c).
+from render_turnaround import WORLD_LINEAR  # noqa: E402
 
 TOOL_VERSION = "E09.1"
 
@@ -432,7 +434,7 @@ def main():
     world = bpy.data.worlds.new("performer")
     scene.world = world
     world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs[0].default_value = (0.16, 0.16, 0.18, 1.0)
+    world.node_tree.nodes["Background"].inputs[0].default_value = (*WORLD_LINEAR, 1.0)
 
     key = bpy.data.lights.new("key", type="SUN")
     key.energy = 3.2

@@ -51,6 +51,12 @@ FULL_W, FULL_H = 820, 1240
 INSET = 620
 INSET_HEIGHT_FRACTION = 0.20
 ARC_FRAMES = (17, rig_character.PROBE_FRAMES)
+
+#: Director-facing clay/character stills — sheets + `preview_glb` (F-cade389c).
+#: ONE named plate; control/performer routes keep the darker `WORLD_LINEAR` in
+#: `render_turnaround`. Importers: `make_binding_sheet`, `make_skeleton_sheet`,
+#: `preview_glb` (and `make_rig_sheet` via `light_the_scene` here).
+CLAY_STUDIO_LINEAR = (0.30, 0.30, 0.32)
 #: The joints the Director rules on, in the order he reads them. `(panel label, joint)` --
 #: the SIDE is appended at run time from `articulated_side`, never pinned here.
 INSET_JOINTS = (("shoulder", "shoulder"), ("elbow", "elbow"),
@@ -365,7 +371,7 @@ def light_the_scene(scene):
     scene.world = world
     world.use_nodes = True
     bg = world.node_tree.nodes["Background"]
-    bg.inputs[0].default_value = (0.30, 0.30, 0.32, 1.0)
+    bg.inputs[0].default_value = (*CLAY_STUDIO_LINEAR, 1.0)
     bg.inputs[1].default_value = 1.0
     for name, energy, rot in (("key", 3.4, (52, 0, 26)), ("fill", 1.3, (62, 0, -134)),
                               ("rim", 2.1, (74, 0, 178))):

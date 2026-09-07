@@ -48,6 +48,30 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 #: be drawn by a different engine with nothing in either record able to say so.
 ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
 
+#: Director-facing clay/character stills share ONE linear plate with the sheet tools
+#: (F-cade389c). Home is `make_parts_sheet.CLAY_STUDIO_LINEAR`; imported, never copied.
+from make_parts_sheet import CLAY_STUDIO_LINEAR  # noqa: E402
+
+#: Head elev is level so a look-down does not pack torso into the square crop.
+HEAD_ELEV_DEG = 0.0
+#: Head radius as a fraction of bbox height — height alone, never width (F-34e036b0).
+HEAD_RADIUS_FRAC = 0.13
+#: Head centre sits this fraction of H below the bbox top (middle of the top ~14% band).
+HEAD_CENTRE_FROM_TOP_FRAC = 0.07
+
+
+def head_framing(center, dims, hi):
+    """Square head crop from HEIGHT alone — centre in the top band, radius ~0.13*H.
+
+    WAVE 32, F-34e036b0. The prior formula took `max(0.14*H, 0.5*max(W,D)*0.6)`, so
+    character WIDTH drove the crop on 6 of 8 cast-survey subjects and the square frame
+    packed chest under a look-down elev. Width is deliberately absent here.
+    """
+    h = float(dims.z)
+    head_r = HEAD_RADIUS_FRAC * h
+    head_c = Vector((center.x, center.y, hi.z - HEAD_CENTRE_FROM_TOP_FRAC * h))
+    return head_c, head_r
+
 
 def _render_status(result):
     """The render operator's status set as a sorted list of strings, `[]` if unreadable.
@@ -382,9 +406,9 @@ def main():
     stats["bbox_dims"] = list(dims)
     radius = max(dims) / 2.0
 
-    # head region: top 22% of the bbox, framed square
-    head_c = Vector((center.x, center.y, hi.z - 0.11 * dims.z))
-    head_r = max(0.14 * dims.z, 0.5 * max(dims.x, dims.y) * 0.6)
+    # Head crop from HEIGHT alone (F-34e036b0): width used to inflate head_r into a
+    # torso frame on wide characters. Centre sits in the top ~14% of H; elev is level.
+    head_c, head_r = head_framing(center, dims, hi)
 
     stats["engine"] = select_engine(scn)
     scn.view_settings.view_transform = "Standard"
@@ -392,7 +416,8 @@ def main():
     scn.world = world
     world.use_nodes = True
     bg = world.node_tree.nodes["Background"]
-    bg.inputs[0].default_value = (0.72, 0.72, 0.73, 1.0)
+    # ONE clay plate with the sheets (F-cade389c); not the old 0.72 light grey.
+    bg.inputs[0].default_value = (*CLAY_STUDIO_LINEAR, 1.0)
     bg.inputs[1].default_value = 1.0
 
     sun_data = bpy.data.lights.new("sun", type="SUN")
@@ -433,8 +458,10 @@ def main():
     written = [
         add_camera_render("full_a", center, radius, 30, 10, (640, 960), args.out, args),
         add_camera_render("full_b", center, radius, 210, 10, (640, 960), args.out, args),
-        add_camera_render("head_a", head_c, head_r, 30, 6, (512, 512), args.out, args),
-        add_camera_render("head_b", head_c, head_r, 210, 6, (512, 512), args.out, args),
+        add_camera_render("head_a", head_c, head_r, 30, HEAD_ELEV_DEG,
+                          (512, 512), args.out, args),
+        add_camera_render("head_b", head_c, head_r, 210, HEAD_ELEV_DEG,
+                          (512, 512), args.out, args),
     ]
     stats["gate_PREVIEW_GLB"] = gate_previews_written(written)
     stats["views"] = [os.path.abspath(p) for p, _st, _b in written]

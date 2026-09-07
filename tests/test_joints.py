@@ -294,7 +294,8 @@ def test_an_unmatched_joint_is_labelled_on_its_own_panel():
     assert sheet.inset_panel_label("elbow", "elbow_L", table) == "elbow"
     unmatched = sheet.inset_panel_label("wrist", "wrist_L", table)
     assert unmatched != "wrist"
-    assert "NO BALL MATCHED" in unmatched
+    assert "NO MATCH" in unmatched
+    assert "heuristic placement" not in unmatched
 
 
 def test_a_sheet_on_which_nothing_matched_raises_rather_than_renders():
