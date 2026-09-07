@@ -124,8 +124,8 @@ from armature_core.errors import ArmatureError  # noqa: E402
 # choice belongs to `armature_core.parts.halt_outcome` now, so the names that are
 # no longer referenced here are dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, gate_create_video_fps, read_seed_registration,
-    single_path_segment)
+    canonical_payload_digest, comfy_cloud_oss_disclosure, disclosure_lines,
+    fetch_recipe, gate_create_video_fps, read_seed_registration, single_path_segment)
 
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
 import build_i2v_payload as W1  # noqa: E402  - wave 1's trajectory, weights and frame
@@ -1141,6 +1141,15 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
         # compares against to drift from the digest a record declares.
         "payload_sha256": canonical_payload_digest(wf),
     }
+    disc = comfy_cloud_oss_disclosure(
+        route_verdict=(meta.get("gate_ROUTE_built") or {}).get("verdict"))
+    meta["disclosure"] = disc
+    meta.update(fetch_recipe(
+        node_map={"41": "startprobe", "71": "lossless"}, video_nodes=("81",),
+        root_hint="outputs/E11/runs",
+        taps=[{"node": "41", "class_type": "SaveImage", "subdir": "startprobe"},
+              {"node": "71", "class_type": "SaveImage", "subdir": "lossless"},
+              {"node": "81", "class_type": "SaveVideo", "subdir": None}]))
     return wf, meta
 
 
@@ -1329,6 +1338,8 @@ def main(argv=None):
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
     print(canon_line(canon_ev))
+    for line in disclosure_lines(meta["disclosure"]):
+        print(line)
     print("BUILD_CAMERA_I2V_OK " + json.dumps({"path": gpath, 
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
         "resolution": meta["resolution"], "length": meta["length"], "fps": meta["fps"],

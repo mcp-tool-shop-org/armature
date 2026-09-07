@@ -297,6 +297,174 @@ def read_seed_registration(path, *, flag="--seeds"):
     return seeds
 
 
+def read_seed_registration_budget(path, *, flag="--seeds"):
+    """Seeds plus the ceiling/allocation a submitter counts against.
+
+    Wave 34, F-43868378. `read_seed_registration` returns only the seeds list — eight
+    callers still need that shape. The sanctioned submitter cannot see prior spends from a
+    graph builder, so the budget half lives here as a sibling reader: same open/parse/shape
+    clauses for `seeds`, then named clauses for `ceiling.submissions` (int > 0) and
+    `allocation` (non-empty mapping). Returns
+    `{"seeds", "ceiling", "allocation", "path", "flag"}`.
+    """
+    seeds = read_seed_registration(path, flag=flag)
+    ev = {"gate": "PAYLOAD", "andon": "seed_registration_budget", "flag": flag,
+          "path": os.path.abspath(path)}
+    with open(path, encoding="utf-8") as fh:
+        doc = json.load(fh)
+    ceiling = doc.get("ceiling")
+    if not isinstance(ceiling, dict):
+        raise SeedRegistrationError(
+            f"{flag} {path!r} declares `ceiling` as a "
+            f"{type(ceiling).__name__ if ceiling is not None else 'missing key'}, not an "
+            f"object carrying `submissions`. The number a submission step counts against "
+            f"sits beside `note`; without it the bound is prose again",
+            dict(ev, clause="registration_no_ceiling",
+                 read_as=type(ceiling).__name__ if ceiling is not None else None,
+                 keys=sorted(doc)))
+    submissions = ceiling.get("submissions")
+    if not isinstance(submissions, int) or isinstance(submissions, bool) or submissions < 1:
+        raise SeedRegistrationError(
+            f"{flag} {path!r} declares `ceiling.submissions` as "
+            f"{submissions!r} ({type(submissions).__name__}); a submission step needs a "
+            f"positive integer bound",
+            dict(ev, clause="registration_ceiling_submissions_not_a_positive_int",
+                 submissions=submissions,
+                 read_as=type(submissions).__name__))
+    allocation = doc.get("allocation")
+    if not isinstance(allocation, dict) or not allocation:
+        raise SeedRegistrationError(
+            f"{flag} {path!r} declares `allocation` as a "
+            f"{type(allocation).__name__ if allocation is not None else 'missing key'}, "
+            f"not a non-empty object. The per-seed rows are the other half of the bound",
+            dict(ev, clause="registration_no_allocation",
+                 read_as=type(allocation).__name__ if allocation is not None else None,
+                 keys=sorted(doc)))
+    return {"seeds": seeds, "ceiling": ceiling, "allocation": allocation,
+            "path": os.path.abspath(path), "flag": flag,
+            "submissions": int(submissions)}
+
+
+#: Comfy Cloud OSS-on-cloud disclosure — licence map "Comfy Cloud" ToS row
+#: (https://www.comfy.org/terms-of-service), fetched into docs/license-map.md.
+#: Wave 34, F-d092c186. Distinct from build_r2v_payload.TIER_DISCLOSURE (Wan partner).
+COMFY_CLOUD_OSS_DISCLOSURE = {
+    "surface": "Comfy Cloud (OSS weights / core nodes — no partner API node)",
+    "provider_terms": "https://www.comfy.org/terms-of-service",
+    "output_ownership": (
+        "Customer retains all right, title, and interest in and to Output "
+        "(Comfy Cloud ToS; docs/license-map.md Comfy Cloud row)"),
+    "ruling": (
+        "Generation runs on Comfy Cloud per Claude.md; this route loads commercially-"
+        "cleared OSS weights and core nodes only. Disclosure is required because assets "
+        "leave the rig"),
+    "obligations": [
+        {"kind": "data_use",
+         "text": ("uploaded Input (prompts, start frames, references, control packs) and "
+                  "Output leave this rig for Comfy Cloud execution. Comfy's ToS states it "
+                  "'will not use Input or Output to train generative AI'"),
+         "applies_to": "every asset and prompt this submission uploads",
+         "source": "Comfy Cloud ToS; docs/license-map.md Comfy Cloud row"},
+        {"kind": "training_use",
+         "text": ("training posture on this surface is Comfy's 'will not use Input or "
+                  "Output to train generative AI' clause — not the Wan partner SIII.6 "
+                  "training licence. Partner-tier routes print their own block"),
+         "applies_to": "Input and Output on this OSS-on-cloud route",
+         "source": "Comfy Cloud ToS; docs/license-map.md Comfy Cloud row"},
+        {"kind": "ai_content_disclosure",
+         "text": ("footage from this route is AI-generated. Publish with clear disclosure "
+                  "where a venue or contract requires it; this build does not remind you "
+                  "at publish time"),
+         "applies_to": "published footage from this route",
+         "source": "studio per-route disclosure ruling (Claude.md); Comfy Cloud ToS"},
+        {"kind": "watermark",
+         "text": ("no watermark is promised by this OSS graph. If a mark or label is "
+                  "present on returned frames, inspect before publishing rather than "
+                  "assuming the cloud left none"),
+         "applies_to": "the footage this submission returns",
+         "source": "Comfy Cloud ToS; docs/license-map.md Comfy Cloud row"},
+    ],
+}
+
+#: Shorter block for assembly/cascade — frames leave for CreateVideo/SaveVideo packing.
+ASSEMBLY_LEAVE_DISCLOSURE = {
+    "surface": "Comfy Cloud CreateVideo/SaveVideo packing (no sampler / no partner node)",
+    "provider_terms": "https://www.comfy.org/terms-of-service",
+    "ruling": (
+        "This chain authors no generation sampler; frames still leave the rig for "
+        "CreateVideo/SaveVideo on Comfy Cloud"),
+    "obligations": [
+        {"kind": "data_use",
+         "text": ("uploaded frames leave this rig for CreateVideo/SaveVideo on Comfy "
+                  "Cloud. Ordinary cloud compute may bill; no partner-credit node rides "
+                  "this allowlist"),
+         "applies_to": "every frame named by --uploads",
+         "source": "Comfy Cloud ToS; docs/license-map.md Comfy Cloud row"},
+    ],
+}
+
+
+def comfy_cloud_oss_disclosure(route_verdict=None):
+    """Disclosure block for OSS-on-cloud generation builders (wave 34, F-d092c186)."""
+    block = {
+        "route": COMFY_CLOUD_OSS_DISCLOSURE["surface"],
+        "provider_terms": COMFY_CLOUD_OSS_DISCLOSURE["provider_terms"],
+        "output_ownership": COMFY_CLOUD_OSS_DISCLOSURE["output_ownership"],
+        "ruling": COMFY_CLOUD_OSS_DISCLOSURE["ruling"],
+        "obligations": [dict(o) for o in COMFY_CLOUD_OSS_DISCLOSURE["obligations"]],
+        "route_verdict": route_verdict,
+        "read_from": ("build_assembly_payload.COMFY_CLOUD_OSS_DISCLOSURE, mirrored from "
+                      "docs/license-map.md's Comfy Cloud ToS row"),
+        "checked_by": ("nothing in code gates publication duties; they are DISCLOSED at "
+                       "the moment the spend is authored"),
+    }
+    return block
+
+
+def assembly_leave_disclosure(route_verdict=None):
+    """Shorter disclosure for assembly/cascade packing chains (wave 34, F-d092c186)."""
+    return {
+        "route": ASSEMBLY_LEAVE_DISCLOSURE["surface"],
+        "provider_terms": ASSEMBLY_LEAVE_DISCLOSURE["provider_terms"],
+        "ruling": ASSEMBLY_LEAVE_DISCLOSURE["ruling"],
+        "obligations": [dict(o) for o in ASSEMBLY_LEAVE_DISCLOSURE["obligations"]],
+        "route_verdict": route_verdict,
+        "read_from": "build_assembly_payload.ASSEMBLY_LEAVE_DISCLOSURE",
+        "checked_by": ("frames leave for CreateVideo/SaveVideo; disclosed rather than "
+                       "gated"),
+    }
+
+
+def fetch_recipe(*, node_map, video_nodes=(), root_hint=None, taps=None):
+    """Fetch recipe keys a payload record carries for fetch_run --record (F-dc84b444).
+
+    `node_map` is {node_id_str: subdir}. `video_nodes` is an iterable of node id strings
+    whose files land beside the run. `taps` is an optional list of
+    {node, class_type, subdir|None} rows for readers that want class beside id.
+    """
+    nm = {str(k): str(v) for k, v in dict(node_map or {}).items()}
+    vn = [str(x) for x in (video_nodes or ())]
+    tap_rows = list(taps) if taps is not None else [
+        {"node": nid, "class_type": "SaveImage", "subdir": sub} for nid, sub in nm.items()
+    ] + [
+        {"node": nid, "class_type": "SaveVideo", "subdir": None} for nid in vn
+    ]
+    return {
+        "fetch": {
+            "node_map": nm,
+            "video_nodes": vn,
+            "root_hint": root_hint,
+            # `none` = explicitly empty (no SaveImage taps), not "fall back to E02".
+            "node_map_flag": (",".join(f"{k}={v}" for k, v in sorted(nm.items()))
+                              if nm else "none"),
+            "video_nodes_flag": (",".join(vn) if vn else "none"),
+        },
+        "taps": tap_rows,
+        "node_map": nm,
+        "video_nodes": vn,
+    }
+
+
 def gate_output_not_overwritten(paths, out, overwrite, exc, gate="PAYLOAD"):
     """Gate <gate> · ANDON — a rebuild does not silently replace an earlier build's artefacts.
 
@@ -1068,6 +1236,14 @@ def build_and_write(argv=None):
         # `ROUTE` receipt above cannot be read as describing a different graph.
         "payload_sha256": canonical_payload_digest(wf),
     }
+    # Wave 34, F-d092c186 / F-dc84b444 — leave-the-rig disclosure + fetch recipe.
+    disc = assembly_leave_disclosure(route_verdict=gate_route.get("verdict"))
+    record["disclosure"] = disc
+    recipe = fetch_recipe(
+        node_map={}, video_nodes=(str(SAVE_ID),),
+        root_hint="outputs/S03/runs",
+        taps=[{"node": str(SAVE_ID), "class_type": "SaveVideo", "subdir": None}])
+    record.update(recipe)
 
     graph_path = os.path.join(out, "S03-assembly.api.json")
     record_path = os.path.join(out, "S03-assembly-payload-record.json")
@@ -1100,6 +1276,8 @@ def build_and_write(argv=None):
     # receipt, so two runs into one `--out` are distinguishable in a scrollback.
     print(f"payload sha256   {record['payload_sha256']}")
     print(f"overwrite        {gate_overwrite['verdict']}")
+    for line in disclosure_lines(disc):
+        print(line)
     # Wave 32, F-3e310dc1 / F-8d31935f — same OK LOOK as the JSON family (`path` key).
     print("BUILD_ASSEMBLY_OK " + json.dumps({"path": graph_path}, ensure_ascii=False))
     return wf

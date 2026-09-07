@@ -64,7 +64,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import route_gates  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, disclosure_lines, read_seed_registration)
+    canonical_payload_digest, disclosure_lines, fetch_recipe, read_seed_registration)
 from armature_core.canon import add_spend_flags  # noqa: E402
 from armature_core.errors import (  # noqa: E402
     ArmatureError, GateCanon, GateFailure, GateSSeedRegistration)
@@ -986,6 +986,11 @@ def main(argv=None):
         # was asserted about this graph or another one.
         "payload_sha256": canonical_payload_digest(built),
     }
+    # Wave 34, F-dc84b444 — fetch recipe (credit disclosure already printed below).
+    record.update(fetch_recipe(
+        node_map={}, video_nodes=("81",),
+        root_hint="outputs/E14/runs",
+        taps=[{"node": "81", "class_type": "SaveVideo", "subdir": None}]))
     record_path = os.path.join(args.out, f"E14-{args.arm}-payload-record.json")
     with open(record_path, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2, ensure_ascii=False)

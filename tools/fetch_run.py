@@ -280,6 +280,10 @@ def parse_node_map(text):
     applied to somebody else's graph, every frame would land in the video branch, and the
     only symptom would be a directory of files with the wrong names.
 
+    `None` / omitted keeps E02's default. The literal `none` (wave 34, F-dc84b444) is an
+    EXPLICIT empty map for video-only graphs — the same spelling `--video-nodes=none`
+    already uses — so a payload record with no SaveImage taps does not resurrect E02.
+
     WARNING These were `raise SystemExit(<str>)` until wave 10 (F-af78df0f). CPython
     renders that as a bare stderr line and exit code **1** - the code this module's own
     comment reserves for "this tool crashed" - and `except SystemExit: raise` in the
@@ -291,6 +295,10 @@ def parse_node_map(text):
     the operator as exit 2 plus the sentinel. Wave 8 closed this class in the sibling
     (`fetch_t2v_run.plan`, F-e3af7342); these four were left behind.
     """
+    if text is None:
+        return dict(NODE_DIR)
+    if str(text).strip().lower() == "none":
+        return {}
     if not text:
         return dict(NODE_DIR)
     out = {}
@@ -1148,7 +1156,40 @@ def main(argv=None):
                          "<run>_<index><ext>, comma separated. Defaults to E02's H.264 "
                          "review tap (114); pass --video-nodes=none for a graph with no "
                          "video output")
+    ap.add_argument("--record", default=None,
+                    help="builder payload record carrying fetch.node_map / "
+                         "fetch.video_nodes / fetch.root_hint (wave 34, F-dc84b444). "
+                         "When given, missing --node-map/--video-nodes/--root are read "
+                         "from it so a post-credit fetch does not invent E02 defaults")
     a = ap.parse_args(argv)
+    # Wave 34, F-dc84b444 — consume the fetch recipe the builder wrote beside the graph.
+    if a.record:
+        try:
+            with open(a.record, encoding="utf-8") as fh:
+                rec_doc = json.load(fh)
+        except (OSError, ValueError) as exc:
+            raise FetchHalt(
+                f"--record {a.record!r} cannot be read as JSON ({type(exc).__name__}: "
+                f"{exc}). The fetch recipe is how this tool knows which taps belong to "
+                f"this graph rather than to E02",
+                {"gate": "FETCH", "andon": "FetchHalt",
+                 "clause": "record_unreadable", "path": os.path.abspath(a.record),
+                 "error": type(exc).__name__}) from exc
+        fetch_block = rec_doc.get("fetch") if isinstance(rec_doc, dict) else None
+        if not isinstance(fetch_block, dict):
+            raise FetchHalt(
+                f"--record {a.record!r} carries no `fetch` object with node_map / "
+                f"video_nodes. Rebuild the payload so the record names its taps",
+                {"gate": "FETCH", "andon": "FetchHalt",
+                 "clause": "record_missing_fetch_recipe",
+                 "path": os.path.abspath(a.record),
+                 "keys": sorted(rec_doc) if isinstance(rec_doc, dict) else None})
+        if a.node_map is None and fetch_block.get("node_map_flag") is not None:
+            a.node_map = fetch_block["node_map_flag"]
+        if a.video_nodes is None and fetch_block.get("video_nodes_flag") is not None:
+            a.video_nodes = fetch_block["video_nodes_flag"]
+        if a.root is None and fetch_block.get("root_hint"):
+            a.root = fetch_block["root_hint"]
     # ---- Gate FETCH · ANDON, wave 28 (F-5f51c793), refused at the BOUNDARY the way `--run`
     # is one line down and `--hosted-tier` is in `gate_saved_graph`. `--root` defaulted to
     # E02's run tree with no `help=` at all, while its neighbour `--node-map` documents its

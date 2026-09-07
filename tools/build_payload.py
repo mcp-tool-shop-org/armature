@@ -92,7 +92,8 @@ from armature_core.errors import (  # noqa: E402
 # `build_cascade_payload` already imports them from that module; this is the third caller,
 # not a third implementation.
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, frame_order, gate_slot_frame_index)
+    canonical_payload_digest, comfy_cloud_oss_disclosure, disclosure_lines,
+    fetch_recipe, frame_order, gate_slot_frame_index)
 
 WIDTH, HEIGHT, LENGTH, FPS = 480, 832, 33, 16
 SEED = 654654950714624  # pinned from the saved graph, so A0's three repeats are identical
@@ -668,6 +669,14 @@ def build(arm, experiment="E02", seed=None):
         # compares against to drift from the digest a record declares.
         "payload_sha256": canonical_payload_digest(wf),
     }
+    disc = comfy_cloud_oss_disclosure(route_verdict=gate_route.get("verdict"))
+    meta["disclosure"] = disc
+    meta.update(fetch_recipe(
+        node_map={"301": "batchprobe", "302": "lossless"}, video_nodes=("114",),
+        root_hint="outputs/E02/runs",
+        taps=[{"node": "301", "class_type": "SaveImage", "subdir": "batchprobe"},
+              {"node": "302", "class_type": "SaveImage", "subdir": "lossless"},
+              {"node": "114", "class_type": "SaveVideo", "subdir": None}]))
     return wf, meta
 
 
@@ -1013,6 +1022,8 @@ def main(argv=None):
     # spelled four different ways. It is `<PREFIX>_OK ` now, with the SAME prefix this
     # file's `__main__` block prints on a halt, so one AST read of that block derives both
     # directions of the census.
+    for line in disclosure_lines(meta["disclosure"]):
+        print(line)
     print("BUILD_PAYLOAD_OK " + json.dumps({"path": gpath, 
         "experiment": a.experiment, "arm": a.arm, "nodes": len(wf), "gate_L": "PASS",
         "reference": meta["reference_image"],

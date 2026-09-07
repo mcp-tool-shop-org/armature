@@ -45,7 +45,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 import build_cascade_payload as CASCADE  # noqa: E402
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, disclosure_lines, read_seed_registration)
+    canonical_payload_digest, disclosure_lines, fetch_recipe, read_seed_registration)
 from armature_core import assembly as AS  # noqa: E402
 from armature_core import route_gates as RG  # noqa: E402
 from armature_core.route_gates import RouteGate  # noqa: E402
@@ -663,6 +663,12 @@ def build_and_write(argv=None):
         # as an object, not the pretty-printed file - through the one shared function.
         "payload_sha256": canonical_payload_digest(wf),
     }
+    # Wave 34, F-dc84b444 — fetch recipe for the SaveVideo tap (partner disclosure already
+    # rides `disclosure` above; do not re-open that LOOK).
+    record.update(fetch_recipe(
+        node_map={}, video_nodes=(str(SAVE_ID),),
+        root_hint="outputs/E13/runs",
+        taps=[{"node": str(SAVE_ID), "class_type": SAVE_CLASS, "subdir": None}]))
 
     # Below the last in-tool gate. `os.makedirs` used to sit above Gate S, so a refused
     # spend left an empty run directory beside real ones — the invariant build_payload.py
