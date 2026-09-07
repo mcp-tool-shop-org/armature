@@ -571,9 +571,12 @@ def test_the_helper_that_both_refuses_and_writes_is_unmoved_by_this_split():
             derived[name] = sorted(hits)
     # WAVE 34: submit's `post_prompt` and encode_control's `build_control_pack` join —
     # same residue HELPER_BOTH pin in test_instrument_write_ordering.py.
+    # WAVE 35: make_sheet / measure_floor join via run_dailies / sheet_main.
     assert derived == {
         "build_submit_payload": ["post_prompt"],
         "encode_control": ["build_control_pack"],
+        "make_sheet": ["run_dailies"],
+        "measure_floor": ["sheet_main"],
         "rig_character": ["export_rigged"],
         "stage_render": ["run_export"],
     }, derived

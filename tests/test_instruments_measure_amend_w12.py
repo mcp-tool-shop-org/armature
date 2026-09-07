@@ -131,9 +131,10 @@ def test_every_require_frames_call_in_the_tree_bounds_by_number():
     `make_startframe_sheet`, `make_thesis_sheet`), and `make_identity_sheet` alone did.
     """
     callers = sorted(m for m, (_p, t) in TOOL_TREES.items() if _require_frames_calls(t))
+    # WAVE 35: measure_floor's sheet mode joins; every call still passes numbers=.
     assert callers == ["make_gate0_sheet", "make_identity_sheet", "make_lift_sheet",
                        "make_review_clip", "make_startframe_sheet",
-                       "make_thesis_sheet"], callers
+                       "make_thesis_sheet", "measure_floor"], callers
     assert _positional_frame_bounds() == {}, _positional_frame_bounds()
 
 

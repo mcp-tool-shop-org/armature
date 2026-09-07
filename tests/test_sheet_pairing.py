@@ -387,7 +387,10 @@ RECORDED_FRAME_TOOLS = [
     "encode_control", "invert_frames", "lift_clip", "make_crop_strip", "make_gate0_sheet",
     "make_identity_sheet", "make_lift_sheet", "make_pick_sheet", "make_plate",
     "make_review_clip", "make_startframe_sheet", "make_thesis_sheet", "measure_arm",
-    "measure_clip", "pack_pose_pack",
+    "measure_clip",
+    # WAVE 35: measure_floor --sheet mode lists frame dirs and require_frames by number.
+    "measure_floor",
+    "pack_pose_pack",
     # WAVE 34: `--frames=i,j` is an FLF index pair (not a frames directory), but the
     # derivation keys on the flag name + any `listdir` in the module; joins loudly.
     # It does NOT positionally index a listing (measured; Dict-embedded listdir closed).
@@ -752,9 +755,10 @@ def test_every_sheet_that_draws_an_rgba_tile_routes_through_the_one_helper():
                 derived[mod] = node
                 if "load_rgb_over_plate" not in ast.dump(node):
                     without.append(mod)
+    # WAVE 35: measure_floor's sheet mode defines `_rgb` over load_rgb_over_plate.
     assert set(derived) == {"make_gate0_sheet", "make_identity_sheet", "make_lift_sheet",
                             "make_sheet", "make_startframe_sheet",
-                            "make_thesis_sheet"}, sorted(derived)
+                            "make_thesis_sheet", "measure_floor"}, sorted(derived)
     assert without == [], without
 
 
@@ -851,7 +855,8 @@ RECORDED_PARSER_POPULATION = [
     "armature_index", "author_walk", "build_animate_payload", "build_assembly_payload",
     "build_camera_i2v_payload", "build_cascade_payload", "build_i2v_payload",
     "build_lora_arm_payload", "build_payload", "build_r2v_payload",
-    "build_submit_payload", "build_t2v_payload", "build_uploads_payload",
+    "build_routes_payload", "build_submit_payload", "build_t2v_payload",
+    "build_uploads_payload",
     "canon_gate", "check_relift", "compare_runs", "composite_reference",
     "diagnose_bone_heat", "encode_control", "extract_clip_frames", "fetch_run",
     "fetch_t2v_run", "fit_reference", "gate_b_frames", "gate_saved_graph",
@@ -876,7 +881,8 @@ def test_the_parser_population_is_every_tool_with_a_command_line():
         "vanished": sorted(set(RECORDED_PARSER_POPULATION) - set(pop)),
     }
     # WAVE 34: 67 -> 69. submit + uploads join; lift_solve stays via passthrough binding.
-    assert len(pop) == 69, pop
+    # WAVE 35: 69 -> 70. build_routes_payload joins.
+    assert len(pop) == 70, pop
     # The population is asserted against the thing it is ABOUT, not against its own history:
     # every `tools/*.py` that calls `add_argument(` has a command line, whatever idiom it
     # reaches its namespace through.

@@ -183,7 +183,8 @@ def test_the_cli_tool_population_has_one_home():
     assert SP.parser_population is CN.parser_population
     assert SAS.CLI_TOOLS == CN.parser_population()
     # WAVE 34: 67 -> 69 (submit + uploads).
-    assert len(SAS.CLI_TOOLS) == 69, len(SAS.CLI_TOOLS)
+    # WAVE 35: 69 -> 70 (build_routes_payload).
+    assert len(SAS.CLI_TOOLS) == 70, len(SAS.CLI_TOOLS)
 
 
 def test_the_callee_name_and_fn_source_helpers_have_one_home():

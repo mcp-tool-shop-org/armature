@@ -120,9 +120,11 @@ def test_measure_only_reaches_its_own_writer(rc, tmp_path, monkeypatch):
     `measure.json`. It used to halt before the writer with `unknown binding True`."""
     calls = {}
 
-    def fake_build_pass(glb, name, bands, label, bind=None, envelope_radii="measured"):
+    def fake_build_pass(glb, name, bands, label, bind=None, envelope_radii="measured",
+                        hand_mode="mitten"):
         calls["bind"] = bind
         calls["label"] = label
+        calls["hand_mode"] = hand_mode
         return {
             "premise2": {}, "weld_on_import": {}, "normalisation": {},
             "premise6": {}, "bone_lengths": {}, "gate_p": None, "timings": {},
@@ -154,7 +156,8 @@ def test_measure_only_reaches_its_own_writer(rc, tmp_path, monkeypatch):
 def test_the_measure_record_says_whether_anything_was_bound(rc, tmp_path, monkeypatch):
     """`rec["gate_p"]` is `None` when nothing is bound, and a null beside a gate name is the
     placeholder-shaped-like-evidence this repo refuses. The record has to say which it is."""
-    def fake_build_pass(glb, name, bands, label, bind=None, envelope_radii="measured"):
+    def fake_build_pass(glb, name, bands, label, bind=None, envelope_radii="measured",
+                        hand_mode="mitten"):
         return {
             "premise2": {}, "weld_on_import": {}, "normalisation": {},
             "premise6": {}, "bone_lengths": {}, "gate_p": None, "timings": {},

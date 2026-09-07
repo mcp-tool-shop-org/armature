@@ -259,6 +259,8 @@ def resolve_camera(spec, bounds, width, height):
 
 def main():
     a = parse_args()
+    # F-82f88f23: optional keyframed orbit; absent => shot-spec camera below.
+    cam_keys = load_camera_path(getattr(a, "camera_path", None))
     spec = shotspec.load_spec(a.spec)
 
     fps = spec["frames"]["fps"]
@@ -359,6 +361,22 @@ def main():
 
     for i in range(count):
         blender_scene.set_scene_frame(scene, i)
+        if cam_keys:
+            sample = framing.sample_camera_at(cam_keys, i)
+            frame_target = Vector(sample["target"])
+            cam.matrix_world = blender_scene.orbit_matrix(
+                frame_target, float(sample["radius"]),
+                float(sample["elevation_deg"]), float(sample["azimuth_deg"]))
+            if i == 0:
+                pos = framing.camera_position(
+                    tuple(frame_target), float(sample["radius"]),
+                    float(sample["elevation_deg"]), float(sample["azimuth_deg"]))
+                target = frame_target
+                cam_solution = dict(cam_solution)
+                cam_solution["target"] = list(sample["target"])
+                cam_solution["target_source"] = "camera_path"
+                cam_solution["radius"] = float(sample["radius"])
+                cam_solution["radius_source"] = "camera_path"
         frame_path = os.path.join(a.out, f"{i:05d}.png")
         _before = rc.render_target_snapshot(frame_path)
         scene.render.filepath = frame_path
@@ -425,6 +443,7 @@ def main():
             "cannot make the frame-completeness check pass or fail. The sibling renderer "
             "render_performer.py derives the same population"),
         "asset": asset, "asset_sha256": sha, "camera_position": [round(v, 6) for v in pos],
+        "camera_path": getattr(a, "camera_path", None),
         "camera_target": [round(v, 6) for v in cam_solution["target"]],
         "camera_target_source": cam_solution["target_source"],
         "camera_radius": round(cam_solution["radius"], 6),

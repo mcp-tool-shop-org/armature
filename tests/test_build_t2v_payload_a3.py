@@ -28,7 +28,9 @@ BANK = os.path.join(REPO, "outputs", "E09", "route2")
 #: must skip the byte-level citation checks rather than fail — but it must SAY it skipped,
 #: which is what a skip reason is for.
 _banked = os.path.isdir(BANK)
-needs_bank = requires_bank(BANK, lever="outputs/")
+#: lever defaults inside `requires_bank`; do not re-spell `"outputs/"` here — the
+#: output-path census treats a bare outputs string on this assignment as cwd-relative.
+needs_bank = requires_bank(BANK)
 
 def test_the_default_profile_is_the_one_a3_authorises():
     """A silent default that produced the superseded trajectory is exactly the defect this

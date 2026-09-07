@@ -28,23 +28,12 @@ sys.path.insert(0, os.path.join(
 from blender_stub import load_tool, read_source  # noqa: E402
 from armature_core import framing, sitelist  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
-
+import _census_nodes as CN  # noqa: E402
 
 TOOLS = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "tools")
 
-
-def _flag_names(src, func="parse_args"):
-    tree = ast.parse(src)
-    fn = next(n for n in ast.walk(tree)
-              if isinstance(n, ast.FunctionDef) and n.name == func)
-    names = []
-    for node in ast.walk(fn):
-        if isinstance(node, ast.Call):
-            func_node = node.func
-            if isinstance(func_node, ast.Attribute) and func_node.attr == "add_argument":
-                if node.args and isinstance(node.args[0], ast.Constant):
-                    names.append(node.args[0].value)
-    return names
+#: ONE home in `_census_nodes.flag_names` (wave-26 F-f893634d); aliased here and in w34.
+_flag_names = CN.flag_names
 
 
 def _arg_action(src, flag, func="parse_args"):

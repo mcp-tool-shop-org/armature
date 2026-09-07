@@ -48,6 +48,7 @@ OK_PAYLOAD_EXEMPT = {
     "test_instruments_measure_amend_w25.py",
     "test_instruments_measure_amend_w28.py",
     "test_instruments_measure_amend_w34.py",
+    "test_instruments_measure_amend_w35.py",
     "test_packaging.py",
     "test_paid_argv_smoke.py",
     "test_measure_argv_smoke.py",
@@ -110,6 +111,8 @@ def test_every_ok_mention_imports_load_ok_payload_or_is_exempt():
 
 def test_the_exemption_list_may_only_shrink():
     """Ceiling pin — bump only with a reason naming the module that joined."""
+    # WAVE 35: 42 -> 42 stays; test_instruments_measure_amend_w35.py joins the
+    # presence-check exemption set (source-scan pins, not receipt parsers).
     assert len(OK_PAYLOAD_EXEMPT) <= 42, len(OK_PAYLOAD_EXEMPT)
 
 

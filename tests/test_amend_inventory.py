@@ -38,7 +38,10 @@ FINDING_RE = re.compile(r"\bF-[0-9a-f]{8}\b")
 
 #: Measured 2026-09-06 on ca26d0a worktree before this wave's own amend file landed.
 #: May only fall; bump deliberately with a comment naming the wave that grew it.
-AMEND_FILE_CEILING = 60
+#: WAVE 35: 60 -> 64. Four `test_*_w35_*.py` amend modules landed with the MEDIUM
+#: execute (builders / core-solvers / instruments / instruments-measure); graduate
+#: later rather than delete product pins to clear the ceiling.
+AMEND_FILE_CEILING = 64
 AMEND_BYTE_FRACTION_CEILING = 0.42
 
 

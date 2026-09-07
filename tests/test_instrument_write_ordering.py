@@ -151,6 +151,11 @@ HELPER_BOTH_REFUSES_AND_WRITES = {
     # does not record — measured after the submitter / encode_control --run landings.
     "build_submit_payload": ["post_prompt"],
     "encode_control": ["build_control_pack"],
+    # WAVE 35: `run_dailies` / `sheet_main` both refuse and write; make_sheet and
+    # measure_floor still gate-and-write directly elsewhere, so they stay in the
+    # ordering population too (same shape as rig_character / export_rigged).
+    "make_sheet": ["run_dailies"],
+    "measure_floor": ["sheet_main"],
     # `export_rigged` writes the GLB and raises the family; `rig_character` is in the ordering
     # population anyway, because its CLI body also writes directly (`os.makedirs` at :1691).
     "rig_character": ["export_rigged"],
@@ -334,7 +339,11 @@ POPULATION_MEASURED_2026_09_04 = {
     "composite_reference", "fetch_t2v_run", "fit_reference", "gate_b_frames",
     "gate_saved_graph", "lift_clip", "lift_solve", "make_ab_clip", "make_crop_strip",
     "make_gate0_sheet", "make_identity_sheet", "make_lift_sheet", "make_pick_sheet",
-    "make_plate", "make_review_clip", "make_skeleton_sheet", "make_startframe_sheet",
+    "make_plate", "make_review_clip",
+    # WAVE 35: dailies sheet author joins — gates-and-writes (and also HELPER_BOTH via
+    # `run_dailies`).
+    "make_sheet",
+    "make_skeleton_sheet", "make_startframe_sheet",
     # JOINED 2026-09-04 by the instruments wave-10 amend (F-13bd448d): `preview_glb.main`
     # now calls `gate_previews_written` over the four paths its renders returned, so it
     # gates-and-writes where before it only wrote. It is a `bpy` tool and lands in the

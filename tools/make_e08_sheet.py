@@ -241,8 +241,8 @@ def main(argv=None):
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     # `cv2.imwrite` returns a BOOL on failure and raises NOTHING; the sentinel below
     # carries an absolute path and is the receipt a later session cites. Same shape as
-    # fit_reference.py:212 and make_plate.py:220 (RE-MEASURED wave 16: both cited 216 /
-    # 224 before their classes lost a normalising `__init__` four lines up).
+    # fit_reference.py:299 and make_plate.py:220 (RE-MEASURED wave 35: fit_reference's
+    # imwrite check moved; wave 16 had cited 212 / 216 before earlier class edits).
     if not cv2.imwrite(a.out, sheet):
         raise SheetInputError(
             f"cv2 refused to write {os.path.abspath(a.out)}; E08_SHEET_OK would name a "

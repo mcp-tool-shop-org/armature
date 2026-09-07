@@ -207,7 +207,8 @@ def test_the_parser_population_is_every_tool_that_declares_an_argument():
     # WAVE 34: 67 -> 69. `build_submit_payload` and `build_uploads_payload` join; the
     # retarget spelling on `lift_solve` (`a = require_retarget_flags(parse_args())`) is
     # visible again via `_passthrough_arg0_names`, so it does not leave.
-    assert len(CLI_TOOLS) == 69, len(CLI_TOOLS)
+    # WAVE 35: 69 -> 70. `build_routes_payload` joins.
+    assert len(CLI_TOOLS) == 70, len(CLI_TOOLS)
 
 
 def test_the_solver_no_longer_shadows_the_tool_of_the_same_name():
@@ -413,6 +414,9 @@ def test_the_deleted_walk_is_the_one_that_reported_six_correct_modules():
         "build_lora_arm_payload": (["canon_prompt", "no_canon", "subject"], []),
         "build_payload": (["canon_prompt", "no_canon", "subject"], []),
         "build_r2v_payload": (["canon_prompt", "no_canon", "subject"], []),
+        # WAVE 35: routes dispatcher — old walk saw subparser dests; CN.undeclared_flags
+        # resolves them. Same shape as canon_gate's cmd/func.
+        "build_routes_payload": (["cmd", "func"], []),
         "build_t2v_payload": (["canon_prompt", "no_canon", "subject"], []),
         "canon_gate": (["cmd", "func"], []),
         "render_turnaround": (["ortho_scale_text"], []),
@@ -602,9 +606,12 @@ PAID_SUCCESS = set(_PAID_SMOKE.PAID)
 MEASURE_SUCCESS = set(_MEASURE_SMOKE.MEASURE)
 EXTENDED_SHEETS = set(_EXT_SHEET_SMOKE.EXTENDED_SHEETS)
 BLENDER_SHEET_SUCCESS = set(_EXT_SHEET_SMOKE.BLENDER_SHEET_SUCCESS)
+#: WAVE 35: owned routes dispatcher carries a list SUCCESS fixture below so the gap
+#: does not grow when the tool joins CLI_TOOLS.
+ROUTES_SUCCESS = {"build_routes_payload"}
 NO_SUCCESS_FIXTURE = sorted(
     set(CLI_TOOLS) - set(SHEETS) - PAID_SUCCESS - MEASURE_SUCCESS
-    - EXTENDED_SHEETS - BLENDER_SHEET_SUCCESS)
+    - EXTENDED_SHEETS - BLENDER_SHEET_SUCCESS - ROUTES_SUCCESS)
 
 #: The members of `CLI_TOOLS` that cannot be driven from a CPython process at all, keyed on
 #: the BEHAVIOUR "runs under Blender" (`blender_stub.blender_reach`, wave 12 F-6b3040d1) and
@@ -622,11 +629,11 @@ CPYTHON_CLI_TOOLS = _cpython_cli_tools()
 
 
 def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
-    """29 of 69 after wave 35 (was 47 of 69 after wave 34 paid SUCCESS; measure + extended
-    sheets shrink further). A fixture added moves a tool out of this set; nothing may move
-    the other way."""
+    """29 of 70 after wave 35 routes SUCCESS (was 29 of 69 before routes joined CLI;
+    measure + extended sheets had already shrunk the gap). A fixture added moves a tool
+    out of this set; nothing may move the other way."""
     covered = (set(SHEETS) | PAID_SUCCESS | MEASURE_SUCCESS
-               | EXTENDED_SHEETS | BLENDER_SHEET_SUCCESS)
+               | EXTENDED_SHEETS | BLENDER_SHEET_SUCCESS | ROUTES_SUCCESS)
     assert set(NO_SUCCESS_FIXTURE) | covered == set(CLI_TOOLS)
     assert set(SHEETS) <= set(CLI_TOOLS), sorted(set(SHEETS) - set(CLI_TOOLS))
     assert PAID_SUCCESS <= set(CLI_TOOLS), sorted(PAID_SUCCESS - set(CLI_TOOLS))
@@ -634,14 +641,25 @@ def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
     assert EXTENDED_SHEETS <= set(CLI_TOOLS), sorted(EXTENDED_SHEETS - set(CLI_TOOLS))
     assert BLENDER_SHEET_SUCCESS <= set(CLI_TOOLS), sorted(
         BLENDER_SHEET_SUCCESS - set(CLI_TOOLS))
+    assert ROUTES_SUCCESS <= set(CLI_TOOLS), sorted(ROUTES_SUCCESS - set(CLI_TOOLS))
     assert len(NO_SUCCESS_FIXTURE) <= 29, (
         f"{len(NO_SUCCESS_FIXTURE)} command-line tools have no end-to-end success fixture; "
-        f"29 was the count after wave 35's measure + extended sheet SUCCESS fixtures and "
-        f"it may only fall: {NO_SUCCESS_FIXTURE}")
+        f"29 was the count after wave 35's measure + extended sheet + routes SUCCESS "
+        f"fixtures and it may only fall: {NO_SUCCESS_FIXTURE}")
     assert len(PAID_SUCCESS) == 17, sorted(PAID_SUCCESS)
     assert len(MEASURE_SUCCESS) == 7, sorted(MEASURE_SUCCESS)
     assert len(EXTENDED_SHEETS) == 7, sorted(EXTENDED_SHEETS)
     assert len(BLENDER_SHEET_SUCCESS) == 4, sorted(BLENDER_SHEET_SUCCESS)
+    assert len(ROUTES_SUCCESS) == 1, sorted(ROUTES_SUCCESS)
+
+
+def test_build_routes_payload_list_is_a_success_fixture(capsys):
+    """WAVE 35: routes dispatcher joins CLI_TOOLS with a real main(argv) SUCCESS path."""
+    import build_routes_payload as BRP
+
+    assert BRP.main(["list", "--live-only"]) == 0
+    out = capsys.readouterr().out
+    assert "ROUTES_LIST_OK " in out
 
 
 def test_the_blender_side_of_the_cli_population_is_the_one_that_cannot_be_driven_here():
@@ -666,7 +684,8 @@ def test_the_blender_side_of_the_cli_population_is_the_one_that_cannot_be_driven
     for module in excluded:
         assert blender_reach(module + ".py"), module
     # WAVE 34: 50 -> 52. The two boundary payload tools are CPython; blender side unchanged.
-    assert len(CPYTHON_CLI_TOOLS) == 52, len(CPYTHON_CLI_TOOLS)
+    # WAVE 35: 52 -> 53. build_routes_payload is CPython.
+    assert len(CPYTHON_CLI_TOOLS) == 53, len(CPYTHON_CLI_TOOLS)
 
 
 def _module_scope_imports_this_interpreter_cannot_resolve(module):

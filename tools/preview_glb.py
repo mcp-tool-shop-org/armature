@@ -359,10 +359,12 @@ def main():
     primary_glb = glbs[0]
     bpy.ops.wm.read_factory_settings(use_empty=True)
     _import = bpy.ops.import_scene.gltf(filepath=primary_glb)
-    for extra in glbs[1:]:
-        bpy.ops.import_scene.gltf(filepath=extra)
     rc.require_import_status(_import, primary_glb, PreviewGlbGate,
                              {"who": "preview_glb"})
+    for extra in glbs[1:]:
+        _extra = bpy.ops.import_scene.gltf(filepath=extra)
+        rc.require_import_status(_extra, extra, PreviewGlbGate,
+                                 {"who": "preview_glb", "role": "roster_extra"})
 
     scn = bpy.context.scene
     all_meshes = [o for o in bpy.data.objects if o.type == "MESH"]

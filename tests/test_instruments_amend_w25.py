@@ -460,7 +460,9 @@ IMPORT_SITE_NOT_OURS = {
 def test_every_glb_import_site_in_this_domain_captures_the_operator_status_set():
     """The third operator joins the census its two siblings were already held to."""
     sites = _operator_call_sites(TOOLS, "bpy.ops.import_scene.gltf")
-    assert len(sites) == 16, sites
+    # WAVE 35: 16 -> 17. preview_glb's appendable --glb roster loop adds a second
+    # import_scene.gltf call; both sites capture the operator status set.
+    assert len(sites) == 17, sites
     uncaptured = sorted({fn for fn, _, cap in sites if not cap})
     assert uncaptured == sorted(IMPORT_SITE_NOT_OURS), {
         "uncaptured import sites": uncaptured,
@@ -494,10 +496,11 @@ def test_the_import_status_clause_has_exactly_one_home_in_this_domain():
                  and ast.unparse(c.func).endswith("require_import_status")])
         if n:
             callers[name] = n
-    # FOURTEEN of the fifteen captured sites hand their status to the home; the
-    # fifteenth is `probe_glb`, whose outcome for a declined import is a MEASUREMENT
-    # rather than a halt (below).
-    assert sum(callers.values()) == 14, callers
+    # FIFTEEN of the sixteen captured sites hand their status to the home; the
+    # sixteenth is `probe_glb`, whose outcome for a declined import is a MEASUREMENT
+    # rather than a halt (below). WAVE 35: preview_glb's roster loop adds a second
+    # require_import_status call (14 -> 15).
+    assert sum(callers.values()) == 15, callers
     assert len(callers) == 11, callers
     assert "probe_glb" not in callers
 
@@ -696,7 +699,7 @@ def test_the_skeleton_sheets_sentinel_reports_what_the_run_measured():
     # `ast.unparse` normalises string quoting to single quotes; the keys are compared in
     # that spelling rather than in the source's.
     for key in ("'tool'", "'json'", "'gate_SKELETON_SHEET'", "'n_inset_joints'",
-                "'n_snap_sites'", "'panels'", "'side'"):
+                "'n_snap_sites'", "'panels'", "'side'", "'compose'", "'sheet'"):
         assert key in text, (key, text)
     assert "gate_snap" in text and "spec['rows']" in text
 
@@ -709,8 +712,9 @@ def test_the_payload_of_the_rewritten_sentinel_is_a_dict_literal():
              and isinstance(n.args[0], ast.Dict)]
     keys = [sorted(k.value for k in d.args[0].keys if isinstance(k, ast.Constant))
             for d in dumps]
-    assert ["gate_SKELETON_SHEET", "json", "n_inset_joints", "n_snap_sites", "panels",
-            "side", "tool"] in keys, keys
+    # WAVE 35: --compose adds `compose` + `sheet` beside the measured gate counts.
+    assert ["compose", "gate_SKELETON_SHEET", "json", "n_inset_joints", "n_snap_sites",
+            "panels", "sheet", "side", "tool"] in keys, keys
 
 
 #: The `_OK` lines OUTSIDE this domain whose payload is not `json.dumps`, measured

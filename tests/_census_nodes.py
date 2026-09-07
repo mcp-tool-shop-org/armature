@@ -410,6 +410,25 @@ def argparse_dests(node):
     return out
 
 
+def flag_names(src, func="parse_args"):
+    """Flag strings a parser function's `add_argument` calls declare (wave 34/35 home).
+
+    One home for the AST walk `test_instruments_amend_w34` / `_w35` both used to define
+    locally (`test_amend_w26_suite` F-f893634d: duplicate walks graduate here).
+    """
+    tree = ast.parse(src) if isinstance(src, str) else src
+    fn = next(n for n in ast.walk(tree)
+              if isinstance(n, ast.FunctionDef) and n.name == func)
+    names = []
+    for node in ast.walk(fn):
+        if isinstance(node, ast.Call):
+            func_node = node.func
+            if isinstance(func_node, ast.Attribute) and func_node.attr == "add_argument":
+                if node.args and isinstance(node.args[0], ast.Constant):
+                    names.append(node.args[0].value)
+    return names
+
+
 def flag_helpers(trees):
     """`{(module, function): dests}` for every function that adds flags to a parser.
 

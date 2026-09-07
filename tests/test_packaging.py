@@ -1414,8 +1414,10 @@ def _saved_graph_success(tmp_path):
     saved.write_text(json.dumps(G.ref_saved()), encoding="utf-8")
     seeds = tmp_path / "seeds.json"
     seeds.write_text(json.dumps({"seeds": [2026081351]}), encoding="utf-8")
+    # WAVE 35: --experiment/--stage required when --record is omitted.
     return ["gate_saved_graph.py", f"--saved={saved}", f"--api={api}", f"--seeds={seeds}",
-            f"--out={tmp_path / 'admission.json'}", "--hosted-tier=wan2.7-r2v"]
+            f"--out={tmp_path / 'admission.json'}", "--hosted-tier=wan2.7-r2v",
+            "--experiment=E09", "--stage=B2"]
 
 
 SUCCESS_INVOCATIONS = {
@@ -2114,7 +2116,10 @@ def test_every_documented_flag_is_one_the_tool_ACCEPTS():
     for name, lines in _usage_lines().items():
         top, sub, _has = readers[name]
         for rest, line in lines:
-            for flag in re.findall(r"(--[A-Za-z][\w-]*)", rest):
+            # WAVE 35: flags after a bare `--` are forwarded to a child tool
+            # (build_routes_payload dispatch/admit/fetch); this tool does not accept them.
+            own = rest.split(" -- ", 1)[0]
+            for flag in re.findall(r"(--[A-Za-z][\w-]*)", own):
                 if flag not in (top | sub):
                     offenders.append(f"{name}: {flag} in {line!r}")
     assert offenders == [], offenders

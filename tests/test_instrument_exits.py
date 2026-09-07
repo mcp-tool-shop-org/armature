@@ -1275,8 +1275,9 @@ RECORDED_CPYTHON_WITH_HANDLER = [
     "analyze_p3.py", "armature_index.py", "build_animate_payload.py",
     "build_assembly_payload.py", "build_camera_i2v_payload.py",
     "build_cascade_payload.py", "build_i2v_payload.py", "build_lora_arm_payload.py",
-    "build_payload.py", "build_r2v_payload.py", "build_submit_payload.py",
-    "build_t2v_payload.py", "build_uploads_payload.py", "canon_gate.py",
+    "build_payload.py", "build_r2v_payload.py", "build_routes_payload.py",
+    "build_submit_payload.py", "build_t2v_payload.py", "build_uploads_payload.py",
+    "canon_gate.py",
     "compare_runs.py", "composite_reference.py", "encode_control.py",
     "extract_clip_frames.py", "fetch_run.py", "fetch_t2v_run.py", "fit_reference.py",
     "gate_b_frames.py", "gate_saved_graph.py", "invert_frames.py", "lift_clip.py",
@@ -1460,8 +1461,8 @@ def test_the_one_handlers_adopters_are_derived_and_carry_the_six_key_record():
         "analyze_p3.py", "armature_index.py", "build_animate_payload.py",
         "build_assembly_payload.py", "build_camera_i2v_payload.py", "build_cascade_payload.py",
         "build_i2v_payload.py", "build_lora_arm_payload.py", "build_payload.py",
-        "build_r2v_payload.py", "build_submit_payload.py", "build_t2v_payload.py",
-        "build_uploads_payload.py", "canon_gate.py",
+        "build_r2v_payload.py", "build_routes_payload.py", "build_submit_payload.py",
+        "build_t2v_payload.py", "build_uploads_payload.py", "canon_gate.py",
         "compare_runs.py", "composite_reference.py", "encode_control.py",
         "extract_clip_frames.py", "fetch_run.py", "fetch_t2v_run.py",
         "fit_reference.py", "gate_saved_graph.py", "invert_frames.py",
@@ -1523,7 +1524,8 @@ def test_the_cpython_derivation_reads_the_prefix_and_the_entry_off_the_block():
                                "fetch_run.py", "lift_clip.py", "measure_lift.py",
                                "measure_tracking.py"], sorted(by_stem)
     # WAVE 34: 47 -> 49. submit + uploads adopt run_tool_main without quoting <STEM>_HALT.
-    assert len(CPYTHON_WITH_HANDLER) - len(by_stem) == 49, len(CPYTHON_WITH_HANDLER)
+    # WAVE 35: 49 -> 50. build_routes_payload joins the same way.
+    assert len(CPYTHON_WITH_HANDLER) - len(by_stem) == 50, len(CPYTHON_WITH_HANDLER)
     # The entry is not always `main`, and it is seven tools now rather than one.
     assert sorted(f for f in CPYTHON_WITH_HANDLER
                   if halt_handler(f)["entry"] != "main") == [
