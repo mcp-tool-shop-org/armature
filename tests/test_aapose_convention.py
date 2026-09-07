@@ -593,6 +593,32 @@ GOLDEN = {
 }
 
 
+def _format_golden_hash_mismatch(frame, expected, got, env, verified):
+    """Aligned expected/got rows plus first-difference window (F-00788077)."""
+    first = next((i for i, (a, b) in enumerate(zip(expected, got)) if a != b), None)
+    if first is None:
+        if len(expected) != len(got):
+            diff = f"first difference: lengths {len(expected)} vs {len(got)}"
+        else:
+            diff = "first difference: (none in shared prefix)"
+    else:
+        lo = max(0, first - 4)
+        hi = min(max(len(expected), len(got)), first + 5)
+        diff = (
+            f"first difference at index {first}:\n"
+            f"  expected[{lo}:{hi}] = {expected[lo:hi]}\n"
+            f"  got     [{lo}:{hi}] = {got[lo:hi]}"
+        )
+    return (
+        f"frame: {frame}\n"
+        f"expected: {expected}\n"
+        f"got:      {got}\n"
+        f"{diff}\n"
+        f"observed environment: {env}\n"
+        f"last verified in: {verified}"
+    )
+
+
 @pytest.mark.parametrize("width,height,hands", sorted(GOLDEN))
 def test_golden_frames_are_byte_stable(width, height, hands):
     canvas = golden_frame(width, height, hands)
@@ -601,14 +627,13 @@ def test_golden_frames_are_byte_stable(width, height, hands):
     got = hashlib.sha256(canvas.tobytes()).hexdigest()
     # WAVE 26, F-b460731c: the message carries the environment that produced the hash, so a
     # human ruling on a moved rasterisation has the axis in front of them rather than in a
-    # comment that may be three cv2 majors old.
-    assert got == GOLDEN[(width, height, hands)], {
-        "frame": (width, height, hands),
-        "expected": GOLDEN[(width, height, hands)],
-        "got": got,
-        "observed environment": observed_environment(),
-        "last verified in": ENVIRONMENT_VERIFIED_2026_09_05,
-    }
+    # comment that may be three cv2 majors old. WAVE 32, F-00788077: expected/got are
+    # left-aligned rows with a first-difference window, not an unaligned dict dump.
+    expected = GOLDEN[(width, height, hands)]
+    assert got == expected, _format_golden_hash_mismatch(
+        (width, height, hands), expected, got,
+        observed_environment(), ENVIRONMENT_VERIFIED_2026_09_05,
+    )
 
 
 def test_the_recorded_environment_is_the_one_verifying_these_hashes():

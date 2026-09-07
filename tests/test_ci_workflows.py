@@ -5527,6 +5527,23 @@ def gate_and_work_order(body):
     return labels, gates, work, floor
 
 
+def _format_step_order(labels, gates, work, floor):
+    """Fixed-width Order table: index, GATE/WORK/FLOOR/-, label (F-cb34c4cb)."""
+    gate_set, work_set, floor_set = set(gates), set(work), set(floor)
+    rows = []
+    for i, label in enumerate(labels):
+        if i in gate_set:
+            kind = "GATE"
+        elif i in work_set:
+            kind = "WORK"
+        elif i in floor_set:
+            kind = "FLOOR"
+        else:
+            kind = "-"
+        rows.append(f"{i:2d}  {kind:<5}  {label}")
+    return "\n".join(rows)
+
+
 def jobs_with_a_gate():
     """(workflow, job) for every job carrying a pure-shell gate — read, never written down."""
     out = []
@@ -5601,13 +5618,14 @@ def test_a_job_with_a_gate_decides_before_it_spends(workflow, job):
     on two hosted runners and then prints `release.yml requires a tag ref`, which it had
     everything it needed to print before the first `pip install`.
     """
-    labels, gates, work, _floor = gate_and_work_order("\n".join(_job_lines(_text(workflow), job)))
+    labels, gates, work, floor = gate_and_work_order("\n".join(_job_lines(_text(workflow), job)))
     assert gates and work, (labels, gates, work)
     assert max(gates) < min(work), (
         f"{workflow}:{job} runs {labels[min(work)]!r} at step {min(work)} and still has a "
         f"gate at step {max(gates)} ({labels[max(gates)]!r}); these gates decide on "
         f"$GITHUB_REF, an env value and the two manifests, so a run that is going to be "
-        f"refused is refused after the whole job has been paid for. Order: {labels}")
+        f"refused is refused after the whole job has been paid for. Order:\n"
+        f"{_format_step_order(labels, gates, work, floor)}")
 
 
 @pytest.mark.parametrize("workflow,job", jobs_with_a_gate())
@@ -5619,12 +5637,13 @@ def test_a_gate_sits_on_the_floor_it_actually_needs(workflow, job):
     gates upward would be green on a workflow whose first step ran `python` on a runner that
     has none, in an empty directory.
     """
-    labels, gates, _work, floor = gate_and_work_order("\n".join(_job_lines(_text(workflow), job)))
+    labels, gates, work, floor = gate_and_work_order("\n".join(_job_lines(_text(workflow), job)))
     assert floor, labels
     assert max(floor) < min(gates), (
         f"{workflow}:{job} runs a gate at step {min(gates)} ({labels[min(gates)]!r}) before "
         f"{labels[max(floor)]!r} at step {max(floor)}; the version comparison needs the "
-        f"checkout for the manifests and setup-python for the interpreter. Order: {labels}")
+        f"checkout for the manifests and setup-python for the interpreter. Order:\n"
+        f"{_format_step_order(labels, gates, work, floor)}")
 
 
 def _verify_body_with_the_gates_last():
@@ -5663,7 +5682,8 @@ def test_the_order_census_goes_red_on_the_order_this_job_had():
         "the reverted order reads as gates-before-work; the property cannot fail")
     assert min(gates) == 8 and min(work) == 2, (
         f"the reconstruction is not the measured pre-fix order (tag gate ninth, Install "
-        f"third): gates {gates}, work {work}, labels {labels}")
+        f"third): gates {gates}, work {work}. Order:\n"
+        f"{_format_step_order(labels, gates, work, floor)}")
     # And the floor clause is unaffected by the mutation, so the two properties are separable.
     assert max(floor) < min(gates), (floor, gates)
 

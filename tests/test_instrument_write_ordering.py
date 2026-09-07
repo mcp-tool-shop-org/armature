@@ -795,6 +795,23 @@ def _format_stranded_growth(detail, grew_names):
     return out
 
 
+def _format_ordering_failure(name, gates_at, writes_at):
+    """Line-sorted refusal/write table for the clean-tool ordering assert (F-ec3f261b)."""
+    first_ln = min(writes_at)
+    ordered = max(gates_at) < min(writes_at)
+    rows = [
+        f"{name}: first write {writes_at[first_ln]} at :{first_ln}",
+        f"ordered max(gate)<min(write): {ordered}",
+        "refusals:",
+    ]
+    for ln in sorted(gates_at):
+        rows.append(f"  :{ln}  {gates_at[ln]}")
+    rows.append("writes:")
+    for ln in sorted(writes_at):
+        rows.append(f"  :{ln}  {writes_at[ln]}")
+    return "\n".join(rows)
+
+
 def stranded_site_count(members=None, *, source=None):
     """SITES, not names: the same walk, counting every line rather than every spelling."""
     source = source or {}
@@ -967,7 +984,8 @@ def test_a_tool_with_no_excused_refusal_is_held_to_the_ordering_rule():
         gates_at, writes_at = gate_and_write_lines(_source(name), name)
         if not gates_at or not writes_at:
             continue
-        assert max(gates_at) < min(writes_at), (name, gates_at, writes_at)
+        assert max(gates_at) < min(writes_at), _format_ordering_failure(
+            name, gates_at, writes_at)
 
 
 def _with_a_refusal_below_the_first_write(name):
