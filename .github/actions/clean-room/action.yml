@@ -40,6 +40,10 @@ runs:
       shell: bash
       run: |
         set -eu
+        # Log phases are collapsible in the Actions UI so a red clean-room transcript is not
+        # one undifferentiated blob (pip-freeze wall vs classifier refusal). Andon `::error::`
+        # lines stay at group end so the annotation still surfaces.
+        echo ::group::build
         python -m pip install "build>=1.5,<2" "twine>=7,<8"
         # THE LEG JUDGES WHAT THIS RUN BUILT, AND NOTHING ELSE -- the invariant `verify.ps1`
         # leg 3 established at wave 23 and this implementation of the same leg did not get.
@@ -85,11 +89,14 @@ runs:
             exit 1
           fi
         done
+        echo ::endgroup::
         # `dist/*` is deliberate HERE and only here: the classifier gate's own docstring
         # records that the population is the DIRECTORY, because release.yml uploads the whole
         # of it and the publish action publishes what it uploads. The clear and the two
         # by-name checks above are what make that range a known quantity rather than a guess.
+        echo ::group::twine
         python -m twine check dist/*
+        echo ::endgroup::
         # THE SDIST, BUILT FROM AND RUN. Three artifacts leave this repository and, until this
         # line, two of them were installed before the publish: the wheel below, and the npm
         # tarball in the sibling action. `twine check dist/*` reads METADATA and never opens
@@ -145,6 +152,7 @@ runs:
         # wheel into a venv still holding a previous run's packages and goes GREEN on a wheel
         # missing a module the stale venv still carries, which is the defect class this
         # repository names first.
+        echo ::group::sdist room
         SDIST_ROOM="${RUNNER_TEMP:-/tmp}/cleanroom-sdist"
         WHEEL_ROOM="${RUNNER_TEMP:-/tmp}/cleanroom"
         rm -rf "$SDIST_ROOM" "$WHEEL_ROOM"
@@ -163,6 +171,8 @@ runs:
           exit 1
         fi
         "$SDIST_ROOM/bin/armature" modules --json > /dev/null
+        echo ::endgroup::
+        echo ::group::wheel room
         python -m venv "$WHEEL_ROOM"
         "$WHEEL_ROOM/bin/python" -m pip install "$WHEEL"
         "$WHEEL_ROOM/bin/python" -m pip freeze
@@ -173,11 +183,14 @@ runs:
         fi
         "$WHEEL_ROOM/bin/armature" check
         "$WHEEL_ROOM/bin/armature" modules --json > /dev/null
+        echo ::endgroup::
         # THE PROBE IS A FILE, NOT A HEREDOC, for the reason the classifier gate beside it is
         # one: `verify.ps1`'s leg 3 runs the SAME text, and a copy forks. Its own docstring
         # carries the measurement (one copy gutted, 256 tests still green) and the reason the
         # printed line is BUILT from the calls rather than written as a literal.
+        echo ::group::probe
         "$WHEEL_ROOM/bin/python" "$GITHUB_ACTION_PATH/lazy_import_probe.py"
+        echo ::endgroup::
 
     # THE ONE FAILURE CLASS THIS PROJECT HAS ALREADY PAID FOR, AND THE ONLY GATE THAT CAN
     # SEE IT. `twine check` above validates metadata STRUCTURE, not classifier MEMBERSHIP:

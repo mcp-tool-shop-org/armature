@@ -247,7 +247,7 @@ if ($NoPackage) {
     Write-Host ''
     Write-Host '──────── package build — SKIPPED (-NoPackage)' -ForegroundColor Yellow
 } else {
-    Invoke-Leg -Name 'package build (wheel + sdist + twine + two clean installs + launcher)' -Body {
+    Invoke-Leg -Name 'package build (wheel+sdist+twine+clean installs)' -Body {
         Push-Location $repo
         try {
             # The toolchain CI pins, installed here for the same reason it is pinned there:
@@ -738,17 +738,31 @@ Write-Host ''
 
 $legRows = @()
 foreach ($r in $results) {
+    # Short token on the aligned row so FAIL keeps the PASS-column scan; long reason on the
+    # next indented line in the same colour. Package-leg name is ≤52 so the -52 field holds.
     $verdict = if ($r.Outcome -eq 'PASS') {
         'PASS'
     } elseif ($r.Raised) {
-        'FAIL (a command in the leg raised — the commands after it never ran, so the leg established no outcome)'
+        'FAIL (raised)'
     } elseif (-not $r.Established) {
-        'FAIL (the leg established no outcome — nothing it shells out to ran)'
+        'FAIL (no outcome)'
     } else {
         "FAIL (exit $($r.ExitCode))"
     }
+    $detail = if ($r.Outcome -eq 'PASS') {
+        $null
+    } elseif ($r.Raised) {
+        'a command in the leg raised — the commands after it never ran, so the leg established no outcome'
+    } elseif (-not $r.Established) {
+        'the leg established no outcome — nothing it shells out to ran'
+    } else {
+        $null
+    }
     $colour = if ($r.Outcome -eq 'PASS') { 'Green' } else { 'Red' }
     Write-Host ("  {0,-52} {1,7}s  {2}" -f $r.Leg, $r.Seconds, $verdict) -ForegroundColor $colour
+    if ($detail) {
+        Write-Host ("    {0}" -f $detail) -ForegroundColor $colour
+    }
     $legRows += [pscustomobject]@{
         Leg         = $r.Leg
         ExitCode    = $r.ExitCode
@@ -757,6 +771,7 @@ foreach ($r in $results) {
         Raised      = $r.Raised
         Seconds     = $r.Seconds
         Verdict     = $verdict
+        Detail      = $detail
     }
 }
 

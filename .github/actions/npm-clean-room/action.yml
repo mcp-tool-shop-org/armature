@@ -37,6 +37,10 @@ runs:
       working-directory: npm
       run: |
         set -eu
+        # Collapsible phases (pack / install / selftest) match the wheel clean room's groups
+        # so a red npm log is not one unsectioned transcript. Andon `::error::` stays at
+        # group end so the Actions annotation still surfaces.
+        echo ::group::pack
         rm -f ./*.tgz
         npm pack
         # NO PIPELINE. `shell: bash` runs with `-o pipefail` and this script adds `set -eu`,
@@ -61,6 +65,8 @@ runs:
           exit 1
         fi
         TARBALL="$PWD/${1#./}"
+        echo ::endgroup::
+        echo ::group::install
         PREFIX="${RUNNER_TEMP:-/tmp}/npm-cleanroom"
         rm -rf "$PREFIX"
         mkdir -p "$PREFIX"
@@ -73,5 +79,8 @@ runs:
           ls -la "$PREFIX/node_modules/.bin" || echo "(no node_modules/.bin at all)"
           exit 1
         fi
+        echo ::endgroup::
+        echo ::group::selftest
         "$SHIM" --node-selftest
+        echo ::endgroup::
         rm -f ./*.tgz
