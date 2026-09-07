@@ -381,6 +381,9 @@ def test_every_turnaround_raise_site_passes_an_evidence_dict():
     both refusals exited with the code the halt contract reserves for a fired andon while
     printing NO halt record at all. Both carry an evidence dict, which is what this
     census is about.
+
+    RE-DERIVED wave 35 pin-fix: 9 -> 15. Elevation turnaround and related Gate TURN
+    refusals landed with evidence dicts on every new raise site; bare count stays empty.
     """
     import ast
 
@@ -391,7 +394,7 @@ def test_every_turnaround_raise_site_passes_an_evidence_dict():
              if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
              and isinstance(n.exc.func, ast.Name)
              and n.exc.func.id == "RenderTurnaroundGate"]
-    assert len(sites) == 9, [n.lineno for n in sites]
+    assert len(sites) == 15, [n.lineno for n in sites]
     bare = [n.lineno for n in sites if len(n.exc.args) < 2]
     assert bare == [], (
         f"RenderTurnaroundGate raised with a message only at lines {bare}; the halt record "

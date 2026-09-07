@@ -816,7 +816,10 @@ def test_the_census_walks_every_citation_in_the_package_and_says_how_many():
     # correction leaves this green and merely makes the entry deletable -- which is
     # exactly what the ceiling is for, and the same treatment wave 22 gave the same
     # file.
-    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {"rig_gates": 1, "shotspec": 1}
+    # WAVE 35 pin-fix: donor_gate joins with 1; rig_gates 1 -> 2 (measured ceiling).
+    STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN = {
+        "donor_gate": 1, "rig_gates": 2, "shotspec": 1,
+    }
     over = {k: v for k, v in others.items()
             if v > STALE_IN_MODULES_THIS_DOMAIN_DOES_NOT_OWN.get(k, 0)}
     assert over == {}, {"stale now": others,
@@ -1254,7 +1257,7 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # live again and is deleted below. Numbers survive only as the measurement.
     ('test_instruments_amend_w14', 'preview_glb.py', 166),
     ('test_instruments_amend_w22', 'preview_glb.py', 65),
-    ('test_pinned_framing', 'preview_walk.py', 93),
+    # WAVE 35 pin-fix: preview_walk row DELETED — that anchor resolves again.
     # WAVE 28 (instruments-measure): THREE ROWS DELETED, in the commit that made them live
     # again — this table's own stated rule, and the same shape core-gates and core-solvers
     # each applied once in wave 25. The help-text work (F-3ce0db92) added lines to 36
@@ -1285,9 +1288,16 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # only as the measurement; reasons name no <file>.py:<n> here).
     ('test_assembly', 'test_amend_w12_core_solvers.py', 797),
     ('test_instruments_amend_w10', 'test_check_relift.py', 44),
-    ('test_build_payload', 'lift_solve.py', 345),
-    ('test_core_solver_evidence', 'author_walk.py', 712),
-    ('test_walk', 'author_walk.py', 712),
+    # WAVE 35 pin-fix: four WAVE-34 rows DELETED — those anchors resolve again
+    # (lift_solve / author_walk / preview_walk). Seven new blanks JOIN; numbers survive
+    # only as the measurement. Reasons name no <file>.py:<n> here.
+    ('test_ci_workflows', 'test_packaging.py', 1013),
+    ('test_instruments_amend_w22_optics', 'render_start_frame.py', 1012),
+    ('test_instruments_amend_w8', 'test_render_visibility.py', 89),
+    ('test_pinned_framing', 'render_performer.py', 321),
+    ('test_posearc', 'rig_character.py', 661),
+    ('test_rig_gates', 'rig_character.py', 881),
+    ('test_rig_gates', 'rig_character.py', 666),
     # ROW DELETED, WAVE 25 (core-solvers), in the commit that made it live again — which is
     # this table's own stated rule. The row named a line in `blender_scene.py` cited by
     # `test_instruments_amend_w14`, kept as a deliberate stale citation because the number
@@ -1311,8 +1321,8 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # pushed a docstring onto the cited line, so the anchor resolved. The citing site is
     # RE-ANCHORED ON THE SYMBOL rather than re-measured (`test_instruments_amend_w16.py`,
     # the F-39381793 block), so nothing cites that line now and there is no row to keep.
-    ('test_instruments_amend_w18', 'test_amend_w16_builders.py', 815),
-    ('test_instruments_amend_w22', 'test_amend_w16_builders.py', 815),
+    # WAVE 35 pin-fix: the two test_amend_w16_builders.py:815 rows DELETED — anchors
+    # resolve again under concurrent builders pin-fix.
     ('test_instruments_amend_w8', 'test_retopo_and_bake.py', 122),
     # WAVE 25 (instruments): ('test_make_rig_sheet', 'rig_repair.py', 150) and
     # ('test_probe_glb', 'probe_subject.py', 88) DELETED here, in the commit that made
@@ -1429,7 +1439,12 @@ CI_PACKAGING_CITED_FILES_NOT_IN_THE_TREE = {
 #: eight had its number quoted inside a sentence recording it as wrong — the shape that
 #: forces a row into `TESTS_STALE_ANCHORS_RECORDED`. A row added here needs the same
 #: justification that table's rows carry.
-CI_PACKAGING_STALE_ANCHORS_RECORDED = set()
+#: WAVE 35 pin-fix: one row JOINS — `pyproject.toml` quotes the former bare line cite
+#: inside the sentence that records it as wrong (the correction that says citations name
+#: steps, not lines). Deleting the number would delete the correction.
+CI_PACKAGING_STALE_ANCHORS_RECORDED = {
+    ("pyproject.toml", "ci.yml", 239),
+}
 
 _ANY_FILE_ANCHOR = re.compile(
     r"(?<![A-Za-z0-9_/.])((?:[A-Za-z0-9_.-]+/)*[A-Za-z0-9_.-]+"

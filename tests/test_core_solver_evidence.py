@@ -297,10 +297,12 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         #   route_gates 50 -> 53  F-ebb1ebb4 / F-6fcab339 / F-f1234354:
         #                       `ruled_name_with_unknown_suffix`, `hosted_nodes_without_a_tier`
         #                       and `generator_family_contradicted`.
-        "assembly": 23, "blender_scene": 8, "canon": 1, "cli": 2, "donor_gate": 15, "framing": 6,
+        "assembly": 23, "blender_scene": 8, "canon": 1, "cli": 2, "donor_gate": 17, "framing": 6,
         # WAVE 34 pin-fix: gates 28 -> 29 (measured); cli 0 -> 2 GateCanon raises via
         # function-local imports, now visible to `_gate_raises` after the errors fallback.
-        "gates": 29, "glb": 4, "landmarks": 2, "lift_solve": 5, "parts": 8,
+        # WAVE 35 pin-fix: donor_gate 15 -> 17, lift_solve 5 -> 8, turnaround 16 -> 17
+        # (measured on the merged MEDIUM-execute tree).
+        "gates": 29, "glb": 4, "landmarks": 2, "lift_solve": 8, "parts": 8,
                 # WAVE 20 (core-gates, 2026-09-05): +3 in `route_gates.RouteGate`, RE-DERIVED with
         # `==` in this worktree against the merged base `475f4eb`, which every census here read
         # GREEN first. BRANCH-LOCAL — the coordinator re-measures at the merge.
@@ -327,7 +329,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
 
         # WAVE-22 MERGE (coordinator, 2026-09-05): every row on this line MEASURED on the merged tree by this walk (core-solvers and core-gates
         # each moved different rows branch-local; neither line was a merged measurement).
-        "resample": 8, "rig_gates": 17, "route_gates": 53, "startframe": 21, "turnaround": 16,
+        "resample": 8, "rig_gates": 17, "route_gates": 53, "startframe": 21, "turnaround": 17,
         "walk": 3,
         # WAVE 22 (core-gates, F-682ce228): `canon_census` joins the population with its
         # first gate raise — `gate_census_table`'s `_refuse`, six clauses through one site.
@@ -372,7 +374,8 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # above. RE-DERIVED with `==` in this worktree; BRANCH-LOCAL — the coordinator
     # re-measures on the merged tree and never sums the branches.
     # WAVE 34 pin-fix: 219 -> 222 (gates +1, cli +2 GateCanon via function-local import).
-    assert sum(with_gates.values()) == 222
+    # WAVE 35 pin-fix: 222 -> 228 (donor_gate +2, lift_solve +3, turnaround +1).
+    assert sum(with_gates.values()) == 228
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

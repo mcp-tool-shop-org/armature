@@ -749,16 +749,22 @@ CHANNEL_CONVENTIONS = {
 }
 
 
-def convention_digest(name):
-    """Stable digest string for Gate CONV-style pinning of a channel byte layout."""
+def convention_digest(name, extra=None):
+    """Stable digest string for Gate CONV-style pinning of a channel byte layout.
+
+    `extra` is the caller's location mapping — same shape as `depth_extent` / `encode_u8`.
+    """
     import hashlib
     rec = CHANNEL_CONVENTIONS.get(name)
     if rec is None:
+        ev = {"gate": None, "andon": "ArmatureError",
+              "clause": "unknown_channel_convention", "name": name}
+        ev.update(extra or {})
         raise ArmatureError(
-            f"no channel convention named {name!r}; known: "
-            f"{sorted(CHANNEL_CONVENTIONS)}",
-            {"gate": None, "andon": "ArmatureError",
-             "clause": "unknown_channel_convention", "name": name})
+            _context_prefix(extra)
+            + f"no channel convention named {name!r}; known: "
+            + f"{sorted(CHANNEL_CONVENTIONS)}",
+            ev)
     payload = "|".join([
         rec["digest_seed"], rec["layout"], rec["licence"], repr(rec["background"]),
     ])

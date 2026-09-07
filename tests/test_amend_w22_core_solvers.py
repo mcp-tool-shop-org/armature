@@ -764,6 +764,9 @@ REPEATED_CLAUSE_WORDS = {
     # One refusal, two profiles: `stickwidth` and `hand_stickwidth` refuse the same unknown
     # `stickwidth_type` with the same message shape.
     "aapose": {"unknown_stickwidth_type"},
+    # WAVE 35: character-class bind refuses the same mesh/bone shape checks at more than
+    # one door — one refusal shape per word, not two triage keys.
+    "binding": {"bone_radius_not_positive", "no_deforming_bones", "vertices_not_n_by_3"},
     # `depth_extent` and `normalize_depth` refuse the same population — the geometry pixels
     # — under one word, deliberately (wave 18, F-476a4ee8).
     "channels": {"non_finite_geometry_depth"},

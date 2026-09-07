@@ -418,6 +418,9 @@ RECORDED_POPULATION = frozenset({
     # CeilingBudget / SubmitGate / UploadGate are new multi-site family classes;
     # SiteListError crossed the two-site threshold (leaves the single-site set).
     "CeilingBudget", "SiteListError", "SubmitGate", "UploadGate",
+    # WAVE 35 pin-fix: MakeSheetError crossed via literal raises in make_sheet;
+    # RoutesGate is the new multi-site andon on build_routes_payload.
+    "MakeSheetError", "RoutesGate",
     # Joined 2026-09-04 (wave 10, instruments-measure). The census caught the growth
     # loudly, which is what it is for: `ReviewClipError`, `ShotsetSheetError` and
     # `ZoomSheetError` are new typed classes replacing thirteen bare
@@ -668,7 +671,8 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # which was already policed. It leaves the single-site set in the same commit — see
     # `test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed`, whose two
     # derived counts move 22 -> 21 and 21 -> 20 for the same one reason.
-    assert len(POLICED) == 131, sorted(POLICED)
+    # WAVE 35 pin-fix: 131 -> 133 — MakeSheetError + RoutesGate (measured).
+    assert len(POLICED) == 133, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -917,9 +921,11 @@ def test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed():
     assert "QuadriflowDeclined" in single
     assert not (single & POLICED)
     # WAVE 34 pin-fix: SiteListError crossed into POLICED; 21 -> 20 / 20 -> 19.
+    # WAVE 35 pin-fix: MakeSheetError left the single-site set into POLICED;
+    # family_here 19 -> 18 while single stays 20 (a non-family single joined).
     assert len(single) == 20, sorted(single)
     family_here = single & _family_classes_defined_under_tools()
-    assert len(family_here) == 19, sorted(family_here)
+    assert len(family_here) == 18, sorted(family_here)
 
 
 def _family_classes_defined_under_tools():
@@ -1058,7 +1064,8 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree with the derivation above.
     # WAVE 34 pin-fix: +3 family classes on the merged tree (CeilingBudget,
     # SubmitGate, UploadGate); SiteListError was already defined.
-    assert len(defined) == 151, len(defined)
+    # WAVE 35 pin-fix: 151 -> 152 — RoutesGate joins the family under tools/.
+    assert len(defined) == 152, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
@@ -1121,19 +1128,24 @@ def test_the_delegated_edge_sees_the_three_classes_the_literal_walk_could_not():
     # still carries the red proof alone — a pair that becomes a single member is exactly the
     # kind of quiet narrowing this file exists to report, so the count is asserted rather
     # than the membership silently shrinking.
+    # WAVE 35 pin-fix: `MakeSheetError` LEAVES the pure-demonstrator set — make_sheet now
+    # carries eight literal raises beside the delegated `exc = exc or MakeSheetError` site,
+    # so the literal walk sees it and the pure list is empty. The delegated edge is still
+    # what this test is about: every named class below still has sites the literal walk
+    # cannot see.
     old = literal_sites_only(TOOLS)
     pure = sorted(n for n in ("MakeSheetError", "AnalyzeP3Error", "PosePackError",
                               "PlateError")
                   if not old.get(n))
-    assert pure == ["MakeSheetError"], pure
-    for name in pure:
-        assert old.get(name, set()) == set(), (name, sorted(old.get(name, ())))
-        assert len(RAISE_SITES[name]) == 1, sorted(RAISE_SITES[name])
+    assert pure == [], pure
     # `AnalyzeP3Error`'s delegated site is still SEEN by the widened walk, which is the
     # property this test is about — what changed is that the literal walk can now see two
     # OTHER sites of the same class.
     assert len(old.get("AnalyzeP3Error", ())) == 2, sorted(old.get("AnalyzeP3Error", ()))
     assert len(RAISE_SITES["AnalyzeP3Error"]) == 3, sorted(RAISE_SITES["AnalyzeP3Error"])
+    assert len(old.get("MakeSheetError", ())) == 8, sorted(old.get("MakeSheetError", ()))
+    assert len(RAISE_SITES["MakeSheetError"]) == 9, sorted(RAISE_SITES["MakeSheetError"])
+    assert "MakeSheetError" in POLICED
 
     # The delegated-only sites: present in the widened walk, invisible to the literal one.
     # If the old walk could see them this comparison would be with itself.
@@ -1644,6 +1656,8 @@ TESTS_DIR = TESTS
 #: clauses arrived with the same merge; +51 core-solvers clauses from GLB animation,
 #: framing path, character-class, OpenPose drawing, articulated hands, named gaits,
 #: lift root_provider; -1 retired stance_frac_not_modelled (F-ce5896e5).
+#: WAVE 35 pin-fix: 844 -> 880 on the merged tree after MEDIUM execute — routes/dailies/
+#: floor-sheet/roster/binding clauses landed with the product; vocabulary re-derived with ==.
 RECORDED_CLAUSES = [
     'above_one',
     'adjacent_pair_shapes_differ',
@@ -1760,6 +1774,7 @@ RECORDED_CLAUSES = [
     'bufferview_not_an_index',
     'bufferview_out_of_range',
     'bufferview_past_bin_chunk',
+    'builder_missing',
     'built_graph_is_not_the_spec_graph',
     'built_graph_link_topology_is_wrong',
     'bvh_import_failed',
@@ -1847,6 +1862,11 @@ RECORDED_CLAUSES = [
     'cv2_refused_the_frame_write',
     'cv2_refused_the_strip_write',
     'cv2_refused_the_write',
+    'dailies_manifest_missing',
+    'dailies_manifest_missing_keys',
+    'dailies_manifest_not_json',
+    'dailies_manifest_not_object',
+    'dailies_toml_unavailable',
     'declared_group_size_above_the_ceiling',
     'declared_total_disagrees',
     'decode_stride_is_not_positive',
@@ -1905,7 +1925,9 @@ RECORDED_CLAUSES = [
     'expected_rate_not_finite',
     'expected_rate_not_positive',
     'expected_unet_loader_node',
+    'experiment_conflicts_with_record',
     'experiment_has_no_seed_registry',
+    'experiment_stage_required_without_record',
     'experts_read_different_positives',
     'export_incomplete',
     'export_input_path_unreadable',
@@ -1927,6 +1949,9 @@ RECORDED_CLAUSES = [
     'flat_slot_ceiling_exceeded',
     'flf_pair_same_index',
     'floor_material_reads_an_image',
+    'floor_not_object',
+    'floor_sheet_needs_runs',
+    'floor_sheet_run_dir_missing',
     'flow_bad_shape',
     'flow_max_mag_not_finite_and_positive',
     'forbidden_not_a_list',
@@ -1986,6 +2011,7 @@ RECORDED_CLAUSES = [
     'gate0_meta_not_an_object',
     'gate0_meta_required',
     'gate0_meta_unreadable',
+    'gate0_sheet_missing_before_measure',
     'gate_l_frame_source',
     'gate_s_registration',
     'gated_text_is_not_shipped_text',
@@ -1994,6 +2020,8 @@ RECORDED_CLAUSES = [
     'glb_and_out_are_required',
     'glb_has_no_render_visible_mesh',
     'glb_is_not_a_file',
+    'glb_or_roster_required',
+    'glb_required',
     'graph_file_missing',
     'group_node_count_disagrees_with_the_plan',
     'group_size_below_one',
@@ -2001,6 +2029,7 @@ RECORDED_CLAUSES = [
     'half_extent_negative',
     'half_extent_not_numbers',
     'half_extent_wrong_arity',
+    'hand_binding_needs_articulated',
     'hand_has_no_length',
     'hand_keypoints_wrong_shape',
     'hand_length_not_positive',
@@ -2051,12 +2080,15 @@ RECORDED_CLAUSES = [
     'limb_trace_too_short',
     'link_table_entry_names_no_origin',
     'liveness_probe_shape_changed',
+    'manifest_glb_count_mismatch',
+    'manifest_required',
     'mask_bbox_is_empty',
     'mask_disagrees_with_projection',
     'masked_geometry_is_all_background_depth',
     'master_carries_no_transparent_pixel',
     'master_carries_no_transparent_region_for_a_plate',
     'master_entirely_transparent',
+    'measure_without_gate0',
     'measurement_dated_in_the_future',
     'measurement_not_positive',
     'meta_path_equals_graph_path',
@@ -2192,6 +2224,7 @@ RECORDED_CLAUSES = [
     'panels_document_is_not_an_object',
     'panels_document_is_not_on_disk',
     'panels_document_not_named',
+    'panels_json_missing_for_compose',
     'part_deformed_under_the_pose',
     'part_did_not_land_on_its_bone_transform',
     'part_radius_not_positive',
@@ -2248,7 +2281,10 @@ RECORDED_CLAUSES = [
     'record_describes_a_different_graph',
     'record_frame_counts_disagree',
     'record_is_not_tied_to_the_graph',
+    'record_missing_experiment',
     'record_missing_fetch_recipe',
+    'record_missing_stage',
+    'record_not_a_mapping',
     'record_route_facts_disagree',
     'record_unreadable',
     'recorded_convention_digest_drift',
@@ -2287,6 +2323,11 @@ RECORDED_CLAUSES = [
     'root_provider_root_not_3vector',
     'root_provider_unknown_source',
     'root_provider_unreadable',
+    'roster_and_glb_both_set',
+    'roster_not_a_nonempty_list',
+    'roster_ortho_scale_mismatch',
+    'roster_requires_ortho_scale',
+    'roster_row_missing_glb',
     'round_trip_dtype_not_uint8',
     'round_trip_moved_the_surface',
     'round_trip_not_lossless',
@@ -2294,6 +2335,9 @@ RECORDED_CLAUSES = [
     'round_trip_population_incomplete',
     'round_trip_probe_window_too_small',
     'round_trip_residual_over_tolerance',
+    'route_has_no_builder',
+    'route_narrative_only',
+    'route_requires_order_gate',
     'route_unknown',
     'ruled_name_with_unknown_suffix',
     'run_excludes_frames_and_out',
@@ -2326,6 +2370,9 @@ RECORDED_CLAUSES = [
     'shadow_floor_eps_is_zero',
     'shadow_layer_needs_floor_and_plate',
     'shape_mismatch',
+    'sheet_frames_empty',
+    'sheet_requires_floor',
+    'sheet_requires_out',
     'short_chunk_body',
     'short_chunk_header',
     'short_header',
@@ -2351,6 +2398,7 @@ RECORDED_CLAUSES = [
     'spec_value_not_positive',
     'spec_value_wrong_type',
     'spec_version_unsupported',
+    'stage_conflicts_with_record',
     'stage_render_manifest_missing',
     'stage_render_manifest_unreadable',
     'stale_channel',
@@ -2436,9 +2484,11 @@ RECORDED_CLAUSES = [
     'unknown_mode',
     'unknown_named_gait',
     'unknown_occupant_kind',
+    'unknown_pipeline_mode',
     'unknown_pose_arc',
     'unknown_pose_arc_axis',
     'unknown_pose_library',
+    'unknown_route',
     'unknown_spatial_kind',
     'unknown_spec_key',
     'unknown_stickwidth_type',
@@ -2495,8 +2545,6 @@ RECORDED_CLAUSES = [
 #: CATEGORY, not an exemption — it may not grow, and a clause that gains a
 #: fixture leaves it in the commit that adds the fixture.
 CLAUSES_NAMED_BY_NO_FIXTURE = [
-    # WAVE 34 pin-fix (core-solvers coordinator): RE-DERIVED with == on the merged tree after feature-execute.
-    # Vocabulary grew with builders/submit/cloud/retarget clauses; rows below are the unnamed remainder.
     'admission_not_a_mapping',
     'admission_unreadable',
     'allowlist_name_pattern',
@@ -2516,12 +2564,12 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'bone_has_zero_rest_length',
     'bone_map_not_an_object',
     'bone_map_source_bone_missing',
-    'bone_radius_not_positive',
     'bone_set_changes_between_frames',
     'bufferview_negative_range',
     'bufferview_no_bytelength',
     'bufferview_not_an_index',
     'bufferview_past_bin_chunk',
+    'builder_missing',
     'bvh_import_failed',
     'bvh_importer_missing',
     'candidate_frames_are_not_all_one_size',
@@ -2551,6 +2599,9 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'cv2_could_not_read_the_source',
     'cv2_refused_the_strip_write',
     'cv2_refused_the_write',
+    'dailies_manifest_not_json',
+    'dailies_manifest_not_object',
+    'dailies_toml_unavailable',
     'declared_group_size_above_the_ceiling',
     'decode_stride_is_not_positive',
     'decoded_bytes_are_not_whole_frames',
@@ -2569,6 +2620,9 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'ffmpeg_refused_the_encode',
     'field_absent',
     'flag_component_not_an_integer',
+    'floor_not_object',
+    'floor_sheet_needs_runs',
+    'floor_sheet_run_dir_missing',
     'frame_and_predecessor_are_different_sizes',
     'frame_array_shape_is_unsupported',
     'frame_hints_are_parallel',
@@ -2588,9 +2642,13 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'frames_without_index',
     'gate0_meta_not_an_object',
     'gate0_meta_unreadable',
+    'gate0_sheet_missing_before_measure',
     'generator_unknown',
+    'glb_or_roster_required',
+    'glb_required',
     'group_node_count_disagrees_with_the_plan',
     'group_size_below_one',
+    'hand_binding_needs_articulated',
     'hand_has_no_length',
     'hand_keypoints_wrong_shape',
     'hand_length_not_positive',
@@ -2603,12 +2661,14 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'ledger_submissions_not_a_list',
     'ledger_unreadable',
     'licence_map_ruling',
+    'manifest_glb_count_mismatch',
+    'manifest_required',
+    'measure_without_gate0',
     'mitten_hand_wrong_point_count',
     'motion_and_retarget_both_set',
     'motion_or_retarget_required',
     'no_batch_node_to_measure',
     'no_composite_colour_named',
-    'no_deforming_bones',
     'no_json_chunk',
     'no_moving_frames',
     'no_numbered_frames_in_the_directory',
@@ -2622,6 +2682,7 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'orbit radius',
     'order_unvouched',
     'palm_plane_degenerate',
+    'panels_json_missing_for_compose',
     'part_radius_not_positive',
     'phase_shorter_than_a_frame',
     'plan_paths_collide',
@@ -2630,6 +2691,9 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'pose_frames_missing',
     'pose_library_needs_positive_frames',
     'readout_angle_outside_the_arc',
+    'record_missing_experiment',
+    'record_missing_stage',
+    'record_not_a_mapping',
     'render_target_missing',
     'required_landmark_missing',
     'rest_landmarks_missing',
@@ -2638,6 +2702,12 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'retarget_source_has_no_action',
     'retarget_unsupported_format',
     'root_is_not_a_3_vector',
+    'roster_and_glb_both_set',
+    'roster_not_a_nonempty_list',
+    'roster_ortho_scale_mismatch',
+    'roster_row_missing_glb',
+    'route_has_no_builder',
+    'route_narrative_only',
     'route_unknown',
     'run_excludes_frames_and_out',
     'runs_not_valid_for_seed_spread',
@@ -2646,9 +2716,12 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'segment_has_zero_length',
     'set_glb_is_not_a_file',
     'set_short',
+    'sheet_frames_empty',
+    'sheet_requires_out',
     'sign_not_unit',
     'snappable_site_is_not_a_landmark',
     'source_image_has_a_zero_dimension',
+    'stage_conflicts_with_record',
     'stage_render_manifest_missing',
     'stage_render_manifest_unreadable',
     'stream_reported_no_rate',
@@ -2662,7 +2735,9 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
     'two_answers',
     'unknown_channel_mode',
     'unknown_floor_mode',
+    'unknown_pipeline_mode',
     'unknown_pose_library',
+    'unknown_route',
     'unknown_still_target',
     'vector_has_zero_length',
     'view_direction_parallel_to_up',
@@ -2697,9 +2772,9 @@ CLAUSES_NAMED_BY_NO_FIXTURE = [
 #: seven approved findings.
 SENTENCE_SHAPED_CLAUSES = {
     'orbit radius':
-        'render_turnaround.py:848',
+        'render_turnaround.py:927',
     'render visibility':
-        'render_turnaround.py:998',
+        'render_turnaround.py:1096',
 }
 
 
