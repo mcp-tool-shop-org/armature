@@ -325,7 +325,8 @@ def test_a_stale_frame_from_a_previous_run_halts_rather_than_being_counted(
     monkeypatch.setattr(T, "download", _writer())
     monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
     with pytest.raises(T.FetchHalt) as exc:
-        T.main([f"--dump={_dump_of(tmp_path, 4)}", f"--out={out}"])
+        # --force: skip output_already_exists so the stray-frame clause is the one measured
+        T.main([f"--dump={_dump_of(tmp_path, 4)}", f"--out={out}", "--force"])
     assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00009.png"]
     assert "FETCH_T2V_OK" not in capsys.readouterr().out
 
@@ -415,7 +416,7 @@ def test_a_stale_donor_video_in_the_out_root_halts(tmp_path, monkeypatch, capsys
     monkeypatch.setattr(T, "download", _writer())
     monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
     with pytest.raises(T.FetchHalt) as exc:
-        T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={out}"])
+        T.main([f"--dump={_dump_of(tmp_path, 3, video=True)}", f"--out={out}", "--force"])
     assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["donor.webm"]
     assert "FETCH_T2V_OK" not in capsys.readouterr().out
 
@@ -429,7 +430,7 @@ def test_a_stale_differently_cased_frame_halts_here_too(tmp_path, monkeypatch, c
     monkeypatch.setattr(T, "download", _writer())
     monkeypatch.setattr(T, "order_evidence", lambda o: _ev(E09_ARRAY, E09_HASH))
     with pytest.raises(T.FetchHalt) as exc:
-        T.main([f"--dump={_dump_of(tmp_path, 3)}", f"--out={out}"])
+        T.main([f"--dump={_dump_of(tmp_path, 3)}", f"--out={out}", "--force"])
     assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00009.PNG"]
     assert "FETCH_T2V_OK" not in capsys.readouterr().out
 

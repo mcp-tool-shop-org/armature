@@ -63,14 +63,21 @@ def _gsg_files(tmp_path, seeds=(1,)):
                       ("seeds.json", {"seeds": list(seeds)})):
         (d / name).write_text(json.dumps(doc), encoding="utf-8")
     return [f"--api={d / 'api.json'}", f"--saved={d / 'saved.json'}",
-            f"--seeds={d / 'seeds.json'}", f"--out={tmp_path / 'fresh' / 'rec.json'}"]
+            f"--seeds={d / 'seeds.json'}", f"--out={tmp_path / 'fresh' / 'rec.json'}",
+            "--experiment=E09", "--stage=B2"]
 
 
 def _gsg_halt(tmp_path, extra):
     """Drive `gate_saved_graph`'s `__main__` block and READ the printed halt record."""
+    base = list(_gsg_files(tmp_path))
+    # With --record, experiment/stage come from the payload. Keep the helper's E09/B2
+    # defaults only when no record is supplied, so a real builder record cannot conflict.
+    if any(a == "--record" or a.startswith("--record=") for a in extra):
+        base = [a for a in base
+                if not a.startswith("--experiment=") and not a.startswith("--stage=")]
     proc = subprocess.run(
         [sys.executable, os.path.join(TOOLS, "gate_saved_graph.py"),
-         *_gsg_files(tmp_path), *extra],
+         *base, *extra],
         capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=REPO)
     lines = [ln for ln in proc.stdout.splitlines()
              if ln.startswith("SAVED_ADMISSION_HALT ")]
@@ -459,7 +466,7 @@ def test_every_builder_writes_the_field_this_legacy_fixture_omits():
     import _census_nodes as CN
     assert len(CN.graph_payload_builders()) == len(BUILDERS)
     assert CN.boundary_payload_tools() == [
-        "build_submit_payload.py", "build_uploads_payload.py"]
+        "build_routes_payload.py", "build_submit_payload.py", "build_uploads_payload.py"]
 
 
 def test_two_conflicting_payload_digests_in_one_record_refuse(tmp_path):
@@ -475,7 +482,8 @@ def test_two_conflicting_payload_digests_in_one_record_refuse(tmp_path):
 def test_the_mismatched_record_reaches_the_halt_line_under_the_gate_exit_code(tmp_path):
     """The halt line, READ, on the tie."""
     other = {"7": {"class_type": "UNETLoader", "inputs": {"unet_name": "x.safetensors"}}}
-    path = _record(tmp_path, {"payload_sha256": _digest(other),
+    path = _record(tmp_path, {"experiment": "E09", "stage": "B2",
+                              "payload_sha256": _digest(other),
                               "gates": {"ROUTE": _receipt()}}, name="mismatch.json")
     code, halt = _gsg_halt(tmp_path, [f"--record={path}"])
     assert code == 2, halt

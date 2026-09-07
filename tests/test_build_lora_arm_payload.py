@@ -548,7 +548,7 @@ def test_every_builder_puts_its_graph_through_the_licence_census():
         "build_r2v_payload.py", "build_t2v_payload.py",
         "gate_saved_graph.py"], population
     assert CN.boundary_payload_tools() == [
-        "build_submit_payload.py", "build_uploads_payload.py"]
+        "build_routes_payload.py", "build_submit_payload.py", "build_uploads_payload.py"]
 
     #: The ONE exemption, named and dated: `build_payload.py` (E02/E03/E06's VACE route)
     #: predates `route_gates` and gates through `armature_core.gates` instead, so the

@@ -113,7 +113,14 @@ def _builder_record(api_graph, **verify_kwargs):
     """
     from build_assembly_payload import canonical_payload_digest
 
+    # Wave 35: admission labels come from the payload when --record is passed.
+    # Fixture records must carry usable experiment/stage strings (no E09/B2 silent
+    # defaults on the gate). Callers may override via verify_kwargs pop-outs.
+    experiment = verify_kwargs.pop("experiment", "E09")
+    stage = verify_kwargs.pop("stage", "B2")
     return {"tool": "a builder",
+            "experiment": experiment,
+            "stage": stage,
             "payload_sha256": canonical_payload_digest(api_graph),
             "gates": {"ROUTE": RG.verify(api_graph, **verify_kwargs)}}
 

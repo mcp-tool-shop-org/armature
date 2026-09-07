@@ -293,7 +293,8 @@ def test_a_refused_admission_leaves_no_output_directory(tmp_path):
                        match=r"\[SAVED_ADMISSION\] the saved file is not the graph this "
                              r"repo built"):
         GSG.main([f"--saved={saved_path}", f"--api={api_path}",
-                  f"--seeds={seeds_path}", f"--out={out}"])
+                  f"--seeds={seeds_path}", f"--out={out}",
+                  "--experiment=E09", "--stage=B2"])
     assert not out.exists()
     assert not out.parent.exists(), "a refused admission created its output directory"
 
@@ -440,7 +441,8 @@ def test_a_wrapped_saved_file_is_refused_by_a_gate_not_by_a_stdlib_key(tmp_path,
     with pytest.raises(RG.RouteGate,
                        match=r"\[ROUTE\] this is not a graph this module can read: a dict"):
         GSG.main([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
-                  f"--seeds={d / 'seeds.json'}", f"--out={out}"])
+                  f"--seeds={d / 'seeds.json'}", f"--out={out}",
+                  "--experiment=E09", "--stage=B2"])
     assert not out.parent.exists(), "a refused admission created its output directory"
 
 
@@ -457,7 +459,8 @@ def test_an_api_format_graph_passed_as_saved_is_refused_by_name(tmp_path):
     out = tmp_path / "fresh" / "admission.json"
     with pytest.raises(RG.RouteGate) as exc:
         GSG.main([f"--saved={api_as_saved}", f"--api={d / 'g.api.json'}",
-                  f"--seeds={d / 'seeds.json'}", f"--out={out}"])
+                  f"--seeds={d / 'seeds.json'}", f"--out={out}",
+                  "--experiment=E09", "--stage=B2"])
     assert "save-format graph" in str(exc.value)
     assert exc.value.evidence["top_level_keys"] == ["49"]
     assert exc.value.evidence["unwrapped_by_load_graph"]
@@ -618,7 +621,8 @@ def test_a_wrapped_api_file_is_unwrapped_rather_than_dying_on_a_stdlib_key(tmp_p
     out = tmp_path / "fresh" / "admission.json"
     with pytest.raises(Exception) as exc:
         GSG.main([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
-                  f"--seeds={d / 'seeds.json'}", f"--out={out}"])
+                  f"--seeds={d / 'seeds.json'}", f"--out={out}",
+                  "--experiment=E09", "--stage=B2"])
     assert not isinstance(exc.value, (KeyError, TypeError)), exc.value
     assert exc.value.evidence.get("gate"), exc.value
     assert "class_type" not in str(exc.value)
@@ -634,7 +638,8 @@ def test_a_save_format_file_passed_as_api_is_refused_by_a_named_format_clause(tm
     out = tmp_path / "fresh" / "admission.json"
     with pytest.raises(RG.RouteGate) as exc:
         GSG.main([f"--saved={d / 'g.saved.json'}", f"--api={swapped}",
-                  f"--seeds={d / 'seeds.json'}", f"--out={out}"])
+                  f"--seeds={d / 'seeds.json'}", f"--out={out}",
+                  "--experiment=E09", "--stage=B2"])
     assert "API-format graph" in str(exc.value)
     assert exc.value.evidence["clause"] == "not_an_api_format_graph"
     assert not out.parent.exists(), "a refused admission created its output directory"

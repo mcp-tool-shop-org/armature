@@ -568,7 +568,8 @@ def _gsg_files(tmp_path):
                       ("seeds.json", {"seeds": [1]})):
         (d / name).write_text(json.dumps(doc), encoding="utf-8")
     return [f"--api={d / 'api.json'}", f"--saved={d / 'saved.json'}",
-            f"--seeds={d / 'seeds.json'}", f"--out={tmp_path / 'fresh' / 'rec.json'}"]
+            f"--seeds={d / 'seeds.json'}", f"--out={tmp_path / 'fresh' / 'rec.json'}",
+            "--experiment=E09", "--stage=B2"]
 
 
 #: `(the supplied --frame, why it is not three integers)`. Both shapes, one clause.
@@ -729,6 +730,12 @@ def test_every_payload_error_stores_the_evidence_it_is_given(mod_name):
     assert str(mod.PayloadError("m")) == "m", mod_name
 
 
+#: Wave 35: `SeedRegistration` is a list subclass carrying `.ceiling` / `.allocation`,
+#: not an evidence-normalising andon. Its `__init__` is the carrier, not a GateFailure
+#: override — exempt it so the census still catches error classes that rewrite evidence.
+_INIT_EXEMPT = frozenset({"SeedRegistration"})
+
+
 @pytest.mark.parametrize("name", OWNED)
 def test_no_class_in_this_domain_normalises_the_evidence_it_is_handed(name):
     """The POPULATION: every class defined in the builders domain's owned modules, not the
@@ -737,7 +744,7 @@ def test_no_class_in_this_domain_normalises_the_evidence_it_is_handed(name):
     tree = ast.parse(open(os.path.join(TOOLS, name), encoding="utf-8").read())
     offenders = []
     for node in ast.walk(tree):
-        if not isinstance(node, ast.ClassDef):
+        if not isinstance(node, ast.ClassDef) or node.name in _INIT_EXEMPT:
             continue
         for body in node.body:
             if (isinstance(body, (ast.FunctionDef, ast.AsyncFunctionDef))
@@ -1083,7 +1090,12 @@ def test_every_clause_name_in_the_two_fetchers_is_distinct():
     # launch would be deciding on evidence that was never produced. A reader keying on the
     # word learns the same thing from either. The sibling fetcher IMPORTS both the gate and
     # `download`, so it adds no third site.
+    #
+    # WAVE 35: `output_already_exists` is ONE clause in both fetchers by design — a used
+    # `--root/--run` or `--out` refuses the silent blend the same way; `--force` is the
+    # shared escape. A reader keying on the word learns the same thing from either tool.
     assert sorted(shared) == ["'downloader_shell_not_found'", "'empty_results'",
+                              "'output_already_exists'",
                               "'unexpected_source_node'"], shared
 
 

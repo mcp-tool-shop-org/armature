@@ -976,7 +976,8 @@ def test_the_real_tier_on_a_graph_that_carries_its_enums_still_reaches_gate_L(tm
     proc, halt, oks = _drive("gate_saved_graph.py", [
         f"--saved={saved}", f"--api={api}", f"--seeds={seeds}",
         f"--out={tmp_path / 'out' / 'admission.json'}",
-        "--hosted-tier=wan2.7-r2v"], "SAVED_ADMISSION")
+        "--hosted-tier=wan2.7-r2v", "--experiment=E09", "--stage=B2"],
+        "SAVED_ADMISSION")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert halt is None and len(oks) == 1, (halt, oks)
     from conftest import load_ok_payload

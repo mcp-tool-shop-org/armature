@@ -335,7 +335,8 @@ def test_the_admission_still_passes_end_to_end_on_a_real_builder_receipt(tmp_pat
 def test_the_halt_line_reads_the_caught_refusal_clause(tmp_path):
     """Rule 4 — the halt record READ off `__main__`, on the auditor's own operand."""
     ev = _caught_refusal(CAMERA_LINKED_FRAME)
-    record = _write(tmp_path, "in/caught.json", {"gates": {"ROUTE": ev}})
+    record = _write(tmp_path, "in/caught.json", {
+        "experiment": "E09", "stage": "B2", "gates": {"ROUTE": ev}})
     code, halt = _gsg_halt(tmp_path, [f"--record={record}", "--frame=832,480,81"])
     assert code == 2, halt
     assert halt["error"] == "RouteGate", halt

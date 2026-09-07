@@ -268,7 +268,8 @@ def test_a_stale_frame_in_a_mapped_directory_halts_rather_than_being_counted(
     (root / "r" / "lossless" / "00099.png").write_bytes(b"\x89PNG")
     dump = _dump(tmp_path, [_result("302", i) for i in range(3)])
     with pytest.raises(F.FetchHalt) as exc:
-        F.main([f"--dump={dump}", "--run=r", f"--root={root}"])
+        # --force: skip output_already_exists so the stray-file clause is the one measured
+        F.main([f"--dump={dump}", "--run=r", f"--root={root}", "--force"])
     ev = exc.value.evidence
     assert ev["planned"] == 3
     assert [os.path.basename(p) for p in ev["extra"]] == ["00099.png"]
@@ -309,7 +310,7 @@ def test_a_stale_video_in_the_run_root_halts(tmp_path, stub_download, capsys):
     (root / "r" / "someone_elses_review_8fps.mp4").write_bytes(b"\x00\x00\x00 ftyp")
     dump = _dump(tmp_path, [_result("302", i) for i in range(2)])
     with pytest.raises(F.FetchHalt) as exc:
-        F.main([f"--dump={dump}", "--run=r", f"--root={root}"])
+        F.main([f"--dump={dump}", "--run=r", f"--root={root}", "--force"])
     ev = exc.value.evidence
     assert [os.path.basename(p) for p in ev["extra"]] == ["someone_elses_review_8fps.mp4"]
     assert "FETCH_RUN" not in capsys.readouterr().out
@@ -329,7 +330,7 @@ def test_a_stale_differently_cased_png_in_a_mapped_directory_halts(
     (root / "r" / "lossless" / "00099.PNG").write_bytes(b"\x89PNG")
     dump = _dump(tmp_path, [_result("302", i) for i in range(2)])
     with pytest.raises(F.FetchHalt) as exc:
-        F.main([f"--dump={dump}", "--run=r", f"--root={root}"])
+        F.main([f"--dump={dump}", "--run=r", f"--root={root}", "--force"])
     assert [os.path.basename(p) for p in exc.value.evidence["extra"]] == ["00099.PNG"]
     assert "FETCH_RUN" not in capsys.readouterr().out
 

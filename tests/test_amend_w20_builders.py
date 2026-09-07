@@ -84,7 +84,7 @@ def test_the_population_is_the_nine_builders_the_finding_names():
         "build_cascade_payload", "build_i2v_payload", "build_lora_arm_payload",
         "build_payload", "build_r2v_payload", "build_t2v_payload"]
     assert CN.boundary_payload_tools() == [
-        "build_submit_payload.py", "build_uploads_payload.py"]
+        "build_routes_payload.py", "build_submit_payload.py", "build_uploads_payload.py"]
 
 
 # ======================================================== driving each builder to its record
@@ -431,7 +431,9 @@ def test_the_halt_line_reads_the_tie_clause(tmp_path, monkeypatch):
     built = tmp_path / "built"
     built.mkdir(parents=True, exist_ok=True)
     record_path, _ = DRIVES["build_r2v_payload"](built, monkeypatch)
-    code, halt = _gsg_halt(tmp_path, [f"--record={record_path}"])
+    # r2v records carry experiment but not stage; supply --stage so admission labels
+    # resolve without conflicting with the record's experiment.
+    code, halt = _gsg_halt(tmp_path, [f"--record={record_path}", "--stage=A1"])
     assert code == 2, halt
     assert halt["error"] == "RouteGate", halt
     assert halt["evidence"]["clause"] == "record_describes_a_different_graph", halt

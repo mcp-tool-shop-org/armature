@@ -80,7 +80,8 @@ def test_the_halt_line_an_operator_reads_on_the_lost_class_operand_names_the_and
     r = subprocess.run(
         [sys.executable, os.path.join(TOOLS, "gate_saved_graph.py"),
          f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
-         f"--seeds={d / 'seeds.json'}", f"--out={out}"],
+         f"--seeds={d / 'seeds.json'}", f"--out={out}",
+         "--experiment=E09", "--stage=B2"],
         capture_output=True, text=True, encoding="utf-8", errors="replace", env=env,
         cwd=os.path.dirname(TOOLS))
     assert r.returncode == 2, (r.returncode, r.stdout[-800:], r.stderr[-800:])

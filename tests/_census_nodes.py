@@ -993,13 +993,14 @@ def blender_reach(src):
 
 # ------------------------------------------------------------- shared tool populations
 
-#: Match `build_*payload*.py` but do NOT author an API graph. Wave 34 added them; the
-#: glob that enumerates the nine graph builders / spend-builder family must exclude them
-#: or every pin that says "nine" silently becomes eleven. Recorded as their own class
-#: wherever a census must name them.
+#: Match `build_*payload*.py` but do NOT author an API graph. Wave 34 added submitter +
+#: uploads; wave 35 added the routes dispatcher. The glob that enumerates the nine graph
+#: builders / spend-builder family must exclude them or every pin that says "nine"
+#: silently becomes twelve. Recorded as their own class wherever a census must name them.
 NON_GRAPH_PAYLOAD = frozenset({
     "build_submit_payload.py",   # sanctioned Comfy Cloud submitter
     "build_uploads_payload.py",  # --uploads map author
+    "build_routes_payload.py",   # owned dispatcher / route catalog — not a graph author
 })
 
 
@@ -1011,12 +1012,12 @@ def is_graph_payload_builder(name):
 
 
 def graph_payload_builders():
-    """The nine tools that author an API graph — never the submitter or uploads map."""
+    """The nine tools that author an API graph — never submitter, uploads, or routes."""
     return sorted(n for n in os.listdir(TOOLS) if is_graph_payload_builder(n))
 
 
 def boundary_payload_tools():
-    """Submitter + uploads-map author: match the glob, not graph authors."""
+    """Submitter + uploads-map + routes dispatcher: match the glob, not graph authors."""
     present = sorted(n for n in NON_GRAPH_PAYLOAD
                      if os.path.isfile(os.path.join(TOOLS, n)))
     if set(present) != NON_GRAPH_PAYLOAD:
@@ -1030,12 +1031,12 @@ def spend_and_fetch_tools():
     """The CPU-side tools that author a submission, gate one, or retrieve its output.
 
     Every graph `tools/build_*payload*.py`, `tools/canon_gate.py`, `tools/fetch_*.py` and
-    `tools/gate_saved_graph.py` — WALKED rather than typed. The wave-34 submitter and
-    uploads-map tools match the build_*payload glob but are NOT graph authors; they live
-    in `boundary_payload_tools()` / `NON_GRAPH_PAYLOAD`. Lifted here from
-    `test_packaging.py` and `test_amend_w10_builders.py`, which carried byte-identical
-    copies: a census POPULATION derived twice means a correction to one is a silent drift
-    in the other's membership (F-e63ce880).
+    `tools/gate_saved_graph.py` — WALKED rather than typed. The wave-34 submitter /
+    uploads-map tools and the wave-35 routes dispatcher match the build_*payload glob but
+    are NOT graph authors; they live in `boundary_payload_tools()` / `NON_GRAPH_PAYLOAD`.
+    Lifted here from `test_packaging.py` and `test_amend_w10_builders.py`, which carried
+    byte-identical copies: a census POPULATION derived twice means a correction to one is
+    a silent drift in the other's membership (F-e63ce880).
     """
     return sorted(
         n for n in os.listdir(TOOLS)

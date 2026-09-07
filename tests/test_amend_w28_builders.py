@@ -47,8 +47,8 @@ SPECS = os.path.join(REPO, "specs")
 import _census_nodes as CN
 
 #: The thirteen graph / admit / fetch tools this domain owns for parser censuses, plus the
-#: wave-34 boundary pair (submitter + uploads map) recorded as their own class. Derived
-#: from the owned globs, not from a hand-kept list of "the ones I remembered".
+#: wave-34/35 boundary class (submitter + uploads map + routes dispatcher) recorded as
+#: their own class. Derived from the owned globs, not from a hand-kept list.
 _GRAPH_AND_ADMIT = CN.spend_and_fetch_tools()
 _BOUNDARY = CN.boundary_payload_tools()
 DOMAIN_TOOLS = sorted(set(_GRAPH_AND_ADMIT) | set(_BOUNDARY))
@@ -872,8 +872,9 @@ def test_the_domain_population_is_the_thirteen_tools():
     """Size and membership before the property, so a new tool joins the census on the day
     it lands rather than being guarded by a list somebody forgot.
 
-    Thirteen graph/admit/fetch tools plus the wave-34 boundary class (submitter + uploads
-    map) that match `build_*payload*.py` without authoring a graph.
+    Thirteen graph/admit/fetch tools plus the wave-34/35 boundary class (submitter +
+    uploads map + routes dispatcher) that match `build_*payload*.py` without authoring a
+    graph.
     """
     assert _GRAPH_AND_ADMIT == [
         "build_animate_payload.py", "build_assembly_payload.py",
@@ -882,8 +883,9 @@ def test_the_domain_population_is_the_thirteen_tools():
         "build_r2v_payload.py", "build_t2v_payload.py", "canon_gate.py",
         "fetch_run.py", "fetch_t2v_run.py", "gate_saved_graph.py"], _GRAPH_AND_ADMIT
     assert len(_GRAPH_AND_ADMIT) == 13
-    assert _BOUNDARY == ["build_submit_payload.py", "build_uploads_payload.py"]
-    assert len(DOMAIN_TOOLS) == 15, DOMAIN_TOOLS
+    assert _BOUNDARY == [
+        "build_routes_payload.py", "build_submit_payload.py", "build_uploads_payload.py"]
+    assert len(DOMAIN_TOOLS) == 16, DOMAIN_TOOLS
 
 
 def test_every_parser_in_this_domain_says_what_its_tool_IS():
