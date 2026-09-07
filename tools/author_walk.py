@@ -3,10 +3,18 @@
 
     blender -b -P tools\\author_walk.py -- --glb=<rigged.glb> --manifest=<rig_manifest.json>
                                            --out=<walk.glb>
+    blender -b -P tools\\author_walk.py -- --glb=<rigged.glb> --manifest=<rig_manifest.json>
+                                           --motion=<channels.json> --out=<action.glb>
+    blender -b -P tools\\author_walk.py -- --glb=<rigged.glb> --manifest=<rig_manifest.json>
+                                           --pose-library=hold --n-hold=8 --out=<hold.glb>
 
-Takes the rigged performer and writes a new GLB carrying a walk -> stop -> emote action.
-The gait itself is `armature_core.walk`, which has no bpy in it and is tested without
-Blender; this file is only the driver, the gates, and the export.
+Takes the rigged performer and writes a new GLB carrying a keyed action. The default is
+still the parametric walk -> stop -> emote (`armature_core.walk`). Wave 34 (F-3415ebd2)
+adds a general `key_motion` path: `--motion` reads the same per-frame local-3x3 + root
+channel JSON `lift_solve` already keys, and `--pose-library` builds rest / idle / hold
+records of that schema so FLF2V endpoints and non-gait beats do not have to fake gait
+knobs. The gait factory stays the walk specialisation; this file remains the driver,
+the gates, and the export.
 
 --------------------------------------------------------------------------------
 Read the exit code and you will be wrong
@@ -57,10 +65,18 @@ import numpy as np  # noqa: E402
 from mathutils import Matrix, Vector  # noqa: E402
 
 import rig_character  # noqa: E402  (the OBJ gate lives there; enumerated, not rebuilt)
+import lift_solve as LA  # noqa: E402  (F-3415ebd2: key_motion reuses the lift applier)
 from armature_core import blender_scene, parts, rig_gates, sitelist, walk  # noqa: E402
+from armature_core import lift_solve as LS  # noqa: E402  (motion-record schema + IDENTITY)
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
-TOOL_VERSION = "E08.1"
+TOOL_VERSION = "E08.2"
+
+#: Built-in pose packs that emit the lift_solve channel schema without a detector
+#: (F-3415ebd2). `rest` is one identity frame; `hold` repeats identity; `idle` holds with
+#: a small authored spine sway so a multi-frame idle is not a rest clone wearing a longer
+#: frame count.
+POSE_LIBRARIES = ("rest", "idle", "hold")
 
 #: Both tolerances are fractions of the CHARACTER'S OWN bounding diagonal, never absolute
 #: metres — a global constant must not govern a local feature.
@@ -144,8 +160,9 @@ HELP_PROG = "blender -b -P tools/author_walk.py --"
 HELP_DESCRIPTION = ((__doc__ or "").strip().splitlines() or [None])[0]
 
 
-def parse_args():
-    argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
+def parse_args(argv=None):
+    if argv is None:
+        argv = sys.argv[sys.argv.index("--") + 1:] if "--" in sys.argv else []
     ap = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
@@ -163,16 +180,103 @@ def parse_args():
                          "stores key times in SECONDS, so this must match the shot spec's")
     # argparse eats leading minus signs: pass these as --key=value.
     ap.add_argument("--n-walk", type=int, default=40,
-                    help="frames of walking before the stop (default 40)")
+                    help="frames of walking before the stop (default 40); gait path only")
     ap.add_argument("--n-decel", type=int, default=8,
-                    help="frames spent decelerating into the stop (default 8)")
+                    help="frames spent decelerating into the stop (default 8); gait path only")
     ap.add_argument("--n-gesture", type=int, default=12,
-                    help="frames of the gesture after the stop (default 12)")
+                    help="frames of the gesture after the stop (default 12); gait path only")
     ap.add_argument("--n-hold", type=int, default=5,
-                    help="frames held at the end of the gesture (default 5)")
+                    help="frames held at the end of the gesture (gait), or the frame count "
+                         "for --pose-library=hold/idle/rest (default 5)")
     ap.add_argument("--steps", type=int, default=5,
-                    help="footfalls inside the walking span (default 5)")
+                    help="footfalls inside the walking span (default 5); gait path only")
+    # F-3415ebd2: general key_motion path — channel JSON or a named pose library.
+    ap.add_argument("--motion", default=None,
+                    help="channel JSON in the lift_solve motion-record schema "
+                         "(frames[].local bone->3x3 + frames[].root). Selects the "
+                         "key_motion path; mutually exclusive with --pose-library and "
+                         "with the gait factory")
+    ap.add_argument("--pose-library", default=None, choices=POSE_LIBRARIES,
+                    help="build a small rest/idle/hold channel table and key it "
+                         "(F-3415ebd2). Frame count is --n-hold. Mutually exclusive "
+                         "with --motion and with the gait factory")
     return ap.parse_args(argv)
+
+
+def identity_local_table():
+    """Every registered bone at IDENTITY, as nested lists (JSON-safe)."""
+    return {name: [list(row) for row in LS.IDENTITY] for name in sitelist.ALL_NAMES}
+
+
+def build_pose_library_frames(name, *, n_frames=1):
+    """Pure pose-library builder: rest / idle / hold as lift_solve channel frames.
+
+    No bpy. Idle carries a small authored spine sway so a multi-frame idle is not a
+    rest record with a longer count; rest and hold are identity holds.
+    """
+    key = (name or "").strip().lower()
+    if key not in POSE_LIBRARIES:
+        raise ArmatureError(
+            f"--pose-library={name!r} is not one of {list(POSE_LIBRARIES)}",
+            {"clause": "unknown_pose_library", "pose_library": name,
+             "known": list(POSE_LIBRARIES)})
+    n = int(n_frames)
+    if n < 1:
+        raise ArmatureError(
+            f"--n-hold={n_frames!r} must be an integer >= 1 when --pose-library is set",
+            {"clause": "pose_library_needs_positive_frames", "n_hold": n_frames,
+             "pose_library": key})
+    frames = []
+    for i in range(n):
+        local = identity_local_table()
+        root = [0.0, 0.0, 0.0]
+        if key == "idle":
+            # ~2 deg spine nod, phase-shifted per frame — authored, not detected.
+            phase = (2.0 * math.pi * i / max(n, 1))
+            rx = 2.0 * math.sin(phase)
+            m = walk.rotation_matrix(rx, 0.0, 0.0)
+            local["spine"] = [list(row) for row in m]
+        frames.append({"frame": i, "local": local, "root": list(root)})
+    return frames
+
+
+def load_motion_frames(path):
+    """Read a lift_solve-shaped channel JSON and validate it (no bpy)."""
+    with open(path, encoding="utf-8") as fh:
+        rec = json.load(fh)
+    frames = rec.get("frames") or []
+    gate = LS.validate_motion_record(frames)
+    return rec, frames, gate
+
+
+def resolve_performance(args):
+    """Pick gait vs key_motion; refuse overlapping sources.
+
+    Returns a dict: mode ('gait'|'motion'|'pose_library'), plus the frames / gait /
+    motion gate the chosen path needs. Pure aside from reading --motion off disk.
+    """
+    motion = args.motion
+    library = args.pose_library
+    if motion and library:
+        raise ArmatureError(
+            "--motion and --pose-library both name a performance source; pass one",
+            {"clause": "motion_and_pose_library_both_set",
+             "motion": motion, "pose_library": library})
+    if library:
+        frames = build_pose_library_frames(library, n_frames=args.n_hold)
+        gate = LS.validate_motion_record(frames)
+        return {"mode": "pose_library", "pose_library": library,
+                "frames": frames, "motion_record": {
+                    "tool": "author_walk", "pose_library": library,
+                    "n_hold": int(args.n_hold), "frames": frames},
+                "motion_gate": gate, "gait": None}
+    if motion:
+        rec, frames, gate = load_motion_frames(motion)
+        return {"mode": "motion", "pose_library": None, "frames": frames,
+                "motion_record": rec, "motion_gate": gate, "gait": None,
+                "motion_path": os.path.abspath(motion)}
+    return {"mode": "gait", "pose_library": None, "frames": None,
+            "motion_record": None, "motion_gate": None, "gait": None}
 
 
 # ------------------------------------------------------------------------- helpers
@@ -661,6 +765,7 @@ def main():
     started = time.time()
     args = parse_args()
     out_path = os.path.abspath(args.out)
+    perf = resolve_performance(args)
 
     source_sha = _sha256(args.glb)
 
@@ -677,31 +782,50 @@ def main():
 
     performer, rig_manifest = read_performer(args.manifest)
     diagonal = float(rig_manifest["bbox"]["diagonal"])
-    params = walk.GaitParams(n_walk=args.n_walk, n_decel=args.n_decel,
-                             n_gesture=args.n_gesture, n_hold=args.n_hold,
-                             steps=args.steps)
-    gait = walk.build_gait(performer, params)
-    n_frames = len(gait["frames"])
-    fk = walk.forward_kinematics(performer, gait)
+    rest, _ = LA.read_rest(args.manifest)
 
-    # The FK rows carry landmark positions; Gate F needs bone HEADS, so they are derived
-    # from the same deltas rather than re-derived differently inside the gate.
-    for row, h in zip(fk, _fk_heads(performer, gait)):
-        row["_heads"] = h
+    if perf["mode"] == "gait":
+        params = walk.GaitParams(n_walk=args.n_walk, n_decel=args.n_decel,
+                                 n_gesture=args.n_gesture, n_hold=args.n_hold,
+                                 steps=args.steps)
+        gait = walk.build_gait(performer, params)
+        n_frames = len(gait["frames"])
+        fk = walk.forward_kinematics(performer, gait)
+        for row, h in zip(fk, _fk_heads(performer, gait)):
+            row["_heads"] = h
 
-    # ---- Gate D. Author, snapshot, wipe, author again, compare parsed keys.
-    action, n_curves = author(arm_obj, scene, gait, args.fps)
-    snap_a = fcurve_snapshot(action)
-    action_b, _ = author(arm_obj, scene, gait, args.fps)
-    snap_b = fcurve_snapshot(action_b)
-    gate_d = gate_d_determinism(snap_a, snap_b)
+        # ---- Gate D. Author, snapshot, wipe, author again, compare parsed keys.
+        action, n_curves = author(arm_obj, scene, gait, args.fps)
+        snap_a = fcurve_snapshot(action)
+        action_b, _ = author(arm_obj, scene, gait, args.fps)
+        snap_b = fcurve_snapshot(action_b)
+        gate_d = gate_d_determinism(snap_a, snap_b)
 
-    # ---- Gate F, on the pose Blender is actually holding.
-    authored_heads = posed_heads(arm_obj, scene, n_frames)
-    gate_f = gate_f_fk_agreement(fk, authored_heads, performer, arm_obj, diagonal)
-    authored_verts = sampled_verts(mesh_obj, scene, mesh_sample_frames(n_frames))
-
-    slip = walk.foot_slip(fk)
+        authored_heads = posed_heads(arm_obj, scene, n_frames)
+        gate_f = gate_f_fk_agreement(fk, authored_heads, performer, arm_obj, diagonal)
+        authored_verts = sampled_verts(mesh_obj, scene, mesh_sample_frames(n_frames))
+        slip = walk.foot_slip(fk)
+        motion_frames = None
+        motion_gate = None
+    else:
+        # F-3415ebd2: key_motion path — same schema lift_solve keys, via its applier.
+        gait = None
+        fk = None
+        slip = None
+        motion_frames = perf["frames"]
+        motion_gate = perf["motion_gate"]
+        n_frames = len(motion_frames)
+        action, n_curves = LA.author(arm_obj, scene, motion_frames, rest, args.fps)
+        snap_a = fcurve_snapshot(action)
+        action_b, _ = LA.author(arm_obj, scene, motion_frames, rest, args.fps)
+        snap_b = fcurve_snapshot(action_b)
+        gate_d = gate_d_determinism(snap_a, snap_b)
+        authored_heads = LA.posed_heads(arm_obj, scene, n_frames)
+        gate_f = {"gate": "F", "verdict": "NOT APPLICABLE",
+                  "detail": ("Gate F compares the gait FK bank; the key_motion path has "
+                             "no gait. Arrival is gated by Gate A / ARRIVED instead"),
+                  "performance_mode": perf["mode"]}
+        authored_verts = sampled_verts(mesh_obj, scene, mesh_sample_frames(n_frames))
 
     # ---- export. The OBJ gate first: nothing unregistered ships.
     gate_obj = rig_character.gate_objects_registered(scene, mesh_obj, arm_obj)
@@ -714,28 +838,16 @@ def main():
         "export_def_bones": False, "export_apply": False, "export_materials": "EXPORT",
     }
     # THE DIRECTORY IS CREATED HERE, immediately above the first byte (F-d47095fa).
-    # It used to sit at line 542 of `main()`, with 5 named refusal(s) stranded between
-    # the two (552, 555, 576, 580, 586) -- none of which needs it. A run refused by any of
-    # them left an empty output directory behind, which a reader scanning `outputs/` or
-    # a re-run into the same `--out` reads as an attempt that produced nothing rather
-    # than one that was refused. Pinned by `tests/test_instruments_amend_w10.py::
-    # test_no_refusal_sits_between_the_output_directory_and_the_first_byte`.
     os.makedirs(os.path.dirname(out_path), exist_ok=True)  # scripts make their own dirs
     props = set(bpy.ops.export_scene.gltf.get_rna_type().properties.keys())
     kwargs = {k: v for k, v in wanted.items() if k in props}
-    # WAVE 14, F-6a9a0f72: the target is snapshotted BEFORE the export and the operator's
-    # status set is CAPTURED, so a declined export over a previous run's GLB is refused
-    # rather than hashed. Both are required arguments of the gate.
     before_glb = rig_character.export_target_snapshot(out_path)
     export_result = bpy.ops.export_scene.gltf(**kwargs)
-    # F-9b2d4106, family carry: the exporter can return CANCELLED without raising. One
-    # implementation, `rig_character.gate_glb_written` - never a second copy.
     gate_glb = rig_character.gate_glb_written(
         out_path, result=export_result, before=before_glb,
-        what="the authored walk GLB")
+        what="the authored performance GLB")
 
-    # ---- Gate A, on a fresh import of what was just written. Same fps andon again: the
-    # re-import is where the seconds-to-frames conversion happens a second time.
+    # ---- Gate A, on a fresh import of what was just written.
     scene2 = rig_character.fresh_scene(args.fps)
     blender_scene.import_glb(out_path, expected_fps=args.fps)
     mesh2, arm2 = pick_subject(scene2)
@@ -744,15 +856,20 @@ def main():
         "the re-imported exported GLB")
     scene2.frame_start = 1
     scene2.frame_end = n_frames
-    reimported_heads = posed_heads(arm2, scene2, n_frames)
-    reimported_verts = sampled_verts(mesh2, scene2, sorted(authored_verts))
-    gate_a = gate_a_arrival(authored_heads, reimported_heads, authored_verts,
-                            reimported_verts, diagonal)
+    if perf["mode"] == "gait":
+        reimported_heads = posed_heads(arm2, scene2, n_frames)
+        reimported_verts = sampled_verts(mesh2, scene2, sorted(authored_verts))
+        gate_a = gate_a_arrival(authored_heads, reimported_heads, authored_verts,
+                                reimported_verts, diagonal)
+    else:
+        gate_a = LA.gate_arrived(
+            authored_heads, LA.posed_heads(arm2, scene2, n_frames), diagonal)
 
     out_sha = _sha256(out_path)
     record = {
         "tool": "author_walk", "tool_version": TOOL_VERSION,
         "blender": blender_scene.blender_provenance(),
+        "performance_mode": perf["mode"],
         "source": {"glb": os.path.abspath(args.glb), "sha256": source_sha,
                    "manifest": os.path.abspath(args.manifest)},
         "output": {"glb": out_path, "sha256": out_sha,
@@ -761,43 +878,62 @@ def main():
         "fps": args.fps, "frames": n_frames,
         "duration_s": n_frames / float(args.fps),
         "performer_measured": performer.as_dict(),
-        "gait_params": gait["params"],
-        "derived": gait["derived"],
-        "omega_rad_per_frame": gait["omega_rad_per_frame"],
-        "cadence_steps_per_second": args.fps * gait["omega_rad_per_frame"] / math.pi,
-        "phase_boundaries": gait["phase_boundaries"],
         "n_fcurves": n_curves,
-        "foot_slip": slip,
         "gates": {"fps_ordering": {"verdict": "PASS", "detail": "import_glb(expected_fps)"},
                   "N_pre": gate_n_pre, "N_post": gate_n_post, "OBJ": gate_obj,
                   "SPACE": gate_space, "D": gate_d, "F": gate_f, "A": gate_a,
                   "GLB_written": gate_glb},
-        "ground_truth": [
-            {"frame": r["frame"], "scene_frame": g["scene_frame"],
-             "phase_name": g["phase_name"], "gait_speed": g["gait_speed"],
-             "phase_rad": g["phase_rad"],
-             "hips_translation": g["pose"]["hips"]["translation"],
-             "pose_deg": {b: {k: v for k, v in ch.items() if k != "translation"}
-                          for b, ch in g["pose"].items()},
-             "world": {k: v for k, v in r.items() if k not in ("frame", "_heads")}}
-            for r, g in zip(fk, gait["frames"])
-        ],
         "elapsed_s": time.time() - started,
     }
+    if perf["mode"] == "gait":
+        record.update({
+            "gait_params": gait["params"],
+            "derived": gait["derived"],
+            "omega_rad_per_frame": gait["omega_rad_per_frame"],
+            "cadence_steps_per_second": args.fps * gait["omega_rad_per_frame"] / math.pi,
+            "phase_boundaries": gait["phase_boundaries"],
+            "foot_slip": slip,
+            "ground_truth": [
+                {"frame": r["frame"], "scene_frame": g["scene_frame"],
+                 "phase_name": g["phase_name"], "gait_speed": g["gait_speed"],
+                 "phase_rad": g["phase_rad"],
+                 "hips_translation": g["pose"]["hips"]["translation"],
+                 "pose_deg": {b: {k: v for k, v in ch.items() if k != "translation"}
+                              for b, ch in g["pose"].items()},
+                 "world": {k: v for k, v in r.items() if k not in ("frame", "_heads")}}
+                for r, g in zip(fk, gait["frames"])
+            ],
+        })
+    else:
+        record["motion_gate"] = motion_gate
+        record["pose_library"] = perf.get("pose_library")
+        if perf["mode"] == "motion":
+            record["source"]["motion"] = perf["motion_path"]
+            record["source"]["motion_sha256"] = _sha256(perf["motion_path"])
+        record["motion_provenance"] = {
+            k: v for k, v in (perf["motion_record"] or {}).items() if k != "frames"}
+
     side = os.path.splitext(out_path)[0] + ".motion.json"
     with open(side, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2)
 
-    print("AUTHOR_WALK_OK " + json.dumps({
+    ok = {
         "glb": out_path, "sha256": out_sha, "frames": n_frames, "fps": args.fps,
         "fcurves": n_curves, "keys": gate_d["n_keys"],
-        "travel": round(gait["derived"]["total_forward_travel"], 6),
-        "step": round(gait["derived"]["step_distance_derived"], 6),
-        "cadence_steps_per_s": round(record["cadence_steps_per_second"], 4),
-        "slide_fraction_total": round(slip["slide"]["slide_fraction_total"], 5),
+        "performance_mode": perf["mode"],
         "gate_D": gate_d["verdict"], "gate_F": gate_f["verdict"],
         "gate_A": gate_a["verdict"], "motion": side,
-    }))
+    }
+    if perf["mode"] == "gait":
+        ok.update({
+            "travel": round(gait["derived"]["total_forward_travel"], 6),
+            "step": round(gait["derived"]["step_distance_derived"], 6),
+            "cadence_steps_per_s": round(record["cadence_steps_per_second"], 4),
+            "slide_fraction_total": round(slip["slide"]["slide_fraction_total"], 5),
+        })
+    else:
+        ok["pose_library"] = perf.get("pose_library")
+    print("AUTHOR_WALK_OK " + json.dumps(ok))
     return 0
 
 
