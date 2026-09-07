@@ -23,9 +23,21 @@ import json
 import os
 import re
 import sys
+import textwrap
 
 REPO = "https://github.com/mcp-tool-shop-org/armature"
 DOCS = "https://mcp-tool-shop-org.github.io/armature/"
+
+
+class _EpilogUnwrapped(argparse.HelpFormatter):
+    """Keep newlines in the epilog (the repo URL); description still fills."""
+
+    def _fill_text(self, text, width, indent):
+        # ArgumentParser.format_help routes epilog through add_text → _fill_text,
+        # which collapses newlines. Preserve them when the epilog carries the URL.
+        if REPO in text or text.lstrip().startswith("Rendering scripts"):
+            return "".join(indent + line + "\n" for line in text.splitlines())
+        return super()._fill_text(text, width, indent)
 
 #: The modules that make up the installed surface, with what each one is for. Kept as
 #: data rather than prose so `armature modules --json` can hand it to a machine.
@@ -290,15 +302,31 @@ def _probe(name):
             "missing_root": None}
 
 
+def _print_module_row(name, purpose, width=80):
+    """Name column 16 wide; purpose wraps under its own column, never past width."""
+    prefix = f"  {name:<16} "
+    body_width = max(16, width - len(prefix))
+    lines = textwrap.wrap(
+        purpose, width=body_width,
+        break_long_words=False, break_on_hyphens=False,
+    ) or [""]
+    print(prefix + lines[0])
+    hang = " " * len(prefix)
+    for line in lines[1:]:
+        print(hang + line)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         prog="armature",
         description="armature — you block the shot; the model shoots it. "
         "GLB-authored previz for video-diffusion generation.",
-        epilog=f"Rendering scripts run inside Blender, from the repo: {REPO}",
+        epilog=("Rendering scripts run inside Blender, from the repo:\n"
+                f"{REPO}"),
+        formatter_class=_EpilogUnwrapped,
     )
     ap.add_argument("--version", action="version", version=f"armature-studio {_version()}")
-    sub = ap.add_subparsers(dest="cmd")
+    sub = ap.add_subparsers(dest="cmd", title="commands", metavar="COMMAND")
 
     p_mod = sub.add_parser("modules", help="list the installed modules and what each is for")
     p_mod.add_argument("--json", action="store_true", help="machine-readable output")
@@ -317,7 +345,7 @@ def main(argv=None):
         else:
             print(f"armature_core — {len(SURFACE)} modules\n")
             for m, d in SURFACE:
-                print(f"  {m:<16} {d}")
+                _print_module_row(m, d)
         return 0
 
     if a.cmd == "check":
