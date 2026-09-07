@@ -90,6 +90,15 @@ def main(argv=None):
                     help="a payload/run record; its provenance is drawn as a fourth "
                          "column, every line from the record and NOT RECORDED where the "
                          "record does not carry it")
+    ap.add_argument("--measurements", default=None,
+                    help="optional measure_clip.json; diagnostics under provenance "
+                         "(F-79c25d9e)")
+    ap.add_argument("--tracking", default=None,
+                    help="optional measure_tracking.json; diagnostic r= (F-79c25d9e)")
+    ap.add_argument("--floor", default=None,
+                    help="optional floor.json / seed_spread.json (F-79c25d9e)")
+    ap.add_argument("--smoothness", default=None,
+                    help="optional measure_smoothness.json (F-79c25d9e)")
     ap.add_argument("--title", default=None,
                     help="the sheet's heading; default: derived from the arms")
     ap.add_argument("--control-label", default="CONTROL   depth, per-shot, near-bright",
@@ -188,7 +197,21 @@ def main(argv=None):
     if a.meta:
         with open(a.meta, encoding="utf-8") as fh:
             meta = json.load(fh)
-    prov = provenance_lines(meta) if meta is not None else []
+    from make_gate0_sheet import (load_measurements,  # noqa: PLC0415
+                                  merge_sheet_diagnostics)
+    from sheet_compose import load_diagnostic_record  # noqa: PLC0415
+    measurements = merge_sheet_diagnostics(
+        measurements=load_measurements(a.measurements) if a.measurements else None,
+        tracking=load_measurements(a.tracking) if a.tracking else None,
+        floor=load_diagnostic_record(a.floor),
+        smoothness=load_diagnostic_record(a.smoothness))
+    prov = (provenance_lines(meta, measurements=measurements)
+            if meta is not None else [])
+    if meta is None and measurements:
+        # Diagnostics alone still print when --meta is omitted.
+        from sheet_compose import diagnostic_lines as _diag  # noqa: PLC0415
+        prov = _diag(a.measurements, a.tracking, a.floor, a.smoothness,
+                     labels=["clip", "tracking", "floor", "smoothness"])
 
     ctl_by_number = by_number[rows[0][0]]
     tw = fit(_rgb(os.path.join(a.control, ctl_by_number[min(ctl_by_number)]),

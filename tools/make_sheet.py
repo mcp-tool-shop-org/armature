@@ -15,6 +15,11 @@ the orchestrator lives here: a small run.json/toml names control/frames/referenc
 and optional detection; this invokes the existing tools in-process and refuses to print
 MEASURE_*_OK without GATE0_SHEET present. Each tool stays callable alone.
 
+**F-9b7d1d35 / F-fdc0027f.** Optional `clip=` extracts into `frames_dir` before Gate 0;
+optional `floor={runs|seeds,mode,...}` runs measure_floor after Gate 0; optional
+`lift_out=` supplies `detection_raw.json` when `detection` is omitted. encode_control
+`--run` stays a separate control-pack step.
+
 Sheets locate; full size decides. Every tile here is written at native resolution with
 no resampling, so what is on the sheet is what is in the file.
 
@@ -214,17 +219,51 @@ def load_dailies_manifest(path):
     return data
 
 
+def resolve_dailies_detection(man):
+    """Optional lift_out → detection_raw.json when detection is omitted (F-fdc0027f)."""
+    if man.get("detection"):
+        return man["detection"]
+    lift_out = man.get("lift_out")
+    if not lift_out:
+        return None
+    candidate = os.path.join(lift_out, "detection_raw.json")
+    if os.path.isfile(candidate):
+        return candidate
+    return None
+
+
 def run_dailies(manifest_path):
-    """Gate 0 first; measurements only after GATE0_SHEET exists on disk (F-ca0f0408)."""
+    """Gate 0 first; measurements only after GATE0_SHEET exists on disk (F-ca0f0408).
+
+    F-9b7d1d35: optional `clip` extracts into frames_dir; optional floor / seed-spread
+    run lists call measure_floor after Gate 0. encode_control --run stays a separate step.
+    F-fdc0027f: optional `lift_out` supplies detection_raw.json when detection is omitted.
+    """
+    import extract_clip_frames as ECF  # noqa: PLC0415
     import make_ab_clip as AB  # noqa: PLC0415
     import make_gate0_sheet as G0  # noqa: PLC0415
     import make_review_clip as MRC  # noqa: PLC0415
     import measure_clip as MC  # noqa: PLC0415
+    import measure_floor as MF  # noqa: PLC0415
     import measure_tracking as MT  # noqa: PLC0415
 
     man = load_dailies_manifest(manifest_path)
     out_dir = os.path.abspath(man["out_dir"])
     os.makedirs(out_dir, exist_ok=True)
+    products = {}
+
+    # Optional extract BEFORE Gate 0 so frames_dir exists for the panel (F-9b7d1d35).
+    # Does not auto-encode; control pack remains encode_control --run.
+    if man.get("clip"):
+        frames_dir = os.path.abspath(man["frames_dir"])
+        os.makedirs(frames_dir, exist_ok=True)
+        ECF.main([
+            f"--clip={man['clip']}",
+            f"--out={frames_dir}",
+            f"--label={man.get('label', 'clip')}",
+        ])
+        products["extract_clip_frames"] = frames_dir
+
     gate0_out = os.path.join(out_dir, man.get("gate0_name", "gate0_sheet.png"))
     frames_flag = man.get("frames", "0,8,16,24")
     # ---- Gate 0 BEFORE any MEASURE_*_OK. The judging discipline forbids quoting a
@@ -244,8 +283,47 @@ def run_dailies(manifest_path):
             {"gate": "DAILIES", "andon": "MakeSheetError",
              "clause": "gate0_sheet_missing_before_measure", "gate0_out": gate0_out})
 
-    products = {"gate0_sheet": gate0_out}
+    products["gate0_sheet"] = gate0_out
     measure_ok_allowed = True  # sheet is on disk
+
+    # Floor / seed-spread AFTER Gate 0, BEFORE or beside clipstats (F-9b7d1d35).
+    floor_cfg = man.get("floor")
+    if isinstance(floor_cfg, dict) and floor_cfg:
+        root = floor_cfg.get("root") or man.get("floor_root") or out_dir
+        mode = floor_cfg.get("mode", "fixed-seed")
+        floor_out = os.path.join(
+            out_dir,
+            floor_cfg.get("out_name",
+                          "seed_spread.json" if mode == "seed-spread" else "floor.json"))
+        argv = [f"--mode={mode}", f"--root={root}", f"--out={floor_out}"]
+        if mode == "seed-spread":
+            seeds = floor_cfg.get("seeds") or floor_cfg.get("runs")
+            if not seeds:
+                raise MakeSheetError(
+                    "dailies floor.mode=seed-spread needs floor.seeds=",
+                    {"gate": "DAILIES", "andon": "MakeSheetError",
+                     "clause": "dailies_floor_seeds_required"})
+            argv.append(f"--seeds={seeds if isinstance(seeds, str) else ','.join(seeds)}")
+        else:
+            runs = floor_cfg.get("runs")
+            if not runs:
+                raise MakeSheetError(
+                    "dailies floor needs floor.runs= for fixed-seed",
+                    {"gate": "DAILIES", "andon": "MakeSheetError",
+                     "clause": "dailies_floor_runs_required"})
+            argv.append(f"--runs={runs if isinstance(runs, str) else ','.join(runs)}")
+        if floor_cfg.get("early"):
+            argv.append(f"--early={floor_cfg['early']}")
+        if floor_cfg.get("late"):
+            argv.append(f"--late={floor_cfg['late']}")
+        MF.main(argv)
+        products["floor"] = floor_out
+        if floor_cfg.get("sheet"):
+            sheet_out = os.path.join(out_dir, floor_cfg.get("sheet_name", "floor_sheet.png"))
+            MF.main(["--sheet", f"--floor={floor_out}", f"--root={root}",
+                     f"--frames={floor_cfg.get('sheet_frames', '0,8,16')}",
+                     f"--out={sheet_out}"])
+            products["floor_sheet"] = sheet_out
 
     if man.get("measure_clip", True):
         if not measure_ok_allowed:
@@ -273,8 +351,10 @@ def run_dailies(manifest_path):
     if man.get("review_clip", True):
         review_out = os.path.join(out_dir, man.get("review_dir_name", "review"))
         argv = [f"--frames={man['frames_dir']}", f"--out={review_out}"]
-        if man.get("detection"):
-            argv.append(f"--detection={man['detection']}")
+        detection = resolve_dailies_detection(man)
+        if detection:
+            argv.append(f"--detection={detection}")
+            products["detection"] = detection
         if man.get("stills"):
             argv.append(f"--stills={man['stills']}")
         MRC.main(argv)
@@ -283,12 +363,15 @@ def run_dailies(manifest_path):
     if man.get("ab_clip", False):
         ab_out = os.path.join(out_dir, man.get("ab_clip_name", "gate0_ab.webp"))
         fps = float(man.get("fps", 16))
-        AB.main([
+        ab_argv = [
             "--mode=gate0",
             f"--a={man['control_dir']}", f"--b={man['frames_dir']}",
             f"--a-fps={fps}", f"--b-fps={fps}",
             f"--meta={man['meta']}", f"--out={ab_out}",
-        ])
+        ]
+        if man.get("reference") and man["reference"].lower() != "none":
+            ab_argv.append(f"--reference={man['reference']}")
+        AB.main(ab_argv)
         products["ab_clip"] = ab_out
 
     # Optional: rebuild Gate 0 with measurements bound onto the provenance column.
@@ -306,6 +389,8 @@ def run_dailies(manifest_path):
         ]
         if products.get("measure_tracking"):
             argv.append(f"--tracking={products['measure_tracking']}")
+        if products.get("floor"):
+            argv.append(f"--floor={products['floor']}")
         G0.main(argv)
         products["gate0_sheet_measured"] = g0_measured
 

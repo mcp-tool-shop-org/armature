@@ -5,6 +5,7 @@
            --b=<frames dir> --b-fps=20 --b-label="E10 81f @ 20" --out=<clip.webp>
     python tools\\make_ab_clip.py --mode=gate0 --a=<control> --b=<output>
            --a-fps=16 --b-fps=16 --meta=<payload.json> --out=<gate0.webp>
+           [--reference=<plate.png|frames dir>]
 
 The Director judges motion at true tempo. Two arms that ran at different frame counts over
 the same performance cannot be laid side by side by pairing frame k with frame k — that
@@ -349,17 +350,42 @@ def provenance_banner_text(meta, max_lines=6):
     return " | ".join(lines[:max_lines])
 
 
+def load_gate0_reference(path, n_frames):
+    """Static plate held across frames, or a same-index reference sequence (F-1cc5cd22).
+
+    A file path is a plate: every composite frame pastes that one image. A directory of
+    NNNNN.png is a sequence: frame k uses reference index min(k, n_ref-1).
+    """
+    if path is None:
+        return None, None
+    if os.path.isdir(path):
+        paths = frame_paths(path)
+        frames = [Image.open(p).convert("RGB") for p in paths]
+        return frames, {"kind": "sequence", "dir": os.path.abspath(path),
+                        "n_frames": len(frames),
+                        "paths": [os.path.abspath(p) for p in paths]}
+    if not os.path.isfile(path):
+        raise ABClipError(
+            f"--reference={path} is neither a file nor a frame directory",
+            {"gate": "ARGS", "andon": "ABClipError",
+             "clause": "gate0_reference_missing", "reference": path})
+    plate = Image.open(path).convert("RGB")
+    return [plate] * max(1, n_frames), {
+        "kind": "static_plate", "path": os.path.abspath(path)}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="two clips side by side in one file, each played at its OWN true "
                     "tempo, for the Director to judge in motion. --mode=gate0 is the "
-                    "control|output motion Gate 0 panel with a provenance banner "
-                    "(F-f174c9e2)",
+                    "control|output|reference motion Gate 0 panel with a provenance "
+                    "banner (F-f174c9e2 / F-1cc5cd22)",
         epilog=HALT_EPILOG)
     ap.add_argument("--mode", default="ab", choices=("ab", "gate0"),
                     help="ab (default): two arms at their own tempos. gate0: "
-                         "control|output at matched fps with a provenance banner from "
-                         "--meta and a sidecar listing control/output sha populations")
+                         "control|output|optional-reference at matched fps with a "
+                         "provenance banner from --meta and a sidecar listing sha "
+                         "populations")
     ap.add_argument("--a", required=True,
                     help="left frame directory (control when --mode=gate0)")
     ap.add_argument("--b", required=True,
@@ -378,6 +404,10 @@ def main(argv=None):
     ap.add_argument("--meta", default=None,
                     help="payload record JSON; required for --mode=gate0. Provenance "
                          "lines use the same NOT RECORDED convention as make_gate0_sheet")
+    ap.add_argument("--reference", default=None,
+                    help="gate0 only: static reference plate (held across frames) or a "
+                         "NNNNN.png directory (same-index sequence). Still Gate 0's "
+                         "third column, in motion (F-1cc5cd22)")
     ap.add_argument("--out", required=True, help="the A/B (or Gate 0) file to write")
     ap.add_argument("--lossless", type=int, default=1,
                     help="1 writes a lossless WebP; 0 writes quality 95. Recorded either "
@@ -400,10 +430,17 @@ def main(argv=None):
                  "clause": "gate0_fps_mismatch",
                  "a_fps": a_fps, "b_fps": b_fps})
         meta = load_gate0_meta(a.meta)
+    elif a.reference is not None:
+        raise ABClipError(
+            "--reference is only valid with --mode=gate0",
+            {"gate": "ARGS", "andon": "ABClipError",
+             "clause": "reference_requires_gate0", "reference": a.reference})
 
     pa, pb = frame_paths(a.a), frame_paths(a.b)
     ia_frames = [Image.open(p).convert("RGB") for p in pa]
     ib_frames = [Image.open(p).convert("RGB") for p in pb]
+    ref_frames, ref_rec = load_gate0_reference(
+        a.reference if a.mode == "gate0" else None, len(pa))
 
     na, nb = frame_numbers(pa), frame_numbers(pb)
     # ---- ANDON, before the time axis exists: the numbers the banner prints are the
@@ -428,23 +465,32 @@ def main(argv=None):
         # The FILE's own number, five digits like the file itself — never the position.
         left = banner(ia_frames[x], f"{label_a}   f{na[x]:05d}   t={t:.3f}s")
         right = banner(ib_frames[y], f"{label_b}   f{nb[y]:05d}   t={t:.3f}s")
-        h = max(left.height, right.height)
-        width = left.width + right.width + 8
+        panels = [left, right]
+        if ref_frames is not None:
+            ri = min(x, len(ref_frames) - 1)
+            panels.append(banner(ref_frames[ri], f"reference   t={t:.3f}s"))
+        h = max(p.height for p in panels)
+        gap = 8
+        width = sum(p.width for p in panels) + gap * (len(panels) - 1)
         if prov:
             # Short provenance strip under the pair — same NOT RECORDED lines as Gate 0.
             from sheet_compose import font as sheet_font
             face = sheet_font("arial.ttf", 12)
             strip_h = 28
             canvas = Image.new("RGB", (width, h + strip_h), (0, 0, 0))
-            canvas.paste(left, (0, 0))
-            canvas.paste(right, (left.width + 8, 0))
+            x_off = 0
+            for p in panels:
+                canvas.paste(p, (x_off, 0))
+                x_off += p.width + gap
             d = ImageDraw.Draw(canvas)
             shown = _ellipsize(d, prov, max(0, width - 12), font=face)
             d.text((6, h + 6), shown, fill=(180, 180, 190), font=face)
         else:
             canvas = Image.new("RGB", (width, h), (0, 0, 0))
-            canvas.paste(left, (0, 0))
-            canvas.paste(right, (left.width + 8, 0))
+            x_off = 0
+            for p in panels:
+                canvas.paste(p, (x_off, 0))
+                x_off += p.width + gap
         comps.append(canvas)
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
@@ -467,6 +513,10 @@ def main(argv=None):
               "span_s_first_to_last_frame": (len(pb) - 1) / b_fps},
         "composite": {"frames": len(comps), "total_ms": sum(delays),
                       "lossless": bool(a.lossless),
+                      "columns": (
+                          ["control", "output", "reference"] if ref_frames is not None
+                          else (["control", "output"] if a.mode == "gate0"
+                                else ["a", "b"])),
                       "rule": ("union of both arms' frame times; each side holds its "
                                "own frame between its own events. NEITHER arm is "
                                "resampled or retimed"),
@@ -486,7 +536,13 @@ def main(argv=None):
                 str(k): v for k, v in frame_sha_population(pa).items()},
             "output_sha_population": {
                 str(k): v for k, v in frame_sha_population(pb).items()},
+            "reference": ref_rec,
         }
+        if ref_rec and ref_rec.get("kind") == "sequence":
+            record["gate0"]["reference_sha_population"] = {
+                str(k): v for k, v in frame_sha_population(ref_rec["paths"]).items()}
+        elif ref_rec and ref_rec.get("kind") == "static_plate":
+            record["gate0"]["reference_sha"] = _sha256_file(ref_rec["path"])
     with open(side, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2)
 

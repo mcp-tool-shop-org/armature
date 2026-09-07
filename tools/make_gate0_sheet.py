@@ -227,6 +227,29 @@ def load_measurements(path):
     return out or None
 
 
+def merge_sheet_diagnostics(measurements=None, tracking=None, floor=None,
+                            smoothness=None, lift=None):
+    """Flatten clip/tracking headlines plus sheet_compose.diagnostic_lines (F-79c25d9e)."""
+    from sheet_compose import diagnostic_lines  # noqa: PLC0415
+
+    out = dict(measurements or {})
+    if tracking:
+        for k, v in tracking.items():
+            if k == "r=" or k not in out:
+                out[k] = v
+    extra = diagnostic_lines(
+        floor, smoothness, lift,
+        labels=["floor", "smoothness", "lift"])
+    # diagnostic_lines returns a banner + lines; fold non-banner into the dict so
+    # provenance_lines' existing MEASURED block prints them.
+    for ln in extra:
+        if not ln or ln.startswith("MEASURED"):
+            continue
+        key, _, val = ln.partition(" ")
+        out[key.strip()] = val.strip()
+    return out or None
+
+
 def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, captions=None,
           plate=SHEET_PLATE, measurements=None):
     """Assemble the panel.
@@ -383,6 +406,13 @@ def main(argv=None):
     ap.add_argument("--tracking", default=None,
                     help="optional measure_tracking.json; contributes the r= line beside "
                          "--measurements (F-e2e302b5)")
+    ap.add_argument("--floor", default=None,
+                    help="optional floor.json / seed_spread.json; prints under provenance "
+                         "via sheet_compose.diagnostic_lines (F-79c25d9e)")
+    ap.add_argument("--smoothness", default=None,
+                    help="optional measure_smoothness.json; diagnostic only (F-79c25d9e)")
+    ap.add_argument("--lift", default=None,
+                    help="optional measure_lift.json; diagnostic only (F-79c25d9e)")
     a = ap.parse_args(argv)
 
     with open(a.meta, encoding="utf-8") as fh:
@@ -396,16 +426,14 @@ def main(argv=None):
             captions[int(k)] = v
     reference = None if a.reference.lower() == "none" else a.reference
     plate = parse_plate(a.sheet_plate, SheetPopulationError, flag="--sheet-plate")
-    measurements = None
-    if a.measurements:
-        measurements = load_measurements(a.measurements) or {}
-    if a.tracking:
-        tracking = load_measurements(a.tracking) or {}
-        measurements = dict(measurements or {})
-        # tracking contributes r=; keep clip headlines from --measurements when both set
-        for k, v in tracking.items():
-            if k == "r=" or k not in measurements:
-                measurements[k] = v
+    clip = load_measurements(a.measurements) if a.measurements else None
+    tracking = load_measurements(a.tracking) if a.tracking else None
+    from sheet_compose import load_diagnostic_record  # noqa: PLC0415
+    measurements = merge_sheet_diagnostics(
+        measurements=clip, tracking=tracking,
+        floor=load_diagnostic_record(a.floor),
+        smoothness=load_diagnostic_record(a.smoothness),
+        lift=load_diagnostic_record(a.lift))
     # ---- the output directory is created only once every in-tool andon above
     #      has fired -- the plate parse included.
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)

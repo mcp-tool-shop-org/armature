@@ -94,14 +94,21 @@ class ResampleArgError(ArmatureError):
 
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
-        description="the same dance, more in-betweens: resample a motion record to a new "
-                    "sample count without changing the performance's duration",
+        description="the same dance, densified or decimated: --mode=densify (default) "
+                    "resamples to more in-betweens; --mode=decimate keeps a geodesic "
+                    "budget of keyframes with endpoints exact (F-2e3c2374)",
         epilog=HALT_EPILOG)
+    ap.add_argument("--mode", default="densify", choices=("densify", "decimate"),
+                    help="densify (default): more samples over the same duration. "
+                         "decimate: keep --budget keyframes (endpoints always kept) "
+                         "(F-2e3c2374)")
     ap.add_argument("--motion", required=True,
                     help="a motion record: {frames: [{frame, local: {bone: 3x3}, root}]}")
-    ap.add_argument("--frames", type=int, required=True,
-                    help="destination sample count (argparse eats leading minus signs, so "
-                         "pass flags as --flag=value)")
+    ap.add_argument("--frames", type=int, default=None,
+                    help="destination sample count for --mode=densify (required there)")
+    ap.add_argument("--budget", type=int, default=None,
+                    help="kept keyframe count for --mode=decimate (including endpoints); "
+                         "required when decimating")
     ap.add_argument("--out", required=True,
                     help="directory for the resampled motion record")
     ap.add_argument("--fps-src", type=float, default=16.0,
@@ -109,6 +116,45 @@ def parse_args(argv=None):
                          "playback rate that preserves the performance's duration")
     ap.add_argument("--name", default=None, help="output basename (default: derived)")
     return ap.parse_args(argv)
+
+
+def decimate_indices(frames, budget):
+    """Keep endpoints + highest per-step geodesic cost interiors (F-2e3c2374).
+
+    Reuses armature_core.resample.geodesic_deg over DIAGNOSTIC_BONES present in the
+    record. Endpoints are always kept; budget < 2 is refused by the caller.
+    """
+    n = len(frames)
+    if budget >= n:
+        return list(range(n))
+    present = [b for b in DIAGNOSTIC_BONES if b in (frames[0].get("local") or {})]
+    if not present:
+        present = list((frames[0].get("local") or {}).keys())[:8]
+    costs = []
+    for i in range(n - 1):
+        cost = 0.0
+        for b in present:
+            a = frames[i]["local"].get(b)
+            c = frames[i + 1]["local"].get(b)
+            if a is None or c is None:
+                continue
+            cost += resample.geodesic_deg(
+                tuple(tuple(float(v) for v in row) for row in a),
+                tuple(tuple(float(v) for v in row) for row in c))
+        # Candidate interior = right endpoint of the step.
+        costs.append((cost, i + 1))
+    keep = {0, n - 1}
+    for _cost, idx in sorted(costs, key=lambda t: t[0], reverse=True):
+        if len(keep) >= budget:
+            break
+        if 0 < idx < n - 1:
+            keep.add(idx)
+    if len(keep) < budget:
+        for i in range(1, n - 1):
+            if len(keep) >= budget:
+                break
+            keep.add(i)
+    return sorted(keep)
 
 
 def _sha256(path):
@@ -123,39 +169,51 @@ def main(argv=None):
     started = time.time()
     a = parse_args(argv)
     out_dir = os.path.abspath(a.out)
+    mode = a.mode
 
-    # ---- ANDON, before anything is read or written: the destination sample count is a
-    #      count of samples. `--frames=1` reached `resample.positions(n_src, 1)` and
-    #      `sample_interval_ratio = (n_src - 1) / (n_dst - 1)`, both of which divide by
-    #      `n_dst - 1`, and died with a bare ZeroDivisionError naming neither the flag nor
-    #      the value. A resampled timeline needs two endpoints to span anything at all.
-    if a.frames < MIN_DST_FRAMES:
-        raise ResampleArgError(
-            f"--frames={a.frames} is not a timeline; this tool resamples a path between "
-            f"its endpoints, so the destination needs at least {MIN_DST_FRAMES} samples "
-            f"(the index-space rule divides by n_dst - 1)",
-            {"gate": "ARGS", "andon": "ResampleArgError",
-             "clause": "destination_frame_count_below_two",
-             "frames": a.frames, "minimum": MIN_DST_FRAMES})
+    if mode == "densify":
+        if a.frames is None:
+            raise ResampleArgError(
+                "--frames is required for --mode=densify",
+                {"gate": "ARGS", "andon": "ResampleArgError",
+                 "clause": "densify_requires_frames", "mode": mode})
+        if a.budget is not None:
+            raise ResampleArgError(
+                "--budget belongs to --mode=decimate",
+                {"gate": "ARGS", "andon": "ResampleArgError",
+                 "clause": "budget_requires_decimate", "budget": a.budget})
+        # ---- ANDON, before anything is read or written: the destination sample count is a
+        #      count of samples. `--frames=1` reached `resample.positions(n_src, 1)` and
+        #      `sample_interval_ratio = (n_src - 1) / (n_dst - 1)`, both of which divide by
+        #      `n_dst - 1`, and died with a bare ZeroDivisionError naming neither the flag nor
+        #      the value. A resampled timeline needs two endpoints to span anything at all.
+        if a.frames < MIN_DST_FRAMES:
+            raise ResampleArgError(
+                f"--frames={a.frames} is not a timeline; this tool resamples a path between "
+                f"its endpoints, so the destination needs at least {MIN_DST_FRAMES} samples "
+                f"(the index-space rule divides by n_dst - 1)",
+                {"gate": "ARGS", "andon": "ResampleArgError",
+                 "clause": "destination_frame_count_below_two",
+                 "frames": a.frames, "minimum": MIN_DST_FRAMES})
+    else:
+        if a.budget is None:
+            raise ResampleArgError(
+                "--budget is required for --mode=decimate",
+                {"gate": "ARGS", "andon": "ResampleArgError",
+                 "clause": "decimate_requires_budget", "mode": mode})
+        if a.frames is not None:
+            raise ResampleArgError(
+                "--frames belongs to --mode=densify; decimate takes --budget=",
+                {"gate": "ARGS", "andon": "ResampleArgError",
+                 "clause": "frames_requires_densify", "frames": a.frames})
+        if a.budget < MIN_DST_FRAMES:
+            raise ResampleArgError(
+                f"--budget={a.budget} is not a timeline; decimate keeps endpoints so the "
+                f"budget needs at least {MIN_DST_FRAMES}",
+                {"gate": "ARGS", "andon": "ResampleArgError",
+                 "clause": "decimate_budget_below_two",
+                 "budget": a.budget, "minimum": MIN_DST_FRAMES})
 
-    # ---- ANDON, the same block, the OTHER divisor (F-981fe49d, wave 16). `--frames` was
-    #      gated in wave 14 because `positions` and `sample_interval_ratio` divide by
-    #      `n_dst - 1`; `--fps-src` divides three of the same block's derived quantities
-    #      and was left open. Measured on the base tree, on a 4-frame record that passes
-    #      every gate: `--fps-src=0` raised a bare `ZeroDivisionError` at
-    #      `(n_src - 1) / a.fps_src` — untyped, so the `__main__` handler classified it
-    #      exit 1 ("an unhandled error") rather than the exit 2 a deliberate refusal earns,
-    #      and the message named neither the flag nor the value. `--fps-src=-16` ran to
-    #      COMPLETION, printed `RESAMPLE_MOTION_OK` and wrote the record with
-    #      `fps_dst_true_tempo: -37.333`, `span_s_first_to_last_sample: -0.1875` and
-    #      `clip_s_src_frames_over_fps: -0.25`; `--fps-src=nan` wrote NaN into all three.
-    #      `fps_dst_true_tempo` exists so a later tool or operator can pick the generator's
-    #      frame rate from it, so a negative or NaN value there is read out of a file the
-    #      record says reproduced cleanly.
-    #
-    #      The clause is `> 0` AND finite, in that order, because the two directions are
-    #      different: `nan > 0` is False and is caught here, while `inf > 0` is True and
-    #      would pass a positivity test while making every derived duration zero.
     if not math.isfinite(a.fps_src) or a.fps_src <= 0:
         raise ResampleArgError(
             f"--fps-src={a.fps_src} is not a sampling rate; the source's rate divides "
@@ -169,28 +227,7 @@ def main(argv=None):
                         else "source_rate_not_positive"),
              "fps_src": a.fps_src, "minimum_exclusive": 0.0})
 
-    # ---- ANDON, the same block, the flag that names the OUTPUT (F-db1de39d, wave 18).
-    #      `--name` is pasted into `os.path.join(out_dir, name + ".motion.json")` below,
-    #      and it was checked for nothing. Third measured instance of one family in this
-    #      domain; `pack_pose_pack --name` is the second and is fixed in the same wave,
-    #      `make_review_clip --run` is the first and is a DEFERRED Stage B item. The
-    #      refusal sits HERE, above `os.makedirs` and above the record read, because a
-    #      refused run must leave no directory behind: that is the ordering rule the
-    #      `--frames` andon above was moved for (F-6a18f6d5).
-    #
-    #      The guard is TRUTHINESS, not `is not None`, because that is exactly the
-    #      population the paste happens for: the write site reads `a.name or (derived)`,
-    #      so a falsy `--name` never reaches the join. Measured on the base tree,
-    #      `--name=` (empty) wrote the derived `motion.6.motion.json`; refusing it here
-    #      would refuse an input this tool accepts today, and a bound belongs where the
-    #      value is READ.
     if a.name:
-        # WAVE 22, SEAM 1: the ONE home for this check, adopted BY IMPORT (the two
-        # byte-identical copies this domain held are deleted). The import is at the
-        # CALL SITE rather than at module scope for one reason, stated so it is not
-        # read as a cycle break: the helper lands on core-solvers' branch in the same
-        # parallel wave, and a module-scope import makes this file uncollectable on
-        # any tree where that branch has not merged yet. Same object either way.
         from armature_core.parts import single_path_segment
 
         single_path_segment(a.name, "--name", ResampleArgError,
@@ -200,29 +237,54 @@ def main(argv=None):
     with open(a.motion, encoding="utf-8") as fh:
         src = json.load(fh)
     frames = src["frames"]
-    n_src, n_dst = len(frames), a.frames
-
+    n_src = len(frames)
     gate_in = lift_solve.validate_motion_record(frames)
-    gate_time = resample.monotonic(n_src, n_dst)
-    out_frames = resample.resample_frames(frames, n_dst)
-    gate_ends = resample.endpoints_match(frames, out_frames)
-    gate_out = lift_solve.validate_motion_record(out_frames)
+    kept_indices = None
 
-    present = [b for b in DIAGNOSTIC_BONES if b in frames[0]["local"]]
-    fps_dst = resample.fps_for(a.fps_src, n_src, n_dst)
-
-    payload = {
-        "tool": "resample_motion",
-        "tool_version": TOOL_VERSION,
-        "module_version": resample.TOOL_VERSION,
-        "source": {"path": os.path.abspath(a.motion), "sha256": _sha256(a.motion),
-                   "tool": src.get("tool"), "tool_version": src.get("tool_version"),
-                   "clip_source": src.get("source"),
-                   "ema_alpha": src.get("ema_alpha"),
-                   "note": ("the smoothing configuration is CARRIED, not re-run: this tool "
-                            "densifies the path the record already describes and changes "
-                            "nothing about how that record was smoothed")},
-        "resample": {
+    if mode == "decimate":
+        kept_indices = decimate_indices(frames, a.budget)
+        out_frames = []
+        for j, src_i in enumerate(kept_indices):
+            fr = frames[src_i]
+            out_frames.append({
+                "frame": j,
+                "local": {b: [list(r) for r in fr["local"][b]] for b in fr["local"]},
+                "root": list(fr["root"]),
+            })
+        n_dst = len(out_frames)
+        # Endpoint-match against the SOURCE endpoints (indices 0 and n_src-1), which
+        # decimate_indices always keeps as out_frames[0] and out_frames[-1].
+        gate_ends = resample.endpoints_match(
+            [frames[0], frames[-1]],
+            [out_frames[0], out_frames[-1]])
+        gate_time = {
+            "verdict": f"decimate kept {n_dst} of {n_src} (budget={a.budget})",
+            "gate": "RESAMPLE", "mode": "decimate",
+            "kept_indices": kept_indices, "budget": a.budget,
+        }
+        fps_dst = a.fps_src  # same sample times as kept source frames; tempo unchanged
+        resample_block = {
+            "mode": "decimate",
+            "n_src": n_src, "n_dst": n_dst,
+            "budget": a.budget,
+            "kept_indices": kept_indices,
+            "rule": ("geodesic-budget decimate: endpoints always kept; interiors chosen "
+                     "by largest per-step geodesic over DIAGNOSTIC_BONES; frame indices "
+                     "renumbered 0..n_dst-1; endpoint poses match source endpoints"),
+            "fps_src": a.fps_src,
+            "fps_dst_true_tempo": fps_dst,
+            "span_s_first_to_last_sample": (n_src - 1) / a.fps_src,
+            "clip_s_src_frames_over_fps": n_src / a.fps_src,
+            "clip_s_dst_frames_over_fps": n_dst / fps_dst,
+        }
+    else:
+        n_dst = a.frames
+        gate_time = resample.monotonic(n_src, n_dst)
+        out_frames = resample.resample_frames(frames, n_dst)
+        gate_ends = resample.endpoints_match(frames, out_frames)
+        fps_dst = resample.fps_for(a.fps_src, n_src, n_dst)
+        resample_block = {
+            "mode": "densify",
             "n_src": n_src, "n_dst": n_dst,
             "rule": ("index-space: destination sample j reads source position "
                      "j * (n_src - 1) / (n_dst - 1); rotations by shortest-arc slerp per "
@@ -240,7 +302,24 @@ def main(argv=None):
                            "resampling preserves. Quoting frames/fps instead gives a clip "
                            "length differing by less than one frame; both are reported so "
                            "no reader has to guess which convention a tempo claim used"),
-        },
+        }
+
+    gate_out = lift_solve.validate_motion_record(out_frames)
+    present = [b for b in DIAGNOSTIC_BONES if b in frames[0]["local"]]
+
+    payload = {
+        "tool": "resample_motion",
+        "tool_version": TOOL_VERSION,
+        "module_version": resample.TOOL_VERSION,
+        "mode": mode,
+        "source": {"path": os.path.abspath(a.motion), "sha256": _sha256(a.motion),
+                   "tool": src.get("tool"), "tool_version": src.get("tool_version"),
+                   "clip_source": src.get("source"),
+                   "ema_alpha": src.get("ema_alpha"),
+                   "note": ("the smoothing configuration is CARRIED, not re-run: this tool "
+                            "densifies or decimates the path the record already describes "
+                            "and changes nothing about how that record was smoothed")},
+        "resample": resample_block,
         "gates": {
             "SOLVE_input": gate_in, "RESAMPLE_monotonic": gate_time,
             "RESAMPLE_endpoints": gate_ends, "SOLVE_output": gate_out,
@@ -249,26 +328,16 @@ def main(argv=None):
             "step_angles_src_deg": resample.step_angles(frames, present),
             "step_angles_dst_deg": resample.step_angles(out_frames, present),
             "note": ("per-bone geodesic angle between consecutive frames. A DIAGNOSTIC; it "
-                     "gates nothing. On a smooth passage the median step scales with the "
-                     "sample interval; at a turn in the source path it does not, because "
-                     "slerp densifies the path between the source's samples and leaves the "
-                     "turns at them exactly where they were"),
+                     "gates nothing."),
         },
         "frames": out_frames,
         "elapsed_s": time.time() - started,
     }
 
-    name = a.name or (os.path.splitext(os.path.basename(a.motion))[0] + f".{n_dst}")
+    name = a.name or (os.path.splitext(os.path.basename(a.motion))[0]
+                      + (f".decimate{a.budget}" if mode == "decimate" else f".{n_dst}"))
     path = os.path.join(out_dir, name + ".motion.json")
-    # ---- the output directory is created BELOW every andon above it (F-6a18f6d5): the
-    #      `--frames` bound, `lift_solve.validate_motion_record(frames)`,
-    #      `resample.monotonic`, `resample.endpoints_match` and
-    #      `validate_motion_record(out_frames)`. It used to sit at the top of `main`, so a
-    #      record whose frames carry no `local` rotations raised SolveGate [SOLVE] and left
-    #      `--out` on disk, existing and empty — which a later reader, or a re-run into the
-    #      same `--out`, reads as an attempt that produced nothing rather than one that was
-    #      refused. Nothing irreversible is at stake; the ordering rule is.
-    os.makedirs(out_dir, exist_ok=True)      # scripts create their own output directories
+    os.makedirs(out_dir, exist_ok=True)
     with open(path, "w", encoding="utf-8") as fh:
         payload.update(runtime_provenance())
         json.dump(payload, fh, indent=2)
@@ -278,9 +347,10 @@ def main(argv=None):
            for b in present[:4]}
     print("RESAMPLE_MOTION_OK " + json.dumps({
         "out": path, "sha256": _sha256(path)[:32],
-        "n_src": n_src, "n_dst": n_dst,
+        "mode": mode, "n_src": n_src, "n_dst": n_dst,
+        "budget": a.budget, "kept_indices": kept_indices,
         "fps_src": a.fps_src, "fps_dst_true_tempo": fps_dst,
-        "endpoints": gate_ends["verdict"], "timeline": gate_time["verdict"],
+        "endpoints": gate_ends.get("verdict"), "timeline": gate_time.get("verdict"),
         "median_step_deg_sample": med}))
     return 0
 

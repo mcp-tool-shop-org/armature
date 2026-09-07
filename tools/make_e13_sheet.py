@@ -253,6 +253,15 @@ def main(argv=None):
                          "shaped like evidence")
     ap.add_argument("--sample", default="0,37,75,112,149",
                     help="output frame indices (argparse eats leading minus signs)")
+    ap.add_argument("--measurements", default=None,
+                    help="optional measure_clip.json; diagnostics under provenance "
+                         "(F-79c25d9e)")
+    ap.add_argument("--tracking", default=None,
+                    help="optional measure_tracking.json (F-79c25d9e)")
+    ap.add_argument("--floor", default=None,
+                    help="optional floor.json / seed_spread.json (F-79c25d9e)")
+    ap.add_argument("--smoothness", default=None,
+                    help="optional measure_smoothness.json (F-79c25d9e)")
     a = ap.parse_args(argv)
 
     with open(a.payload, encoding="utf-8") as fh:
@@ -320,11 +329,18 @@ def main(argv=None):
     frame_labels = [f"f{i}  ({fr['stream']['width']}x{fr['stream']['height']} "
                     f"@ {fr['stream']['fps']} fps)" for i in idx]
 
+    from sheet_compose import diagnostic_lines  # noqa: PLC0415
+    diag = diagnostic_lines(
+        a.measurements, a.tracking, a.floor, a.smoothness,
+        labels=["clip", "tracking", "floor", "smoothness"])
+    # Skip the blank + MEASURED banner; provenance_lines appends `extra` as-is.
+    diag_extra = [ln for ln in diag if ln and not ln.startswith("MEASURED")]
     prov = provenance_lines(
         payload, a.prompt_id, fr.get("clip_sha256"), ref_rows,
         extra=[f"clip         {fr['n_frames']} frames, {fr['distinct_frames']} distinct, "
                f"{fr['clip_bytes']} bytes",
-               f"stream       {fr['stream']['line'][:110]}"])
+               f"stream       {fr['stream']['line'][:110]}",
+               *diag_extra])
 
     title = (f"E13 {a.arm} seed {a.seed} — references | output | provenance   "
              f"(diagnostics only; the Director's eye is the verdict)")

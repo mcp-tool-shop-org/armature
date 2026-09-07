@@ -85,6 +85,91 @@ class SheetPopulationError(ArmatureError):
 SHEET_PLATE = (0, 0, 0)
 
 
+def _round_or_none(v, nd=4):
+    if v is None:
+        return "NOT RECORDED"
+    try:
+        return round(float(v), nd)
+    except (TypeError, ValueError):
+        return "NOT RECORDED"
+
+
+def diagnostic_lines(*records, labels=None):
+    """Headline diagnostic lines from measure_* JSON records (F-79c25d9e).
+
+    Generalises startframe/gate0's measurements block so thesis/e13/gate0 can print
+    floor / tracking / smoothness / lift / clipstats under provenance. Every number is
+    labelled diagnostic; these lines gate nothing.
+    """
+    lines = []
+    labels = labels or []
+    for i, rec in enumerate(records):
+        if rec is None:
+            continue
+        if isinstance(rec, str):
+            if not os.path.isfile(rec):
+                lines.append(f"diag[{labels[i] if i < len(labels) else i}]  MISSING {rec}")
+                continue
+            with open(rec, encoding="utf-8") as fh:
+                rec = json.load(fh)
+        if not isinstance(rec, dict):
+            continue
+        tag = labels[i] if i < len(labels) else rec.get("tool") or rec.get("quantity") or "diag"
+        # measure_clip
+        arms = rec.get("arms")
+        if isinstance(arms, list) and arms:
+            arm = arms[0]
+            lines.append(
+                f"{tag}.frames     {arm.get('n_frames')} / "
+                f"{(arm.get('distinct') or {}).get('n_distinct')} distinct")
+            fd = ((arm.get("frame_deltas") or {}).get("stats") or {})
+            lines.append(f"{tag}.d(frame)   {_round_or_none(fd.get('median'), 3)}")
+        # measure_tracking
+        if "timing_correlation" in rec:
+            lines.append(f"{tag}.r=         {_round_or_none(rec.get('timing_correlation'), 4)}")
+        # measure_floor / seed_spread
+        qty = rec.get("quantity")
+        if qty in ("fixed_seed_floor", "seed_spread") or rec.get("mode") in (
+                "fixed-seed", "seed-spread"):
+            pairs = rec.get("pairs") or rec.get("per_seed") or []
+            identical = sum(
+                1 for p in pairs
+                if isinstance(p, dict) and (
+                    p.get("bit_identical") is True
+                    or p.get("identical") is True
+                    or (p.get("max_abs_diff") == 0)))
+            lines.append(
+                f"{tag}.floor      {qty or rec.get('mode')}: "
+                f"{identical}/{len(pairs)} identical-frame pairs")
+            ws = rec.get("window_source")
+            if isinstance(ws, dict):
+                lines.append(
+                    f"{tag}.windows    early={ws.get('early')} late={ws.get('late')}")
+        # measure_smoothness
+        if rec.get("tool") == "measure_smoothness" or "keypoints_whose_per_frame_median_ROSE" in rec:
+            rose = rec.get("keypoints_whose_per_frame_median_ROSE") or []
+            lines.append(f"{tag}.smooth     rose={len(rose)}")
+        # measure_lift
+        if rec.get("tool") == "measure_lift":
+            lines.append(
+                f"{tag}.lift       frames={rec.get('n_frames', rec.get('frames', 'NOT RECORDED'))}")
+        # generic headline keys already flattened by load_measurements
+        for k in ("frames", "d(frame) med", "d(luma) med", "corr to f0", "horizon", "r="):
+            if k in rec and not any(k in ln for ln in lines):
+                lines.append(f"{tag}.{k:<10} {rec[k]}")
+    if lines:
+        return ["", "MEASURED (diagnostics; they gate nothing)", *lines]
+    return []
+
+
+def load_diagnostic_record(path):
+    """Load one measure_* JSON path, or None when path is omitted."""
+    if not path:
+        return None
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
 def load_rgb_over_plate(path, plate=SHEET_PLATE):
     """One RGB tile for a sheet, and the record of how its alpha was disposed of.
 

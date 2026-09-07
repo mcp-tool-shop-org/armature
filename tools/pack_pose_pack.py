@@ -89,9 +89,21 @@ MIN_FPS_EXCLUSIVE = 0
 def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         description="pack the pose-stick frames into ONE lossless animated file, the "
-                    "single artefact the pose route uploads",
+                    "single artefact the pose route uploads. --from-motion + --manifest "
+                    "runs project→render→pack in-process (F-e4e327b1)",
         epilog=HALT_EPILOG)
-    ap.add_argument("--frames", required=True, help="directory of NNNNN.png stick frames")
+    ap.add_argument("--frames", default=None, help="directory of NNNNN.png stick frames "
+                                                   "(required unless --from-motion)")
+    ap.add_argument("--from-motion", default=None,
+                    help="motion record; with --manifest, runs project_pose_keypoints → "
+                         "render_pose_sticks → pack in-process and refuses fps/size drift "
+                         "(F-e4e327b1)")
+    ap.add_argument("--manifest", default=None,
+                    help="rig manifest; required with --from-motion")
+    ap.add_argument("--width", type=int, default=832,
+                    help="with --from-motion: projection width (default 832)")
+    ap.add_argument("--height", type=int, default=480,
+                    help="with --from-motion: projection height (default 480)")
     ap.add_argument("--out", required=True,
                     help="directory for the packed animation and its record")
     ap.add_argument("--fps", type=int, default=16,
@@ -107,6 +119,41 @@ def parse_args(argv=None):
                     help="apng is the default because Comfy Cloud's upload endpoint "
                          "refused animated WebP with 422 INVALID_IMAGE, measured 2026-08-12")
     return ap.parse_args(argv)
+
+
+def from_motion_pipeline(motion, manifest, out_dir, fps, width, height):
+    """project → render → return stick frames dir; refuse fps/size drift (F-e4e327b1)."""
+    import project_pose_keypoints as PPK  # noqa: PLC0415
+    import render_pose_sticks as RPS  # noqa: PLC0415
+
+    kp_path = os.path.join(out_dir, "keypoints.json")
+    sticks_dir = os.path.join(out_dir, "sticks")
+    os.makedirs(out_dir, exist_ok=True)
+    PPK.main([
+        f"--motion={motion}", f"--manifest={manifest}", f"--out={kp_path}",
+        f"--width={width}", f"--height={height}", f"--fps={fps}",
+    ])
+    with open(kp_path, encoding="utf-8") as fh:
+        kp = json.load(fh)
+    kp_fps = kp.get("fps")
+    kp_res = kp.get("resolution")
+    if kp_fps is not None and int(kp_fps) != int(fps):
+        raise PosePackError(
+            f"--from-motion fps drift: project wrote fps={kp_fps}, pack asked --fps={fps}",
+            {"gate": "ARGS", "andon": "PosePackError",
+             "clause": "from_motion_fps_drift",
+             "project_fps": kp_fps, "pack_fps": fps, "keypoints": kp_path})
+    if isinstance(kp_res, (list, tuple)) and len(kp_res) == 2:
+        if int(kp_res[0]) != int(width) or int(kp_res[1]) != int(height):
+            raise PosePackError(
+                f"--from-motion size drift: project wrote {list(kp_res)}, pack asked "
+                f"{width}x{height}",
+                {"gate": "ARGS", "andon": "PosePackError",
+                 "clause": "from_motion_size_drift",
+                 "project_resolution": list(kp_res),
+                 "pack_resolution": [width, height], "keypoints": kp_path})
+    RPS.main([f"--keypoints={kp_path}", f"--out={sticks_dir}"])
+    return {"keypoints": kp_path, "sticks": sticks_dir, "keypoints_record": kp}
 
 
 def frame_paths(directory):
@@ -189,6 +236,26 @@ def read_pack(path):
 def main(argv=None):
     a = parse_args(argv)
     out_dir = os.path.abspath(a.out)
+    pipeline = None
+
+    if a.from_motion:
+        if not a.manifest:
+            raise PosePackError(
+                "--from-motion requires --manifest=",
+                {"gate": "ARGS", "andon": "PosePackError",
+                 "clause": "from_motion_requires_manifest",
+                 "from_motion": a.from_motion})
+        if a.frames:
+            raise PosePackError(
+                "--from-motion builds stick frames in-process; do not also pass --frames",
+                {"gate": "ARGS", "andon": "PosePackError",
+                 "clause": "from_motion_excludes_frames",
+                 "from_motion": a.from_motion, "frames": a.frames})
+    elif not a.frames:
+        raise PosePackError(
+            "--frames is required unless --from-motion= is set",
+            {"gate": "ARGS", "andon": "PosePackError",
+             "clause": "frames_or_from_motion_required"})
 
     # ---- ANDON, before anything is read or written, and far above `os.makedirs`: the
     #      pack's rate is a rate. F-6bb38028, wave 18, and the same divisor
@@ -231,7 +298,13 @@ def main(argv=None):
     single_path_segment(a.name, "--name", PosePackError,
                         extra={"tool": "pack_pose_pack", "out": out_dir})
 
-    paths = frame_paths(a.frames)
+    frames_dir = a.frames
+    if a.from_motion:
+        pipeline = from_motion_pipeline(
+            a.from_motion, a.manifest, out_dir, a.fps, a.width, a.height)
+        frames_dir = pipeline["sticks"]
+
+    paths = frame_paths(frames_dir)
     frames = load_frames(paths, alpha_over=parse_plate(a.alpha_over, PosePackError))
     # WAVE-12 MERGE (coordinator, 2026-09-04): created below the frame refusals (a missing or unreadable frame leaves
     # nothing on disk); Gate R below reads back the pack this tool writes.
@@ -269,6 +342,25 @@ def main(argv=None):
             "Gate B probe saves the batch as the conditioning node received it, to be "
             "counted and compared against these source frames."),
     }
+    if pipeline is not None:
+        # Refuse size drift between rendered sticks and the pack canvas.
+        stick_w = int(frames[0].shape[1])
+        stick_h = int(frames[0].shape[0])
+        if stick_w != int(a.width) or stick_h != int(a.height):
+            raise PosePackError(
+                f"--from-motion size drift after render: sticks are {stick_w}x{stick_h}, "
+                f"pipeline asked {a.width}x{a.height}",
+                {"gate": "ARGS", "andon": "PosePackError",
+                 "clause": "from_motion_stick_size_drift",
+                 "stick_resolution": [stick_w, stick_h],
+                 "asked": [a.width, a.height]})
+        manifest["from_motion"] = {
+            "motion": os.path.abspath(a.from_motion),
+            "manifest": os.path.abspath(a.manifest),
+            "keypoints": pipeline["keypoints"],
+            "sticks": pipeline["sticks"],
+            "width": a.width, "height": a.height, "fps": a.fps,
+        }
     mpath = os.path.join(out_dir, "pose_pack_manifest.json")
     with open(mpath, "w", encoding="utf-8") as fh:
         manifest.update(runtime_provenance())

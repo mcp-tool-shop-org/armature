@@ -19,7 +19,9 @@ let that confusion happen silently: `--survey` reports every candidate encoding 
 *both* a grayscale and a true-RGB probe, and the gate fires on the one actually used.
 
 **Diagnostic and gate are different objects** (CLAUDE.md). `survey_codecs` measures and
-returns a table; `gates.gate_r_round_trip` raises. The survey never decides anything.
+returns a table; `gates.gate_r_round_trip` raises. Recommendations
+(`recommended_gray` / `recommended_rgb`) pin the next encode for `--codec=auto` /
+`--codec-from=`; they do not replace Gate R.
 
 **What the input side refuses, and why Gate R cannot cover it.** Gate R compares the frames
 this tool loaded against their decode, so anything that happened *while loading* is invisible
@@ -128,6 +130,12 @@ CODECS = {
         "note": "THE TRAP. Included so the failure is measured here, not inferred.",
     },
 }
+
+#: F-06be7ebb / F-1bfe3e49 — the chroma-subsampled trap. Surveyed so the failure is
+#: measured; offered on argparse only when `--allow-trap` is set.
+TRAP_CODEC = "x264-qp0-yuv420"
+SAFE_CODECS = tuple(c for c in CODECS if c != TRAP_CODEC)
+CODEC_AUTO = "auto"
 
 
 class EncodeFailure(ArmatureError):
@@ -556,8 +564,32 @@ def _probe_pair(h=64, w=64, n=5, seed=17):
     )
 
 
+def survey_recommendations(rows):
+    """First lossless codec per probe column, in CODECS declaration order (F-06be7ebb).
+
+    `recommended_gray` / `recommended_rgb` pin the next encode; the survey table alone
+    used to leave the operator re-typing `--codec=` — including the trap — by hand.
+    """
+    rec = {"recommended_gray": None, "recommended_rgb": None}
+    for row in rows:
+        name = row.get("codec")
+        if name == TRAP_CODEC:
+            continue
+        if rec["recommended_gray"] is None and row.get("grayscale") == "lossless":
+            rec["recommended_gray"] = name
+        if rec["recommended_rgb"] is None and row.get("rgb") == "lossless":
+            rec["recommended_rgb"] = name
+        if rec["recommended_gray"] and rec["recommended_rgb"]:
+            break
+    return rec
+
+
 def survey_codecs():
-    """DIAGNOSTIC — measure every candidate bridge. Decides nothing, raises nothing."""
+    """DIAGNOSTIC — measure every candidate bridge; pin recommended_gray/rgb (F-06be7ebb).
+
+    Still raises nothing. Recommendations are the first non-trap lossless row per probe,
+    so `--codec=auto` / `--codec-from=` can select without re-typing a trap.
+    """
     gray, colour = _probe_pair()
     h, w = gray[0].shape[:2]
     rows = []
@@ -581,6 +613,61 @@ def survey_codecs():
                     row[label] = f"UNAVAILABLE: {str(e)[:90]}"
             rows.append(row)
     return rows
+
+
+def survey_table(rows=None):
+    """Survey rows plus recommended_gray / recommended_rgb (F-1bfe3e49 / F-06be7ebb)."""
+    rows = list(rows) if rows is not None else survey_codecs()
+    return {**survey_recommendations(rows), "survey": rows}
+
+
+def load_survey_table(path):
+    """Load a --survey-out JSON and require recommended_* (or derive them)."""
+    try:
+        with open(path, encoding="utf-8") as fh:
+            data = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EncodeFailure(
+            f"--codec-from={path} is not readable survey JSON: {exc}",
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "codec_from_unreadable", "path": os.path.abspath(path),
+             "error": str(exc)}) from exc
+    if not isinstance(data, dict):
+        raise EncodeFailure(
+            f"--codec-from={path} must be a JSON object",
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "codec_from_not_object", "path": os.path.abspath(path)})
+    rows = data.get("survey")
+    if not isinstance(rows, list) or not rows:
+        raise EncodeFailure(
+            f"--codec-from={path} carries no survey rows",
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "codec_from_missing_survey", "path": os.path.abspath(path)})
+    rec = survey_recommendations(rows)
+    gray = data.get("recommended_gray") or rec["recommended_gray"]
+    rgb = data.get("recommended_rgb") or rec["recommended_rgb"]
+    if not gray or not rgb:
+        raise EncodeFailure(
+            f"--codec-from={path} has no lossless recommendation for "
+            f"gray={gray!r} rgb={rgb!r}",
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "codec_from_missing_recommendation",
+             "path": os.path.abspath(path),
+             "recommended_gray": gray, "recommended_rgb": rgb})
+    return {"recommended_gray": gray, "recommended_rgb": rgb, "survey": rows,
+            "path": os.path.abspath(path)}
+
+
+def codec_for_mode(mode, recommendations):
+    """Pick recommended_gray / recommended_rgb for a measured channel mode."""
+    if mode == "gray":
+        return recommendations["recommended_gray"]
+    if mode == "rgb":
+        return recommendations["recommended_rgb"]
+    raise EncodeFailure(
+        f"channel mode {mode!r} is not gray or rgb",
+        {"gate": "CODEC", "andon": "EncodeFailure",
+         "clause": "unknown_channel_mode", "mode": mode})
 
 
 def channel_pixel_mode(frames_dir, sample_n=1):
@@ -687,35 +774,56 @@ def read_stage_render_channel_dirs(run_dir):
 
 
 def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
-                       alpha_over=None, progress=None, survey_rows=None):
-    """Encode every stage_render channel into one pack receipt (F-b8bf8e7d).
+                       alpha_over=None, progress=None, survey_rows=None,
+                       recommendations=None, stream=False):
+    """Encode every stage_render channel into one pack receipt (F-b8bf8e7d / F-1bfe3e49).
 
     Videos land under `<run>/control_videos/<channel>.<ext>`. A codec that `--survey`
     marks unsafe for a channel's measured mode is refused before that channel encodes,
     so a grayscale-safe trap cannot ride beside an RGB normal under one green pack.
+
+    `codec="auto"` (F-1bfe3e49) picks per channel from `recommended_gray` /
+    `recommended_rgb`. An explicit codec remains an all-channels override that still
+    runs `gate_codec_safe_for_mode`.
     """
     manifest, channel_dirs = read_stage_render_channel_dirs(run_dir)
     rows = survey_rows if survey_rows is not None else survey_codecs()
-    if codec not in CODECS:
+    auto = codec == CODEC_AUTO
+    if auto:
+        recs = recommendations or survey_recommendations(rows)
+        if not recs.get("recommended_gray") or not recs.get("recommended_rgb"):
+            raise EncodeFailure(
+                "codec=auto needs recommended_gray and recommended_rgb from the survey",
+                {"gate": "ARGS", "andon": "EncodeFailure",
+                 "clause": "auto_missing_recommendations",
+                 "recommendations": recs})
+    elif codec not in CODECS:
         raise EncodeFailure(
-            f"unknown codec {codec!r}; known: {sorted(CODECS)}",
+            f"unknown codec {codec!r}; known: {sorted(CODECS)} or {CODEC_AUTO!r}",
             {"gate": "ARGS", "andon": "EncodeFailure",
              "clause": "unknown_codec", "flag": "--codec", "codec": codec,
              "known": sorted(CODECS)})
-    ext = CODECS[codec]["ext"]
     videos_dir = os.path.join(run_dir, "control_videos")
     os.makedirs(videos_dir, exist_ok=True)
     channels = {}
+    codecs_used = {}
     for channel, frames_dir in sorted(channel_dirs.items()):
         mode = channel_pixel_mode(frames_dir)
-        safety = gate_codec_safe_for_mode(codec, mode, survey_rows=rows)
+        ch_codec = codec_for_mode(mode, recs) if auto else codec
+        safety = gate_codec_safe_for_mode(ch_codec, mode, survey_rows=rows)
+        ext = CODECS[ch_codec]["ext"]
         out_path = os.path.join(videos_dir, f"{channel}{ext}")
-        receipt = build(frames_dir, out_path, codec, invert=invert, fps=fps,
-                        expect=expect, alpha_over=alpha_over, progress=progress)
+        build_kw = dict(invert=invert, fps=fps, expect=expect,
+                        alpha_over=alpha_over, progress=progress)
+        if stream:
+            build_kw["stream"] = True
+        receipt = build(frames_dir, out_path, ch_codec, **build_kw)
+        codecs_used[channel] = ch_codec
         channels[channel] = {
             "channel": channel,
             "frames_dir": os.path.abspath(frames_dir),
             "mode": mode,
+            "codec": ch_codec,
             "codec_safety": safety,
             "video": os.path.abspath(out_path),
             "video_sha256": receipt["video_sha256"],
@@ -723,6 +831,7 @@ def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
             "n_frames": receipt["n_frames"],
             "gate_R": receipt["gate_R"],
             "receipt": out_path + ".receipt.json",
+            "stream": bool(stream),
         }
     pack = {
         "tool": "encode_control",
@@ -731,9 +840,12 @@ def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
         "manifest": os.path.abspath(os.path.join(run_dir, "manifest.json")),
         "channel_dirs": {k: os.path.abspath(v) for k, v in channel_dirs.items()},
         "codec": codec,
-        "codec_args": CODECS[codec]["args"],
+        "codec_selection": "per_channel_auto" if auto else "explicit_override",
+        "codecs_used": codecs_used,
+        "recommendations": (recommendations or survey_recommendations(rows)) if auto else None,
         "fps": fps,
         "inverted": invert,
+        "stream": bool(stream),
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
         "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
@@ -745,6 +857,8 @@ def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
         },
         "stage_render_tool_version": manifest.get("tool_version"),
     }
+    if not auto:
+        pack["codec_args"] = CODECS[codec]["args"]
     pack_path = os.path.join(run_dir, "control_pack.receipt.json")
     with open(pack_path, "w", encoding="utf-8") as fh:
         json.dump(pack, fh, indent=2)
@@ -752,14 +866,179 @@ def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
     return pack
 
 
+def encode_stream_png_sequence(frames_dir, path, codec, fps=16, invert=False,
+                               expect=None, alpha_over=None, progress=None,
+                               batch_size=8):
+    """Encode via a temporary %05d.png sequence ffmpeg reads (F-a0dda17d).
+
+    Keeps Gate R by decoding back and comparing against on-disk sources in batches so
+    the full RGB stack need not stay in Python memory. Default in-memory path stays for
+    short packs.
+    """
+    if codec not in CODECS:
+        raise EncodeFailure(f"unknown codec {codec!r}; known: {sorted(CODECS)}",
+                            {"gate": "ARGS", "andon": "EncodeFailure",
+                             "clause": "unknown_codec", "flag": "--codec",
+                             "value": codec, "known": sorted(CODECS)})
+    gate_encode_rate(fps)
+    gate_ffmpeg_binary()
+    names = frame_population(frames_dir, expect=expect)
+    if not names:
+        raise EncodeFailure(
+            f"{frames_dir} holds no numbered frames to stream-encode",
+            {"gate": "FRAMES", "andon": "EncodeFailure",
+             "clause": "no_frames_to_stream", "frames_dir": frames_dir})
+
+    with tempfile.TemporaryDirectory(prefix="encode_control_stream_") as td:
+        modes, dtypes, alpha_seen = [], [], False
+        for i, n in enumerate(names):
+            src = os.path.join(frames_dir, n)
+            with Image.open(src) as im:
+                mode = im.mode
+                if mode == "P":
+                    raise EncodeFailure(
+                        f"{src}: mode 'P' is palette-indexed; encoding an index as a "
+                        f"value is not encoding the frame",
+                        {"gate": "FRAMES", "andon": "EncodeFailure",
+                         "clause": "frame_is_palette_indexed",
+                         "frame": n, "mode": mode})
+                has_alpha = mode in ("RGBA", "LA", "PA")
+                a = np.array(im.convert("RGBA") if has_alpha else im)
+            if mode not in modes:
+                modes.append(mode)
+            if a.dtype.name not in dtypes:
+                dtypes.append(a.dtype.name)
+            if a.dtype != np.uint8:
+                raise EncodeFailure(
+                    f"{src}: dtype {a.dtype}; the uint8 view of 16-bit data wraps mod 256",
+                    {"gate": "FRAMES", "andon": "EncodeFailure",
+                     "clause": "frame_dtype_is_not_uint8",
+                     "frame": n, "mode": mode, "dtype": a.dtype.name})
+            if has_alpha:
+                alpha_seen = True
+                a, _rec = compose_over_named_plate(
+                    a, alpha_over, label=f"{src}: mode {mode!r}", exc=EncodeFailure,
+                    extra_evidence={"frame": n, "mode": mode, "dtype": a.dtype.name},
+                    channel_order="RGB")
+            elif a.ndim == 2:
+                a = np.repeat(a[..., None], 3, axis=2)
+            elif a.ndim == 3 and a.shape[2] == 3:
+                pass
+            else:
+                raise EncodeFailure(
+                    f"{src}: array shape {a.shape} is not a frame this bridge encodes",
+                    {"gate": "FRAMES", "andon": "EncodeFailure",
+                     "clause": "frame_array_shape_is_not_a_frame",
+                     "frame": n, "mode": mode, "shape": list(a.shape)})
+            if invert:
+                a = (255 - a).astype(np.uint8)
+            a = np.ascontiguousarray(a, dtype=np.uint8)
+            Image.fromarray(a, mode="RGB").save(os.path.join(td, f"{i:05d}.png"))
+            if progress is not None:
+                progress("stream-write", i + 1, len(names))
+            if i == 0:
+                h, w = a.shape[:2]
+
+        pattern = os.path.join(td, "%05d.png")
+        os.makedirs(os.path.dirname(os.path.abspath(path)) or ".", exist_ok=True)
+        cmd = [
+            FFMPEG, "-y", "-hide_banner", "-loglevel", "error",
+            "-framerate", str(fps), "-i", pattern,
+            *CODECS[codec]["args"],
+            path,
+        ]
+        proc = run_ffmpeg(cmd, timeout_s=timeout_for_frames(len(names)), subject="encode",
+                          input_path=pattern, output_path=path)
+        if proc.returncode != 0 or not os.path.isfile(path):
+            raise EncodeFailure(
+                f"ffmpeg failed to stream-encode {codec}: "
+                f"{proc.stderr.decode('utf-8', 'replace')[:500]}",
+                {"gate": "ENCODE", "andon": "EncodeFailure",
+                 "clause": "ffmpeg_refused_the_stream_encode",
+                 "codec": codec, "out": path, "returncode": proc.returncode,
+                 "wrote_the_file": os.path.isfile(path), "ffmpeg": FFMPEG,
+                 "stderr_tail": proc.stderr.decode("utf-8", "replace")[-800:]})
+
+        decoded = decode(path, w, h)
+        if len(decoded) != len(names):
+            raise EncodeFailure(
+                f"stream Gate R: decode returned {len(decoded)} frames, source has "
+                f"{len(names)}",
+                {"gate": "R", "andon": "EncodeFailure",
+                 "clause": "stream_decode_frame_count",
+                 "n_source": len(names), "n_decoded": len(decoded)})
+
+        # Batch Gate R against on-disk coerced sources (not a full in-memory stack).
+        source_hasher = hashlib.sha256()
+        for start in range(0, len(names), max(1, batch_size)):
+            end = min(len(names), start + max(1, batch_size))
+            batch_src = []
+            for i in range(start, end):
+                with Image.open(os.path.join(td, f"{i:05d}.png")) as im:
+                    arr = np.ascontiguousarray(np.array(im.convert("RGB")), dtype=np.uint8)
+                batch_src.append(arr)
+                source_hasher.update(arr.tobytes())
+            gates.gate_r_round_trip(
+                batch_src, decoded[start:end],
+                source_label=f"{frames_dir} stream batch {start}:{end}",
+                decoded_label=f"{path} [{codec}] batch {start}:{end}")
+            if progress is not None:
+                progress("stream-gate-R", end, len(names))
+
+        source = {
+            "source_modes": modes,
+            "source_dtype": dtypes[0] if len(dtypes) == 1 else dtypes,
+            "source_alpha_present": alpha_seen,
+            "alpha_disposition": (
+                f"composited over rgb{tuple(int(v) for v in alpha_over)}" if alpha_seen
+                else "no alpha channel in any source frame"),
+            "encode_path": "stream_png_sequence",
+        }
+        with open(path, "rb") as fh:
+            video_sha = hashlib.sha256(fh.read()).hexdigest()
+        receipt = {
+            "tool": "encode_control",
+            "frames_dir": frames_dir,
+            "frame_names": names,
+            "n_frames": len(names),
+            "resolution": [w, h],
+            "fps": fps,
+            "inverted": invert,
+            **source,
+            "codec": codec,
+            "codec_args": CODECS[codec]["args"],
+            "ffmpeg": FFMPEG,
+            "ffmpeg_version": ffmpeg_version(),
+            "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+            **runtime_provenance({"numpy": np, "Pillow": Image}),
+            "video": path,
+            "video_sha256": video_sha,
+            "source_frames_sha256": source_hasher.hexdigest(),
+            "gate_R": {"verdict": "PASS", "path": "stream_batched"},
+            "stream": True,
+            "stream_batch_size": max(1, batch_size),
+        }
+        with open(path + ".receipt.json", "w", encoding="utf-8") as fh:
+            json.dump(receipt, fh, indent=2)
+        return receipt
+
+
 def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
-          alpha_over=None, progress=None):
+          alpha_over=None, progress=None, stream=False):
     """Encode a control sequence and run Gate R on it. **Raises** on any difference.
 
     The gate is called here, inside the function that produces the artifact a later
     step will upload — not chained behind a shell `&&`, which can walk past a failing
     exit code, and not as an `assert`, which `-O` deletes.
+
+    `stream=True` (F-a0dda17d) writes a temp PNG sequence ffmpeg reads and batches Gate R
+    against on-disk sources. Default stays in-memory for short packs.
     """
+    if stream:
+        return encode_stream_png_sequence(
+            frames_dir, out_path, codec, fps=fps, invert=invert, expect=expect,
+            alpha_over=alpha_over, progress=progress)
+
     names, frames, source = read_frames(frames_dir, invert=invert, expect=expect,
                                         alpha_over=alpha_over, progress=progress)
     h, w = frames[0].shape[:2]
@@ -805,6 +1084,7 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
             b"".join(f.tobytes() for f in frames)
         ).hexdigest(),
         "gate_R": {"verdict": "PASS", "evidence": ev},
+        "stream": False,
     }
     with open(out_path + ".receipt.json", "w", encoding="utf-8") as fh:
         json.dump(receipt, fh, indent=2)
@@ -841,13 +1121,22 @@ def main(argv=None):
     # exactly this job eleven files over. argparse now refuses the typo before a single
     # frame is opened; the `unknown_codec` raise in `encode()` STAYS, because it guards
     # every programmatic caller and the parser guards only this one.
-    ap.add_argument("--codec", default="ffv1-gbrp", choices=sorted(CODECS),
-                    help="the bridge to encode with (default ffv1-gbrp, the spec's stated "
-                         "preference). x264-qp0-yuv420 is THE TRAP: its 4:2:0 chroma "
-                         "subsampling is a no-op on grayscale depth/mask/edge channels and "
-                         "quietly corrupts the true-RGB normal channel. Run --survey to "
-                         "see every candidate measured. With --run, unsafe-for-mode is "
-                         "refused per channel before encode")
+    # F-06be7ebb: trap stays in CODECS for survey measurement, but argparse only offers
+    # it when --allow-trap is set. auto is the per-channel pack selector (F-1bfe3e49).
+    ap.add_argument("--allow-trap", action="store_true",
+                    help="offer x264-qp0-yuv420 (THE TRAP) as a --codec choice; without "
+                         "this flag the trap is surveyed but not selectable for a normal "
+                         "encode (F-06be7ebb)")
+    ap.add_argument("--codec", default="ffv1-gbrp",
+                    help="the bridge to encode with (default ffv1-gbrp). With --run, "
+                         "codec=auto picks recommended_gray/recommended_rgb per channel "
+                         "(F-1bfe3e49). Explicit codec remains an all-channels override "
+                         "that still runs gate_codec_safe_for_mode. x264-qp0-yuv420 needs "
+                         "--allow-trap")
+    ap.add_argument("--codec-from", default=None,
+                    help="select codec from a --survey-out JSON by measured source mode "
+                         "(recommended_gray / recommended_rgb); for --run this is "
+                         "equivalent to --codec=auto using that table (F-06be7ebb)")
     ap.add_argument("--fps", type=int, default=16,
                     help="the rate written into the control video and into its receipt "
                          "(default 16); it reaches ffmpeg as `-r <fps>` on the INPUT side, "
@@ -863,22 +1152,30 @@ def main(argv=None):
     ap.add_argument("--alpha-over", default=None,
                     help="R,G,B of the plate an RGBA source is composited over. Without "
                          "it an alpha channel is a refusal, not a silent drop")
+    ap.add_argument("--stream", action="store_true",
+                    help="encode via a temporary %%05d.png sequence ffmpeg reads; Gate R "
+                         "compares decode against on-disk sources in batches "
+                         "(F-a0dda17d). Default stays in-memory for short packs")
     ap.add_argument("--survey", action="store_true",
                     help="DIAGNOSTIC: measure every candidate bridge against a grayscale "
-                         "probe and a true-RGB probe, print the table and exit 0. Decides "
-                         "nothing and encodes none of --frames")
+                         "probe and a true-RGB probe, print the table (with "
+                         "recommended_gray/recommended_rgb) and exit 0")
     ap.add_argument("--survey-out",
                     help="with --survey: also write the table as JSON to this path, with "
-                         "the ffmpeg binary that produced it")
+                         "recommended_gray / recommended_rgb and the ffmpeg binary")
     args = ap.parse_args(argv)
 
     if args.survey:
         rows = survey_codecs()
-        print(json.dumps({"survey": rows}, indent=2))
+        table = survey_table(rows)
+        print(json.dumps(table, indent=2))
         if args.survey_out:
             os.makedirs(os.path.dirname(os.path.abspath(args.survey_out)), exist_ok=True)
             with open(args.survey_out, "w", encoding="utf-8") as fh:
-                json.dump({"ffmpeg": FFMPEG, "survey": rows,
+                json.dump({"ffmpeg": FFMPEG,
+                           "recommended_gray": table["recommended_gray"],
+                           "recommended_rgb": table["recommended_rgb"],
+                           "survey": rows,
                            **runtime_provenance({"numpy": np, "Pillow": Image})},
                           fh, indent=2)
         return 0
@@ -896,6 +1193,46 @@ def main(argv=None):
              "clause": "frames_and_out_are_required",
              "frames": args.frames, "out": args.out, "run": args.run,
              "survey": bool(args.survey)})
+
+    codec_from = load_survey_table(args.codec_from) if args.codec_from else None
+    codec = args.codec
+    if codec_from is not None and args.run:
+        # --codec-from on --run is auto selection from that survey table.
+        codec = CODEC_AUTO
+    elif codec_from is not None and not args.run:
+        # Single-channel: pick by measured mode of --frames.
+        mode = channel_pixel_mode(args.frames)
+        codec = codec_for_mode(mode, codec_from)
+    if codec == TRAP_CODEC and not args.allow_trap:
+        raise EncodeFailure(
+            f"codec {TRAP_CODEC!r} is THE TRAP (4:2:0 chroma); pass --allow-trap to "
+            f"select it deliberately, or run --survey and use recommended_gray/"
+            f"recommended_rgb / --codec-from= / --codec=auto",
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "trap_codec_requires_allow_trap",
+             "codec": codec, "flag": "--allow-trap"})
+    allowed = set(SAFE_CODECS) | {CODEC_AUTO}
+    if args.allow_trap:
+        allowed.add(TRAP_CODEC)
+    if codec not in allowed and codec not in CODECS:
+        raise EncodeFailure(
+            f"unknown codec {codec!r}; known: {sorted(SAFE_CODECS)} or {CODEC_AUTO!r}"
+            + (f" (or {TRAP_CODEC} with --allow-trap)" if not args.allow_trap else ""),
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "unknown_codec", "flag": "--codec", "value": codec,
+             "known": sorted(allowed)})
+    if codec not in allowed:
+        # Explicit trap without --allow-trap already refused; other CODECS keys that are
+        # somehow not in SAFE need the same footing as unknown when allow-trap is off.
+        if codec == TRAP_CODEC:
+            pass  # handled above
+        elif codec not in CODECS and codec != CODEC_AUTO:
+            raise EncodeFailure(
+                f"unknown codec {codec!r}",
+                {"gate": "ARGS", "andon": "EncodeFailure",
+                 "clause": "unknown_codec", "flag": "--codec", "value": codec,
+                 "known": sorted(allowed)})
+
     # ---- the ONE parser. `compose_over_named_plate`'s docstring states the contract the
     #      wave-6 sweep delivered -- "there is one refusal, one composite and one record
     #      shape" -- and the composite and the record WERE one implementation while the
@@ -931,20 +1268,32 @@ def main(argv=None):
               file=sys.stderr, flush=True)
 
     if args.run:
-        pack = build_control_pack(args.run, args.codec, invert=args.invert, fps=args.fps,
-                                  expect=args.expect, alpha_over=plate,
-                                  progress=_progress)
+        pack = build_control_pack(
+            args.run, codec, invert=args.invert, fps=args.fps,
+            expect=args.expect, alpha_over=plate, progress=_progress,
+            survey_rows=(codec_from["survey"] if codec_from else None),
+            recommendations=(codec_from if codec_from else None),
+            stream=args.stream)
         print("ENCODE_CONTROL_PACK " + json.dumps({
             "run": pack["run"],
             "pack_receipt": pack["pack_receipt"],
             "channels": sorted(pack["channels"]),
             "codec": pack["codec"],
+            "codecs_used": pack.get("codecs_used"),
             "gate_R_all": "PASS",
         }))
         return 0
 
-    receipt = build(args.frames, args.out, args.codec, invert=args.invert, fps=args.fps,
-                    expect=args.expect, alpha_over=plate, progress=_progress)
+    # Single-channel: still refuse an unsafe codec for the measured mode (pack path
+    # already does this per channel).
+    if codec != CODEC_AUTO:
+        mode = channel_pixel_mode(args.frames)
+        gate_codec_safe_for_mode(
+            codec, mode,
+            survey_rows=(codec_from["survey"] if codec_from else None))
+    receipt = build(args.frames, args.out, codec, invert=args.invert, fps=args.fps,
+                    expect=args.expect, alpha_over=plate, progress=_progress,
+                    stream=args.stream)
     print("ENCODE_CONTROL " + json.dumps({
         "video": receipt["video"],
         "sha256": receipt["video_sha256"][:16],

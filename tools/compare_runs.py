@@ -326,6 +326,109 @@ def compare_frames(dir_a, dir_b, channel_name=FRAMES_CHANNEL_NAME):
     }
 
 
+def _worst_frame_names(dir_a, dir_b, k=3):
+    """Top-k frames by max_abs_diff (reuse compare_channel's per-frame math)."""
+    names = sorted(f for f in os.listdir(dir_a)
+                   if f.lower().endswith(".png") and f in set(os.listdir(dir_b)))
+    scored = []
+    for name in names:
+        a = _load(os.path.join(dir_a, name))
+        b = _load(os.path.join(dir_b, name))
+        if a.shape != b.shape:
+            continue
+        d = np.abs(a - b)
+        scored.append((int(d.max()), name))
+    scored.sort(reverse=True)
+    return [name for _mx, name in scored[:max(1, k)]]
+
+
+def write_diff_sheet(path_a, path_b, report, out_path, mode="frames",
+                     channel=None, k=3):
+    """Paste A | B | abs-diff for the worst K frames; sidecar states scale (F-fbe241bc).
+
+    make_diff_sheet.py is outside the frozen owned glob; --sheet on this tool is the
+    owned entry. Diff is view-scaled so a 1-level delta is visible; the sidecar records
+    the scale factor applied.
+    """
+    if mode == "frames":
+        dir_a, dir_b = path_a, path_b
+        ch_name = next(iter(report.get("channels") or {"lossless": None}))
+    else:
+        channels = report.get("channels") or {}
+        if channel and channel in channels:
+            ch_name = channel
+        elif channels:
+            ch_name = max(channels, key=lambda c: channels[c].get("max_abs_diff") or 0)
+        else:
+            raise CompareError(
+                "--sheet under --mode=channels needs at least one compared channel",
+                {"clause": "sheet_no_channel", "mode": mode})
+        dir_a = os.path.join(path_a, ch_name)
+        dir_b = os.path.join(path_b, ch_name)
+
+    worst = _worst_frame_names(dir_a, dir_b, k=k)
+    if not worst:
+        raise CompareError(
+            f"--sheet found no comparable frames under {dir_a} / {dir_b}",
+            {"clause": "sheet_no_frames", "dir_a": dir_a, "dir_b": dir_b})
+
+    # Scale so the max delta in the sheet maps near 255 for viewing.
+    global_max = 1
+    tiles = []
+    for name in worst:
+        a = np.array(Image.open(os.path.join(dir_a, name)).convert("RGB"), dtype=np.int16)
+        b = np.array(Image.open(os.path.join(dir_b, name)).convert("RGB"), dtype=np.int16)
+        d = np.abs(a.astype(np.int16) - b.astype(np.int16))
+        global_max = max(global_max, int(d.max()) if d.size else 1)
+        tiles.append((name, a.astype(np.uint8), b.astype(np.uint8), d))
+
+    scale = 255.0 / float(global_max) if global_max > 0 else 1.0
+    rows = []
+    for name, a, b, d in tiles:
+        view = np.clip(d.astype(np.float32) * scale, 0, 255).astype(np.uint8)
+        gap = 8
+        h = max(a.shape[0], b.shape[0], view.shape[0])
+        w = a.shape[1] + gap + b.shape[1] + gap + view.shape[1]
+        canvas = Image.new("RGB", (w, h + 18), (18, 18, 20))
+        canvas.paste(Image.fromarray(a), (0, 0))
+        canvas.paste(Image.fromarray(b), (a.shape[1] + gap, 0))
+        canvas.paste(Image.fromarray(view), (a.shape[1] + gap + b.shape[1] + gap, 0))
+        from PIL import ImageDraw
+        ImageDraw.Draw(canvas).text(
+            (4, h + 2), f"{name}  max|d|={int(d.max())}  scale={scale:.3f}",
+            fill=(200, 200, 210))
+        rows.append(canvas)
+
+    margin = 8
+    sheet_w = max(r.width for r in rows)
+    sheet_h = margin + sum(r.height + margin for r in rows)
+    sheet = Image.new("RGB", (sheet_w + 2 * margin, sheet_h), (12, 12, 14))
+    y = margin
+    for r in rows:
+        sheet.paste(r, (margin, y))
+        y += r.height + margin
+
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)) or ".", exist_ok=True)
+    sheet.save(out_path)
+    sidecar = {
+        "tool": "compare_runs",
+        "kind": "diff_sheet",
+        "sheet": os.path.abspath(out_path),
+        "mode": mode,
+        "channel": ch_name,
+        "worst_frames": worst,
+        "view_scale": scale,
+        "global_max_abs_diff": global_max,
+        "note": ("abs-diff column is view-scaled: displayed = min(255, raw * scale). "
+                 "Native pixels decide; this sheet locates."),
+        **runtime_provenance(),
+    }
+    side_path = out_path + ".scale.json"
+    with open(side_path, "w", encoding="utf-8") as fh:
+        json.dump(sidecar, fh, indent=2)
+    return os.path.abspath(out_path)
+
+
 def main(argv=None):
     """G3's comparison, driven from the command line.
 
@@ -358,6 +461,14 @@ def main(argv=None):
                     help="channels (default): compare shared channel subdirectories. "
                          "frames: call compare_channel on --a/--b directly under the "
                          "synthetic channel name 'lossless' (paid-run VAEDecode layout)")
+    ap.add_argument("--channel", default=None,
+                    help="with --sheet under --mode=channels: which channel subdirectory "
+                         "to tile (default: the channel with the worst max_abs_diff)")
+    ap.add_argument("--sheet", default=None,
+                    help="write A | B | abs-diff tiles for the worst frames to this PNG "
+                         "(F-fbe241bc); sidecar <sheet>.scale.json states the view scale")
+    ap.add_argument("--sheet-k", type=int, default=3,
+                    help="with --sheet: how many worst frames to tile (default 3)")
     ap.add_argument("--out", default=None,
                     help="where to write the JSON report; omitted, none is written and "
                          "the OK line says so")
@@ -374,13 +485,19 @@ def main(argv=None):
             report.update(runtime_provenance())
             json.dump(report, fh, indent=2)
         written = os.path.abspath(args.out)
+    sheet_path = None
+    if args.sheet:
+        sheet_path = write_diff_sheet(
+            args.a, args.b, report, args.sheet,
+            mode=args.mode, channel=args.channel, k=args.sheet_k)
     # The success sentinel rides AFTER the report is on disk, and names it: a verdict line
     # that printed whether or not anything was written is how a mistyped flag read as a
     # completed comparison.
     print("COMPARE_RUNS_OK " + json.dumps(
         dict(report["verdict_inputs"],
              mode=report.get("mode", args.mode),
-             report=written or "no report written (--out not given)")))
+             report=written or "no report written (--out not given)",
+             sheet=sheet_path or "no sheet (--sheet not given)")))
     return 0
 
 
