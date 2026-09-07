@@ -368,7 +368,7 @@ def tools_that_import_a_glb(directory=TOOLS):
 GLB_IMPORTERS = [
     "author_walk.py", "check_relift.py", "diagnose_bone_heat.py", "lift_solve.py",
     "make_binding_sheet.py", "make_parts_sheet.py", "make_rig_sheet.py",
-    "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py", "probe_glb.py",
+    "make_skeleton_sheet.py", "make_test_armature.py", "preview_glb.py", "preview_walk.py", "probe_glb.py",
     "probe_subject.py", "render_performer.py", "render_start_frame.py",
     "render_turnaround.py", "rig_bake.py", "rig_character.py", "rig_parts.py",
     "rig_repair.py", "rig_retopo.py", "stage_render.py",
@@ -396,7 +396,7 @@ FRAMING_HELPERS = ("world_bounds", "world_bounds_over_frames", "evaluated_world_
 
 def test_the_glb_importing_population_is_the_size_and_membership_it_was_measured_to_be():
     derived = tools_that_import_a_glb()
-    assert len(derived) == 21, derived
+    assert len(derived) == 22, derived
     assert sorted(derived) == sorted(GLB_IMPORTERS), sorted(set(derived) ^ set(GLB_IMPORTERS))
 
 
