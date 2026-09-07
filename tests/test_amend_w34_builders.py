@@ -11,8 +11,8 @@ import pytest
 
 import build_assembly_payload as BAP
 import fetch_run as FR
-import submit_comfy_cloud as SUB
-import upload_assets as UP
+import build_submit_payload as SUB
+import build_uploads_payload as UP
 
 
 REPO = Path(__file__).resolve().parents[1]
