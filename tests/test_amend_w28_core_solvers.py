@@ -94,7 +94,10 @@ def _tree(name):
 
 #: One message carrying the three characters this tree's refusals actually use: an em
 #: dash (45 sites in this package), a degree sign (`posearc`'s arc readout) and `≤`.
+#: F-0d3138c9 (wave 32): `halt_ascii_standins` rewrites `≤` to `<=` before the dump, so
+#: the halt RECORD carries the stand-in; the raw raise message still has the glyph.
 NON_ASCII_MESSAGE = "the void \u2014 45.0\u00b0, span 12 \u2264 16"
+HALT_MESSAGE_AFTER_STANDINS = "the void \u2014 45.0\u00b0, span 12 <= 16"
 
 #: `(kind, expected exit code)` for the three outcomes `halt_outcome` discriminates. The
 #: outcome SENTENCES are read from `parts.halt_outcome` itself rather than pasted, so this
@@ -168,10 +171,13 @@ def test_the_halt_line_carries_its_prose_as_prose_on_a_utf8_stdout(tmp_path, kin
     rec = _halt_record(out)
     assert rc == code, (rc, out)
     # `in`, not `==`: a typed gate prefixes its own id and a `KeyError`'s `str` quotes its
-    # argument. What is asserted is that the PROSE arrives as prose.
-    assert NON_ASCII_MESSAGE in rec["message"], rec["message"]
+    # argument. What is asserted is that the PROSE arrives as prose. Wave 32 stand-ins
+    # rewrite `≤` -> `<=` in the record (F-0d3138c9); em dash and degree stay.
+    assert HALT_MESSAGE_AFTER_STANDINS in rec["message"], rec["message"]
     assert "\\u" not in rec["message"], rec["message"]
     assert set(rec) == {"tool", "outcome", "gate", "error", "message", "evidence"}
+    assert list(rec.keys()) == [
+        "tool", "outcome", "gate", "evidence", "error", "message"]
 
 
 @pytest.mark.parametrize("kind,code", HALT_KINDS)

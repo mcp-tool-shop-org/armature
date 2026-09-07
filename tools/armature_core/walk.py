@@ -237,21 +237,16 @@ def gate_stance_frac_is_modelled(stance_frac, where="GaitParams"):
     double = 2.0 * max(0.0, sf - STANCE_FRAC_MODELLED)
     raise GaitGate(
         f"stance_frac={sf} ({where}); this gait model represents "
-        f"stance_frac={STANCE_FRAC_MODELLED} and nothing else. At {sf} the cycle carries "
-        f"{flight * 100:.1f}% flight (no foot planted) and {double * 100:.1f}% double "
-        f"support, while the contralateral offset is pinned at half a cycle, the stance "
-        f"exchange is split at the literal psi endpoints -1/+1, the integrator picks its "
-        f"stance leg from a single boolean and hip_z rides that leg alone. None of those "
-        f"four is derived from stance_frac, so the value would be accepted and a "
-        f"per-exchange lurch - or, below 0.5, a frame of BACKWARD hip travel - would be "
-        f"baked into the authored ground truth every downstream measurement is graded "
-        f"against, with every gate green. A general gait derives all four together; until "
-        f"it exists this refuses rather than pretending",
+        f"stance_frac={STANCE_FRAC_MODELLED} and nothing else "
+        f"(flight={flight * 100:.1f}%, double_support={double * 100:.1f}%; "
+        f"see evidence)",
         {"clause": "stance_frac_not_modelled",
          "gate": "GAIT", "andon": "GaitGate", "stance_frac": sf,
          "modelled": STANCE_FRAC_MODELLED,
          "flight_fraction_of_cycle": flight, "double_support_fraction_of_cycle": double,
-         "where": where})
+         "where": where,
+         "why": ("contralateral offset, stance exchange, stance-leg pick and hip_z are "
+                 "not derived from stance_frac; a general gait would derive all four")})
 
 
 #: The largest fraction of a gait cycle one frame interval may advance. Half a cycle is
@@ -343,14 +338,9 @@ def gate_cadence_is_representable(phase, stance_frac=STANCE_FRAC_MODELLED,
     if over:
         i, d = over[0]
         raise CadenceGate(
-            f"frame {i}: the gait advances {d:.3f} of a cycle in one frame, so more than "
-            f"one stance exchange falls between two samples; the walk cannot be "
-            f"represented at this frame rate. {len(over)} of {len(du)} frame interval(s) "
-            f"exceed {MAX_CYCLES_PER_FRAME} of a cycle in MAGNITUDE, the worst "
-            f"{worst:.3f} (signed {signed_extreme:.3f}), with {exchanges} stance "
-            f"exchange(s) actually observed - the invariant is about the sampling rate, "
-            f"not about whether an exchange was seen and not about which way the gait "
-            f"runs",
+            f"frame {i}: the gait advances {d:.3f} of a cycle in one frame "
+            f"({len(over)}/{len(du)} intervals over {MAX_CYCLES_PER_FRAME} in magnitude, "
+            f"worst {worst:.3f}; see evidence)",
             ev)
 
     ev["verdict"] = (f"{len(du)} frame interval(s), the largest advancing {worst:.3f} of "

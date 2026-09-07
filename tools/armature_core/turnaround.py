@@ -440,17 +440,13 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
         ev["clause"] = "view_carries_no_transparent_pixel"
         raise TurnaroundAlphaGate(
             f"view {view_index} has alpha extrema ({lo}, {hi}): NO pixel is transparent, "
-            "so this is not an RGBA render — it is a baked void with a fourth channel. "
-            "`film_transparent` did not take effect, and every check after this one "
-            "passes on the file anyway: it opens, it is the right size, the figure is in "
-            "it, and a contact sheet cannot tell it from an authored view", ev)
+            f"so this is not an RGBA render — it is a baked void with a fourth channel. "
+            f"See evidence", ev)
     if hi < OPAQUE:
         ev["clause"] = "view_carries_no_opaque_pixel"
         raise TurnaroundAlphaGate(
             f"view {view_index} has alpha extrema ({lo}, {hi}): NO pixel is opaque, so "
-            "nothing solid was rendered into this view. The file is well-formed, "
-            "correctly sized, non-empty, and its alpha channel is richly varied — a gate "
-            "written only against the flat-255 defect passes it", ev)
+            f"nothing solid was rendered into this view. See evidence", ev)
     ev["verdict"] = (f"view {view_index} authored RGBA; extrema ({lo}, {hi}), "
                      f"{float(transparent_fraction):.4f} of the frame transparent")
     return ev
