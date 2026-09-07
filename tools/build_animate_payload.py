@@ -77,8 +77,8 @@ from armature_core.errors import ArmatureError  # noqa: E402
 # choice belongs to `armature_core.parts.halt_outcome` now, so the names that are
 # no longer referenced here are dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
-    canonical_payload_digest, gate_create_video_fps, read_seed_registration,
-    single_path_segment)
+    canonical_payload_digest, comfy_cloud_oss_disclosure, disclosure_lines,
+    fetch_recipe, gate_create_video_fps, read_seed_registration, single_path_segment)
 
 TOOL_VERSION = "E10.1"
 EXPERIMENT = "E08"
@@ -619,6 +619,14 @@ def build(uploads, seed, negative, positive, registry, reference_fit,
         # compares against to drift from the digest a record declares.
         "payload_sha256": canonical_payload_digest(wf),
     }
+    disc = comfy_cloud_oss_disclosure(route_verdict=gate_route.get("verdict"))
+    meta["disclosure"] = disc
+    meta.update(fetch_recipe(
+        node_map={"301": "batchprobe", "302": "lossless"}, video_nodes=("114",),
+        root_hint="outputs/E08/runs",
+        taps=[{"node": "301", "class_type": "SaveImage", "subdir": "batchprobe"},
+              {"node": "302", "class_type": "SaveImage", "subdir": "lossless"},
+              {"node": "114", "class_type": "SaveVideo", "subdir": None}]))
     return wf, meta
 
 
@@ -746,6 +754,8 @@ def main(argv=None):
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 
     print(canon_line(canon_ev))
+    for line in disclosure_lines(meta["disclosure"]):
+        print(line)
     print("BUILD_ANIMATE_OK " + json.dumps({"path": gpath, 
         "graph": gpath, "record": mpath, "nodes": len(wf), "seed": meta["seed"],
         "length": meta["length"], "fps": meta["fps"],

@@ -115,8 +115,8 @@ from armature_core.errors import ArmatureError  # noqa: E402
 # choice belongs to `armature_core.parts.halt_outcome` now, so the names that are
 # no longer referenced here are dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
-    SeedRegistrationError, canonical_payload_digest, read_seed_registration,
-    single_path_segment)
+    SeedRegistrationError, canonical_payload_digest, comfy_cloud_oss_disclosure,
+    disclosure_lines, fetch_recipe, read_seed_registration, single_path_segment)
 from canon_gate import canon_line, canon_spend  # noqa: E402
 
 class PayloadError(ArmatureError):
@@ -706,11 +706,21 @@ def main(argv=None):
         "seed_registration": {"file": os.path.abspath(a.seeds), "registered": registered},
         "gates": {"ROUTE": gate_route, "S": gate_s, "L": gate_l, "CANON": canon_ev},
     }
+    disc = comfy_cloud_oss_disclosure(route_verdict=gate_route.get("verdict"))
+    record["disclosure"] = disc
+    recipe = fetch_recipe(
+        node_map={"70": "lossless"}, video_nodes=("81",),
+        root_hint="outputs/E09/runs",
+        taps=[{"node": "70", "class_type": "SaveImage", "subdir": "lossless"},
+              {"node": "81", "class_type": "SaveVideo", "subdir": None}])
+    record.update(recipe)
     rec_path = os.path.join(a.out, f"E09-B2-{a.tag}-payload-record.json")
     with open(rec_path, "w", encoding="utf-8") as fh:
         json.dump(record, fh, indent=2, ensure_ascii=False)
 
     print(canon_line(canon_ev))
+    for line in disclosure_lines(disc):
+        print(line)
     print("BUILD_T2V_OK " + json.dumps({"path": graph_path,
         "profile": a.profile, "graph": graph_path, "sha256": graph_sha,
         "nodes": len(graph), "seed": seed,

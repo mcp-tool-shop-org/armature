@@ -156,11 +156,10 @@ def _subscript_and_get_keys(src):
 
 
 def test_only_seeds_is_read_by_a_tool():
-    """The corrected claim, measured rather than asserted.
+    """Wave 34 flip (F-43868378): allocation AND ceiling now have readers.
 
-    What this looks like if the docstring were right: `allocation` would appear here beside
-    `seeds`. It does not appear anywhere under `tools/` at all — the same state `ceiling`
-    was in when it was filed as a defect.
+    The wave-6 pin asserted allocation had none. `read_seed_registration_budget` and the
+    sanctioned submitter overturn that: the walk must see both keys under tools/.
     """
     readers = {key: [] for key in SEED_SPEC_KEYS}
     for path, src in _tool_sources():
@@ -169,9 +168,10 @@ def test_only_seeds_is_read_by_a_tool():
             if key in keys:
                 readers[key].append(os.path.basename(path))
     assert readers["seeds"], "no tool reads `seeds`; this walk is not reaching tools/"
-    assert readers["allocation"] == [], (
-        f"`allocation` now has readers ({readers['allocation']}); the module docstring's "
-        f"correction is stale and should be rewritten with this measurement")
+    assert readers["allocation"], (
+        "allocation still has no reader; read_seed_registration_budget should land first")
+    assert "build_assembly_payload.py" in readers["allocation"]
+    assert "build_assembly_payload.py" in readers["ceiling"]
 
 
 def test_the_seed_registry_readers_hand_the_list_to_gate_s():
@@ -223,16 +223,17 @@ def test_every_spec_carries_the_correction_rather_than_the_original_claim_alone(
         f"beside it")
     assert "`allocation` has no reader at all" in why
     assert "no tool reads `ceiling` from a seeds spec" in why
+    # Wave 34: the overturning correction stands beside the historical measurement.
+    assert "CORRECTION, 2026-09-06" in why
+    assert "read_seed_registration_budget" in why
+    assert "submit_comfy_cloud" in why
 
 
 def test_the_specs_correction_agrees_with_the_tree_it_describes():
-    """The claim and the measurement, taken here rather than trusted. If a builder starts
-    counting against `ceiling.submissions`, this test fails and the eight paragraphs are
-    rewritten with it — which is the point of pinning a claim about code to a walk.
+    """Wave 34 flip: a seeds reader also reads ceiling, and allocation has readers.
 
-    family: derived by walking every module under `tools/` (the package included,
-    `superseded/` excluded) for `x["k"]` / `x.get("k")` over the three seed-spec keys ->
-    `seeds` 6 modules, `allocation` 0, `ceiling` 0.
+    The prior pin required the empty intersection. The budget reader + submitter make the
+    opposite true; the home paragraph's CORRECTION, 2026-09-06 records that.
     """
     readers = {key: [] for key in SEED_SPEC_KEYS}
     for path, src in _tool_sources():
@@ -241,17 +242,14 @@ def test_the_specs_correction_agrees_with_the_tree_it_describes():
             if key in keys:
                 readers[key].append(os.path.basename(path))
 
-    assert readers["allocation"] == [], readers["allocation"]
-    # `ceiling` IS subscripted under tools/ — by `armature_core.assembly`'s CASCADE slot
-    # gate and the builders passing that one, which has nothing to do with a seeds spec.
-    # The claim the specs make is narrower and is checked as such: no module that reads a
-    # seeds registry also reads a `ceiling` key.
+    assert readers["allocation"], readers["allocation"]
     seeds_readers = set(readers["seeds"])
     assert seeds_readers, "no tool reads `seeds`; this walk is not reaching tools/"
     both = sorted(seeds_readers & set(readers["ceiling"]))
-    assert both == [], (
-        f"{both} now read BOTH a seeds list and a `ceiling` key; the eight specs' "
-        f"correction says nothing counts against ceiling.submissions and it is stale")
+    assert both, (
+        "no module reads BOTH a seeds list and a `ceiling` key; "
+        "read_seed_registration_budget should")
+    assert "build_assembly_payload.py" in both
 
 
 # -------------------------------- every spec's citations, not `SEED_SPECS[0]`'s (F-c92a6cfb)

@@ -67,9 +67,10 @@ from armature_core import route_gates as RG  # noqa: E402
 # `armature_core.parts.halt_outcome` now and no other line here names either,
 # so the import is dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
-    FRAME_KEY, canonical_payload_digest, frame_order, frame_source_ids,
-    gate_create_video_fps, gate_output_not_overwritten, gate_slot_frame_index,
-    route_report_lines, subject_provenance)
+    FRAME_KEY, assembly_leave_disclosure, canonical_payload_digest, disclosure_lines,
+    fetch_recipe, frame_order, frame_source_ids, gate_create_video_fps,
+    gate_output_not_overwritten, gate_slot_frame_index, route_report_lines,
+    subject_provenance)
 
 TOOL_VERSION = "E13.2"
 
@@ -278,6 +279,14 @@ def build_and_write(argv=None):
         # Wave 20, F-dba1bcd8. The tie between THIS record and the graph beside it.
         "payload_sha256": canonical_payload_digest(wf),
     }
+    # Wave 34, F-d092c186 / F-dc84b444 — leave-the-rig disclosure + fetch recipe.
+    disc = assembly_leave_disclosure(route_verdict=gate_route.get("verdict"))
+    record["disclosure"] = disc
+    recipe = fetch_recipe(
+        node_map={}, video_nodes=(str(SAVE_ID),),
+        root_hint="outputs/E13/runs",
+        taps=[{"node": str(SAVE_ID), "class_type": "SaveVideo", "subdir": None}])
+    record.update(recipe)
 
     # Below the last in-tool gate: a refuse leaves no output directory.
     graph_path = os.path.join(out, "E13-cascade.api.json")
@@ -310,6 +319,8 @@ def build_and_write(argv=None):
     # receipt, so two runs into one `--out` are distinguishable in a scrollback.
     print(f"payload sha256   {record['payload_sha256']}")
     print(f"overwrite        {gate_overwrite['verdict']}")
+    for line in disclosure_lines(disc):
+        print(line)
     print("BUILD_CASCADE_OK " + json.dumps({"path": graph_path}, ensure_ascii=False))
     return wf
 
