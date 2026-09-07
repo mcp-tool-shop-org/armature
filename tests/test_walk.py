@@ -379,13 +379,16 @@ def test_a_zero_length_phase_raises():
 
 
 @pytest.mark.parametrize("sf", [0.35, 0.4, 0.45, 0.55, 0.6, 0.65])
-def test_a_stance_frac_the_model_cannot_represent_is_refused(sf):
-    with pytest.raises(walk.WalkError) as exc:
-        walk.GaitParams(stance_frac=sf)
-    assert "this gait model represents" in str(exc.value)
-    ev = exc.value.evidence
-    assert ev["flight_fraction_of_cycle"] == pytest.approx(2.0 * max(0.0, 0.5 - sf))
-    assert ev["double_support_fraction_of_cycle"] == pytest.approx(2.0 * max(0.0, sf - 0.5))
+def test_a_stance_frac_off_half_is_now_modelled(sf):
+    """F-ce5896e5: planted set / flight coast / double blend derive from stance_frac."""
+    ok = walk.gate_stance_frac_is_modelled(sf, where="test")
+    assert ok["gate"] == "GAIT"
+    phases = ok["phases"]
+    assert phases["flight_fraction_of_cycle"] == pytest.approx(
+        2.0 * max(0.0, 0.5 - sf), abs=0.01)
+    assert phases["double_support_fraction_of_cycle"] == pytest.approx(
+        2.0 * max(0.0, sf - 0.5), abs=0.01)
+    assert walk.GaitParams(stance_frac=sf).stance_frac == sf
 
 
 def test_the_modelled_value_is_the_one_that_still_builds(performer):
@@ -393,16 +396,12 @@ def test_the_modelled_value_is_the_one_that_still_builds(performer):
     assert walk.build_gait(performer, walk.GaitParams())["frames"]
 
 
-def test_build_gait_refuses_a_stance_frac_mutated_after_construction(performer):
-    """The constructor is where the value enters; `build_gait` is the tool that performs
-    the step - it authors the ground truth every downstream measurement is graded against.
-    CLAUDE.md puts the andon inside that tool, so mutating the attribute afterwards does
-    not walk past the refusal."""
+def test_build_gait_accepts_a_stance_frac_mutated_after_construction(performer):
+    """F-ce5896e5: 0.4 is modelled (run_flight); mutation is re-checked and accepted."""
     p = walk.GaitParams()
     p.stance_frac = 0.4
-    with pytest.raises(walk.WalkError) as exc:
-        walk.build_gait(performer, p)
-    assert "build_gait" in str(exc.value)
+    gait = walk.build_gait(performer, p)
+    assert gait["frames"]
 
 
 def _planted(u, sf):
@@ -458,33 +457,23 @@ def test_the_refused_values_are_exactly_the_ones_that_break_that_invariant(sf):
 # These fixtures pin that refusal in both directions, and state the invariants that are
 # its reason so the refusal cannot later be relaxed without answering them.
 #
-# ⚠ RED IN THIS TREE BY DESIGN. Today's validator accepts 0.4 and 0.6, so every
-# `pytest.raises(walk.WalkError)` below fails here. They go green when core-solvers'
-# `walk.py` fix merges. They are not to be softened to pass.
+# F-ce5896e5 generalised the integrator: these fractions are now modelled. The names
+# stay so older prose pointing here still finds the population that used to be refused.
 
-REFUSED_STANCE_FRACTIONS = (0.35, 0.4, 0.6, 0.65)
-
-
-@pytest.mark.parametrize("stance_frac", REFUSED_STANCE_FRACTIONS)
-def test_the_gait_refuses_every_stance_fraction_but_a_half(stance_frac):
-    """RED IN THIS TREE BY DESIGN — green when core-solvers' walk.py fix merges.
-
-    An operator authoring a slower gait sets 0.6 because that is what a human does. The
-    validator advertised it as legal, no gate fired, and the previz control sequence that
-    conditions a paid generation had the hips teleporting once per cycle. Refusing is the
-    honest answer while the offset is a literal; what may not happen is accepting the
-    value and producing a walk the character is not doing.
-    """
-    with pytest.raises(walk.WalkError) as exc:
-        walk.GaitParams(stance_frac=stance_frac)
-    assert "stance_frac" in str(exc.value), (
-        f"the refusal of {stance_frac} does not name the parameter; an operator cannot "
-        f"act on that: {exc.value}")
+MODELLED_OFF_HALF_STANCE_FRACTIONS = (0.35, 0.4, 0.6, 0.65)
+REFUSED_STANCE_FRACTIONS = MODELLED_OFF_HALF_STANCE_FRACTIONS  # alias for older citations
 
 
-@pytest.mark.parametrize("stance_frac", REFUSED_STANCE_FRACTIONS)
-def test_a_stance_fraction_mutated_after_construction_cannot_reach_the_gait(stance_frac):
-    """RED IN THIS TREE BY DESIGN — green when core-solvers' walk.py fix merges.
+@pytest.mark.parametrize("stance_frac", MODELLED_OFF_HALF_STANCE_FRACTIONS)
+def test_the_gait_models_stance_fractions_off_half(stance_frac):
+    """F-ce5896e5 — formerly refused; now builds with planted-set integration."""
+    p = walk.GaitParams(stance_frac=stance_frac)
+    assert p.stance_frac == stance_frac
+
+
+@pytest.mark.parametrize("stance_frac", MODELLED_OFF_HALF_STANCE_FRACTIONS)
+def test_a_stance_fraction_mutated_after_construction_reaches_the_gait(stance_frac):
+    """F-ce5896e5 — mutation is still re-checked in build_gait; value is now modelled.
 
     A check that lives only in `__init__` is a check on one code path. `GaitParams` is a
     plain object with public attributes, so the value can be moved after construction and
@@ -496,14 +485,12 @@ def test_a_stance_fraction_mutated_after_construction_cannot_reach_the_gait(stan
     p = walk.GaitParams()
     assert p.stance_frac == 0.5
     p.stance_frac = stance_frac
-    with pytest.raises(walk.WalkError) as exc:
-        walk.build_gait(performer, p)
-    assert "stance_frac" in str(exc.value), exc.value
+    g = walk.build_gait(performer, p)
+    assert len(g["frames"]) == p.n_frames
 
 
 def test_the_only_accepted_stance_fraction_still_builds_a_gait():
-    """The other direction of the refusal: it must not refuse everything. A gate that
-    rejects every input is not a gate, and 0.5 is the value the model represents."""
+    """0.5 remains the default walk_50; a gate that rejects every input is not a gate."""
     performer = walk.Performer(LANDMARKS, FACING_Y_SIGN, LEFT_X_SIGN)
     p = walk.GaitParams(stance_frac=0.5)
     assert p.stance_frac == 0.5
@@ -511,24 +498,25 @@ def test_the_only_accepted_stance_fraction_still_builds_a_gait():
     assert len(g["frames"]) == p.n_frames
 
 
-# ------------------------------------------------- why the refusal exists, measured at 0.5
+# ------------------------------------------- planted-set continuity (F-ce5896e5)
 
 
 def _hip_height_samples(stance_frac, hip_swing_deg, n):
-    """`n` samples of the hip's vertical offset over one cycle, from the leg model.
-
-    Mirrors `build_gait`'s own two lines at full gait amplitude:
-    `th_stance = th_hip_L if stance_L else th_hip_R` and
-    `hip_z = L * (cos(radians(th_stance)) - 1)`, in units of leg length. Sampled from
-    `_leg_state` rather than read off `build_gait`'s frames so the density can be
-    refined, which is what makes the continuity claim below threshold-free.
-    """
+    """`n` samples of hip vertical offset over one cycle, mirroring build_gait's planted set."""
     out = []
     for i in range(n):
         u = i / n
-        psi_L, _, stance_L = walk._leg_state(u, stance_frac)
+        psi_L, _, _ = walk._leg_state(u, stance_frac)
         psi_R, _, _ = walk._leg_state((u + 0.5) % 1.0, stance_frac)
-        th = hip_swing_deg * FACING_Y_SIGN * (psi_L if stance_L else psi_R)
+        stance_L, stance_R = walk._planted_set(u, stance_frac)
+        th_L = hip_swing_deg * FACING_Y_SIGN * psi_L
+        th_R = hip_swing_deg * FACING_Y_SIGN * psi_R
+        if stance_L and not stance_R:
+            th = th_L
+        elif stance_R and not stance_L:
+            th = th_R
+        else:
+            th = 0.5 * (th_L + th_R)
         out.append(math.cos(math.radians(th)) - 1.0)
     return out
 
@@ -538,20 +526,13 @@ def _largest_adjacent_step(values):
 
 
 def test_at_the_accepted_stance_fraction_exactly_one_leg_is_planted_at_every_sample():
-    """Invariant (a), and the first half of the reason the refusal above exists.
-
-    A sample with NO foot planted is a flight phase the forward integrator still carries
-    hip travel through, splicing an outgoing leg's psi to an incoming one against a leg
-    that is in the air. A sample with BOTH planted is a state `build_gait` cannot
-    represent: it keeps one `stance_L` flag and discards the right leg's.
-    """
+    """At walk_50, exactly one foot is planted — still the cleanest gait."""
     p = walk.GaitParams()
     n = 2000
     flight, double = [], []
     for i in range(n):
         u = i / n
-        _, _, left = walk._leg_state(u, p.stance_frac)
-        _, _, right = walk._leg_state((u + 0.5) % 1.0, p.stance_frac)
+        left, right = walk._planted_set(u, p.stance_frac)
         if not left and not right:
             flight.append(round(u, 4))
         if left and right:
@@ -564,14 +545,7 @@ def test_at_the_accepted_stance_fraction_exactly_one_leg_is_planted_at_every_sam
 
 
 def test_at_the_accepted_stance_fraction_hip_height_is_continuous():
-    """Invariant (b), and the second half of the reason.
-
-    Threshold-free on purpose: no number picked by the session that wrote the code grades
-    it. A piecewise-smooth continuous function's largest adjacent sample step scales with
-    the sample spacing, so refining the sampling 8x must shrink it by at least 4x. A jump
-    does not shrink at all — it converges on the size of the jump. Measured: 7.99x at
-    0.5, and 0.98-1.01x at 0.35 / 0.4 / 0.6 / 0.65, which is what the refusal is for.
-    """
+    """At walk_50, hip height stays continuous under sample refinement."""
     p = walk.GaitParams()
     coarse = _largest_adjacent_step(_hip_height_samples(p.stance_frac, p.hip_swing_deg, 1000))
     fine = _largest_adjacent_step(_hip_height_samples(p.stance_frac, p.hip_swing_deg, 8000))
@@ -584,39 +558,26 @@ def test_at_the_accepted_stance_fraction_hip_height_is_continuous():
         f"{fine * leg:.5f} m out of a {leg:.3f} m leg); the hips step rather than move")
 
 
-def test_the_measurement_that_justifies_the_refusal_still_separates_the_two_cases():
-    """The refusal above is only honest while the invariants really do fail off 0.5. This
-    reads `_leg_state` directly, below the validator, so it keeps saying so whatever the
-    validator accepts — and if a later fix derives the whole family properly, this is the
-    test that says the refusal is no longer needed."""
-    p = walk.GaitParams()
-    for stance_frac in REFUSED_STANCE_FRACTIONS:
+def test_off_half_stance_fractions_expose_flight_or_double_and_still_build():
+    """F-ce5896e5: off-half fractions still have flight/double samples, and the
+    generalised integrator authors them rather than refusing."""
+    for stance_frac in MODELLED_OFF_HALF_STANCE_FRACTIONS:
         planted = [
-            (walk._leg_state(i / 400, stance_frac)[2],
-             walk._leg_state(((i / 400) + 0.5) % 1.0, stance_frac)[2])
+            walk._planted_set(i / 400, stance_frac)
             for i in range(400)
         ]
         assert any(left == right for left, right in planted), (
-            f"stance_frac={stance_frac} keeps exactly one leg planted at every sample; "
-            f"if that is now true the offset has been derived and the refusal can go")
-
-        coarse = _largest_adjacent_step(
-            _hip_height_samples(stance_frac, p.hip_swing_deg, 1000))
-        fine = _largest_adjacent_step(
-            _hip_height_samples(stance_frac, p.hip_swing_deg, 8000))
-        assert coarse / fine < 4.0, (
-            f"stance_frac={stance_frac} now has a continuous hip height "
-            f"({coarse / fine:.2f}x under 8x refinement); the refusal can go")
+            f"stance_frac={stance_frac} unexpectedly keeps exactly one leg planted")
+        assert walk.GaitParams(stance_frac=stance_frac).stance_frac == stance_frac
 
 
-def test_the_refused_set_still_brackets_the_only_value_that_works():
-    """The guard on the population. 0.6 is the ordinary human stance fraction and the
-    reason this matters at all; a set edited down to nothing would go green and stop
-    making its claim."""
-    assert 0.5 not in REFUSED_STANCE_FRACTIONS
-    assert min(REFUSED_STANCE_FRACTIONS) < 0.5 < max(REFUSED_STANCE_FRACTIONS)
-    assert 0.6 in REFUSED_STANCE_FRACTIONS, "0.6 is the ordinary human stance fraction"
+def test_modelled_off_half_set_brackets_the_default_walk():
+    """0.6 remains in the modelled-off-half population; default stays walk_50."""
+    assert 0.5 not in MODELLED_OFF_HALF_STANCE_FRACTIONS
+    assert min(MODELLED_OFF_HALF_STANCE_FRACTIONS) < 0.5 < max(MODELLED_OFF_HALF_STANCE_FRACTIONS)
+    assert 0.6 in MODELLED_OFF_HALF_STANCE_FRACTIONS
     assert walk.GaitParams().stance_frac == 0.5
+    assert "run_flight" in walk.NAMED_GAITS
 
 
 # ------------------------------------------- the cadence andon, over every frame pair
@@ -844,8 +805,9 @@ def test_the_two_named_andons_are_gate_failures_carrying_their_own_id():
     """
     from armature_core.errors import ArmatureError, GateFailure
 
+    # F-ce5896e5: 0.4 is modelled; out-of-range still raises GaitGate.
     with pytest.raises(walk.GaitGate) as exc:
-        walk.gate_stance_frac_is_modelled(0.4)
+        walk.gate_stance_frac_is_modelled(0.0)
     assert isinstance(exc.value, GateFailure) and isinstance(exc.value, ArmatureError)
     assert isinstance(exc.value, walk.WalkError)         # every existing catcher still works
     assert exc.value.gate == "GAIT"
@@ -866,6 +828,8 @@ def test_the_gait_andon_s_passing_record_names_its_andon_too():
     carried `andon` and `gate_stance_frac_is_modelled` did not."""
     ok = walk.gate_stance_frac_is_modelled(walk.STANCE_FRAC_MODELLED)
     assert ok["gate"] == "GAIT" and ok["andon"] == "GaitGate"
+    ok40 = walk.gate_stance_frac_is_modelled(0.4)
+    assert ok40["named_gait"] == "run_flight"
 
 
 def test_the_halt_contract_reads_both_andons_as_gates_rather_than_as_crashes():
@@ -882,7 +846,7 @@ def test_the_halt_contract_reads_both_andons_as_gates_rather_than_as_crashes():
         return ("FAILED - an unhandled error", None, 1)
 
     try:
-        walk.gate_stance_frac_is_modelled(0.4)
+        walk.gate_stance_frac_is_modelled(0.0)
     except Exception as exc:                                    # noqa: BLE001
         assert outcome(exc) == ("HALTED - a gate fired", "GAIT", 2)
 

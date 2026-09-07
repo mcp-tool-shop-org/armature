@@ -396,8 +396,154 @@ def facing(verts, z_ankle, height, z_ground):
     return out
 
 
-def derive(verts, n_bands=200):
-    """Every landmark this rig needs, each tagged MEASURED or DERIVED(<rule>)."""
+#: Character-class adapters (F-3c80ad38). Mannequin silhouette+balls is the measured
+#: default; imported site tables and proportion fallback emit the same landmark dict
+#: shape and refuse silent cross-class use of mannequin-only instruments.
+CHARACTER_CLASSES = ("mannequin_balls", "imported_sites", "proportion_fallback")
+
+
+def require_character_class(character_class, where="landmarks"):
+    """Refuse an unknown or silently cross-classed character adapter."""
+    if character_class not in CHARACTER_CLASSES:
+        raise LandmarkError(
+            f"character_class={character_class!r} ({where}) is not one of "
+            f"{list(CHARACTER_CLASSES)}; silent cross-class use is refused",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "unknown_character_class",
+             "character_class": character_class,
+             "known": list(CHARACTER_CLASSES), "where": where})
+    return character_class
+
+
+def _landmark_dict_shape(marks, provenance, character_class, extra=None):
+    """The common dict shape every character-class adapter emits."""
+    out = {
+        "landmarks": marks,
+        "provenance": provenance,
+        "character_class": character_class,
+        "facing": extra.get("facing") if extra else None,
+        "box": extra.get("box") if extra else None,
+        "regions": extra.get("regions") if extra else None,
+        "traces": extra.get("traces") if extra else {},
+        "trace_health": extra.get("trace_health") if extra else {},
+        "n_bands": extra.get("n_bands") if extra else None,
+    }
+    if extra:
+        for k, v in extra.items():
+            if k not in out:
+                out[k] = v
+    return out
+
+
+def derive_from_imported_sites(sites, character_class="imported_sites"):
+    """Adapter: an external site table -> the same landmark dict shape as `derive`.
+
+    `sites` maps landmark name -> (x, y, z). Every value is tagged
+    `MEASURED(imported_sites)`; mannequin silhouette topology is not consulted.
+    """
+    require_character_class(character_class, where="derive_from_imported_sites")
+    if character_class != "imported_sites":
+        raise LandmarkError(
+            f"derive_from_imported_sites was called with character_class="
+            f"{character_class!r}; use character_class='imported_sites' or call the "
+            f"adapter that matches the subject",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "character_class_mismatch",
+             "character_class": character_class, "adapter": "imported_sites"})
+    if not sites:
+        raise LandmarkError(
+            "imported_sites adapter was given an empty site table",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "imported_sites_empty"})
+    marks = {k: tuple(float(c) for c in v) for k, v in sites.items()}
+    prov = {k: "MEASURED(imported_sites)" for k in marks}
+    return _landmark_dict_shape(marks, prov, character_class)
+
+
+def derive_proportion_fallback(verts, character_class="proportion_fallback"):
+    """Adapter: bbox-relative proportions when silhouette topology is not mannequin-class.
+
+    Emits the core chain (crotch/spine/chest/neck/head + limb ends) as
+    `DERIVED(proportion_fallback:<rule>)`. Refuses to pretend these are MEASURED balls.
+    """
+    require_character_class(character_class, where="derive_proportion_fallback")
+    if character_class != "proportion_fallback":
+        raise LandmarkError(
+            f"derive_proportion_fallback was called with character_class="
+            f"{character_class!r}; refuse silent cross-class use",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "character_class_mismatch",
+             "character_class": character_class, "adapter": "proportion_fallback"})
+    verts = np.asarray(verts, dtype=np.float64)
+    if verts.ndim != 2 or verts.shape[1] != 3 or len(verts) < 8:
+        raise LandmarkError(
+            f"proportion_fallback needs an (N, 3) cloud with N>=8, got {verts.shape}",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "proportion_fallback_bad_cloud",
+             "shape": list(verts.shape)})
+    lo, hi = verts.min(axis=0), verts.max(axis=0)
+    mid = 0.5 * (lo + hi)
+    h = float(hi[2] - lo[2])
+    w = float(hi[0] - lo[0])
+    if h <= 0 or w <= 0:
+        raise LandmarkError(
+            f"proportion_fallback saw a degenerate bbox dims={(hi - lo).tolist()}",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "proportion_fallback_degenerate_bbox"})
+
+    def P(frac_z, x_off=0.0, y_off=0.0):
+        return (float(mid[0] + x_off * w), float(mid[1] + y_off * w),
+                float(lo[2] + frac_z * h))
+
+    marks = {
+        "crotch": P(0.48), "spine_base": P(0.55), "chest_base": P(0.68),
+        "neck_base": P(0.82), "head_base": P(0.88), "head_top": P(1.0),
+        "shoulder_L": P(0.78, -0.22), "shoulder_R": P(0.78, 0.22),
+        "elbow_L": P(0.62, -0.28), "elbow_R": P(0.62, 0.28),
+        "wrist_L": P(0.48, -0.30), "wrist_R": P(0.48, 0.30),
+        "hand_end_L": P(0.44, -0.32), "hand_end_R": P(0.44, 0.32),
+        "hip_L": P(0.48, -0.10), "hip_R": P(0.48, 0.10),
+        "knee_L": P(0.28, -0.10), "knee_R": P(0.28, 0.10),
+        "ankle_L": P(0.06, -0.10), "ankle_R": P(0.06, 0.10),
+        "toe_L": P(0.02, -0.10, 0.04), "toe_R": P(0.02, 0.10, 0.04),
+        "nose": P(0.92, 0.0, 0.06), "eye_L": P(0.93, -0.05, 0.05),
+        "eye_R": P(0.93, 0.05, 0.05), "ear_L": P(0.92, -0.12), "ear_R": P(0.92, 0.12),
+    }
+    # Marker tails required by sitelist non-deforming bones.
+    for tip, head in (("nose_tip", "nose"), ("eye_L_tip", "eye_L"), ("eye_R_tip", "eye_R"),
+                      ("ear_L_tip", "ear_L"), ("ear_R_tip", "ear_R")):
+        hx, hy, hz = marks[head]
+        marks[tip] = (hx, hy + 0.02 * w, hz)
+    prov = {k: f"DERIVED(proportion_fallback:{k})" for k in marks}
+    box = {"lo": lo.tolist(), "hi": hi.tolist(), "height": h, "width": w}
+    return _landmark_dict_shape(
+        marks, prov, character_class,
+        extra={"box": box, "facing": {"facing_y_sign": 1.0, "left_x_sign": 1.0},
+               "regions": {"x_centreline": float(mid[0])}, "n_bands": None})
+
+
+def derive(verts, n_bands=200, character_class="mannequin_balls", imported_sites=None):
+    """Every landmark this rig needs, each tagged MEASURED or DERIVED(<rule>).
+
+    `character_class` selects the adapter (F-3c80ad38):
+      * mannequin_balls — silhouette trunk/arm/leg topology (default, measured path)
+      * imported_sites — pass `imported_sites` dict; no silhouette required
+      * proportion_fallback — bbox proportions when topology is not mannequin-class
+
+    Cross-class calls refuse rather than silently running the mannequin path on a
+    clothed hero or animal.
+    """
+    require_character_class(character_class, where="derive")
+    if character_class == "imported_sites":
+        if imported_sites is None:
+            raise LandmarkError(
+                "character_class='imported_sites' requires an imported_sites table",
+                {"gate": None, "andon": "LandmarkError",
+                 "clause": "imported_sites_required"})
+        return derive_from_imported_sites(imported_sites, character_class=character_class)
+    if character_class == "proportion_fallback":
+        return derive_proportion_fallback(verts, character_class=character_class)
+
     verts = np.asarray(verts, dtype=np.float64)
     bands, box = band_profile(verts, n_bands=n_bands)
     reg = _region_runs(bands)
@@ -658,6 +804,7 @@ def derive(verts, n_bands=200):
     return {
         "landmarks": marks,
         "provenance": prov,
+        "character_class": "mannequin_balls",
         "facing": face,
         "box": box,
         "regions": {

@@ -151,6 +151,40 @@ BONES = (
 #: Every name the rig is registered to carry. Gate N binds on this set in both directions.
 ALL_NAMES = tuple(b.name for b in BONES)
 
+#: Optional articulated hand chain (F-f821776d). Not in default `BONES` — mitten wrists
+#: remain the registered product — but available when a subject carries finger deform
+#: bones. validate() does not walk this table; `bones_for(hand_mode=...)` does.
+HAND_CHAIN = (
+    Bone("thumb.L",  "wrist.L", "wrist_L",  "thumb_L",  True, False),
+    Bone("index.L",  "wrist.L", "wrist_L",  "index_L",  True, False),
+    Bone("middle.L", "wrist.L", "wrist_L",  "middle_L", True, False),
+    Bone("ring.L",   "wrist.L", "wrist_L",  "ring_L",   True, False),
+    Bone("pinky.L",  "wrist.L", "wrist_L",  "pinky_L",  True, False),
+    Bone("thumb.R",  "wrist.R", "wrist_R",  "thumb_R",  True, False),
+    Bone("index.R",  "wrist.R", "wrist_R",  "index_R",  True, False),
+    Bone("middle.R", "wrist.R", "wrist_R",  "middle_R", True, False),
+    Bone("ring.R",   "wrist.R", "wrist_R",  "ring_R",   True, False),
+    Bone("pinky.R",  "wrist.R", "wrist_R",  "pinky_R",  True, False),
+)
+
+HAND_MODES = ("mitten", "articulated")
+
+
+def bones_for(hand_mode="mitten"):
+    """Registered bones, optionally extended with the articulated hand chain."""
+    if hand_mode not in HAND_MODES:
+        raise SiteListError(
+            f"hand_mode={hand_mode!r} is not one of {list(HAND_MODES)}",
+            {"gate": None, "andon": "SiteListError", "clause": "unknown_hand_mode",
+             "hand_mode": hand_mode, "known": list(HAND_MODES)})
+    if hand_mode == "mitten":
+        return BONES
+    return BONES + HAND_CHAIN
+
+
+def hand_chain_names():
+    return tuple(b.name for b in HAND_CHAIN)
+
 #: The bone that drives the E03 probe arc. E03's `arm_r_raise` rotates the arm on the
 #: **+X side** about +Y — its own docstring says so: "the arm named _r in the generator
 #: (the +X side)". On the wire subject `_r` was a label on a planar T-pose, not anatomy.
