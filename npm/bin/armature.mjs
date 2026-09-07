@@ -200,8 +200,23 @@ function fail(found, err) {
     ? `  That pin is the ONLY interpreter tried — PATH is not searched while it is set.\n` +
       `  Install the toolkit into it, or unset ARMATURE_PYTHON to search PATH again.\n`
     : `  Point at a specific interpreter with ARMATURE_PYTHON if you use one.\n`;
+  // Long pin paths wrap mid-sentence on an 80-col terminal; keep a short headline and put
+  // the path on its own indented line under a label so the refusal kind still scans.
+  let headline;
+  if (what.length <= 72) {
+    headline = `armature: ${what}\n\n`;
+  } else if (pinned) {
+    const kind = found.sawInterpreter
+      ? `ARMATURE_PYTHON is set; ${PYPI} is not importable from it.`
+      : ranButNotPython
+        ? `ARMATURE_PYTHON is set; it ran, and it is not a Python interpreter.`
+        : `ARMATURE_PYTHON is set; this shell could not run it.`;
+    headline = `armature: ${kind}\n  pin: ${pinned}\n\n`;
+  } else {
+    headline = `armature: ${what}\n\n`;
+  }
   process.stderr.write(
-    `armature: ${what}\n\n` +
+    headline +
       remedy +
       hint +
       `  What this launcher tried: armature --node-selftest\n` +

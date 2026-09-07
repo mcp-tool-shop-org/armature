@@ -245,6 +245,31 @@ def main(argv):
     }))
 
 
+def printable_halt_line(line, stream=None):
+    """`line` rendered so printing it to `stream` cannot raise on its encoding.
+
+    Same shape as `armature_core.parts.printable_halt_line`, reproduced here because this
+    file cannot import the shared helper (trove-classifiers alone on the runner). A UTF-8
+    stdout keeps the em dash; a cp1252 console escapes only what it cannot carry so the
+    `print` in `finally` never deletes `sys.exit`.
+    """
+    text = line if isinstance(line, str) else str(line)
+    stream = sys.stdout if stream is None else stream
+    enc = getattr(stream, "encoding", None)
+    if not isinstance(enc, str) or not enc:
+        return text
+    errors = getattr(stream, "errors", None)
+    try:
+        text.encode(enc, errors if isinstance(errors, str) and errors else "strict")
+        return text
+    except (UnicodeError, LookupError, TypeError, ValueError):
+        pass
+    try:
+        return text.encode(enc, "backslashreplace").decode(enc, "replace")
+    except (UnicodeError, LookupError, TypeError, ValueError):
+        return text.encode("ascii", "backslashreplace").decode("ascii")
+
+
 def run_gate_main(fn, argv, tool=TOOL, gate=GATE, halt=HALT,
                   refusal_class=ClassifierGateFailure):
     """Run `fn(argv)` under the halt contract and exit. NEVER RETURNS.
@@ -268,6 +293,11 @@ def run_gate_main(fn, argv, tool=TOOL, gate=GATE, halt=HALT,
     function and passes its own tokens. The defaults are this gate's own, so the call at the
     bottom of this file is unchanged and no reader of `CLASSIFIER_GATE_HALT ` sees a
     difference.
+
+    Traceback prints only on the crash (exit 1) branch; a typed refusal already carries
+    clause and evidence on the HALT line. The halt JSON uses `ensure_ascii=False` so the
+    outcome em dash is prose, not `\\u2014`, then `printable_halt_line` keeps the print safe
+    on a non-UTF-8 console.
     """
     try:
         raise SystemExit(fn(argv))
@@ -281,21 +311,25 @@ def run_gate_main(fn, argv, tool=TOOL, gate=GATE, halt=HALT,
             "tool": tool, "outcome": outcome, "gate": gate,
             "error": type(exc).__name__,
             "message": "the halt line could not be built", "evidence": None}
-        line = json.dumps(sentinel)
+        line = json.dumps(sentinel, ensure_ascii=False)
         try:
-            traceback.print_exc()
+            if not refusal:
+                traceback.print_exc()
             detail = getattr(exc, "evidence", None)
             sentinel = {
                 "tool": tool, "outcome": outcome,
                 "gate": getattr(exc, "gate", None),
                 "error": type(exc).__name__, "message": str(exc),
                 "evidence": detail if isinstance(detail, dict) else None}
-            line = json.dumps(sentinel, default=str, allow_nan=False)
+            line = json.dumps(sentinel, default=str, allow_nan=False, ensure_ascii=False)
         except BaseException:                                          # noqa: BLE001
             pass
         finally:
-            print("::error::" + str(exc))
-            print(halt + line)
+            try:
+                print("::error::" + str(exc))
+                print(printable_halt_line(halt + line))
+            except BaseException:                                      # noqa: BLE001
+                pass
             sys.exit(code)
 
 
