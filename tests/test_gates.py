@@ -1269,8 +1269,12 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # `family_raise_count()` — never a sum of branches. Convention retrieved
     # (openpose.ConventionError sites), cli GateCanon subcommands, G1 horizon,
     # and the rest of the wave-34 feature-execute delta land in this denominator.
-    assert total == 420, (
-        f"{total} family raises in armature_core; this pin asserts 420, MEASURED on the wave-34 merged "
+    # WAVE-35 MERGE pin-fix: 420 → 454. MEASURED on merged main @ d932ebc by calling
+    # `family_raise_count()` — never a sum of branches. Donor-check CLI surface,
+    # SavedAdmission experiment/stage clauses, and the rest of the wave-35 execute
+    # delta land in this denominator.
+    assert total == 454, (
+        f"{total} family raises in armature_core; this pin asserts 454, MEASURED on the wave-35 merged "
         f"tree. This is the denominator every ratio below is quoted against — re-measure it "
         f"deliberately")
 
@@ -2162,15 +2166,17 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
     # WAVE-34 MERGE pin-fix: MEASURED on merged main with the helpers above.
     # ConventionError now defined in both openpose and aapose (+1 name collision);
     # cli/canon/openpose deltas move modules and core-only counts.
+    # WAVE-35 MERGE pin-fix: MEASURED on merged main @ d932ebc with the helpers above.
+    # +1 name / +1 definition / +1 module outside core; core-only counts unchanged.
     assert measured == {
-        "names": 151,
-        "definitions": 158,
-        "modules": 88,
+        "names": 152,
+        "definitions": 159,
+        "modules": 89,
         "defined_more_than_once": {
             "ConventionError": 2, "DetectionGate": 2, "PayloadError": 5, "RenderGate": 2,
         },
         "core_only_definitions": 61,
         "core_only_modules": 21,
     }, measured
-    # WAVE-34 MERGE pin-fix: MEASURED on the merged tree (definitions minus core-only).
-    assert measured["definitions"] - measured["core_only_definitions"] == 97
+    # WAVE-35 MERGE pin-fix: MEASURED on the merged tree (definitions minus core-only).
+    assert measured["definitions"] - measured["core_only_definitions"] == 98

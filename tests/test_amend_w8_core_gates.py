@@ -100,7 +100,10 @@ RECORDED_GATE_RAISES = {
     # WAVE 34 (feature-execute → pin-fix): cli gained Gate CANON subcommands
     # (`unknown_subject`, `gated_text_is_not_shipped_text`). RE-DERIVED on merged main.
     ("cli.py", "GateCanon"): 2,
-    ("donor_gate.py", "DonorGate"): 15,
+    # WAVE 35 (feature-execute → pin-fix): 15 -> 17. `load_detection_rows` /
+    # `check_donor_clip` (`unreadable_gate_input`) — the `armature donor check` CLI
+    # surface. RE-DERIVED on merged main @ d932ebc.
+    ("donor_gate.py", "DonorGate"): 17,
     # WAVE 34: G1 gained `frame_exceeds_trained_horizon` (max_frames=81 on wan-* profiles).
     # RE-DERIVED on merged main — was 2 (unknown profile + frame-not-legal).
     ("gates.py", "G1GeneratorLegality"): 3,
@@ -323,7 +326,8 @@ def test_the_derived_population_is_the_one_this_file_records():
     # `580af47`, which every census here read GREEN first. BRANCH-LOCAL — five domains move
     # pins this wave and the coordinator re-measures on the merged tree rather than summing.
     # WAVE 34 pin-fix: 115 → 118 (+1 G1 horizon, +2 cli GateCanon).
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 118
+    # WAVE 35 pin-fix: 118 → 120 (+2 DonorGate on donor-check CLI surface).
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 120
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

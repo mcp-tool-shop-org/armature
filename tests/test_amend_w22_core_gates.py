@@ -433,7 +433,8 @@ def test_the_two_declaration_refusal_reaches_the_printed_halt_record(tmp_path):
     d = _gsg_case(tmp_path, saved_doc=_two_declarations())
     out = tmp_path / "fresh" / "admission.json"
     payload = _halt_line([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
-                          f"--seeds={d / 'seeds.json'}", f"--out={out}"],
+                          f"--seeds={d / 'seeds.json'}", f"--out={out}",
+                          "--experiment=w22", "--stage=probe"],
                          "SAVED_ADMISSION_HALT", "gate_saved_graph.py")
     assert payload["error"] == "RouteGate"
     ev = payload["evidence"]
@@ -621,7 +622,8 @@ def test_the_gate_pair_refusal_reaches_the_printed_halt_record(tmp_path):
     d = _gsg_case(tmp_path)
     out = tmp_path / "fresh" / "admission.json"
     payload = _halt_line([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
-                          f"--seeds={d / 'seeds.json'}", f"--out={out}"],
+                          f"--seeds={d / 'seeds.json'}", f"--out={out}",
+                          "--experiment=w22", "--stage=probe"],
                          "SAVED_ADMISSION_HALT", "gate_saved_graph.py")
     assert payload["error"] == "PairGate"
     rows = payload["evidence"]["conditioning_nodes"]
@@ -642,7 +644,8 @@ def test_the_hosted_billing_refusal_reaches_the_printed_halt_record(tmp_path):
     out = tmp_path / "fresh" / "admission.json"
     payload = _halt_line([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
                           f"--seeds={d / 'seeds.json'}", f"--out={out}",
-                          "--hosted-tier=wan2.7-r2v"],
+                          "--hosted-tier=wan2.7-r2v",
+                          "--experiment=w22", "--stage=probe"],
                          "SAVED_ADMISSION_HALT", "gate_saved_graph.py")
     assert "top/6" in payload["message"] and "inner/6" in payload["message"]
     rows = payload["evidence"].get("hosted_frame_legality_nodes")
@@ -1403,7 +1406,8 @@ def test_the_shift_clause_reaches_the_printed_halt_record(tmp_path):
                        "inputs": {"add_noise": "enable", "noise_seed": 7}}})
     out = tmp_path / "fresh" / "admission.json"
     payload = _halt_line([f"--saved={d / 'g.saved.json'}", f"--api={d / 'g.api.json'}",
-                          f"--seeds={d / 'seeds.json'}", f"--out={out}"],
+                          f"--seeds={d / 'seeds.json'}", f"--out={out}",
+                          "--experiment=w22", "--stage=probe"],
                          "SAVED_ADMISSION_HALT", "gate_saved_graph.py")
     assert payload["error"] == "RouteGate"
     ev = payload["evidence"]

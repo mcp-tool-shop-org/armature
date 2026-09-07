@@ -187,6 +187,12 @@ dev = [
     # are, at the same string ci.yml and release.yml install; the ceiling because the release job
     # must not pick up a new major on the day it runs.
     "requests>=2.32,<3",
+    # WAVE 35: ci.yml `python-tests` and release.yml `verify` install this in the
+    # `audit Python dependencies` step before the suite runs. The suite-dependency
+    # census walks every `pip install` ahead of pytest, so the pin lives here with
+    # the same ceiling those steps carry — release day must not pick up a new major
+    # of the auditor.
+    "pip-audit>=2.7,<3",
 ]
 
 [project.urls]

@@ -5576,7 +5576,8 @@ def test_the_release_gate_census_reads_the_job_it_claims_to_read():
     added, this assertion is what forces someone to look at it.
     """
     labels, gates, work, floor = gate_and_work_order(VERIFY_BODY)
-    assert len(labels) == 12, labels
+    # WAVE 35: +1 `audit Python dependencies` (pip-audit) between Install and sheet-fonts.
+    assert len(labels) == 13, labels
     assert [labels[i] for i in gates] == [
         "The version in the tag must equal the version in the package",
         "The two workflows must read the same visibility",
@@ -5584,6 +5585,7 @@ def test_the_release_gate_census_reads_the_job_it_claims_to_read():
     ], [labels[i] for i in gates]
     assert [labels[i] for i in work] == [
         "Install",
+        "audit Python dependencies",
         "./.github/actions/sheet-fonts",
         "Suite",
         "Suite under -O",
@@ -5594,12 +5596,12 @@ def test_the_release_gate_census_reads_the_job_it_claims_to_read():
         "actions/checkout@11d5960a326750d5838078e36cf38b85af677262",
         "actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065",
     ], [labels[i] for i in floor]
-    # The twelfth step is neither, and it is labelled by its OWN `uses:` -- not by the `name:`
-    # inside its `with:` block, which is the name of the artifact and read `dist` until
-    # `_step_keys` was taught the difference.
+    # The thirteenth step is neither, and it is labelled by its OWN `uses:` -- not by the
+    # `name:` inside its `with:` block, which is the name of the artifact and read `dist`
+    # until `_step_keys` was taught the difference.
     assert labels[-1] == "actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02", (
         labels[-1])
-    assert 11 not in gates and 11 not in work and 11 not in floor, (gates, work, floor)
+    assert 12 not in gates and 12 not in work and 12 not in floor, (gates, work, floor)
 
 
 def test_the_jobs_that_carry_a_gate_are_the_ones_this_file_thinks_they_are():
@@ -5661,9 +5663,9 @@ def test_a_gate_sits_on_the_floor_it_actually_needs(workflow, job):
 def _verify_body_with_the_gates_last():
     """The REAL steps of `verify`, permuted back to the order measured on `3380ae2`.
 
-    Not a hand-written toy job: the mutation moves the three gate blocks below the six work
-    steps and changes nothing else, so the predicates it is fed are the ones the property
-    runs.
+    Not a hand-written toy job: the mutation moves the three gate blocks below the seven
+    work steps and changes nothing else, so the predicates it is fed are the ones the
+    property runs. WAVE 35: others 9 → 10 (+ `audit Python dependencies`).
     """
     lines = _job_lines(RELEASE, "verify")
     first = [i for i, ln in enumerate(lines) if ln.lstrip().startswith("- ")][0]
@@ -5671,9 +5673,9 @@ def _verify_body_with_the_gates_last():
     steps = _step_blocks("\n".join(lines))
     gates = [s for s in steps if _is_pure_shell_gate(s)]
     others = [s for s in steps if not _is_pure_shell_gate(s)]
-    assert len(gates) == 3 and len(others) == 9, (len(gates), len(others))
+    assert len(gates) == 3 and len(others) == 10, (len(gates), len(others))
     # Back where they were: after `npm-clean-room` and before `upload-artifact`, which is the
-    # last of the nine.
+    # last of the ten.
     reordered = others[:-1] + gates + others[-1:]
     return "\n".join(head + [ln for step in reordered for ln in step])
 
@@ -5686,14 +5688,16 @@ def test_the_order_census_goes_red_on_the_order_this_job_had():
     """
     before = _verify_body_with_the_gates_last()
     labels, gates, work, floor = gate_and_work_order(before)
-    # The mutation carries the defect rather than deleting the subject: the same twelve steps,
-    # the same three gates, the same six work steps, the same floor.
-    assert len(labels) == 12, labels
-    assert len(gates) == 3 and len(work) == 6 and len(floor) == 2, (gates, work, floor)
+    # The mutation carries the defect rather than deleting the subject: the same thirteen
+    # steps, the same three gates, the same seven work steps, the same floor.
+    # WAVE 35: 12 → 13 labels, 6 → 7 work (+ pip-audit); gates land at index 9 after the
+    # seven work steps (was 8 when work was six).
+    assert len(labels) == 13, labels
+    assert len(gates) == 3 and len(work) == 7 and len(floor) == 2, (gates, work, floor)
     assert not max(gates) < min(work), (
         "the reverted order reads as gates-before-work; the property cannot fail")
-    assert min(gates) == 8 and min(work) == 2, (
-        f"the reconstruction is not the measured pre-fix order (tag gate ninth, Install "
+    assert min(gates) == 9 and min(work) == 2, (
+        f"the reconstruction is not the measured pre-fix order (tag gate tenth, Install "
         f"third): gates {gates}, work {work}. Order:\n"
         f"{_format_step_order(labels, gates, work, floor)}")
     # And the floor clause is unaffected by the mutation, so the two properties are separable.
