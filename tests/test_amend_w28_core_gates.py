@@ -43,19 +43,37 @@ ROUTE_GATES = os.path.join(
 # ===========================================================================
 
 
-@pytest.mark.parametrize("subject", sorted(canon_census.CENSUS))
+#: Identity-only census rows — the only population `--no-canon` may escape.
+#: BLACKGUARD carries surfaces (EMBEDDED_SURFACES / blackguard.surfaces.json); CANON
+#: is ARMED on it and `--no-canon` is the checkbox refuse, not an UNGATED announcement.
+_IDENTITY_ONLY = sorted(
+    s for s, row in canon_census.CENSUS.items() if row.get("surfaces") is None
+)
+
+
+@pytest.mark.parametrize("subject", _IDENTITY_ONLY)
 def test_the_ungated_announcement_carries_the_reason_not_only_the_subject(subject):
     """The loudest signal in the repo that a spend went ahead unGATED says WHY.
 
-    Measured before the fix, for all three census rows: `[canon] UNGATED: BLACKGUARD`,
-    `[canon] UNGATED: PERFORMER`, `[canon] UNGATED: WIRE` — the subject and nothing else,
-    while the `reason` sat in the same dict. A reviewer scanning a build log could not
-    tell a ratified-hole escape from a subject whose canon was never written.
+    Driven on identity-only rows (PERFORMER, WIRE). BLACKGUARD is ARMED — its
+    `--no-canon` path is the checkbox refuse, covered elsewhere — so it is not in
+    this population. Before the fix the announcement named the subject and nothing
+    else while `reason` sat in the same dict.
     """
     ev = canon.require_canon(subject, "any prompt at all", no_canon=True)
     reason = canon_census.CENSUS[subject]["reason"]
     assert ev["announcement"].startswith(f"[canon] UNGATED: {subject}")
     assert reason in ev["announcement"], ev["announcement"]
+
+
+def test_blackguard_no_canon_is_the_checkbox_refuse_not_an_ungated_escape():
+    """BLACKGUARD CANON is ARMED (surfaces embedded); `--no-canon` must refuse."""
+    assert "BLACKGUARD" in canon_census.CENSUS
+    assert canon_census.CENSUS["BLACKGUARD"]["surfaces"] is not None
+    assert "blackguard.surfaces.json" in canon_census.EMBEDDED_SURFACES
+    with pytest.raises(GateCanon) as exc:
+        canon.require_canon("BLACKGUARD", "any prompt at all", no_canon=True)
+    assert exc.value.evidence["clause"] == "checkbox"
 
 
 def test_the_census_refusal_that_justifies_itself_on_the_announcement_now_tells_truth():

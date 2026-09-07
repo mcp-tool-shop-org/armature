@@ -3223,7 +3223,11 @@ def npm_publish_jobs():
 
 #: Measured 2026-09-04. Before this wave `npm_pack_jobs()` was EMPTY — the census's own red
 #: proof — while `npm_publish_jobs()` was already this.
-NPM_PACK_JOBS_TODAY = [("ci.yml", "launcher"), ("release.yml", "verify")]
+#: WAVE-34: python-tests also packs via npm-clean-room (node→python handoff). Re-measured
+#: on merged main — do not drop the handoff to shrink this list.
+NPM_PACK_JOBS_TODAY = [
+    ("ci.yml", "python-tests"), ("ci.yml", "launcher"), ("release.yml", "verify"),
+]
 NPM_PUBLISH_JOBS_TODAY = [("release.yml", "npm")]
 
 
@@ -5601,12 +5605,15 @@ def test_the_release_gate_census_reads_the_job_it_claims_to_read():
 def test_the_jobs_that_carry_a_gate_are_the_ones_this_file_thinks_they_are():
     """The population, derived off the tree, with the sibling that made the predicate honest.
 
-    Enumerated across all three workflows: `release.yml:verify` is the only job with a
-    pure-shell gate. The one other step anywhere carrying `exit 1` in its script is
-    release.yml's `Publish`, which reaches the registry -- it is WORK, and a job whose only
-    `exit` lives in its publish step has no gate to order.
+    Enumerated across all three workflows. WAVE-34: `ci.yml:python-tests` carries the
+    release.yml rehearsal STATUS pure-shell gate (moved before spend); `release.yml:verify`
+    keeps its three version/visibility/pre-release gates. release.yml's `Publish` still
+    reaches the registry — it is WORK, and a job whose only `exit` lives in its publish
+    step has no gate to order.
     """
-    assert jobs_with_a_gate() == [("release.yml", "verify")], jobs_with_a_gate()
+    assert jobs_with_a_gate() == [
+        ("ci.yml", "python-tests"), ("release.yml", "verify"),
+    ], jobs_with_a_gate()
     npm = "\n".join(_job_lines(RELEASE, "npm"))
     labels, gates, work, _floor = gate_and_work_order(npm)
     assert gates == [], [labels[i] for i in gates]

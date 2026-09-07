@@ -742,23 +742,39 @@ def test_g5_refuses_either_half_of_an_empty_reference(ref_count, ref_seq):
         gates.g5_openpose_conformance(18, [[1, 2]], ref_count, ref_seq)
 
 
-def test_g5_is_dormant_because_the_drawing_convention_is_not_retrieved():
-    """**The premise the dormancy rests on, pinned so it cannot change in silence.** G5 has
-    no production call site: grepped 2026-09-04 across `tools/` and `tests/`, the name
-    appears at its definition, in `cli.SURFACE`'s gate list and in the suite, nowhere else.
-    The reason is not neglect — `stage_render.py:281-284` calls
-    `openpose.require_drawing_convention()` whenever `pose` is requested and that function
-    raises unconditionally, because `PALETTE` and `KEYPOINT_NAMES` are both None, so the
-    pose channel cannot be emitted at all.
+def test_g5_is_dormant_even_though_the_drawing_convention_is_retrieved():
+    """**Dormancy re-measured after F-b08c0918 filled the palette.** G5 still has no
+    production *call* that invokes `g5_openpose_conformance`: grepped across `tools/`,
+    the name appears at its definition and in comments (`stage_render` records
+    `gate_called: None`), nowhere as a Call. Wave 34 retrieved `PALETTE` and
+    `KEYPOINT_NAMES` from ControlNet, so `require_drawing_convention()` now returns
+    True — the old "constants are None" premise is overturned in place. The remaining
+    commission is to wire this gate into the pose route and record ITS return rather
+    than a NOT-RUN placeholder."""
+    import ast
+    import pathlib
 
-    The day either constant is filled this test fails, and that failure IS the commission:
-    wire `g5_openpose_conformance` into the route that records a G5 verdict, and stop
-    `stage_render` writing a literal PASS for a gate it never invoked."""
     from armature_core import openpose
-    assert openpose.PALETTE is None
-    assert openpose.KEYPOINT_NAMES is None
-    with pytest.raises(Exception):
-        openpose.require_drawing_convention()
+
+    assert openpose.PALETTE is not None and len(openpose.PALETTE) == openpose.KEYPOINT_COUNT
+    assert openpose.KEYPOINT_NAMES is not None
+    assert len(openpose.KEYPOINT_NAMES) == openpose.KEYPOINT_COUNT
+    assert openpose.require_drawing_convention() is True
+
+    tools = pathlib.Path(__file__).resolve().parents[1] / "tools"
+    calls = []
+    for path in tools.rglob("*.py"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            fn = node.func
+            name = getattr(fn, "id", None) or getattr(fn, "attr", None)
+            if name == "g5_openpose_conformance":
+                calls.append(str(path.relative_to(tools.parent)))
+    assert calls == [], (
+        f"g5_openpose_conformance is now called from {calls}; update the G5 "
+        f"manifest path and retire this dormancy pin in the same commit")
 
 
 def test_g5_still_passes_against_the_retrieved_convention():

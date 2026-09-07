@@ -266,6 +266,23 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
+      # Rehearsal obligation is CI-reachable: release.yml's STATUS line must name a completed
+      # Actions run, not NOT YET RUN. A live release:published refuses the same string; this
+      # step makes the debt visible on every PR that touches packaging rather than only after
+      # a tag is cut. Cleared when STATUS records run id + tag.
+      # GATE BEFORE SPEND: sits on the checkout+python floor, before pip / suite / clean-room
+      # / npm pack — a run that will refuse is refused before the job is paid for.
+      - name: release.yml rehearsal STATUS must be recorded
+        run: |
+          set -eu
+          # Header STATUS comment only — not this step's own error text.
+          if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*NOT YET RUN' .github/workflows/release.yml; then
+            echo "::error::release.yml header STATUS is still unset; rehearse before the next live release."
+            echo "::error::gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true"
+            exit 1
+          fi
+          echo "STATUS line is recorded."
+
       # opencv is pinned to the rig's verified version: the aapose golden-frame
       # tests assert byte-stable rasterization, and the rasterizer's version is
       # the axis that matters. Headless build — no GUI stack on a runner.
@@ -337,21 +354,6 @@ jobs:
       - uses: ./.github/actions/npm-clean-room
         with:
           python: ${{ runner.temp }}/cleanroom/bin/python
-
-      # Rehearsal obligation is CI-reachable: release.yml's STATUS line must name a completed
-      # Actions run, not NOT YET RUN. A live release:published refuses the same string; this
-      # step makes the debt visible on every PR that touches packaging rather than only after
-      # a tag is cut. Cleared when STATUS records run id + tag.
-      - name: release.yml rehearsal STATUS must be recorded
-        run: |
-          set -eu
-          # Header STATUS comment only — not this step's own error text.
-          if grep -E -q '^[[:space:]]*#[[:space:]]*STATUS:[[:space:]]*NOT YET RUN' .github/workflows/release.yml; then
-            echo "::error::release.yml header STATUS is still unset; rehearse before the next live release."
-            echo "::error::gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true"
-            exit 1
-          fi
-          echo "STATUS line is recorded."
 
   # The launcher is Node, not Python, and it ran as a step of the Python job on one version.
   # `npm/package.json` declares `"node": ">=18"` — a promise npm enforces on a user's machine

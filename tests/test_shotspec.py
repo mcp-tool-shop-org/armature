@@ -93,7 +93,11 @@ def test_wrong_spec_version_is_refused(tmp_path):
 def test_unimplemented_camera_type_is_refused(tmp_path):
     raw = _minimal(tmp_path)
     raw["camera"] = {"type": "dolly"}
-    with pytest.raises(SpecError, match=r"spec\.camera\.type 'dolly' is not implemented \(only 'orbit'\)"):
+    # `static` joined `orbit` as an implemented type; the refusal names the known set.
+    with pytest.raises(
+        SpecError,
+        match=r"spec\.camera\.type 'dolly' is not implemented \(known: \['orbit', 'static'\]\)",
+    ):
         shotspec.normalise_spec(raw)
 
 

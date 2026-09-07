@@ -97,8 +97,13 @@ RECORDED_GATE_RAISES = {
     # with bare subscripts, so a record whose key moved reached the operator as a
     # `KeyError` (not an `ArmatureError`: exit 1, no receipt) on the REFUSAL path.
     # RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
+    # WAVE 34 (feature-execute → pin-fix): cli gained Gate CANON subcommands
+    # (`unknown_subject`, `gated_text_is_not_shipped_text`). RE-DERIVED on merged main.
+    ("cli.py", "GateCanon"): 2,
     ("donor_gate.py", "DonorGate"): 15,
-    ("gates.py", "G1GeneratorLegality"): 2,
+    # WAVE 34: G1 gained `frame_exceeds_trained_horizon` (max_frames=81 on wan-* profiles).
+    # RE-DERIVED on merged main — was 2 (unknown profile + frame-not-legal).
+    ("gates.py", "G1GeneratorLegality"): 3,
     ("gates.py", "G2Completeness"): 2,
     # WAVE 25 (core-gates, F-35820295): 4 -> 7. G4 wrote `width` and `height` into its
     # receipt and let them decide nothing, and never checked a bbox's own corner order:
@@ -317,7 +322,8 @@ def test_the_derived_population_is_the_one_this_file_records():
     # (F-ebb1ebb4, F-6fcab339, F-f1234354). RE-DERIVED with `==` in this worktree against
     # `580af47`, which every census here read GREEN first. BRANCH-LOCAL — five domains move
     # pins this wave and the coordinator re-measures on the merged tree rather than summing.
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 115
+    # WAVE 34 pin-fix: 115 → 118 (+1 G1 horizon, +2 cli GateCanon).
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 118
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

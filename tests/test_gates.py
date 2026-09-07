@@ -1265,10 +1265,14 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree by calling `family_raise_count()` — never a sum of branches
     # (core-solvers 370 and core-gates 353 were each branch-local; core-gates folded `shotspec`'s 22 raises
     # into one helper while core-solvers added five).
-    assert total == 359, (
-        f"{total} family raises in armature_core; this pin asserts 359, MEASURED on the wave-32 merged "
-        f"tree (draw_frame now raises ConventionError on a blank plate, F-eab59919). This is the "
-        f"denominator every ratio below is quoted against — re-measure it deliberately")
+    # WAVE-34 MERGE pin-fix: 359 → 420. MEASURED on merged main by calling
+    # `family_raise_count()` — never a sum of branches. Convention retrieved
+    # (openpose.ConventionError sites), cli GateCanon subcommands, G1 horizon,
+    # and the rest of the wave-34 feature-execute delta land in this denominator.
+    assert total == 420, (
+        f"{total} family raises in armature_core; this pin asserts 420, MEASURED on the wave-34 merged "
+        f"tree. This is the denominator every ratio below is quoted against — re-measure it "
+        f"deliberately")
 
 
 def test_a_refusal_that_carries_no_evidence_at_all_is_counted_in_its_own_category():
@@ -2155,25 +2159,18 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
     # never sums.
     # WAVE-25 MERGE (coordinator, 2026-09-05): every value below MEASURED on the merged tree with the helpers above — never a sum
     # of the branch-local readings the comments above record.
+    # WAVE-34 MERGE pin-fix: MEASURED on merged main with the helpers above.
+    # ConventionError now defined in both openpose and aapose (+1 name collision);
+    # cli/canon/openpose deltas move modules and core-only counts.
     assert measured == {
-        "names": 148,
-        "definitions": 154,
-        "modules": 85,
-        "defined_more_than_once": {"DetectionGate": 2, "PayloadError": 5, "RenderGate": 2},
-        "core_only_definitions": 60,
-        "core_only_modules": 20,
+        "names": 151,
+        "definitions": 158,
+        "modules": 88,
+        "defined_more_than_once": {
+            "ConventionError": 2, "DetectionGate": 2, "PayloadError": 5, "RenderGate": 2,
+        },
+        "core_only_definitions": 61,
+        "core_only_modules": 21,
     }, measured
-    # the quantity the comment's last clause is about: definitions sitting outside the
-    # core-only walk, which is the gap the tree-wide census exists to close. 82 on
-    # `580af47`; 83 on `w25-builders`, the +1 being `build_lora_arm_payload.UnknownBaseline`
-    # — a class defined under `tools/` and not under `tools/armature_core/`, which is
-    # exactly the population this subtraction measures.
-    # the quantity the comment's last clause is about: definitions that sit outside the
-    # core-only walk, which is the gap the tree-wide census exists to close. 82 on
-    # `580af47`; 90 here — all eight classes above are tool-side, so the whole delta
-    # lands on this side of the subtraction and `core_only_definitions` is unmoved.
-    # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree (definitions minus core-only definitions).
-    # the quantity the comment's last clause is about: definitions outside the core-only
-    # walk, which is the gap the tree-wide census exists to close (82 -> 85 with the three)
-    # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree (definitions minus core-only definitions).
-    assert measured["definitions"] - measured["core_only_definitions"] == 94
+    # WAVE-34 MERGE pin-fix: MEASURED on the merged tree (definitions minus core-only).
+    assert measured["definitions"] - measured["core_only_definitions"] == 97

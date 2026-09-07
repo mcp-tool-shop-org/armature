@@ -39,10 +39,13 @@ PROBE = textwrap.dedent(
         "unknown_generator": dict(width=512, height=768, count=33),
     }[case]
 
+    # `unknown_generator`: shotspec's unified table admits Gate L family names
+    # (`wan`) that are NOT G1 profiles. A totally unknown string is SpecError
+    # before G1 arms; `wan` reaches G1 and raises `unknown_generator_profile`.
     spec = {
         "spec_version": 1,
         "name": "optimize-probe",
-        "generator": "nobody-filed-this" if case == "unknown_generator" else "wan-vace",
+        "generator": "wan" if case == "unknown_generator" else "wan-vace",
         "asset": {"path": asset},
         "resolution": {"width": bad["width"], "height": bad["height"]},
         "frames": {"count": bad["count"], "fps": 16},

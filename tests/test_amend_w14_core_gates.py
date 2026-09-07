@@ -278,7 +278,9 @@ def test_a_planar_asset_is_still_reported_rather_than_refused():
 
 
 def _spec(**over):
-    spec = {"spec_version": 1, "name": "n", "generator": "wan2.1_vace_14B",
+    # Generator must be in the unified table (G1 profiles + Gate L families).
+    # `wan2.1_vace_14B` was a pre-unification alias; G1's row is `wan-vace`.
+    spec = {"spec_version": 1, "name": "n", "generator": "wan-vace",
             "asset": {"path": "a.glb"},
             "resolution": {"width": 832, "height": 480},
             "frames": {"count": 33, "fps": 16}, "channels": ["depth"]}
