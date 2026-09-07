@@ -885,6 +885,34 @@ def halt_keysafe(value, _seen=None):
     return value
 
 
+#: cp1252-hostile glyphs -> ASCII stand-ins. Em dash (U+2014) and degree (U+00B0) ARE in
+#: cp1252; substituting them would rewrite every outcome sentence. These four are not, and
+#: leaving them for `printable_halt_line`'s backslashreplace produces the mixed LOOK
+#: (glyphs beside `\u2264`) F-0d3138c9 names. Apply in `halt_ascii_standins` BEFORE the
+#: dump so the common path never mixes; keep `printable_halt_line` as last-resort guard.
+_HALT_ASCII_STANDINS = str.maketrans({
+    "\u2264": "<=",   # ≤
+    "\u2265": ">=",   # ≥
+    "\u2260": "!=",   # ≠
+    "\u2026": "...",  # …
+})
+
+
+def halt_ascii_standins(text):
+    """`text` with cp1252-hostile glyphs replaced by ASCII stand-ins (`<=`, `>=`, …)."""
+    if not isinstance(text, str):
+        text = str(text)
+    return text.translate(_HALT_ASCII_STANDINS)
+
+
+def _evidence_clause_first(evidence):
+    """Evidence mapping with `clause` first when present — halt-line wrap LOOK."""
+    if not isinstance(evidence, dict) or "clause" not in evidence:
+        return evidence
+    return {"clause": evidence["clause"],
+            **{k: v for k, v in evidence.items() if k != "clause"}}
+
+
 def printable_halt_line(line, stream=None):
     """`line` rendered so that printing it to `stream` cannot raise on its encoding.
 
@@ -980,14 +1008,18 @@ def run_tool_main(main, prefix, tool=None):
     **The line.** Exactly one line on stdout, `f"{prefix}_HALT "` followed by a JSON object.
     Nothing else is printed by this handler on the refusal path.
 
-    **The six keys, in this order and never a seventh:**
+    **The six keys, in this order and never a seventh** (F-8e83b813 — `evidence` before
+    `message` so an 80-column wrap still surfaces `evidence.clause` in the first lines):
 
       ``tool``      the tool's own name (`tool`, else `prefix.lower()`)
       ``outcome``   one of the three sentences `halt_outcome` returns, below
       ``gate``      `exc.gate` — the gate id a typed `GateFailure` names, else null
+      ``evidence``  the raise's evidence dict through `halt_keysafe` (with `clause` first
+                    when present), else null
       ``error``     `type(exc).__name__`
       ``message``   `str(exc)` — the refusal's own prose, written for a person
-      ``evidence``  the raise's evidence dict through `halt_keysafe`, else null
+                    (`halt_ascii_standins` applied so cp1252-hostile glyphs become `<=` /
+                    `>=` / `!=` / `...` before the dump; F-0d3138c9)
 
     **The three outcomes and the exit codes** (`halt_outcome`, and it is three and not two
     because a bad `--mode=` is a refusal with no gate behind it):
@@ -1044,21 +1076,24 @@ def run_tool_main(main, prefix, tool=None):
     except BaseException as exc:                # noqa: BLE001 — the halt must be loud
         _code, _outcome = halt_outcome(exc)
         _sentinel = {
-            "tool": name, "outcome": _outcome, "gate": None,
-            "error": type(exc).__name__,
-            "message": "the halt line could not be built", "evidence": None}
+            "tool": name, "outcome": halt_ascii_standins(_outcome), "gate": None,
+            "evidence": None, "error": type(exc).__name__,
+            "message": "the halt line could not be built"}
         _line = json.dumps(_sentinel)
         try:
             if _code == 1:
                 # Only the crash. See "THE TRACEBACK IS THE CRASH'S DIAGNOSTIC" above.
                 traceback.print_exc()
             _detail = getattr(exc, "evidence", None)
+            _evidence = (halt_keysafe(_detail)
+                         if isinstance(_detail, dict) else None)
             _sentinel = {
-                "tool": name, "outcome": _outcome,
+                "tool": name,
+                "outcome": halt_ascii_standins(_outcome),
                 "gate": getattr(exc, "gate", None),
-                "error": type(exc).__name__, "message": str(exc),
-                "evidence": (halt_keysafe(_detail)
-                             if isinstance(_detail, dict) else None)}
+                "evidence": _evidence_clause_first(_evidence),
+                "error": type(exc).__name__,
+                "message": halt_ascii_standins(str(exc))}
             _line = json.dumps(_sentinel, default=str, allow_nan=False,
                                ensure_ascii=False)
         except BaseException:                                         # noqa: BLE001

@@ -337,6 +337,10 @@ def stickwidth(height, width, stickwidth_type="v2"):
     The source takes an unknown type to a bare `raise`; this raises something legible for
     the same reason `gates.resolve_generator` does — an unrecognised profile is the case
     where nothing is checked at all.
+
+    Generator-legal sizes this repo submits (832x480, 480x832, 1024x576, 512x512) all
+    land on the v2 floor of 1 px. That LOOK is a stated fact via `pose_sticks_ink_look`,
+    not a silent surprise; a stronger control LOOK needs an explicit stickwidth profile.
     """
     m = min(int(height), int(width))
     if stickwidth_type == "v1":
@@ -363,6 +367,24 @@ def hand_stickwidth(height, width, stickwidth_type="v2"):
         {"gate": None, "andon": "ArmatureError", "clause": "unknown_stickwidth_type",
          "stickwidth_type": stickwidth_type, "defined": ["v1", "v2"],
          "where": "hand_stickwidth"})
+
+
+def pose_sticks_ink_look(height, width, stickwidth_type="v2"):
+    """Measured stick widths for pose-sticks provenance, next to resolution.
+
+    Returns a dict a run record can quote beside `resolution` so a 1 px LOOK at
+    generator-legal sizes is a stated fact. Does not change the transcribed v2 formula.
+    """
+    sw = stickwidth(height, width, stickwidth_type)
+    hsw = hand_stickwidth(height, width, stickwidth_type)
+    return {
+        "resolution": [int(width), int(height)],
+        "stickwidth_type": stickwidth_type,
+        "stickwidth_px": sw,
+        "hand_stickwidth_px": hsw,
+        "v2_floor_px": 1,
+        "at_formula_floor": bool(stickwidth_type == "v2" and sw == 1),
+    }
 
 
 # --------------------------------------------------------------------- the rig map
@@ -580,9 +602,10 @@ RECORD_FIELDS_COMPARED = tuple(sorted(
 WHY_IT_DECIDES_PIXELS = {
     "limb_brightness": " — this is the literal every limb polygon is filled with",
     "default_threshold": " — points below it are skipped entirely",
-    "hand_eps": " — every hand limb and every hand joint dot is drawn only where both "
-                "coordinates exceed it, so raising it on a normalised coordinate erases "
-                "the hands",
+    "hand_eps": " — detector-zero filter on the pre-int float pair: a hand joint is "
+                "skipped only when BOTH float coordinates are <= HAND_EPS (the unset "
+                "(0,0) sentinel). Inted border pixels (x=0 or y=0) still draw when the "
+                "float was past the sentinel",
     "keypoint_count": " — the body loop's length",
 }
 
@@ -974,8 +997,20 @@ def draw_body(canvas, kp2ds, threshold=DEFAULT_THRESHOLD, stickwidth_type="v2",
     return canvas
 
 
-def draw_hand(canvas, keypoints, threshold=DEFAULT_THRESHOLD, stickwidth_type="v2"):
-    """`draw_handpose_new`, transcribed. `keypoints` is (21, 3): x, y, confidence."""
+def _hand_detector_zero(fx, fy):
+    """True when the float pair is the unset (0,0)-ish sentinel, not an in-frame border."""
+    return float(fx) <= HAND_EPS and float(fy) <= HAND_EPS
+
+
+def draw_hand(canvas, keypoints, threshold=DEFAULT_THRESHOLD, stickwidth_type="v2",
+              receipt=None):
+    """`draw_handpose_new`, transcribed. `keypoints` is (21, 3): x, y, confidence.
+
+    HAND_EPS filters the pre-int float pair (detector-zero), not the inted pixel: a joint
+    whose float is past the sentinel still draws when the inted coordinate is on the
+    in-frame border (x=0 or y=0). `receipt`, when a dict, collects the edge/drop census so
+    a border wipe cannot look like a successful hand pass.
+    """
     import cv2
     import matplotlib.colors as mcolors
 
@@ -988,38 +1023,96 @@ def draw_hand(canvas, keypoints, threshold=DEFAULT_THRESHOLD, stickwidth_type="v
     require_readable_keypoints(kp, threshold, "draw_hand")
     H, W = canvas.shape[:2]
     sw = hand_stickwidth(H, W, stickwidth_type)
+    dropped_zero = []
+    drawn_joints = []
+    dropped_limbs = 0
+    drawn_limbs = 0
 
     for ie, (e1, e2) in enumerate(HAND_EDGES):
         k1, k2 = kp[e1], kp[e2]
         if k1[2] < threshold or k2[2] < threshold:
             continue
-        x1, y1, x2, y2 = int(k1[0]), int(k1[1]), int(k2[0]), int(k2[1])
-        if x1 > HAND_EPS and y1 > HAND_EPS and x2 > HAND_EPS and y2 > HAND_EPS:
-            rgb = mcolors.hsv_to_rgb([ie / float(len(HAND_EDGES)), 1.0, 1.0]) * 255
-            cv2.line(canvas, (x1, y1), (x2, y2), rgb, thickness=sw)
+        fx1, fy1, fx2, fy2 = float(k1[0]), float(k1[1]), float(k2[0]), float(k2[1])
+        if _hand_detector_zero(fx1, fy1) or _hand_detector_zero(fx2, fy2):
+            dropped_limbs += 1
+            continue
+        x1, y1, x2, y2 = int(fx1), int(fy1), int(fx2), int(fy2)
+        rgb = mcolors.hsv_to_rgb([ie / float(len(HAND_EDGES)), 1.0, 1.0]) * 255
+        cv2.line(canvas, (x1, y1), (x2, y2), rgb, thickness=sw)
+        drawn_limbs += 1
 
-    for point in kp:
+    for i, point in enumerate(kp):
         if point[2] < threshold:
             continue
-        x, y = int(point[0]), int(point[1])
-        if x > HAND_EPS and y > HAND_EPS:
-            cv2.circle(canvas, (x, y), sw, HAND_JOINT_COLOR, thickness=-1)
+        fx, fy = float(point[0]), float(point[1])
+        if _hand_detector_zero(fx, fy):
+            dropped_zero.append(i)
+            continue
+        x, y = int(fx), int(fy)
+        cv2.circle(canvas, (x, y), sw, HAND_JOINT_COLOR, thickness=-1)
+        drawn_joints.append(i)
+
+    if receipt is not None:
+        receipt.update({
+            "hand_drawn_joints": drawn_joints,
+            "hand_detector_zero_dropped": dropped_zero,
+            "hand_limbs_drawn": drawn_limbs,
+            "hand_limbs_dropped_detector_zero": dropped_limbs,
+            "hand_stickwidth_px": sw,
+        })
     return canvas
+
+
+def _count_confident(kp, threshold):
+    if kp is None:
+        return 0
+    arr = np.asarray(kp, dtype=np.float64)
+    if arr.ndim != 2 or arr.shape[-1] < 3:
+        return 0
+    return int(np.sum(arr[:, 2] >= float(threshold)))
 
 
 def draw_frame(height, width, body, left_hand=None, right_hand=None,
                threshold=DEFAULT_THRESHOLD, stickwidth_type="v2",
-               draw_head=True, draw_hands=True):
+               draw_head=True, draw_hands=True, receipt=None):
     """One complete pose-stick frame: black canvas, body pass, then each hand pass.
 
     Order matches `draw_aapose_new`: the body is drawn first and the hands over it.
+
+    Refuses with clause `drawn_ink_empty` when the finished plate has zero non-black
+    pixels, so a caller without Gate INK cannot save a black control as a successful
+    pose LOOK. `receipt`, when a dict, collects stickwidth look + hand drop census.
     """
     canvas = blank_canvas(height, width)
+    look = pose_sticks_ink_look(height, width, stickwidth_type)
+    hand_receipts = []
     draw_body(canvas, body, threshold=threshold, stickwidth_type=stickwidth_type,
               draw_head=draw_head)
     if draw_hands:
         for hand in (left_hand, right_hand):
             if hand is not None:
+                hr = {}
                 draw_hand(canvas, hand, threshold=threshold,
-                          stickwidth_type=stickwidth_type)
+                          stickwidth_type=stickwidth_type, receipt=hr)
+                hand_receipts.append(hr)
+    n_ink = int(np.count_nonzero(np.any(canvas != 0, axis=2)))
+    n_confident = (_count_confident(body, threshold)
+                   + _count_confident(left_hand if draw_hands else None, threshold)
+                   + _count_confident(right_hand if draw_hands else None, threshold))
+    if receipt is not None:
+        receipt.update(look)
+        receipt["n_ink"] = n_ink
+        receipt["n_confident"] = n_confident
+        receipt["hands"] = hand_receipts
+    if n_ink == 0:
+        raise ConventionError(
+            f"draw_frame painted 0 non-black pixels on a {int(height)}x{int(width)} "
+            f"canvas; {n_confident} keypoint(s) carried confidence >= {float(threshold)} "
+            f"but none landed as ink",
+            {"gate": None, "andon": "ConventionError", "clause": "drawn_ink_empty",
+             "n_ink": 0, "n_confident": n_confident, "threshold": float(threshold),
+             "height": int(height), "width": int(width),
+             "stickwidth_px": look["stickwidth_px"],
+             "hand_stickwidth_px": look["hand_stickwidth_px"],
+             "hands": hand_receipts})
     return canvas

@@ -186,14 +186,12 @@ def gate_alpha(transparent_fraction, composite_rgb, why, master_path=None,
         ev["clause"] = "master_carries_no_transparent_pixel"
         raise AlphaGate(
             "the authored master carries NO transparent pixels, so it is not an RGBA "
-            "render — it is a baked void with a fourth channel. `film_transparent` did not "
-            "take effect, and every check after this one passes on the file anyway", ev)
+            "render — it is a baked void with a fourth channel. See evidence", ev)
     if float(transparent_fraction) >= 1.0:
         ev["clause"] = "master_entirely_transparent"
         raise AlphaGate(
             "the authored master is ENTIRELY transparent — nothing was rendered into it. "
-            "A fully transparent master would composite to a flat field of the chosen "
-            "colour and condition the generation on an empty picture", ev)
+            "See evidence", ev)
     ev["verdict"] = (f"alpha authored; {float(transparent_fraction):.4f} of the frame is "
                      f"transparent")
     return ev
