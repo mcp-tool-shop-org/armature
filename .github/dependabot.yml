@@ -1,0 +1,13 @@
+# Monthly re-resolve for Actions SHA pins. Workflows pin digests (not floating tags);
+# Dependabot opens a reviewable PR that bumps the digest and the version comment together.
+# Publish-path actions stay SHA-pinned — this file does not switch them to moving tags.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
+    groups:
+      github-actions:
+        patterns:
+          - "*"

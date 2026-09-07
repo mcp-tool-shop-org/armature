@@ -371,6 +371,13 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install pytest numpy pillow opencv-python-headless==5.0.0.93 matplotlib==3.11.1 "build>=1.5,<2" "requests>=2.32,<3"
+      # Same Python dep audit as ci.yml's python-tests, before the suite / clean-room spend.
+      # `pip-audit` fails on any known advisory (no severity floor flag upstream); tool
+      # ceiling matches ci.yml so the auditor cannot pick up a new major on release day.
+      - name: audit Python dependencies
+        run: |
+          python -m pip install "pip-audit>=2.7,<3"
+          python -m pip_audit --progress-spinner off
       # The same font ci.yml installs, from the same implementation. This job ran the suite
       # without one: two tests hard-require a permitted face and FAIL rather than skip without
       # it, so this gate depended on exactly what ci.yml refuses to depend on — and by the time

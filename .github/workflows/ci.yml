@@ -213,14 +213,15 @@ jobs:
         with:
           node-version: 22
 
-      # BEFORE the install, not after it. The repo's only dependency manifest is site/ —
-      # there is no Python manifest here, the test dependencies are the pinned install line
-      # below and nothing resolves a graph — so this is the whole scannable surface. It ran
-      # third, after `npm ci`, and `npm ci` runs every lifecycle script in the resolved tree
-      # by default: the gate could name a compromised dependency but not stop it from having
-      # had a shell on the runner. `--package-lock-only` reads the committed lockfile and
-      # needs no node_modules, so the scan is the first thing that touches site/.
-      # `high` is the studio's threshold; a build-time low is not worth a red main.
+      # BEFORE the install, not after it. site/ is the npm lockfile surface; the Python
+      # runtime set is audited separately in `python-tests` (`pip-audit` on the installed
+      # env). This step used to claim "the whole scannable surface" while the pip graph was
+      # never scanned. It ran third, after `npm ci`, and `npm ci` runs every lifecycle
+      # script in the resolved tree by default: the gate could name a compromised
+      # dependency but not stop it from having had a shell on the runner.
+      # `--package-lock-only` reads the committed lockfile and needs no node_modules, so the
+      # scan is the first thing that touches site/. `high` is the studio's threshold; a
+      # build-time low is not worth a red main.
       - name: scan site dependencies
         working-directory: site
         run: npm audit --package-lock-only --audit-level=high
@@ -296,6 +297,17 @@ jobs:
       # clean-room action's, character for character; a test holds every copy to one string.
       - name: install test dependencies
         run: python -m pip install --upgrade pip numpy pillow pytest opencv-python-headless==5.0.0.93 matplotlib==3.11.1 "build>=1.5,<2" "requests>=2.32,<3"
+
+      # Python dependency audit on the environment that mirrors `[project] dependencies` /
+      # the `[dev]` pins just installed. site/'s `npm audit --audit-level=high` is the npm
+      # half; this is the pip half. `pip-audit` has no `--audit-level=high` (upstream has no
+      # severity floor flag); it fails on any known advisory in the resolved env — at least
+      # as strict as npm's `high`. Ceiling on the tool itself so release day cannot pick up
+      # a new major of the auditor.
+      - name: audit Python dependencies
+        run: |
+          python -m pip install "pip-audit>=2.7,<3"
+          python -m pip_audit --progress-spinner off
 
       # The sheet composers resolve a real font (Arial → Liberation Sans → Noto Sans, all
       # licence-verified) or refuse by name; nothing is bundled, because a font is a binary
