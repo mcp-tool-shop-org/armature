@@ -240,7 +240,50 @@ def parser_helpers(tree):
     return out
 
 
-def _namespace_bindings(fn, helpers):
+def _inner_parse_kind(call, helpers):
+    """`"attr"|"dict"|None` when `call` is a parse (or a known parser helper call)."""
+    if not isinstance(call, ast.Call):
+        return None
+    func = call.func
+    if (isinstance(func, ast.Name) and func.id == "vars" and call.args
+            and isinstance(call.args[0], ast.Call)
+            and isinstance(call.args[0].func, ast.Attribute)
+            and call.args[0].func.attr in ("parse_args", "parse_known_args")):
+        return "dict"
+    if isinstance(func, ast.Attribute) and func.attr in ("parse_args",
+                                                         "parse_known_args"):
+        return "attr"
+    if isinstance(func, ast.Name) and func.id in helpers:
+        return helpers[func.id]
+    return None
+
+
+def _passthrough_arg0_names(tree):
+    """Module-level functions that `return <first positional arg>` (validators).
+
+    WAVE 34: `lift_solve` writes `a = require_retarget_flags(parse_args())`. The
+    outer call is not itself a parser helper — it receives the Namespace, refuses
+    on incomplete retarget admissions, and returns the same object. A walk that
+    only bound `a = parse_args()` / `a = vars(...)` reported `namespace_reads` as
+    `{}` and dropped the tool from `parser_population` while it still declared
+    ten flags and read them all.
+    """
+    out = set()
+    for node in tree.body:
+        if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            continue
+        if not node.args.args:
+            continue
+        first = node.args.args[0].arg
+        for n in ast.walk(node):
+            if (isinstance(n, ast.Return) and isinstance(n.value, ast.Name)
+                    and n.value.id == first):
+                out.add(node.name)
+                break
+    return out
+
+
+def _namespace_bindings(fn, helpers, passthrough=frozenset()):
     """`{local name: "attr"|"dict"}` for every name in `fn` bound to a parsed namespace."""
     ns = {}
     for node in walk_scope(fn):
@@ -256,18 +299,15 @@ def _namespace_bindings(fn, helpers):
         # `namespace_reads(rig_bake)` returned `{}` and `CLI_TOOLS` fell from 67 to 66
         # on a tool that declares five flags and reads four. A census that keys on the
         # spelling cannot see a tool leaving it (wave-18 rule 1).
-        if (isinstance(func, ast.Name) and func.id == "vars" and node.value.args
-                and isinstance(node.value.args[0], ast.Call)
-                and isinstance(node.value.args[0].func, ast.Attribute)
-                and node.value.args[0].func.attr in ("parse_args",
-                                                     "parse_known_args")):
-            kind = "dict"
-        elif isinstance(func, ast.Attribute) and func.attr in ("parse_args",
-                                                               "parse_known_args"):
-            kind = "attr"
-        elif isinstance(func, ast.Name) and func.id in helpers and func.id != fn.name:
+        kind = _inner_parse_kind(node.value, helpers)
+        if kind is None and (isinstance(func, ast.Name) and func.id in passthrough
+                             and func.id != fn.name and node.value.args):
+            # `a = require_retarget_flags(parse_args())` — passthrough over a parse.
+            kind = _inner_parse_kind(node.value.args[0], helpers)
+        if kind is None and (isinstance(func, ast.Name) and func.id in helpers
+                             and func.id != fn.name):
             kind = helpers[func.id]
-        else:
+        if kind is None:
             continue
         for target in node.targets:
             if isinstance(target, ast.Name):
@@ -297,7 +337,8 @@ def cli_bodies(tree):
     if body is None:
         return []
     helpers = parser_helpers(tree)
-    if _namespace_bindings(body, helpers):
+    passthrough = _passthrough_arg0_names(tree)
+    if _namespace_bindings(body, helpers, passthrough):
         return [body]
     named = {n.name: n for n in tree.body
              if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef))}
@@ -309,7 +350,8 @@ def cli_bodies(tree):
             if not (isinstance(arg, ast.Name) and arg.id in named):
                 continue
             fn = named[arg.id]
-            if fn is not body and fn not in out and _namespace_bindings(fn, helpers):
+            if (fn is not body and fn not in out
+                    and _namespace_bindings(fn, helpers, passthrough)):
                 out.append(fn)
     return out or [body]
 
@@ -455,7 +497,8 @@ def declared_flags(tree, mod, helpers):
             continue
         seen.add(fn.name)
         out |= argparse_dests(fn)
-        out |= _namespace_writes(fn, _namespace_bindings(fn, parsers))
+        out |= _namespace_writes(
+            fn, _namespace_bindings(fn, parsers, _passthrough_arg0_names(tree)))
         for node in ast.walk(fn):
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
                 continue
@@ -479,8 +522,9 @@ def namespace_reads(tree):
     """
     out = {}
     parsers = parser_helpers(tree)
+    passthrough = _passthrough_arg0_names(tree)
     for body in cli_bodies(tree):
-        ns = _namespace_bindings(body, parsers)
+        ns = _namespace_bindings(body, parsers, passthrough)
         for node in walk_scope(body):
             if (isinstance(node, ast.Attribute) and isinstance(node.value, ast.Name)
                     and ns.get(node.value.id) == "attr"):

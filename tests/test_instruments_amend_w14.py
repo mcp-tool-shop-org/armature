@@ -492,7 +492,9 @@ def test_every_glb_export_site_captures_the_operator_status_set():
 #:     .venv/Scripts/python.exe -c "import sys;sys.path[:0]=['tests','tools'];
 #:     import test_instruments_amend_w14 as M;
 #:     print(len(M._operator_call_sites(M.TOOLS,'bpy.ops.render.render')))"
-RENDER_SITES_TODAY = 15
+# WAVE 34: 15 -> 10. `render_start_frame`'s nested `_render_still` collapses the former
+# per-path write_still sites into one call; modules unchanged.
+RENDER_SITES_TODAY = 10
 RENDER_SITE_MODULES_TODAY = [
     "armature_core/blender_scene.py", "make_binding_sheet.py", "make_parts_sheet.py",
     "make_skeleton_sheet.py", "preview_glb.py", "preview_walk.py", "render_performer.py",

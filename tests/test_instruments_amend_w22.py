@@ -1371,7 +1371,9 @@ def test_every_render_write_site_in_the_five_renderers_takes_a_snapshot():
                 assert "render_target_snapshot" in window, (
                     "%s:%d renders without a pre-render snapshot in its own scope"
                     % (fn, st.lineno))
-    assert total == 11, total
+    # WAVE 34: 11 -> 6. `render_start_frame`'s nested `_render_still` owns the one
+    # write_still site that used to be counted six times at the callers.
+    assert total == 6, total
 
 
 def test_the_snapshot_helpers_have_exactly_one_home():

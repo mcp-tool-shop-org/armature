@@ -569,8 +569,14 @@ def test_the_helper_that_both_refuses_and_writes_is_unmoved_by_this_split():
         hits = CN.helpers_that_refuse_and_write(ast.parse(CN.read_source(name)))
         if hits:
             derived[name] = sorted(hits)
-    assert derived == {"rig_character": ["export_rigged"],
-                       "stage_render": ["run_export"]}, derived
+    # WAVE 34: submit's `post_prompt` and encode_control's `build_control_pack` join —
+    # same residue HELPER_BOTH pin in test_instrument_write_ordering.py.
+    assert derived == {
+        "build_submit_payload": ["post_prompt"],
+        "encode_control": ["build_control_pack"],
+        "rig_character": ["export_rigged"],
+        "stage_render": ["run_export"],
+    }, derived
 
 
 def test_the_export_still_writes_and_the_reason_stage_render_sits_outside_is_intact():

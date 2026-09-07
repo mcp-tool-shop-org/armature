@@ -205,12 +205,21 @@ def test_the_stage_render_halt_line_carries_the_clause_of_an_unreadable_path(cap
 def test_no_tool_in_this_domain_raises_the_bare_base_with_an_evidence_argument():
     """The census half, keyed on the SHAPE rather than on this one site.
 
-    `raise ArmatureError(msg, {...})` is the shape that silently discards its evidence
-    until `ArmatureError` gains a constructor; an AST census over `tools/**` measured
-    `stage_render.py:582` as the only one in the tree, and this holds that at zero for the
-    (WAVE 16: `:597` on the merged tree, `:582` here — SEAM 15's measured table.)
-    42 modules of this domain.
+    `raise ArmatureError(msg, {...})` USED to silently discard its evidence — the base had
+    no `__init__` and `RuntimeError` absorbed the second arg. That is FIXED: the base now
+    takes `evidence=` and stores it. WAVE 34 retarget / pose-library refusals raise the
+    bare base with an evidence dict on purpose; the pin below holds that the constructor
+    keeps the dict, which is what made the empty-offenders ceiling obsolete.
     """
+    import sys
+    sys.path.insert(0, TOOLS)
+    from armature_core.errors import ArmatureError
+
+    kept = ArmatureError("probe", {"clause": "probe_clause", "n": 1})
+    assert kept.evidence == {"clause": "probe_clause", "n": 1}, kept.evidence
+
+    # Still enumerated so a regression that drops the constructor is visible as a
+    # population of raises whose evidence would again be lost — not as silence.
     offenders = []
     for name in sorted(os.listdir(TOOLS)):
         if not name.endswith(".py"):
@@ -222,7 +231,12 @@ def test_no_tool_in_this_domain_raises_the_bare_base_with_an_evidence_argument()
             cls = getattr(func, "id", getattr(func, "attr", None))
             if cls == "ArmatureError" and len(node.exc.args) >= 2:
                 offenders.append((name, node.lineno))
-    assert offenders == [], offenders
+    assert offenders, (
+        "expected wave-34 retarget/pose-library sites to raise ArmatureError(msg, ev); "
+        "if the population emptied, re-derive whether the shape moved to a subclass")
+    assert ("author_walk.py", 219) in offenders or any(
+        n == "author_walk.py" for n, _ in offenders), offenders
+    assert any(n == "lift_solve.py" for n, _ in offenders), offenders
 
 
 # ===========================================================================

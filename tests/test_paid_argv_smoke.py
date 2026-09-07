@@ -318,6 +318,60 @@ def _encode_control_argv(tmp, monkeypatch):
     return EC, [f"--frames={d}", f"--out={out}"], str(out), "ENCODE_CONTROL"
 
 
+def _uploads_argv(tmp):
+    import build_uploads_payload as B
+    img = tmp / "start.png"
+    Image.fromarray(np.zeros((8, 6, 3), dtype=np.uint8)).save(img)
+    out = tmp / "uploads.json"
+    return B, [f"--route=i2v", f"--start-frame={img}", f"--out={out}", "--dry-run"], \
+        str(out), "UPLOAD_ASSETS_OK"
+
+
+def _submit_argv(tmp):
+    """Dry-run SUCCESS: re-arms every gate, never POSTs. Admission is authored first."""
+    import shutil
+
+    import build_submit_payload as B
+    import gate_saved_graph as G
+    from test_amend_w14_builders import ASSEMBLY_API, ASSEMBLY_SAVED, _builder_record
+
+    d = tmp / "in"
+    d.mkdir()
+    api = d / "g.api.json"
+    saved = d / "g.saved.json"
+    api.write_text(json.dumps(ASSEMBLY_API), encoding="utf-8")
+    saved.write_text(json.dumps(ASSEMBLY_SAVED), encoding="utf-8")
+    seeds_src = None
+    specs = os.path.join(REPO, "specs")
+    for name in sorted(os.listdir(specs)):
+        if not (name.endswith(".json") and "seeds" in name):
+            continue
+        path = os.path.join(specs, name)
+        with open(path, encoding="utf-8") as fh:
+            doc = json.load(fh)
+        if isinstance(doc, dict) and "allocation" in doc:
+            seeds_src = path
+            break
+    if seeds_src is None:
+        raise RuntimeError("no specs/*seeds*.json carries allocation")
+    seeds = d / "seeds.json"
+    shutil.copy(seeds_src, seeds)
+    rec = d / "payload-record.json"
+    rec.write_text(json.dumps(_builder_record(
+        ASSEMBLY_API, family="wan", carries_no_sampler=True, frame=(832, 480, 81))),
+        encoding="utf-8")
+    adm = tmp / "admission.json"
+    assert G.main([
+        f"--saved={saved}", f"--api={api}", f"--seeds={seeds}", f"--out={adm}",
+        f"--record={rec}", "--frame=832,480,81",
+    ]) == 0
+    return B, [
+        f"--api={api}", f"--saved={saved}", f"--admission={adm}", f"--seeds={seeds}",
+        f"--record={rec}", "--frame=832,480,81", "--dry-run",
+        f"--ledger={tmp / 'ledger.json'}",
+    ], str(adm), "SUBMIT_COMFY_CLOUD_OK"
+
+
 #: name -> factory(tmp[, monkeypatch]) -> (mod, argv, artifact, sentinel)
 #: Factories that need monkeypatch take it as a second positional.
 PAID = {
@@ -330,6 +384,8 @@ PAID = {
     "build_animate_payload": _animate_argv,
     "build_i2v_payload": _i2v_argv,
     "build_camera_i2v_payload": _camera_argv,
+    "build_submit_payload": _submit_argv,
+    "build_uploads_payload": _uploads_argv,
     "canon_gate": _canon_gate_argv,
     "gate_b_frames": _gate_b_argv,
     "gate_saved_graph": _gate_saved_argv,
@@ -345,10 +401,13 @@ NEEDS_MONKEYPATCH = {
 
 
 def test_the_paid_success_population_is_the_fifteen_the_finding_names():
+    # WAVE 34 boundary tools join: submit + uploads dry-run SUCCESS keep the sheet gap
+    # at 47 when the CLI population grows 67 -> 69.
     assert sorted(PAID) == [
         "build_animate_payload", "build_assembly_payload", "build_camera_i2v_payload",
         "build_cascade_payload", "build_i2v_payload", "build_lora_arm_payload",
-        "build_payload", "build_r2v_payload", "build_t2v_payload", "canon_gate",
+        "build_payload", "build_r2v_payload", "build_submit_payload",
+        "build_t2v_payload", "build_uploads_payload", "canon_gate",
         "encode_control", "fetch_run", "fetch_t2v_run", "gate_b_frames",
         "gate_saved_graph"]
 

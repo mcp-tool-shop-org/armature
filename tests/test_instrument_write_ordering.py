@@ -146,6 +146,11 @@ def derive_population():
 #: verdict is issued. MEASURED on `81d6c07`; an equality, so a third tool in this shape lands
 #: here loudly instead of sitting outside every category the way `stage_render` did.
 HELPER_BOTH_REFUSES_AND_WRITES = {
+    # WAVE 34: `post_prompt` writes the curl body and raises; `build_control_pack` writes
+    # the control receipt and raises. Both join the residue the one-hop write deliberately
+    # does not record — measured after the submitter / encode_control --run landings.
+    "build_submit_payload": ["post_prompt"],
+    "encode_control": ["build_control_pack"],
     # `export_rigged` writes the GLB and raises the family; `rig_character` is in the ordering
     # population anyway, because its CLI body also writes directly (`os.makedirs` at :1691).
     "rig_character": ["export_rigged"],
@@ -318,7 +323,9 @@ POPULATION_MEASURED_2026_09_04 = {
     "make_overlay_sheet",
     "author_walk", "build_animate_payload", "build_assembly_payload",
     "build_camera_i2v_payload", "build_cascade_payload", "build_i2v_payload",
-    "build_lora_arm_payload", "build_payload", "build_r2v_payload", "build_t2v_payload",
+    "build_lora_arm_payload", "build_payload", "build_r2v_payload",
+    # WAVE 34: submitter + uploads-map author join — both gate-and-write.
+    "build_submit_payload", "build_t2v_payload", "build_uploads_payload",
     # JOINED 2026-09-04 by the instruments wave-10 amend (F-6ee68fc0): `check_relift.main`
     # now calls `gate_relift_window` over each GLB's own keyed action range, so it
     # gates-and-writes where before it only wrote. Its makedirs already sits one line above
@@ -464,14 +471,19 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     # "REVIEW: not a read-back". Twelve names are read-backs (`READBACK_REASONS`, each with
     # the call token a test finds in the source); thirty-five are a dated BACKLOG
     # (`NOT_YET_MOVED`) whose size is pinned, not a design decision.
-    "author_walk": ["gate_a_arrival", "gate_glb_written", "gate_n_names", "pick_subject"],
+    "author_walk": ["gate_a_arrival", "gate_arrived", "gate_glb_written", "gate_n_names",
+                    "pick_subject"],
     "extract_clip_frames": ["probe", "raise ClipReadError"],
     "fetch_run": ["download", "verify_downloads"],
     # WAVE-14 MERGE (coordinator, 2026-09-04): `download` LEFT — `fetch_t2v_run.download` is now a call into
     # `fetch_run.download` (builders, F-a3ba416b: one downloader across both fetchers); measured.
     "fetch_t2v_run": ["gate_order_evidence", "order_evidence"],
     "fit_reference": ["raise FitReferenceError"],
-    "lift_solve": ["gate_arrived", "gate_glb_written", "gate_n_names", "pick_subject"],
+    # WAVE 34 retarget: motion_out is written before the shared gate/author/export path, so
+    # `author` / `gate_objects_registered` / `gate_space_is_identity` join the stranded set
+    # (re-measured; not moved above the new first write in this pin-fix).
+    "lift_solve": ["author", "gate_arrived", "gate_glb_written", "gate_n_names",
+                   "gate_objects_registered", "gate_space_is_identity", "pick_subject"],
     "make_binding_sheet": ["render_arm"],
     "make_e08_sheet": ["raise SheetInputError"],
     "make_lift_sheet": ["subject_box"],
@@ -498,8 +510,11 @@ REFUSALS_BELOW_THE_FIRST_WRITE = {
     "render_performer": ["gate_coverage", "raise RenderGate",
                          "require_render_target_moved"],
     "render_pose_sticks": ["raise SticksGate"],
-    "render_start_frame": ["gate_alpha", "gate_backdrop", "raise RenderGate",
-                           "require_render_target_moved"],
+    # WAVE 34: `require_render_target_moved` LEFT — the nested `_render_still` helper
+    # now takes the snapshot+require around the single write_still site, so the
+    # call no longer sits below a first write the walk attributes to this module's
+    # other paths. Measured; entry deleted, not commented.
+    "render_start_frame": ["gate_alpha", "gate_backdrop", "raise RenderGate"],
     "render_turnaround": ["gate_set_distinct", "gate_view_alpha", "gate_view_crop", "gate_whole", "raise RenderTurnaroundGate",
                           "require_render_target_moved"],
     "rig_bake": ["gate_glb_written"],
@@ -599,18 +614,21 @@ READBACK_REASONS = {
 NOT_YET_MOVED = {
     # WAVE-14 MERGE (coordinator, 2026-09-04): six names left — the four `make_shotset_sheet` / `make_rig_sheet` / `make_skeleton_sheet`
     # strands moved above their writes (instruments, instruments-measure) and `gate_ink` moved (instruments-measure).
+    "author": "lift_solve authors the action after retarget already wrote motion_out (wave 34)",
     "build_pass": "rig_character's build pass refuses below the measure branch's makedirs (wave 13 read this family as an artefact of the walk's mutually-exclusive-branch handling; the walk is the operand, not the reason)",
     "export_rigged": "rig_character, same family as `build_pass`",
     "gate_a_arrival": "author_walk stages the walk and refuses after the run directory exists",
     "gate_alpha": "render_start_frame refuses on alpha after the first frame's directory exists",
-    "gate_arrived": "lift_solve, the author_walk shape one domain over",
+    "gate_arrived": "lift_solve / author_walk, the shape that refuses after the run directory exists",
     "gate_atlas_untouched": "rig_parts refuses on the atlas after the part GLBs are written",
     "gate_backdrop": "render_start_frame, same family as `gate_alpha`",
     "gate_coverage": "render_performer refuses on coverage after the render directory exists",
     "gate_d_determinism": "rig_character, same family as `build_pass`",
     "gate_n_names": "author_walk / lift_solve / rig_character",
+    "gate_objects_registered": "lift_solve, below the retarget motion_out write (wave 34)",
     "gate_part_names": "rig_parts, same family as `gate_atlas_untouched`",
     "gate_set_distinct": "render_turnaround refuses on the view set after the out dir exists",
+    "gate_space_is_identity": "lift_solve, below the retarget motion_out write (wave 34)",
     "gate_view_alpha": "render_turnaround, same family as `gate_set_distinct`",
     "gate_view_crop": "render_turnaround, same family as `gate_set_distinct`",
     "gate_whole": "render_turnaround, same family as `gate_set_distinct`",
@@ -912,8 +930,11 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # `require_import_status` in `rig_parts` -- the re-import whose names Gate PART
     # NAMES reads, below the export it reads back. It is a READ-BACK, so it enters
     # `READBACK_REASONS` and NOT the `NOT_YET_MOVED` backlog, whose size is unchanged.
-    assert names == 55, (
-        f"{names} distinct stranded refusal NAMES; this pin asserts 55 (one unit = one "
+    # WAVE 34: 55 -> 58. author_walk gains `gate_arrived`; lift_solve gains `author` /
+    # `gate_objects_registered` / `gate_space_is_identity` below the new retarget
+    # motion_out write; render_start_frame loses `require_render_target_moved` (-1).
+    assert names == 58, (
+        f"{names} distinct stranded refusal NAMES; this pin asserts 58 (one unit = one "
         f"refusal spelling under a tool, collapsed per tool). Re-derive with the suite "
         f"interpreter named in tests/conftest.py via the command in the comment block above. "
         f"Record the wave that moved it BRANCH-LOCAL, never summed. Dump: {sorted(derived.items())}")
@@ -942,10 +963,14 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # `NOT_YET_MOVED` backlog is unchanged. The three sheets' new
     # `require_render_target_moved` calls add NO site: each sits inside a `shoot`
     # already counted through that name.
-    assert sites == 78, (
-        f"{sites} refusal SITES below a first write; this pin asserts 78, re-derived on the "
-        f"merged tree 2026-09-05 (wave 22, all five domains merged; see the comments above for the "
-        f"measurements it overturned), and the number falls as the moves land")
+    # WAVE 34: 78 -> 72. The six `require_render_target_moved` sites inside
+    # `render_start_frame`'s former inlined write_still calls leave when the nested
+    # `_render_still` helper owns the snapshot+require pair; measured, never summed.
+    assert sites == 72, (
+        f"{sites} refusal SITES below a first write; this pin asserts 72, re-derived on the "
+        f"merged tree after wave 34 retarget / render_start_frame helper landings "
+        f"(see the comments above for the measurements it overturned), and the number "
+        f"falls as the moves land")
 
 
 def test_no_assertion_message_in_the_suite_quotes_a_ceiling_it_does_not_assert():
@@ -1086,9 +1111,10 @@ def test_the_read_back_table_is_read_and_says_what_it_means():
     assert len(READBACK_REASONS) == 13, sorted(READBACK_REASONS)
     # WAVE 16, F-9b4d01ef: the message named 35, which the wave-14 merge overturned when it
     # re-derived 12 / 29 on the merged tree. Same correction as the sites message above.
-    assert len(NOT_YET_MOVED) == 29, (
+    # WAVE 34: 29 -> 32 (`author`, `gate_objects_registered`, `gate_space_is_identity`).
+    assert len(NOT_YET_MOVED) == 32, (
         f"{len(NOT_YET_MOVED)} refusals still sit below a first write without reading it "
-        f"back; this pin asserts 29, re-derived on the merged tree 2026-09-04, and the "
+        f"back; this pin asserts 32, re-derived after wave 34 retarget strands, and the "
         f"number may only fall — a move deletes its entry in the commit that makes it")
 
 

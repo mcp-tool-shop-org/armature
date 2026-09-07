@@ -2,7 +2,7 @@
 """build_payload — assemble a submission, with the gates that must fire first.
 
     python tools/build_payload.py --experiment=E02 --arm=A1a --out=<payload.json> \
-        --subject=BLACKGUARD --no-canon
+        --subject=PERFORMER --no-canon
     python tools/build_payload.py --experiment=E03 --arm=B1  --out=<payload.json> \
         --subject=WIRE --no-canon
     python tools/build_payload.py --experiment=E06 --arm=D1  --out=<payload.json> \
@@ -11,8 +11,9 @@
 `--subject` is not decoration on these lines: `add_spend_flags` arms Gate CANON, which
 fires BEFORE the payload is built, and all three invocations halted without it —
 "[CANON] no subject: a spend with no census id has no answer", exit 2 (wave 12,
-F-4150910d). BLACKGUARD and WIRE are census rows with no ratified surfaces file, so
+F-4150910d). PERFORMER and WIRE are census rows with no ratified surfaces file, so
 `--no-canon` is the escape that row requires and it announces itself in the record.
+BLACKGUARD now carries surfaces; it is no longer an identity-only escape subject.
 
 Emits ComfyUI **API format**. The bridge is the one ruled in `E02-halt-ruling.md`:
 33 x `LoadImage` -> `BatchImagesNode` -> `control_video`. There is no encoder anywhere in

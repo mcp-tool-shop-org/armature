@@ -108,11 +108,13 @@ def test_the_cpython_halt_population_moved_and_the_pending_table_is_empty():
     pending = [f for f in B.cpython_tools() if not B.halt_handler(f)]
     assert pending == [], pending
     with_handler = [f for f in B.cpython_tools() if B.halt_handler(f)]
-    assert len(with_handler) == 54, len(with_handler)
+    # WAVE 34: 54 -> 56. submit + uploads adopt the one handler.
+    assert len(with_handler) == 56, len(with_handler)
     adopters = sorted(f for f in with_handler if "run_tool_main" in B.read_source(f))
     # WAVE-25 MERGE (coordinator, 2026-09-05): 37 was this branch alone; builders moved its thirteen onto the
     # handler in the same wave, and the merged tree is MEASURED here by the same expression, never summed.
-    assert len(adopters) == 50, len(adopters)
+    # WAVE 34: 50 -> 52 with submit + uploads.
+    assert len(adopters) == 52, len(adopters)
 
 
 #: The four members whose artifact or number reaches a SPEND or a RULING. Driven end to end

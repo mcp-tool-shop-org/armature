@@ -631,7 +631,8 @@ def test_the_empty_subject_refusal_names_the_frame_that_was_asked_for():
     integer; the refusal must quote it in the sentence AND record it, so a census over
     halt lines can say which frame was requested."""
     src = source("render_start_frame.py")
-    assert "--frame={a.frame}" in src, "the sentence does not quote the flag's value"
+    # WAVE 34: multi-frame authoring quotes the resolved index (`idx`), not `a.frame`.
+    assert "--frame={idx}" in src, "the sentence does not quote the flag's value"
     found = refusals_by_clause("render_start_frame.py")
     _msg, keys = found["subject_has_no_vertices_at_this_frame"]
     assert {"requested_frame", "scene_frame", "action_range"} <= keys, sorted(keys)
@@ -761,10 +762,11 @@ def test_every_inline_refusal_below_the_first_write_names_the_output_directory()
 
 def test_the_population_is_not_empty():
     """A property over an empty set is not a check. The derivation must find the sites it
-    is about — 13 inline refusals across 7 modules on this branch."""
+    is about — WAVE 34: 13 -> 9 after render_start_frame's nested `_render_still` collapsed
+    the per-path inline refusals into the helper."""
     found = inline_refusals_below_the_first_write()
     total = sum(len(v) for v in found.values())
-    assert total >= 13, {k: len(v) for k, v in found.items()}
+    assert total >= 9, {k: len(v) for k, v in found.items()}
     assert "render_turnaround.py" in found and "render_start_frame.py" in found, found
 
 

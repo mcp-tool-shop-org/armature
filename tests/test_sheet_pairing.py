@@ -302,7 +302,14 @@ def _positional_indexing(tree):
                     for target in node.targets:
                         if isinstance(target, ast.Name):
                             holds[target.id] = builders[called]
-            if _calls(ast.Module(body=[node], type_ignores=[]), "listdir"):
+            # WAVE 34: a Dict / DictComp that EMBEDS `os.listdir` for evidence
+            # (`ev_cov["written_so_far"] = sorted(os.listdir(out)...)`) is not a listing
+            # binding. Walking the whole Assign flagged `ev_cov["verdict"]` on
+            # `render_start_frame` as positional frame indexing — the same false-positive
+            # family wave 22 closed for `ast.Slice`.
+            if isinstance(node.value, (ast.Dict, ast.DictComp)):
+                pass
+            elif _calls(ast.Module(body=[node], type_ignores=[]), "listdir"):
                 for target in node.targets:
                     if isinstance(target, ast.Name):
                         holds.setdefault(target.id, "positional")
@@ -381,6 +388,10 @@ RECORDED_FRAME_TOOLS = [
     "make_identity_sheet", "make_lift_sheet", "make_pick_sheet", "make_plate",
     "make_review_clip", "make_startframe_sheet", "make_thesis_sheet", "measure_arm",
     "measure_clip", "pack_pose_pack",
+    # WAVE 34: `--frames=i,j` is an FLF index pair (not a frames directory), but the
+    # derivation keys on the flag name + any `listdir` in the module; joins loudly.
+    # It does NOT positionally index a listing (measured; Dict-embedded listdir closed).
+    "render_start_frame",
 ]
 
 #: Named, dated, and checked against the clause it rests on. `make_crop_strip` indexes a
@@ -839,7 +850,8 @@ parser_population = CN.parser_population
 RECORDED_PARSER_POPULATION = [
     "armature_index", "author_walk", "build_animate_payload", "build_assembly_payload",
     "build_camera_i2v_payload", "build_cascade_payload", "build_i2v_payload",
-    "build_lora_arm_payload", "build_payload", "build_r2v_payload", "build_t2v_payload",
+    "build_lora_arm_payload", "build_payload", "build_r2v_payload",
+    "build_submit_payload", "build_t2v_payload", "build_uploads_payload",
     "canon_gate", "check_relift", "compare_runs", "composite_reference",
     "diagnose_bone_heat", "encode_control", "extract_clip_frames", "fetch_run",
     "fetch_t2v_run", "fit_reference", "gate_b_frames", "gate_saved_graph",
@@ -863,7 +875,8 @@ def test_the_parser_population_is_every_tool_with_a_command_line():
         "appeared": sorted(set(pop) - set(RECORDED_PARSER_POPULATION)),
         "vanished": sorted(set(RECORDED_PARSER_POPULATION) - set(pop)),
     }
-    assert len(pop) == 67, pop  # WAVE 16: the parse_args-helper idiom joined; see above
+    # WAVE 34: 67 -> 69. submit + uploads join; lift_solve stays via passthrough binding.
+    assert len(pop) == 69, pop
     # The population is asserted against the thing it is ABOUT, not against its own history:
     # every `tools/*.py` that calls `add_argument(` has a command line, whatever idiom it
     # reaches its namespace through.

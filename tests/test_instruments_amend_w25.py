@@ -717,6 +717,8 @@ def test_the_payload_of_the_rewritten_sentinel_is_a_dict_literal():
 #: 2026-09-07 on the wave-32 merge. Builders path-only OK lines now carry
 #: json.dumps({"path": ...}); SAVED_ADMISSION_OK is a sentinel on its own line.
 OK_LINES_NOT_JSON_ELSEWHERE = [
+    # WAVE 34: submit + uploads print a bare `_OK` line then a separate json.dumps receipt.
+    "build_submit_payload.py", "build_uploads_payload.py",
     "composite_reference.py", "extract_clip_frames.py", "gate_saved_graph.py",
     "make_cast_sheet.py", "make_e13_sheet.py", "make_hole_survey.py",
     "make_shotset_sheet.py", "measure_cascade_clip.py", "rig_sheet_compose.py",

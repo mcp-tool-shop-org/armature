@@ -204,7 +204,10 @@ def test_the_parser_population_is_every_tool_that_declares_an_argument():
         "declares a flag, census cannot see it": sorted(set(declared_one) - set(CLI_TOOLS)),
         "in the census, declares nothing": sorted(set(CLI_TOOLS) - set(declared_one)),
     }
-    assert len(CLI_TOOLS) == 67, len(CLI_TOOLS)
+    # WAVE 34: 67 -> 69. `build_submit_payload` and `build_uploads_payload` join; the
+    # retarget spelling on `lift_solve` (`a = require_retarget_flags(parse_args())`) is
+    # visible again via `_passthrough_arg0_names`, so it does not leave.
+    assert len(CLI_TOOLS) == 69, len(CLI_TOOLS)
 
 
 def test_the_solver_no_longer_shadows_the_tool_of_the_same_name():
@@ -218,8 +221,10 @@ def test_the_solver_no_longer_shadows_the_tool_of_the_same_name():
     assert CN.colliding_basenames() == ["lift_solve"], CN.colliding_basenames()
     assert CN.cli_body(TOOL_TREES["lift_solve"]) is not None
     assert CN.cli_body(CN.module_trees(include_core=False)["lift_solve"]) is not None
+    # WAVE 34 retarget admits four more flags; the passthrough binding keeps them visible.
     assert set(CN.namespace_reads(TOOL_TREES["lift_solve"])) == {
-        "fps", "glb", "manifest", "motion", "out"}
+        "bone_map", "fps", "glb", "licence_row", "manifest", "motion", "motion_out",
+        "out", "retarget", "root_translation"}
 
 
 def test_the_widened_walk_sees_a_flag_the_old_one_could_not_and_the_old_one_is_shown_blind():
@@ -579,7 +584,9 @@ def test_the_argv_smoke_population_is_the_plate_parsing_population():
 #
 # WAVE 34, F-fbe68663: the fifteen paid CLIs move into `tests/test_paid_argv_smoke.PAID`
 # SUCCESS fixtures, so the gap shrinks 62 -> 47 deliberately. SHEETS stays the plate-sheet
-# five; PAID is the sibling population.
+# five; PAID is the sibling population. The two boundary payload tools that joined the
+# CLI population the same wave (`build_submit_payload`, `build_uploads_payload`) carry
+# dry-run SUCCESS fixtures too, so the gap stays at 47 rather than growing with them.
 
 
 import test_paid_argv_smoke as _PAID_SMOKE  # noqa: E402
@@ -603,8 +610,10 @@ CPYTHON_CLI_TOOLS = _cpython_cli_tools()
 
 
 def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
-    """47 of 67 after wave 34 (was 62 of 67 on 2026-09-04). A fixture added moves a tool
-    out of this set and into SHEETS or PAID_SUCCESS; nothing may move the other way."""
+    """47 of 69 after wave 34 (was 62 of 67 on 2026-09-04; population grew by the two
+    boundary payload tools, covered by dry-run SUCCESS fixtures so the gap does not grow).
+    A fixture added moves a tool out of this set and into SHEETS or PAID_SUCCESS; nothing
+    may move the other way."""
     covered = set(SHEETS) | PAID_SUCCESS
     assert set(NO_SUCCESS_FIXTURE) | covered == set(CLI_TOOLS)
     assert set(SHEETS) <= set(CLI_TOOLS), sorted(set(SHEETS) - set(CLI_TOOLS))
@@ -613,7 +622,7 @@ def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
         f"{len(NO_SUCCESS_FIXTURE)} command-line tools have no end-to-end success fixture; "
         f"47 was the count after wave 34's paid SUCCESS fixtures and it may only fall: "
         f"{NO_SUCCESS_FIXTURE}")
-    assert len(PAID_SUCCESS) == 15, sorted(PAID_SUCCESS)
+    assert len(PAID_SUCCESS) == 17, sorted(PAID_SUCCESS)
 
 
 def test_the_blender_side_of_the_cli_population_is_the_one_that_cannot_be_driven_here():
@@ -637,7 +646,8 @@ def test_the_blender_side_of_the_cli_population_is_the_one_that_cannot_be_driven
         "rig_retopo"], excluded
     for module in excluded:
         assert blender_reach(module + ".py"), module
-    assert len(CPYTHON_CLI_TOOLS) == 50, len(CPYTHON_CLI_TOOLS)
+    # WAVE 34: 50 -> 52. The two boundary payload tools are CPython; blender side unchanged.
+    assert len(CPYTHON_CLI_TOOLS) == 52, len(CPYTHON_CLI_TOOLS)
 
 
 def _module_scope_imports_this_interpreter_cannot_resolve(module):

@@ -605,14 +605,22 @@ def _export_call_sites(filename):
 
 
 def _calls_named(filename, names):
-    """`{callee: [names passed as its first positional argument]}` for `names`."""
+    """`{callee: [names passed as its first positional argument]}` for `names`.
+
+    Resolves both `f(x)` and `mod.f(x)` — WAVE 34's `rc.require_render_target_moved(path)`
+    is the Attribute form the Name-only walk could not see.
+    """
     tree = ast.parse(read_source(filename))
     out = {n: [] for n in names}
     for node in ast.walk(tree):
-        if (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)
-                and node.func.id in out and node.args
+        if not (isinstance(node, ast.Call) and node.args
                 and isinstance(node.args[0], ast.Name)):
-            out[node.func.id].append(node.args[0].id)
+            continue
+        func = node.func
+        callee = (func.id if isinstance(func, ast.Name)
+                  else func.attr if isinstance(func, ast.Attribute) else None)
+        if callee in out:
+            out[callee].append(node.args[0].id)
     return out
 
 
@@ -642,7 +650,10 @@ RECORDED_RENDERERS = [
 #: rather than trusted: this tool never asks whether the file exists because it OPENS every
 #: render it takes, and an absent file raises there instead.
 READ_BACK_EXEMPT = {
-    "render_start_frame.py": ("_pixels", "_alpha_channel"),
+    # WAVE 34: nested `_render_still(path)` assigns `scene.render.filepath = path` and
+    # read-backs via `require_render_target_moved(path, ...)` (Attribute callee). The
+    # `_calls_named` walk below resolves both Name and Attribute.attr forms.
+    "render_start_frame.py": ("_pixels", "_alpha_channel", "require_render_target_moved"),
 }
 
 
@@ -878,7 +889,9 @@ RECORDED_COUNTING_SUCCESS_LINES = [
     # a legitimate finding for a diagnostic), so it is exempt from the guard clause below for
     # that stated reason.
     "diagnose_bone_heat.py",
-    "lift_solve.py",
+    # WAVE 34: `lift_solve` LEFT — retarget's success path no longer prints a `len(...)`
+    # term in the `_OK` payload, so `_counted_payload_terms` does not reach it. Measured;
+    # entry deleted, not commented.
     # WAVE 25 (instruments, F-f204a6d1): `make_skeleton_sheet` JOINED, for the reason
     # `diagnose_bone_heat` did in wave 14. Its success line was
     # `print("MAKE_SKELETON_SHEET_OK " + path)` -- a bare Windows path, the only `_OK`

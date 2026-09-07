@@ -355,8 +355,10 @@ def test_the_int_flags_are_enumerated_so_the_next_one_cannot_hide():
     """The population, by derivation. If a numeric flag is ADDED to either parser this
     fails until someone decides which family it is in — which is the point of enumerating
     rather than listing."""
+    # WAVE 34: `--end-frame` joins with `--set/--frames` multi-frame authoring.
     assert _int_flags("render_start_frame.py") == [
-        "--floor", "--fps", "--frame", "--height", "--shadow-layer", "--width"]
+        "--end-frame", "--floor", "--fps", "--frame", "--height", "--shadow-layer",
+        "--width"]
     assert _int_flags("render_turnaround.py") == [
         "--fps", "--height", "--views", "--width"]
 
