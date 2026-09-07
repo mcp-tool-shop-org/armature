@@ -34,7 +34,13 @@ import numpy as np  # noqa: E402
 
 from armature_core import aapose  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+from sheet_compose import PAD as SHEET_PAD  # noqa: E402
 
+#: Gutter between overlay tiles — same PAD dailies sheets use (F-5b24109f).
+TILE_GUTTER = SHEET_PAD
+#: Dark bar under the frame caption, matching `make_e08_sheet.label` (F-f79959ea).
+LABEL_BAR_H = 26
+GUTTER_RGB = (18, 18, 20)
 
 
 HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
@@ -172,18 +178,35 @@ def main(argv=None):
         over = np.clip(over, 0, 255).astype(np.uint8)
 
         # Ringed markers on the 20 body keypoints, so a joint landing off the body is
-        # visible as a ring in empty air rather than hidden inside a stick.
+        # visible as a ring in empty air rather than hidden inside a stick. Dark halo
+        # behind the index so it stays readable on the pale studio plate (F-f79959ea).
         for j, (x, y, _c) in enumerate(rec["body"][i]):
+            jx, jy = int(round(x)) + a.dot + 2, int(round(y)) - 2
             cv2.circle(over, (int(round(x)), int(round(y))), a.dot, (255, 255, 255), 1)
-            cv2.putText(over, str(j), (int(round(x)) + a.dot + 2, int(round(y)) - 2),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.55, (255, 255, 255), 1, cv2.LINE_AA)
+            cv2.putText(over, str(j), (jx, jy), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
+                        (0, 0, 0), 3, cv2.LINE_AA)
+            cv2.putText(over, str(j), (jx, jy), cv2.FONT_HERSHEY_SIMPLEX, 0.55,
+                        (255, 255, 255), 1, cv2.LINE_AA)
 
-        cv2.putText(over, f"frame {i}", (24, 44), cv2.FONT_HERSHEY_SIMPLEX, 1.1,
-                    (255, 255, 255), 2, cv2.LINE_AA)
+        # Black caption bar then white text — `make_e08_sheet.label` LOOK (F-f79959ea).
+        cv2.rectangle(over, (0, 0), (over.shape[1], LABEL_BAR_H), (0, 0, 0), -1)
+        cv2.putText(over, f"frame {i}", (6, 19), cv2.FONT_HERSHEY_SIMPLEX, 0.5,
+                    (255, 255, 255), 1, cv2.LINE_AA)
         tiles.append(cv2.resize(over, (int(width * a.scale), int(height * a.scale)),
                                 interpolation=cv2.INTER_AREA))
 
-    sheet = np.concatenate(tiles, axis=1)
+    # F-5b24109f: gutter between tiles so an edge stick does not read across frames.
+    if len(tiles) == 1:
+        sheet = tiles[0]
+    else:
+        h = tiles[0].shape[0]
+        gap = np.full((h, TILE_GUTTER, 3), GUTTER_RGB, dtype=np.uint8)
+        parts = []
+        for i, t in enumerate(tiles):
+            if i:
+                parts.append(gap)
+            parts.append(t)
+        sheet = np.concatenate(parts, axis=1)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     # `cv2.imwrite` returns a BOOL on failure and raises NOTHING -- measured 2026-09-04
     # with this venv's OpenCV 5.0.0: an --out naming an existing DIRECTORY returned False,

@@ -40,6 +40,7 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from sheet_compose import font as sheet_font  # noqa: E402
 
 TOOL_VERSION = "E13.1"
 
@@ -147,28 +148,33 @@ def build(arm, ref_images, ref_labels, frame_paths, frame_labels, prov_lines, ti
     per_row = max(1, min(len(outs), 4))
     rows = (len(outs) + per_row - 1) // per_row
 
+    # F-7f9eb100: resolved TrueType face (sheet_compose), not PIL's default bitmap.
+    f_body = sheet_font("arial.ttf", 13)
+    f_hdr = sheet_font("arial.ttf", 15)
+    line_h = 16
     W = max(MARGIN + len(refs) * (REF_W + MARGIN),
             MARGIN + per_row * (OUT_W + MARGIN), 900)
-    prov_h = MARGIN + len(prov_lines) * 14 + MARGIN
+    prov_h = MARGIN + len(prov_lines) * line_h + MARGIN
     H = (BAND_H + MARGIN + BAND_H + ref_h + LABEL_H + MARGIN
          + BAND_H + rows * (out_h + LABEL_H + MARGIN) + MARGIN + BAND_H + prov_h)
 
     sheet = Image.new("RGB", (W, H), BG)
     d = ImageDraw.Draw(sheet)
     y = 4
-    d.text((MARGIN, y), title, fill=FG)
+    d.text((MARGIN, y), title, fill=FG, font=f_hdr)
     y += BAND_H + MARGIN
 
-    d.text((MARGIN, y), "REFERENCES — what was sent, in slot order", fill=DIM)
+    d.text((MARGIN, y), "REFERENCES — what was sent, in slot order", fill=DIM, font=f_body)
     y += BAND_H
     x = MARGIN
     for im, lab in zip(refs, ref_labels):
         sheet.paste(im, (x, y))
-        d.text((x, y + im.size[1] + 2), lab[:34], fill=DIM)
+        d.text((x, y + im.size[1] + 2), lab[:34], fill=DIM, font=f_body)
         x += REF_W + MARGIN
     y += ref_h + LABEL_H + MARGIN
 
-    d.text((MARGIN, y), "OUTPUT — sampled frames (full size on disk decides)", fill=DIM)
+    d.text((MARGIN, y), "OUTPUT — sampled frames (full size on disk decides)",
+           fill=DIM, font=f_body)
     y += BAND_H
     for r in range(rows):
         x = MARGIN
@@ -177,15 +183,16 @@ def build(arm, ref_images, ref_labels, frame_paths, frame_labels, prov_lines, ti
             if i >= len(outs):
                 break
             sheet.paste(outs[i], (x, y))
-            d.text((x, y + outs[i].size[1] + 2), frame_labels[i][:44], fill=DIM)
+            d.text((x, y + outs[i].size[1] + 2), frame_labels[i][:44],
+                   fill=DIM, font=f_body)
             x += OUT_W + MARGIN
         y += out_h + LABEL_H + MARGIN
 
-    d.text((MARGIN, y), "PROVENANCE", fill=DIM)
+    d.text((MARGIN, y), "PROVENANCE", fill=DIM, font=f_hdr)
     y += BAND_H
     for line in prov_lines:
-        d.text((MARGIN, y), line[:150], fill=FG)
-        y += 14
+        d.text((MARGIN, y), line[:150], fill=FG, font=f_body)
+        y += line_h
     return sheet
 
 

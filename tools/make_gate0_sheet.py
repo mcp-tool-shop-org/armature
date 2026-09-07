@@ -43,15 +43,19 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from composite_reference import parse_plate  # noqa: E402
 from measure_lift import gate_listing_pairing  # noqa: E402
 from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
-                           frames_by_number, load_rgb_over_plate, require_frames)
+                           font as sheet_font, frames_by_number, load_rgb_over_plate,
+                           max_text_width, require_frames)
 
 MARGIN = 10
 LABEL_H = 18
 HDR_H = 22
+LINE_H = 16
 BG = (18, 18, 20)
 FG = (235, 235, 235)
 DIM = (140, 140, 150)
 MISSING = "NOT RECORDED"
+PROV_FONT_SIZE = 13
+HDR_FONT_SIZE = 15
 
 
 
@@ -111,6 +115,25 @@ def _sha_text(*candidates):
     return MISSING
 
 
+def reference_display(meta):
+    """Short form for the provenance `reference` line (F-061259da).
+
+    A dict `{"path": ..., "sha256": ...}` used to render as the whole dict and overrun the
+    column; a long absolute path did the same. Basename (or the path key's basename) is
+    what a reader needs to identify the file; the sha rides the next line.
+    """
+    ref = meta.get("reference_image")
+    if not ref:
+        return "NONE (recorded absent)"
+    if isinstance(ref, dict):
+        path = ref.get("path") or ref.get("file") or ""
+        if path:
+            return os.path.basename(str(path))
+        sha = ref.get("sha256")
+        return (str(sha)[:32] if sha else MISSING)
+    return os.path.basename(str(ref))
+
+
 def provenance_lines(meta, output_sha=None, control_sha=None, reference_sha=None):
     """Every line of the provenance panel, derived from the run's record. A value the
     record does not carry prints `NOT RECORDED`. This panel used to bake E02-era
@@ -152,7 +175,7 @@ def provenance_lines(meta, output_sha=None, control_sha=None, reference_sha=None
         f"polarity       {cv('polarity')}",
         f"distinct imgs  {cv('distinct_images')} of {cv('total_images')}",
         f"control sha    {_sha_text(control_sha, ctl_d.get('video_sha256'), ctl_d.get('source_frames_sha256'), meta.get('control_sha256'))}",
-        f"reference      {meta.get('reference_image') or 'NONE (recorded absent)'}",
+        f"reference      {reference_display(meta)}",
         f"reference sha  {_sha_text(reference_sha, ref_d.get('sha256'), meta.get('reference_sha256'))}",
         "",
         f"Gate L         {_get(meta, 'gate_L', 'verdict')}",
@@ -224,44 +247,59 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
     rtile = fit(ref) if ref is not None else None
     ref_w = rtile.width if rtile is not None else 220
     tile_w = cols[0][1].width
-    width = MARGIN + len(cols) * (tile_w + MARGIN) + ref_w + MARGIN + 430
-    height = HDR_H + MARGIN + LABEL_H + tile_h + LABEL_H + tile_h + LABEL_H + MARGIN * 3
+    # F-7f9eb100: same resolved TrueType face as dailies/`sheet_compose`, not PIL's
+    # default bitmap — overflow budgets must match what CI actually renders.
+    f_body = sheet_font("arial.ttf", PROV_FONT_SIZE)
+    f_hdr = sheet_font("arial.ttf", HDR_FONT_SIZE)
+    lines = provenance_lines(meta)
+    # F-061259da: size the provenance column to the measured text, not a fixed +430.
+    prov_w = int(max_text_width(
+        [(ln, f_body) for ln in lines if ln]
+        + [("PROVENANCE", f_hdr), (header_text(meta), f_hdr)]))
+    tile_row_w = MARGIN + len(cols) * (tile_w + MARGIN) + ref_w + MARGIN + prov_w + MARGIN
+    width = max(tile_row_w, int(MARGIN + max_text_width([(header_text(meta), f_hdr)])
+                                + MARGIN))
+    y0 = HDR_H + MARGIN
+    tile_h_driven = HDR_H + MARGIN + LABEL_H + tile_h + LABEL_H + tile_h + LABEL_H + MARGIN * 3
+    # F-0cd6a323: provenance can outgrow the tile column at small tile_h.
+    prov_driven = y0 + LABEL_H + LINE_H * len(lines) + MARGIN
+    height = max(tile_h_driven, prov_driven)
 
     sheet = Image.new("RGB", (width, height), BG)
     d = ImageDraw.Draw(sheet)
-    d.text((MARGIN, 6), header_text(meta), fill=FG)
+    d.text((MARGIN, 6), header_text(meta), fill=FG, font=f_hdr)
 
-    y0 = HDR_H + MARGIN
     ctl_meta = meta.get("control")
     ctl_desc = (ctl_meta.get("polarity", MISSING) if isinstance(ctl_meta, dict)
                 else "NONE - this arm has no control_video")
-    d.text((MARGIN, y0), f"CONTROL  ({ctl_desc})", fill=DIM)
+    d.text((MARGIN, y0), f"CONTROL  ({ctl_desc})", fill=DIM, font=f_body)
     y1 = y0 + LABEL_H + tile_h + LABEL_H
-    d.text((MARGIN, y1), output_heading(meta), fill=DIM)
+    d.text((MARGIN, y1), output_heading(meta), fill=DIM, font=f_body)
 
     x = MARGIN
     for label, c, o in cols:
         sheet.paste(c, (x, y0 + LABEL_H))
-        d.text((x, y0 + LABEL_H + tile_h + 2), label, fill=DIM)
+        d.text((x, y0 + LABEL_H + tile_h + 2), label, fill=DIM, font=f_body)
         sheet.paste(o, (x, y1 + LABEL_H))
-        d.text((x, y1 + LABEL_H + tile_h + 2), label, fill=DIM)
+        d.text((x, y1 + LABEL_H + tile_h + 2), label, fill=DIM, font=f_body)
         x += tile_w + MARGIN
 
-    d.text((x, y0), "REFERENCE", fill=DIM)
+    d.text((x, y0), "REFERENCE", fill=DIM, font=f_body)
     if rtile is not None:
         sheet.paste(rtile, (x, y0 + LABEL_H))
-        d.text((x, y0 + LABEL_H + tile_h + 2), os.path.basename(reference), fill=DIM)
+        d.text((x, y0 + LABEL_H + tile_h + 2), os.path.basename(reference),
+               fill=DIM, font=f_body)
     else:
         # Named as deliberately absent. NOT a blank tile that could read as a missing file.
         for i, ln in enumerate(reference_absent_lines(meta)):
-            d.text((x, y0 + LABEL_H + 6 + i * 15), ln, fill=DIM)
+            d.text((x, y0 + LABEL_H + 6 + i * LINE_H), ln, fill=DIM, font=f_body)
 
     px = x + ref_w + MARGIN
-    d.text((px, y0), "PROVENANCE", fill=DIM)
+    d.text((px, y0), "PROVENANCE", fill=DIM, font=f_hdr)
     yy = y0 + LABEL_H
-    for ln in provenance_lines(meta):
-        d.text((px, yy), ln, fill=DIM if not ln.startswith("Gate") else FG)
-        yy += 15
+    for ln in lines:
+        d.text((px, yy), ln, fill=DIM if not ln.startswith("Gate") else FG, font=f_body)
+        yy += LINE_H
     return sheet
 
 

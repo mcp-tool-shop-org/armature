@@ -41,12 +41,14 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core import startframe as SF  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
+from sheet_compose import font as sheet_font  # noqa: E402
 
 TOOL_VERSION = "E12.1"
 
 MARGIN = 10
 LABEL_H = 16
 HDR_H = 26
+LINE_H = 16
 BG = (18, 18, 20)
 FG = (235, 235, 235)
 DIM = (140, 140, 150)
@@ -290,17 +292,20 @@ def build(cands, rec, scale=0.6, title=None, per_row=3):
     rows = (len(tiles) + per_row - 1) // per_row
 
     lines = provenance_lines(rec)
+    # F-7f9eb100: resolved TrueType face (sheet_compose), not PIL's default bitmap.
+    f_body = sheet_font("arial.ttf", 13)
+    f_hdr = sheet_font("arial.ttf", 15)
     grid_w = per_row * (tw + MARGIN)
     width = MARGIN + grid_w + 400
     height = max(HDR_H + MARGIN + rows * (th + 2 * LABEL_H + MARGIN) + MARGIN,
-                 HDR_H + MARGIN + len(lines) * 15 + MARGIN)
+                 HDR_H + MARGIN + len(lines) * LINE_H + MARGIN)
 
     sheet = Image.new("RGB", (width, height), BG)
     d = ImageDraw.Draw(sheet)
     d.text((MARGIN, 6), (title or "GATE PLATE - candidate plates")
            + f"      (tiles at {scale:g}x of "
              f"{rec['source_size'][0]}x{rec['source_size'][1]}; "
-             f"sheets locate, full size decides)", fill=FG)
+             f"sheets locate, full size decides)", fill=FG, font=f_hdr)
 
     g = rec["cover_fit"]
     sb = rec["visible_rows_source"]
@@ -320,17 +325,18 @@ def build(cands, rec, scale=0.6, title=None, per_row=3):
         d.rectangle([cx, cy + sb[0] * scale,
                      cx + tw - 1, cy + sb[1] * scale], outline=BAND_INK)
         mot = MISSING if c["motion"] is None else f"{c['motion']:.3f}"
-        d.text((cx, cy + th + 2), f"f{c['index']:03d}", fill=FG)
+        d.text((cx, cy + th + 2), f"f{c['index']:03d}", fill=FG, font=f_body)
         d.text((cx, cy + th + 2 + LABEL_H),
                f"sharp {c['sharpness']:.0f}   motion {mot}   luma {c['mean_luma']:.1f}",
-               fill=DIM)
+               fill=DIM, font=f_body)
 
     px = MARGIN + grid_w + MARGIN
     yy = HDR_H + MARGIN
     for ln in lines:
         d.text((px, yy), ln,
-               fill=FG if ln.startswith(("COVER", "VISIBLE", "DIAGNOSTICS")) else DIM)
-        yy += 15
+               fill=FG if ln.startswith(("COVER", "VISIBLE", "DIAGNOSTICS")) else DIM,
+               font=f_body)
+        yy += LINE_H
     return sheet
 
 

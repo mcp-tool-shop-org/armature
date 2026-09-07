@@ -30,6 +30,11 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from sheet_compose import PAD as SHEET_PAD  # noqa: E402
+
+#: Gutter between zoom tiles — same PAD dailies sheets use (F-5b24109f).
+TILE_GUTTER = SHEET_PAD
+GUTTER_RGB = (18, 18, 20)
 
 
 HALT_EPILOG = 'Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".'
@@ -128,7 +133,18 @@ def main(argv=None):
                      "clamped_to_frame": moved, "scale": a.scale,
                      "interpolation": "NEAREST"})
 
-    sheet = np.concatenate(tiles, axis=1)
+    # F-5b24109f: gutter between tiles so abutting crops do not fuse at the shared edge.
+    if len(tiles) == 1:
+        sheet = tiles[0]
+    else:
+        h = tiles[0].shape[0]
+        gap = np.full((h, TILE_GUTTER, 3), GUTTER_RGB, dtype=np.uint8)
+        parts = []
+        for i, t in enumerate(tiles):
+            if i:
+                parts.append(gap)
+            parts.append(t)
+        sheet = np.concatenate(parts, axis=1)
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     # Checked BEFORE the sidecar is written: the `_crops.json` describing the crops used
     # to survive a sheet that does not exist, because the image write was discarded and
