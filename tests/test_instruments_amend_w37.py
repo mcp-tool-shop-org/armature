@@ -128,7 +128,7 @@ def test_engine_flag_and_candidates():
     mod = load_tool("render_performer.py")
     assert mod.engine_candidates_for("eevee") == mod.ENGINE_CANDIDATES
     assert mod.engine_candidates_for("cycles") == mod.CYCLES_CANDIDATES
-    with pytest.raises(ArmatureError):
+    with pytest.raises(ArmatureError, match=r"--engine=.*is not one of"):
         mod.engine_candidates_for("metal")
 
 

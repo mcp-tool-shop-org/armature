@@ -968,6 +968,8 @@ PNG_REFUSALS = [
     ("unsupported_bit_depth", np.zeros((2, 2), dtype=np.uint8), 4),
 ]
 
+#: WAVE 37 pin-fix: write_png + read_png both raise PngWriteError; measured raise sites.
+PNG_WRITE_ERROR_RAISE_COUNT = 23
 
 @pytest.mark.parametrize("clause,arr,depth", PNG_REFUSALS,
                          ids=[c for c, _, _ in PNG_REFUSALS])
@@ -990,13 +992,27 @@ def test_every_png_refusal_names_the_file_it_refused(tmp_path, clause, arr, dept
 
 
 def test_the_png_refusal_population_is_derived_and_complete():
-    """Every `PngWriteError` raise in the module, counted from the tree, so a seventh
-    added later without a `path` is a failure here rather than a silent gap."""
-    raises = [n for n in ast.walk(_tree("pngio.py"))
+    """Every `PngWriteError` raise in the module, counted from the tree, so a site
+    added later without a `path` is a failure here rather than a silent gap.
+
+    WAVE 37: read_png joined write_png under the same andon; the write fixtures above
+    stay the driven set, and the raise-site count is pinned separately. Public
+    write/read doors carry `path`; `_read_chunk` helpers carry offset/tag instead.
+    """
+    tree = _tree("pngio.py")
+    owner = {}
+    for fn in ast.walk(tree):
+        if isinstance(fn, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            for child in ast.walk(fn):
+                owner[child] = fn.name
+    raises = [n for n in ast.walk(tree)
               if isinstance(n, ast.Raise) and isinstance(n.exc, ast.Call)
               and getattr(n.exc.func, "id", None) == "PngWriteError"]
-    assert len(raises) == len(PNG_REFUSALS)
+    assert len(raises) == PNG_WRITE_ERROR_RAISE_COUNT
+    pathless = []
     for node in raises:
         ev = [a for a in node.exc.args if isinstance(a, ast.Dict)][0]
         keys = [k.value for k in ev.keys if isinstance(k, ast.Constant)]
-        assert "path" in keys, ast.dump(node)
+        if "path" not in keys:
+            pathless.append(owner.get(node, "?"))
+    assert sorted(pathless) == ["_read_chunk"] * 3, pathless

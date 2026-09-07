@@ -1292,12 +1292,16 @@ TESTS_STALE_ANCHORS_RECORDED = {
     # (lift_solve / author_walk / preview_walk). Seven new blanks JOIN; numbers survive
     # only as the measurement. Reasons name no <file>.py:<n> here.
     ('test_ci_workflows', 'test_packaging.py', 1013),
-    ('test_instruments_amend_w22_optics', 'render_start_frame.py', 1012),
     ('test_instruments_amend_w8', 'test_render_visibility.py', 89),
-    ('test_pinned_framing', 'render_performer.py', 321),
     ('test_posearc', 'rig_character.py', 661),
-    ('test_rig_gates', 'rig_character.py', 881),
-    ('test_rig_gates', 'rig_character.py', 666),
+    # WAVE 37 pin-fix: four WAVE-35 rows DELETED — those anchors resolve again
+    # (render_start_frame / render_performer / two rig_character cites). Four new
+    # blanks JOIN; numbers survive only as the measurement. Reasons name no
+    # <file>.py:<n> here.
+    ('test_build_payload', 'make_ab_clip.py', 181),
+    ('test_ci_workflows', 'test_record_index_binding.py', 105),
+    ('test_instruments_amend_w10', 'render_turnaround.py', 785),
+    ('test_refusal_clauses', 'make_sheet.py', 52),
     # ROW DELETED, WAVE 25 (core-solvers), in the commit that made it live again — which is
     # this table's own stated rule. The row named a line in `blender_scene.py` cited by
     # `test_instruments_amend_w14`, kept as a deliberate stale citation because the number

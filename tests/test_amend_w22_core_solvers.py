@@ -253,6 +253,8 @@ SEEDED_EXTREMA_TODAY = {
     ("lift_solve", "round_trip_report", "d > worst['d']"): "swept (wave 22)",
     # F-cfb560aa — swept by `require_finite` before either `>` is asked.
     ("parts", "gate_parts_determinism", "d > worst['delta']"): "swept (wave 22)",
+    # WAVE 37: heading keyframe walk compares integer frame indices, not a measurement.
+    ("walk", "resolve_heading_schedule", "fr <= fi"): "integer frame indices",
 }
 #: `resample.sample_map`'s `if i >= span` LEFT this census in the same wave (F-60909e5b):
 #: the branch no longer assigns to a seeded name, it RAISES, so the shape this walk keys on
@@ -772,16 +774,29 @@ REPEATED_CLAUSE_WORDS = {
     "channels": {"non_finite_geometry_depth"},
     # `frame_fidelity` and `gradient_split` now answer the same question about what a frame
     # is, under the same two words, which is the whole point of F-e15d9de2.
-    "clipcompare": {"frame_not_hw3", "shape_mismatch"},
+    # WAVE 37: length_mismatch is the same clip-length door at more than one call site.
+    "clipcompare": {"frame_not_hw3", "length_mismatch", "shape_mismatch"},
     # `half_fovs` and `require_frame_size` refuse a non-positive frame size the same way.
     # WAVE 34: camera-path solvers reuse empty_point_cloud / point_cloud_not_finite with
     # the single-shot framing refusals — one refusal shape, two call doors.
     "framing": {"empty_point_cloud", "frame_size_not_positive", "point_cloud_not_finite"},
     # WAVE 34: character-class adapter refuses a mismatched class at two import doors.
     "landmarks": {"character_class_mismatch"},
+    # WAVE 37: write_png and read_png share one refusal shape per word across both doors.
+    "pngio": {
+        "bit1_not_grayscale", "png_scanline_length", "png_truncated",
+        "png_unsupported_filter", "unsupported_bit_depth", "zero_dimension",
+    },
+    # WAVE 37: motion-record resampling refuses the same bone/root shapes at more than
+    # one frame door — one refusal shape per word.
+    "resample": {
+        "bone_set_changes_between_frames", "frame_zero_carries_no_bones",
+        "root_is_not_a_3_vector",
+    },
     # WAVE 34: GaitParams' constructor WalkError and gate_stance_frac_is_modelled's
     # GaitGate share stance_frac_outside_0_1 — one interval, two doors.
-    "walk": {"stance_frac_outside_0_1"},
+    # WAVE 37: heading_not_finite is the same finite-yaw door for scalar/sequence/keys.
+    "walk": {"heading_not_finite", "stance_frac_outside_0_1"},
 }
 
 
