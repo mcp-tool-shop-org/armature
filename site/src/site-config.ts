@@ -16,7 +16,7 @@ export const config: DefaultSiteConfig = {
     'MIT Licensed — built by <a href="https://mcp-tool-shop.github.io/" style="color:var(--color-muted);text-decoration:underline">MCP Tool Shop</a>. Founded 2026-08-10; the record is the repo’s docs tree.',
 
   hero: {
-    badge: 'v0.4.0 · fourteen experiments closed · identity holds on a hosted tier fed only authored references · 832 health findings fixed, 7,538 tests',
+    badge: 'v0.5.0 · fourteen experiments closed · identity holds on a hosted tier · Stage D + feature pass · 8,051 tests',
     headline: 'armature —',
     headlineAccent: 'You block the shot. The model shoots it.',
     description:

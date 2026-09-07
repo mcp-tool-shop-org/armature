@@ -5,8 +5,8 @@
 | Surface | Name | Status |
 |---|---|---|
 | GitHub | `mcp-tool-shop-org/armature` | live, public, `main` (re-measured 2026-09-06: `gh repo view` reports PUBLIC) |
-| PyPI | **`armature-studio`** | Trusted Publisher configured 2026-08-10; **published** — 0.2.1, 0.3.0 and **0.4.0** on the index; latest is 0.4.0 (re-measured 2026-09-06 against `https://pypi.org/pypi/armature-studio/json`) |
-| npm | **`@mcptoolshop/armature-studio`** | **published** — latest **0.4.0** on the registry (re-measured 2026-09-06 against `https://registry.npmjs.org/@mcptoolshop%2Farmature-studio`). *Corrected 2026-09-05: this row read `@mcptoolshop/armature`, "not yet claimed"; the package that shipped carries the `-studio` suffix like the PyPI project (`npm/package.json`).* |
+| PyPI | **`armature-studio`** | Trusted Publisher configured 2026-08-10; **published** — 0.2.1, 0.3.0, 0.4.0 and **0.5.0** on the index |
+| npm | **`@mcptoolshop/armature-studio`** | **published** — latest **0.5.0** on the registry. *Corrected 2026-09-05: this row read `@mcptoolshop/armature`, "not yet claimed"; the package that shipped carries the `-studio` suffix like the PyPI project (`npm/package.json`).* |
 
 Bare `armature` was unavailable on both PyPI (a 0.0.1 "Config package" stub) and npm (an
 abandoned `1.0.0-alpha4`), which is why the PyPI project carries the `-studio` suffix.

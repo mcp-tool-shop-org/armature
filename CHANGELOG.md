@@ -13,6 +13,10 @@ installs.
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-09-07
+
+**Stage D + feature pass on top of the health run.** Not 1.0.0: `filled` is still open (no Director-accepted shot used in a real project). SHIP_GATE keeps the v0.x target.
+
 - Operator-facing pages re-measured against the v0.4.0 registries and the wave 6–26
   DOC-IMPACT rows: publishing versions, SECURITY provenance (public-only), `requires-python`,
   the ship-gate header, the licence-map reader note, `armature check`'s failing-row cause,
@@ -28,9 +32,10 @@ installs.
   `--set` scenery, mocap `--retarget`, FLF2V pair lock, `-m paid`. Confirming audit then
   executed 69 remaining capabilities. Local serial after pin-fix: **8051 passed / 59 skipped**.
 - **CI:** `pip-audit` on python-tests (setuptools `>=83.0.0,<84`); Dependabot for Actions
-  and pip; rehearsal STATUS recorded as `RUN 34098347849` at throwaway tag
-  `rehearse-390b688` (verify success, publish jobs skipped; tag deleted after the line
-  was written).
+  and pip; python-tests job timeout 90 min (3.11 `-O` needs it); rehearsal STATUS
+  `RUN 34098347849`.
+- Suite on CI `2aa5dc2`: python-tests 3.11 and 3.13 both green including `-O` and both
+  clean rooms.
 
 ## [0.4.0] — 2026-09-06
 

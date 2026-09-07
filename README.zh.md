@@ -80,8 +80,8 @@ npm 包是一个**启动器，而不是一个移植版本**：用第二种语言
 | 花费 | 创始阶段有 22 个测试，每个测试花费 4 个积分；E08–E12 阶段的实际花费为 **0 积分**（GPU 小时计费），低于每个实验设定的上限；**E13 的四个生成是该代码仓库中第一个合作伙伴积分支出，并且在他们之前声明的 424-844 范围内**；E14 的两个生成实际花费了 **0 个合作伙伴积分**，达到其两个生成的上限。 |
 | 许可地图 | 每个采用的依赖项都包含一个**检索到的许可文档**；未验证的内容被视为“无”；通过第三方层进行的路线还包含**每条路线的披露说明**（由导演于 2026-08-12 决定）；该门户网站的既定目的是发布工作室的艺术作品。 |
 | 支出门控 | **CANON 门控** 拒绝提交的付费内容，该内容的标题无法与机器可读的规范对应——表面是行，空占位符是**孔，而不是缺失**，并且会检查两个方向（提示涵盖了规范；提示中的所有内容*都是*规范）。它在创建输出目录**之前**触发，位于七个有效负载构建器中的每一个内部，因为此仓库负责的不可逆步骤是写入有效负载。逃避机制是基于普查的：如果某个主题*具有*规范，则拒绝 `--no-canon`，而不是接受——并且自从第一次健康检查通过后，它会在每次支出时**发出明确的信号**：每个构建器都会打印 `[canon] ARMED: <subject>`，并且在普查逃避时打印 `[canon] UNGATED: <subject> — <the census row's reason>`，因此，构建日志可以区分已批准的孔和规范从未写入的主题；并记录结果，记录在 `gates.CANON` 下，因此，没有任何记录可以留下规范是否已激活或逃避的问题未得到解答。 |
-| 测试 | **8051 在测试环境中通过**（跳过 59 次，于 2026-09-07 测量，在修复了“feature-execute”引脚问题后——v0.4.0 版本为 7538，Stage D 之后为 7811），在记录了 STATUS 的预演中，在 `-O` 下表现相同；CI 测试展示了测试程序能够真实地执行哪些操作——测试环境中的本地资源**明显跳过**。 |
-| 状态 | **v0.4.0 版本已发布；此版本已过时。** 健康度测试（发现 832 个问题）仍然是已发布的版本。此后：进行了 Stage D 的视觉优化，然后进行了一次功能测试，将一个经过授权的提交者添加到代码库中（`build_submit_payload.py`，模拟运行，测试套件中没有实际的积分），扩展了已安装的 CLI（`canon` / `verify` / `spec` / `donor`），并记录了预演 **34098347849**。在您发布新版本之前，不会标记任何新内容。 |
+| 测试 | **8051 在测试环境中通过**（59 次跳过，于 2026-09-07 测量，在修复了“feature-execute”引脚问题后——v0.4.0 版本为 7538，Stage D 之后为 7811），在记录了 STATUS 的测试中，在 `-O` 下表现一致；CI 测试了测试程序能够真实地执行哪些操作——测试环境中的本地资源**明显跳过**。 |
+| 状态 | **v0.5.0**——对 Stage D 进行了视觉优化，并在 v0.4.0 健康运行的基础上添加了一个新功能。授权的仓库提交者（`build_submit_payload.py`，模拟运行），安装了 CLI `canon` / `verify` / `spec` / `donor`，进行了 8051 次测试。不是 1.0.0 版本：填充问题仍然存在。 |
 
 ### 正在衡量的内容（当前的阶段）
 
@@ -188,7 +188,7 @@ E:\AI\armature\.venv\Scripts\python.exe -m pytest -q            # from the repo 
   Deliberate refusals do not: every gate raises a typed error carrying the measurement that
   fired it, and **none of them is an `assert`** — the suite runs a second time under `-O` in CI
   to prove they still raise.
-- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.4.0`
+- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.5.0`
   is current); there is no backport policy and no SLA.
 
 **发布门控。** [SHIP_GATE.md](SHIP_GATE.md) 包含了实际存在的 A–D 四个硬性门控，每一行都附带了相应的证据或说明其被跳过的理由。软性门控项目也如实列出，包括仍然开放的项目。

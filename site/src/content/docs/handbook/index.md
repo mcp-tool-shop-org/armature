@@ -43,11 +43,10 @@ a refusal that names what it measured and what to change, a progress line for ev
 waits, `--help` on every instrument, and a suite that grew from 1,359 tests to 7,538. What an
 operator now reads on screen is on its own page — [Reading a halt](reading-a-halt/).
 
-**This tree is past 0.4.0 and not yet tagged.** Stage D polished the looks; a feature pass
-put a sanctioned in-repo submitter on the spend (`tools/build_submit_payload.py`, dry-run,
-no live credits in the suite) and grew the installed CLI (`canon`, `verify`, `spec check`,
-`donor check`). The suite is **8051 passed / 59 skipped** (2026-09-07). PyPI and npm still
-serve 0.4.0 until a new tag is cut.
+**v0.5.0 is Stage D plus the feature pass.** A sanctioned in-repo submitter sits on the spend
+(`tools/build_submit_payload.py`, dry-run, no live credits in the suite). The installed CLI
+grew `canon`, `verify`, `spec check`, `donor check`. The suite is **8051 passed / 59 skipped**
+(2026-09-07). Not 1.0.0: filled is still open.
 
 ## Install
 

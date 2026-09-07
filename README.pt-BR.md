@@ -81,7 +81,7 @@ Fundada em **10 de agosto de 2026**. Treze experimentos foram concluídos e a te
 | Mapa de licenças | cada dependência adotada possui um **documento de licença recuperado**; NÃO VERIFICADO é tratado como NÃO; caminhos através de camadas de terceiros também possuem **divulgação por caminho** (regra do Diretor, 12 de agosto de 2026); o propósito declarado da porta de entrada é a publicação da arte do estúdio. |
 | Limites de uso | **Gate CANON** rejeita um envio pago cujo assunto não pode ser nomeado em relação a um cânone legível por máquina — a superfície é a linha, um ocupante nulo é um **buraco, e não uma ausência**, e ambas as direções são verificadas (o prompt cobre o cânone; tudo no prompt *é* cânone). Ele é executado **antes** que o diretório de saída seja criado, dentro de cada um dos sete construtores de carga útil, porque o passo irreversível que este repositório executa é escrever uma carga útil. A saída é baseada em dados de censo: `--no-canon` em um assunto que *tem* cânone é rejeitado, não aceito — e, desde o primeiro teste de integridade, é **explícito em cada execução**: cada construtor imprime `[canon] ARMED: <subject>` e, na saída do censo, `[canon] UNGATED: <subject> — <the census row's reason>`, de modo que um log de construção distingue um buraco aprovado de um assunto cujo cânone nunca foi escrito; e registra o resultado em `gates.CANON`, para que nenhum registro deixe em aberto a questão de se o cânone foi ativado ou não. |
 | Testes | **8051: superou o teste na plataforma** (59 tentativas, medido em 2026-09-07 após a correção do problema no pino de execução da funcionalidade — 7538 na versão v0.4.0, 7811 após a Fase D), idêntico em `-O` no ensaio que registrou o STATUS; os testes de CI avaliam o que um processo pode realmente fazer — os recursos locais da plataforma **são visivelmente ignorados**. |
-| Status | **v0.4.0 nos registros; esta versão já está ultrapassada.** O teste de desempenho (832 resultados) ainda é o estado publicado. Desde então: melhorias visuais na Fase D, depois uma passagem de funcionalidade que adicionou um sistema de envio aprovado no repositório (`build_submit_payload.py`, teste a seco, sem créditos ativos no conjunto), expandiu a CLI instalada (`canon` / `verify` / `spec` / `donor`) e registrou o ensaio **34098347849**. Nada de novo é marcado até que você faça um lançamento. |
+| Status | **v0.5.0** — Refinamento visual da fase D e implementação de novos recursos, com base na versão v0.4.0. Ferramenta de envio de código integrada (`build_submit_payload.py`, execução de teste), CLI instalada `canon` / `verify` / `spec` / `donor`, 8051 testes. Ainda não é a versão 1.0.0: o item «filled» ainda está pendente. |
 
 ### O que é medido (o arco atual)
 
@@ -211,7 +211,7 @@ Na forma resumida:
   Deliberate refusals do not: every gate raises a typed error carrying the measurement that
   fired it, and **none of them is an `assert`** — the suite runs a second time under `-O` in CI
   to prove they still raise.
-- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.4.0`
+- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.5.0`
   is current); there is no backport policy and no SLA.
 
 **Barreira de envio.** [SHIP_GATE.md](SHIP_GATE.md) contém as barreiras rígidas A–D conforme estão na realidade, com cada linha sendo verificada com sua evidência ou ignorada com a justificativa correspondente. Os itens de identidade da barreira flexível são listados honestamente, incluindo o que ainda está pendente.

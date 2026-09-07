@@ -103,7 +103,7 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 | Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
 | Spend gates | **Gate CANON** refuses a paid submission whose subject cannot be named against a machine-readable canon — surface is the row, a null occupant is a **hole rather than an absence**, and both directions are checked (the prompt covers the canon; everything in the prompt *is* canon). It fires **before** the output directory is created, inside each of the seven payload builders, because the irreversible step this repo owns is writing a payload. The escape is census-backed: `--no-canon` on a subject that *has* canon is refused, not honoured — and since the first health pass it is **loud on every spend**: each builder prints `[canon] ARMED: <subject>`, and on the census escape `[canon] UNGATED: <subject> — <the census row's reason>`, so a build log distinguishes a ratified hole from a subject whose canon was never written; and records the verdict under `gates.CANON`, so no record can leave the question of whether canon was armed or escaped unanswered |
 | Tests | **8051 passing on the rig** (59 skips, measured 2026-09-07 after the feature-execute pin-fix — 7538 at v0.4.0, 7811 after Stage D), identical under `-O` on the rehearsal that recorded STATUS; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
-| Status | **v0.4.0 on the registries; this tree is past it.** The health run (832 findings) still is the published state. Since then: Stage D visual polish, then a feature pass that put a sanctioned in-repo submitter on the spend (`build_submit_payload.py`, dry-run, no live credits in the suite), grew the installed CLI (`canon` / `verify` / `spec` / `donor`), and recorded rehearsal **34098347849**. Nothing new is tagged until you cut one. |
+| Status | **v0.5.0** — Stage D visual polish and a feature pass on top of the v0.4.0 health run. Sanctioned in-repo submitter (`build_submit_payload.py`, dry-run), installed CLI `canon` / `verify` / `spec` / `donor`, 8051 tests. Not 1.0.0: filled is still open. |
 
 ### What is measured (the current arc)
 
@@ -290,7 +290,7 @@ The short form:
   Deliberate refusals do not: every gate raises a typed error carrying the measurement that
   fired it, and **none of them is an `assert`** — the suite runs a second time under `-O` in CI
   to prove they still raise.
-- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.4.0`
+- **Support status** — `main` is the only supported state. Tagged releases exist (`v0.5.0`
   is current); there is no backport policy and no SLA.
 
 **Ship gate.** [SHIP_GATE.md](SHIP_GATE.md) carries the hard gates A–D as they actually stand,
