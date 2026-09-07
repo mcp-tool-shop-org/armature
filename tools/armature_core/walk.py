@@ -163,37 +163,21 @@ class CadenceGate(WalkError, GateFailure):
     gate = "CADENCE"
 
 
-#: The ONLY stance fraction this gait model is written for, and the reason is structural
-#: rather than a preference. Three quantities in this module are three expressions of one
-#: unstated invariant, and none of them is derived from `stance_frac`:
-#:
-#: * `_leg_state`'s stance interval runs psi = +1 -> -1, and `_integrate_forward` splits
-#:   the exchange at the literal endpoints psi = -1 (outgoing) and psi = +1 (incoming).
-#:   Those are the true endpoints of a stance interval only when the exchange happens at
-#:   the instant one leg's stance ends and the other's begins.
-#: * `build_gait` offsets the right leg by a hard `+ 0.5` of a cycle.
-#: * `build_gait` derives the stance leg from a single boolean, and `hip_z` rides that
-#:   one leg's `cos(theta)`.
-#:
-#: Measured 2026-09-03 over 100,000 samples per cycle (L planted iff u < sf, R planted iff
-#: (u+0.5)%1 < sf): flight = 2*max(0, 0.5-sf) and double support = 2*max(0, sf-0.5). So
-#: exactly one foot is planted at every u ONLY at sf = 0.5. At sf = 0.4 the model spends
-#: 20.0% of the cycle with NO planted foot while `_integrate_forward` still credits the
-#: body's travel to an airborne leg (measured on a real build: 6 of 40 walk frames with no
-#: planted foot, first at frame 7, u = 0.443); at sf = 0.6 there is 10-20% double support
-#: whose attribution is arbitrary and L is always chosen. The visible symptom is in the
-#: authored ground truth itself: walk-phase d(hip_y) max/min was 1.019 at sf = 0.5, 2.593
-#: at sf = 0.6, and at sf = 0.4 the hips travel BACKWARD for one frame while the character
-#: walks forward.
-#:
-#: `_integrate_forward` CANNOT be repaired on its own - at sf = 0.4 the psi endpoint it
-#: would need does not exist, because at the exchange the incoming leg is not in stance at
-#: all. A general gait needs the contralateral offset, a per-frame planted SET, blending
-#: through double support, a refusal to integrate through flight, and `hip_z` taken from a
-#: planted leg - derived together or not at all. Until that model exists this module
-#: refuses the values it cannot represent, rather than silently baking a per-exchange
-#: lurch (or a reversal) into the ground truth with every gate green.
+#: Default / canonical walk stance fraction. F-ce5896e5 generalises the integrator so
+#: other fractions are modelled too; this constant remains the default `GaitParams` value
+#: and the name `walk_50` in `NAMED_GAITS`.
 STANCE_FRAC_MODELLED = 0.5
+
+#: Two-leg bipedal contralateral offset, derived as half a cycle (not a free knob).
+CONTRALATERAL_OFFSET = 0.5
+
+#: Named gaits (F-ce5896e5). Each maps to a stance_frac; offset/planted set/hip_z are
+#: derived from that fraction by `_planted_set` / `_integrate_forward` / `build_gait`.
+NAMED_GAITS = {
+    "walk_50": 0.5,
+    "run_flight": 0.4,
+    "walk_double": 0.6,
+}
 
 
 def require_at_least_one_step(steps, where="GaitParams"):
@@ -216,37 +200,56 @@ def require_at_least_one_step(steps, where="GaitParams"):
     return int(steps)
 
 
+def _planted_set(u, stance_frac, offset=CONTRALATERAL_OFFSET):
+    """(stance_L, stance_R) at cycle position `u` in [0, 1)."""
+    u = u % 1.0
+    return (u < stance_frac), (((u + offset) % 1.0) < stance_frac)
+
+
+def gait_phase_fractions(stance_frac, offset=CONTRALATERAL_OFFSET):
+    """flight / single / double fractions of one cycle for a bipedal gait."""
+    sf = float(stance_frac)
+    flight = double = single = 0.0
+    n = 10000
+    for i in range(n):
+        L, R = _planted_set(i / n, sf, offset)
+        n_p = int(L) + int(R)
+        if n_p == 0:
+            flight += 1
+        elif n_p == 2:
+            double += 1
+        else:
+            single += 1
+    return {
+        "stance_frac": sf,
+        "contralateral_offset": float(offset),
+        "flight_fraction_of_cycle": flight / n,
+        "double_support_fraction_of_cycle": double / n,
+        "single_support_fraction_of_cycle": single / n,
+    }
+
+
 def gate_stance_frac_is_modelled(stance_frac, where="GaitParams"):
-    """ANDON - refuse a stance fraction this gait model does not represent.
+    """ANDON — refuse a stance fraction outside the open unit interval.
 
-    Raises `GaitGate` — a `GateFailure` AND a `WalkError`, so the halt contract records it
-    as a gate firing rather than as a crash (F-0d621185). There is no flag, no environment
-    escape and no `assert`. It is called from `GaitParams.__init__` (where the value
-    enters) and again from `build_gait` (the tool that authors the ground truth), so
-    mutating the attribute after construction does not get past it.
-
-    The evidence carries `andon` beside `gate`. It did not: with no census asking, this
-    andon and `gate_cadence_is_representable` had already drifted apart on exactly that
-    key, which is what an unwatched pair does.
+    F-ce5896e5: the integrator now derives planted set, exchange, flight coast, double-
+    support blend and hip_z from `stance_frac`, so every value in (0, 1) is modelled.
+    Values outside that interval still cannot describe a leg cycle. Raises `GaitGate`.
     """
     sf = float(stance_frac)
-    if sf == STANCE_FRAC_MODELLED:
-        return {"gate": "GAIT", "andon": "GaitGate", "stance_frac": sf, "where": where,
-                "verdict": f"stance_frac {sf} is the modelled gait"}
-    flight = 2.0 * max(0.0, STANCE_FRAC_MODELLED - sf)
-    double = 2.0 * max(0.0, sf - STANCE_FRAC_MODELLED)
-    raise GaitGate(
-        f"stance_frac={sf} ({where}); this gait model represents "
-        f"stance_frac={STANCE_FRAC_MODELLED} and nothing else "
-        f"(flight={flight * 100:.1f}%, double_support={double * 100:.1f}%; "
-        f"see evidence)",
-        {"clause": "stance_frac_not_modelled",
-         "gate": "GAIT", "andon": "GaitGate", "stance_frac": sf,
-         "modelled": STANCE_FRAC_MODELLED,
-         "flight_fraction_of_cycle": flight, "double_support_fraction_of_cycle": double,
-         "where": where,
-         "why": ("contralateral offset, stance exchange, stance-leg pick and hip_z are "
-                 "not derived from stance_frac; a general gait would derive all four")})
+    if not (0.0 < sf < 1.0) or sf != sf:
+        raise GaitGate(
+            f"stance_frac={sf} ({where}); a leg cycle needs stance_frac in (0, 1)",
+            {"clause": "stance_frac_outside_0_1",
+             "gate": "GAIT", "andon": "GaitGate", "stance_frac": sf,
+             "where": where})
+    phases = gait_phase_fractions(sf)
+    named = [n for n, v in NAMED_GAITS.items() if v == sf]
+    return {"gate": "GAIT", "andon": "GaitGate", "stance_frac": sf, "where": where,
+            "named_gait": named[0] if named else None,
+            "phases": phases,
+            "verdict": (f"stance_frac {sf} is modelled"
+                        + (f" (named {named[0]})" if named else ""))}
 
 
 #: The largest fraction of a gait cycle one frame interval may advance. Half a cycle is
@@ -406,7 +409,7 @@ class GaitParams:
     def __init__(
         self,
         n_walk=40, n_decel=8, n_gesture=12, n_hold=5,
-        steps=5, stance_frac=0.5,
+        steps=5, stance_frac=0.5, named_gait=None,
         hip_swing_deg=12.0, knee_flex_deg=42.0,
         arm_swing_deg=14.0, elbow_base_deg=9.0, elbow_swing_deg=7.0,
         ankle_level_frac=0.60, sway_frac=0.30, chest_twist_deg=4.0,
@@ -419,7 +422,16 @@ class GaitParams:
         self.n_gesture = int(n_gesture)
         self.n_hold = int(n_hold)
         self.steps = int(steps)
+        if named_gait is not None:
+            if named_gait not in NAMED_GAITS:
+                raise WalkError(
+                    f"named_gait={named_gait!r} is not one of {sorted(NAMED_GAITS)}",
+                    {"gate": None, "andon": "WalkError", "clause": "unknown_named_gait",
+                     "named_gait": named_gait, "known": sorted(NAMED_GAITS)})
+            stance_frac = NAMED_GAITS[named_gait]
+        self.named_gait = named_gait
         self.stance_frac = float(stance_frac)
+        self.contralateral_offset = float(CONTRALATERAL_OFFSET)
         self.hip_swing_deg = float(hip_swing_deg)
         self.knee_flex_deg = float(knee_flex_deg)
         self.arm_swing_deg = float(arm_swing_deg)
@@ -599,21 +611,20 @@ def _leg_state(u, stance_frac):
     return -1.0 + 2.0 * smootherstep(v), knee, False
 
 
+def _stance_delta(s_of, L, a, b, amp_a, amp_b, key):
+    return -L * (s_of(b[key], amp_b) - s_of(a[key], amp_a))
+
+
 def _integrate_forward(performer, p, phase, speed, legs):
-    """The hips' forward travel, integrated from whichever leg is on the floor.
+    """The hips' forward travel, integrated from the planted-leg set.
 
-    The whole point of the tool: `d(hip_y) = -L * d(sin theta_stance)` is the condition
-    "the planted ankle does not move", so this is derived from the character's own leg
-    rather than being a speed somebody typed in.
+    `d(hip_y) = -L * d(sin theta_stance)` is "the planted ankle does not move". F-ce5896e5
+    generalises the single-boolean path:
 
-    **The stance exchange is handled exactly**, and that detail is worth its lines. The
-    incoming leg arrives at the end of its swing, where the smootherstep is flat, so on
-    the frame it takes over its own sin has barely changed — differencing it across the
-    switch reports a body that stalled. Measured: one frame in eight showed the hips
-    advancing 0.0003 where the neighbouring frames advanced 0.029, and the slide statistic
-    read 9.1 at exactly that frame. Splitting the increment at the boundary — outgoing leg
-    up to psi = -1, incoming leg from psi = +1 — removes it, because those two states are
-    the same instant of the same gait.
+    * exactly one planted → integrate that leg (with exact exchange split when the set
+      flips between adjacent samples);
+    * both planted (double support) → average the two stance contributions;
+    * neither planted (flight) → coast: repeat the previous frame's dy (run_flight).
     """
     gate_cadence_is_representable(phase, getattr(p, "stance_frac", STANCE_FRAC_MODELLED),
                                   where="_integrate_forward")
@@ -623,58 +634,60 @@ def _integrate_forward(performer, p, phase, speed, legs):
     def s_of(psi, amp):
         return math.sin(math.radians(p.hip_swing_deg * amp * fy * psi))
 
+    def planted_keys(rec):
+        keys = []
+        if rec.get("stance_L"):
+            keys.append("psi_L")
+        if rec.get("stance_R"):
+            keys.append("psi_R")
+        return keys
+
     ys = [0.0]
+    prev_dy = 0.0
     for i in range(1, len(phase)):
         a, b = legs[i - 1], legs[i]
         amp_a, amp_b = speed[i - 1], speed[i]
         y = ys[-1]
-        if a["stance_L"] == b["stance_L"]:
-            key = "psi_L" if b["stance_L"] else "psi_R"
-            y += -L * (s_of(b[key], amp_b) - s_of(a[key], amp_a))
-        else:
-            # WAVE 22, F-aee5d2a8 — A STRUCTURAL ASSERTION, SAID SO. This refusal cannot
-            # fire and its own comment already said so: `gate_cadence_is_representable` is
-            # called at the top of this function (and again in `build_gait`) and raises on
-            # ANY interval over the limit before this branch is reachable. CONFIRMED by
-            # measuring that gate's coverage on `e8263a3`: it walks n-1 intervals for n
-            # phase samples (1 / 4 / 40 / 64 at n = 2 / 5 / 41 / 65) — every consecutive
-            # pair, which is the seam the coordinator carried, and it holds.
-            #
-            # So this is not a live andon and must not read as one: a reader who finds a
-            # `raise WalkError` here reasonably concludes the top-of-function gate does not
-            # cover the exchange frames. It is kept — one line of arithmetic above a
-            # branch this repo has already been wrong about (F-84f8fd3b re-derived the
-            # clause once) — but kept as a TRIPWIRE under its own clause word, so a change
-            # to the gate's coverage is loud rather than absorbed. Same disposition as
-            # `resample.sample_map`'s unreachable clamp (F-60909e5b), landed in the same
-            # commit and recorded in one place.
-            du = (phase[i] - phase[i - 1]) / (2.0 * math.pi)
-            if du > MAX_CYCLES_PER_FRAME:
-                raise WalkError(
-                    f"frame {i}: the gait advances {du:.3f} of a cycle in one frame, so "
-                    f"more than one stance exchange falls between two samples; the walk "
-                    f"cannot be represented at this frame rate. "
-                    f"`gate_cadence_is_representable` walks every consecutive interval at "
-                    f"the top of this function and refuses this input before the loop "
-                    f"starts, so reaching here means that gate's coverage has changed",
-                    {"gate": None, "andon": "WalkError",
-                     "clause": "cadence_outruns_frame_rate_at_a_stance_exchange",
-                     "reachability": "structural tripwire on "
-                                     "gate_cadence_is_representable's coverage, not a "
-                                     "reachable refusal",
-                     "frame": i, "cycles_this_frame": du,
-                     "max_cycles_per_frame": MAX_CYCLES_PER_FRAME}
-                )
+        keys_a, keys_b = planted_keys(a), planted_keys(b)
+        du = (phase[i] - phase[i - 1]) / (2.0 * math.pi)
+        if du > MAX_CYCLES_PER_FRAME:
+            raise WalkError(
+                f"frame {i}: the gait advances {du:.3f} of a cycle in one frame, so "
+                f"more than one stance exchange falls between two samples; the walk "
+                f"cannot be represented at this frame rate. "
+                f"`gate_cadence_is_representable` walks every consecutive interval at "
+                f"the top of this function and refuses this input before the loop "
+                f"starts, so reaching here means that gate's coverage has changed",
+                {"gate": None, "andon": "WalkError",
+                 "clause": "cadence_outruns_frame_rate_at_a_stance_exchange",
+                 "reachability": "structural tripwire on "
+                                 "gate_cadence_is_representable's coverage, not a "
+                                 "reachable refusal",
+                 "frame": i, "cycles_this_frame": du,
+                 "max_cycles_per_frame": MAX_CYCLES_PER_FRAME})
+
+        if not keys_b:
+            # Flight: coast with the last stance-derived dy.
+            dy = prev_dy
+        elif keys_a == keys_b:
+            if len(keys_b) == 1:
+                dy = _stance_delta(s_of, L, a, b, amp_a, amp_b, keys_b[0])
+            else:
+                dy = 0.5 * (
+                    _stance_delta(s_of, L, a, b, amp_a, amp_b, "psi_L")
+                    + _stance_delta(s_of, L, a, b, amp_a, amp_b, "psi_R"))
+        elif len(keys_a) == 1 and len(keys_b) == 1 and keys_a != keys_b:
+            # Single-support exchange: split at psi endpoints of the stance interval.
             amp_mid = 0.5 * (amp_a + amp_b)
-            out_key = "psi_L" if a["stance_L"] else "psi_R"
-            in_key = "psi_L" if b["stance_L"] else "psi_R"
-            # FAMILY SITE 1 of STANCE_FRAC_MODELLED: -1 and +1 are the endpoints of a
-            # stance interval only when the exchange is the instant one leg's stance ends
-            # and the other's begins. This site cannot be repaired alone - see the
-            # constant's note.
-            y += -L * (s_of(-1.0, amp_mid) - s_of(a[out_key], amp_a))
-            y += -L * (s_of(b[in_key], amp_b) - s_of(1.0, amp_mid))
-        ys.append(y)
+            out_key, in_key = keys_a[0], keys_b[0]
+            dy = (-L * (s_of(-1.0, amp_mid) - s_of(a[out_key], amp_a))
+                  + -L * (s_of(b[in_key], amp_b) - s_of(1.0, amp_mid)))
+        else:
+            # Entering/leaving double support or flight: average whatever is planted now.
+            dy = sum(_stance_delta(s_of, L, a, b, amp_a, amp_b, k)
+                     for k in keys_b) / float(len(keys_b))
+        prev_dy = dy
+        ys.append(y + dy)
     return ys
 
 
@@ -710,17 +723,18 @@ def build_gait(performer, params):
     n = p.n_frames
     frames = []
 
-    # ---- pass 1: every leg's state, so the forward travel can be integrated with the
-    # stance exchange handled exactly rather than landing between two samples.
+    # ---- pass 1: every leg's state + planted SET (F-ce5896e5). Offset is the bipedal
+    # half-cycle constant; planted membership is derived from stance_frac.
+    offset = float(getattr(p, "contralateral_offset", CONTRALATERAL_OFFSET))
     legs = []
     for i in range(n):
         u_L = (phase[i] / (2.0 * math.pi)) % 1.0
-        psi_L, kn_L, stance_L = _leg_state(u_L, p.stance_frac)
-        # FAMILY SITE 2 of STANCE_FRAC_MODELLED: the contralateral offset is the literal
-        # 0.5, not a quantity derived from `stance_frac`.
-        psi_R, kn_R, _ = _leg_state((u_L + 0.5) % 1.0, p.stance_frac)
+        psi_L, kn_L, _ = _leg_state(u_L, p.stance_frac)
+        psi_R, kn_R, _ = _leg_state((u_L + offset) % 1.0, p.stance_frac)
+        stance_L, stance_R = _planted_set(u_L, p.stance_frac, offset)
         legs.append({"u_L": u_L, "psi_L": psi_L, "psi_R": psi_R,
-                     "kn_L": kn_L, "kn_R": kn_R, "stance_L": stance_L})
+                     "kn_L": kn_L, "kn_R": kn_R,
+                     "stance_L": stance_L, "stance_R": stance_R})
 
     hips_y = _integrate_forward(performer, p, phase, speed, legs)
 
@@ -734,7 +748,8 @@ def build_gait(performer, params):
         amp = speed[i]
         st = legs[i]
         u_L, psi_L, psi_R = st["u_L"], st["psi_L"], st["psi_R"]
-        kn_L, kn_R, stance_L = st["kn_L"], st["kn_R"], st["stance_L"]
+        kn_L, kn_R = st["kn_L"], st["kn_R"]
+        stance_L, stance_R = st["stance_L"], st["stance_R"]
 
         # ---- legs. `fy` puts the swing in the direction the character actually faces:
         # positive about +X carries a hanging limb toward +Y, so forward is fy's sign.
@@ -748,11 +763,14 @@ def build_gait(performer, params):
         th_ankle_R = -p.ankle_level_frac * (th_hip_R + knee_R)
         hip_y = hips_y[i]
 
-        # ---- vertical bob and lateral sway, both from the character's own geometry.
-        # The hip rides the stance leg: it is highest when that leg is vertical.
-        # FAMILY SITE 3 of STANCE_FRAC_MODELLED: one boolean, so `th_stance` is a single
-        # leg's angle. Correct only while exactly one leg is planted at every u.
-        th_stance = th_hip_L if stance_L else th_hip_R
+        # ---- vertical bob from the planted SET (F-ce5896e5). Single support rides that
+        # leg; double support averages; flight averages both swing angles (no plant).
+        if stance_L and not stance_R:
+            th_stance = th_hip_L
+        elif stance_R and not stance_L:
+            th_stance = th_hip_R
+        else:
+            th_stance = 0.5 * (th_hip_L + th_hip_R)
         hip_z = L * (math.cos(math.radians(th_stance)) - 1.0)
         hip_x = (p.sway_frac * performer.hip_half_separation * lx * amp
                  * math.sin(2.0 * math.pi * u_L))
@@ -816,6 +834,8 @@ def build_gait(performer, params):
             "scene_frame": 1 + i,
             "phase_rad": phi,
             "gait_speed": amp,
+            "stance_L": bool(stance_L),
+            "stance_R": bool(stance_R),
             "phase_name": ("walk" if i < f_decel else
                            "decelerate" if i < f_gesture else
                            "gesture" if i < f_hold else "hold"),
@@ -885,6 +905,9 @@ def forward_kinematics(performer, gait):
             return [_mat_vec(R, v)[k] + t[k] for k in range(3)]
 
         record = {"frame": rec["frame"]}
+        if "stance_L" in rec:
+            record["stance_L"] = bool(rec["stance_L"])
+            record["stance_R"] = bool(rec["stance_R"])
         # Iterated, not restated: FK_SITES is the same table `Performer` derives its
         # required landmark set from, so a site added here cannot be read off a table
         # nobody checked for it.
@@ -988,4 +1011,26 @@ def foot_slip(fk, ground_margin_frac=0.25):
             "max_slip": max((iv["horizontal_slip"] for iv in intervals), default=0.0),
         }
     report["max_slip_either_foot"] = max(report["L"]["max_slip"], report["R"]["max_slip"])
+    # Per-gait phase census (F-ce5896e5): how much of the FK clip is single / double /
+    # flight under the planted-set rule, so a run_flight receipt cannot look like walk_50.
+    if fk and "stance_L" in fk[0] and "stance_R" in fk[0]:
+        n_single = n_double = n_flight = 0
+        for f in fk:
+            n_p = int(bool(f["stance_L"])) + int(bool(f["stance_R"]))
+            if n_p == 0:
+                n_flight += 1
+            elif n_p == 2:
+                n_double += 1
+            else:
+                n_single += 1
+        n = len(fk)
+        report["gait_phases"] = {
+            "n_frames": n,
+            "single_support_frames": n_single,
+            "double_support_frames": n_double,
+            "flight_frames": n_flight,
+            "single_support_fraction": n_single / n,
+            "double_support_fraction": n_double / n,
+            "flight_fraction": n_flight / n,
+        }
     return report

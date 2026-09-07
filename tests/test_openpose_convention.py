@@ -55,15 +55,19 @@ def test_the_fixture_still_matches_the_document_it_was_transcribed_from():
     assert found == F20_LIMB_SEQ, f"docs/research-grounding.md no longer carries F20's limbSeq verbatim: {found}"
 
 
-def test_drawing_is_refused_while_the_palette_is_unretrieved():
-    """F20 records that a palette exists; it does not record its values. Writing one
-    from memory would put an unretrieved assertion inside a gate."""
-    import pytest
-
-    from armature_core.errors import ArmatureError
-
-    assert openpose.PALETTE is None
-    assert openpose.KEYPOINT_NAMES is None
-    with pytest.raises(ArmatureError) as exc:
-        openpose.require_drawing_convention()
-    assert "PALETTE" in str(exc.value)
+def test_drawing_convention_is_retrieved_and_drawable():
+    """F-b08c0918: ControlNet draw_bodypose palette + 0-based names are banked; drawing
+    is no longer the unbounded direction."""
+    assert openpose.PALETTE is not None
+    assert openpose.KEYPOINT_NAMES is not None
+    assert len(openpose.PALETTE) == openpose.KEYPOINT_COUNT
+    assert len(openpose.KEYPOINT_NAMES) == openpose.KEYPOINT_COUNT
+    assert openpose.require_drawing_convention() is True
+    # Retrieved ControlNet colours (first and last entries of draw_bodypose `colors`).
+    assert openpose.PALETTE[0] == [255, 0, 0]
+    assert openpose.PALETTE[-1] == [255, 0, 85]
+    assert openpose.KEYPOINT_NAMES[0] == "nose"
+    assert openpose.KEYPOINT_NAMES[1] == "neck"
+    verdict = openpose.check_convention(
+        openpose.KEYPOINT_COUNT, openpose.LIMB_SEQ, openpose.PALETTE)
+    assert verdict["verdict"] == "PASS"

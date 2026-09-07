@@ -14,9 +14,15 @@ experiments need, not what the format can do):
   bit_depth=1, 2-D uint8/bool array   -> grayscale, exact silhouette mask
   bit_depth=8, 2-D uint8 array        -> grayscale
   bit_depth=8, 3-D uint8 array (H,W,3)-> truecolour RGB
+  bit_depth=8, 3-D uint8 array (H,W,4)-> truecolour RGBA (color type 6)
 
 Row 0 of the array is the TOP row of the image, which is PNG's own order. Blender's
 `image.pixels` is bottom-up; the caller flips before it gets here.
+
+RGBA (F-219a7aba): the alpha law's authored master is an (H,W,4) array; without color
+type 6 this writer refused it (`unsupported_shape`) and every Blender-side RGBA export
+had to stay on Blender's own encoder. No paired reader here — EXTERNAL_VERIFIER
+(Pillow) still reads the bytes back.
 """
 
 import struct
@@ -64,6 +70,7 @@ _PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
 
 COLOR_GRAY = 0
 COLOR_RGB = 2
+COLOR_RGBA = 6
 
 
 def _chunk(tag, data):
@@ -116,6 +123,8 @@ def write_png(path, arr, bit_depth=8):
         channels, color_type = 1, COLOR_GRAY
     elif arr.ndim == 3 and arr.shape[2] == 3:
         channels, color_type = 3, COLOR_RGB
+    elif arr.ndim == 3 and arr.shape[2] == 4:
+        channels, color_type = 4, COLOR_RGBA
     else:
         raise PngWriteError(
             f"{path}: unsupported array shape {arr.shape}",

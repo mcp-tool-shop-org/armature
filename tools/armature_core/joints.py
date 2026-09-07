@@ -122,7 +122,8 @@ def _limb_radius(derived, trace_key, z):
 
 def snap_sites_to_balls(derived, balls, snappable=SNAPPABLE,
                         radius_window=BALL_RADIUS_WINDOW,
-                        search_fraction=SNAP_SEARCH_FRACTION):
+                        search_fraction=SNAP_SEARCH_FRACTION,
+                        character_class=None):
     """Move each limb pivot onto its sculpted ball. Returns (new landmarks, offset table).
 
     Greedy by match distance so the most confident pairing claims its ball first, and every
@@ -132,7 +133,20 @@ def snap_sites_to_balls(derived, balls, snappable=SNAPPABLE,
 
     A site with no qualifying ball keeps its heuristic position and is reported as
     `matched: false`, so the report can name which pivots are measured and which are not.
+
+    F-3c80ad38: ball snapping is the mannequin_balls adapter. Calling it on another
+    character class refuses rather than silently claiming sculpted balls on a mesh that
+    has none.
     """
+    cls = character_class or derived.get("character_class") or "mannequin_balls"
+    if cls != "mannequin_balls":
+        raise LandmarkError(
+            f"snap_sites_to_balls is the mannequin_balls adapter and was called on "
+            f"character_class={cls!r}; refuse silent cross-class use — imported_sites "
+            f"and proportion_fallback do not claim sculpted balls",
+            {"gate": None, "andon": "LandmarkError",
+             "clause": "character_class_mismatch",
+             "character_class": cls, "adapter": "mannequin_balls"})
     marks = dict(derived["landmarks"])
     pool = list(balls)
 

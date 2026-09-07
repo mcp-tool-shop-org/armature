@@ -831,7 +831,7 @@ def mitten_hand(wrist, palm_dir, palm_side, hand_length):
     points, and G6 records that Wan draws hands as their own pass. What is built here is a
     rigid five-finger fan laid out in the wrist bone's own frame: it rotates with the wrist
     (so it is not static in image space) and never articulates (so it is static in the
-    hand's own space).
+    hand's own space). Explicit fallback when no finger deform bones exist (F-f821776d).
 
     Every offset is a fraction of THIS hand's own measured length — `hand_length` is the
     wrist->hand_end distance off the rig — so no length in metres governs it, per the
@@ -872,6 +872,53 @@ def mitten_hand(wrist, palm_dir, palm_side, hand_length):
              "clause": "mitten_hand_wrong_point_count",
              "built": len(out), "recorded": HAND_KEYPOINT_COUNT})
     return out
+
+
+def articulated_hand(points21, provenance="MEASURED"):
+    """Pack a real 21-point hand beside `mitten_hand` (F-f821776d).
+
+    `points21` is an iterable of 21 (x, y[, conf]) positions — MediaPipe/WholeBody hand
+    topology or a measured knuckle chain. Returns (21, 3) float64 with confidence 1.0
+    when omitted. Provenance is returned in a sidecar dict so a mitten fallback cannot
+    be mistaken for a measured hand.
+    """
+    arr = np.asarray(list(points21), dtype=np.float64)
+    if arr.ndim != 2 or arr.shape[0] != HAND_KEYPOINT_COUNT:
+        raise ArmatureError(
+            f"articulated_hand needs ({HAND_KEYPOINT_COUNT}, >=2) points, got {arr.shape}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "articulated_hand_wrong_point_count",
+             "shape": list(arr.shape), "recorded": HAND_KEYPOINT_COUNT})
+    if arr.shape[1] == 2:
+        out = np.concatenate([arr, np.ones((HAND_KEYPOINT_COUNT, 1))], axis=1)
+    elif arr.shape[1] >= 3:
+        out = np.asarray(arr[:, :3], dtype=np.float64)
+    else:
+        raise ArmatureError(
+            f"articulated_hand points need >=2 columns, got {arr.shape[1]}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "articulated_hand_bad_columns",
+             "n_columns": int(arr.shape[1])})
+    return out, {"hand_mode": "articulated", "provenance": provenance,
+                 "n_points": HAND_KEYPOINT_COUNT}
+
+
+def pack_hand(wrist, palm_dir, palm_side, hand_length, measured_points=None,
+              hand_mode="mitten"):
+    """Dispatch to articulated or mitten packer; mitten is the explicit fallback."""
+    if hand_mode == "articulated":
+        if measured_points is None:
+            raise ArmatureError(
+                "hand_mode='articulated' requires measured_points; refusing to invent "
+                "knuckles. Pass hand_mode='mitten' for the explicit fallback",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "articulated_hand_points_required",
+                 "hand_mode": hand_mode})
+        return articulated_hand(measured_points)
+    pts = mitten_hand(wrist, palm_dir, palm_side, hand_length)
+    conf = np.concatenate([pts, np.ones((len(pts), 1))], axis=1)
+    return conf, {"hand_mode": "mitten", "provenance": "CONSTRUCTED(mitten_hand)",
+                  "n_points": HAND_KEYPOINT_COUNT}
 
 
 # ---------------------------------------------------------------------- the drawing

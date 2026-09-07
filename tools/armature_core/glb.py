@@ -14,6 +14,7 @@ Pure stdlib. No bpy, no numpy, no image decoding — it never has to understand 
 
 import hashlib
 import json
+import math
 import os
 import struct
 from collections import Counter
@@ -408,3 +409,380 @@ def compare_signatures(pinned, fresh, label=None):
             f"and every generation conditioned on it has an unrecorded ancestor", ev)
     ev["verdict"] = (f"all {len(pinned)} frames of evaluated geometry identical")
     return ev
+
+
+# ---------------------------------------------------------- animation ingest (F-03853b93)
+
+COMPONENT = {
+    5120: ("b", 1),   # BYTE
+    5121: ("B", 1),   # UNSIGNED_BYTE
+    5122: ("h", 2),   # SHORT
+    5123: ("H", 2),   # UNSIGNED_SHORT
+    5125: ("I", 4),   # UNSIGNED_INT
+    5126: ("f", 4),   # FLOAT
+}
+TYPE_COUNT = {
+    "SCALAR": 1, "VEC2": 2, "VEC3": 3, "VEC4": 4,
+    "MAT2": 4, "MAT3": 9, "MAT4": 16,
+}
+
+
+def _accessor_values(js, bin_chunk, accessor_index, path):
+    """Decode one accessor into a flat list of floats (or ints promoted to float).
+
+    Locals are deliberately not named `views`/`binary` — those names are reserved for
+    the atlas path's `_image_blob` census (`test_glb.py` AST walk). Animation ingest
+    validates its own index/range here and leaves Gate ATLAS untouched.
+    """
+    accessors = js.get("accessors") or []
+    if not isinstance(accessor_index, int) or accessor_index < 0 or accessor_index >= len(accessors):
+        raise MalformedGLB(
+            f"{path}: animation names accessor {accessor_index!r} outside the "
+            f"{len(accessors)} declared accessor(s)",
+            {"gate": None, "andon": "MalformedGLB", "clause": "animation_accessor_out_of_range",
+             "accessor": accessor_index, "n_accessors": len(accessors), "path": str(path)})
+    acc = accessors[accessor_index]
+    if "bufferView" not in acc:
+        raise MalformedGLB(
+            f"{path}: accessor {accessor_index} carries no bufferView; sparse/empty "
+            f"accessors are not an animation channel this reader accepts",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_accessor_has_no_bufferview",
+             "accessor": accessor_index, "path": str(path)})
+    buffer_views = js.get("bufferViews") or []
+    view_i = acc["bufferView"]
+    if not isinstance(view_i, int) or view_i < 0 or view_i >= len(buffer_views):
+        raise MalformedGLB(
+            f"{path}: accessor {accessor_index} names bufferView {view_i!r} outside the "
+            f"{len(buffer_views)} declared view(s)",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_bufferview_out_of_range",
+             "accessor": accessor_index, "bufferView": view_i, "path": str(path)})
+    view = buffer_views[view_i]
+    ctype = acc.get("componentType")
+    if ctype not in COMPONENT:
+        raise MalformedGLB(
+            f"{path}: accessor {accessor_index} has unsupported componentType {ctype!r}",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_unsupported_component_type",
+             "accessor": accessor_index, "componentType": ctype, "path": str(path)})
+    fmt, csize = COMPONENT[ctype]
+    atype = acc.get("type")
+    if atype not in TYPE_COUNT:
+        raise MalformedGLB(
+            f"{path}: accessor {accessor_index} has unsupported type {atype!r}",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_unsupported_accessor_type",
+             "accessor": accessor_index, "type": atype, "path": str(path)})
+    ncomp = TYPE_COUNT[atype]
+    count = int(acc.get("count", 0))
+    if count < 1:
+        raise MalformedGLB(
+            f"{path}: accessor {accessor_index} declares count {count}",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_accessor_empty",
+             "accessor": accessor_index, "count": count, "path": str(path)})
+    byte_offset = int(view.get("byteOffset", 0)) + int(acc.get("byteOffset", 0))
+    stride = int(view["byteStride"]) if "byteStride" in view else csize * ncomp
+    need = byte_offset + stride * (count - 1) + csize * ncomp
+    if need > len(bin_chunk):
+        raise MalformedGLB(
+            f"{path}: accessor {accessor_index} reads past the BIN chunk "
+            f"(need {need} bytes, BIN holds {len(bin_chunk)})",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_accessor_past_bin_chunk",
+             "accessor": accessor_index, "need": need, "bin_bytes": len(bin_chunk),
+             "path": str(path)})
+    out = []
+    for i in range(count):
+        start = byte_offset + i * stride
+        vals = struct.unpack_from("<" + fmt * ncomp, bin_chunk, start)
+        out.append([float(v) for v in vals])
+    return out, atype
+
+def _quat_to_mat3(q):
+    """Unit quaternion (x, y, z, w) -> 3x3 row-major rotation matrix."""
+    x, y, z, w = q
+    n = math.sqrt(x * x + y * y + z * z + w * w)
+    if n <= 0.0:
+        return [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    x, y, z, w = x / n, y / n, z / n, w / n
+    xx, yy, zz = x * x, y * y, z * z
+    xy, xz, yz = x * y, x * z, y * z
+    wx, wy, wz = w * x, w * y, w * z
+    return [
+        [1.0 - 2.0 * (yy + zz), 2.0 * (xy - wz), 2.0 * (xz + wy)],
+        [2.0 * (xy + wz), 1.0 - 2.0 * (xx + zz), 2.0 * (yz - wx)],
+        [2.0 * (xz - wy), 2.0 * (yz + wx), 1.0 - 2.0 * (xx + yy)],
+    ]
+
+
+def _lerp(a, b, t):
+    return a + (b - a) * t
+
+
+def _lerp_vec(a, b, t):
+    return [_lerp(a[i], b[i], t) for i in range(len(a))]
+
+
+def _slerp_quat(a, b, t):
+    ax, ay, az, aw = a
+    bx, by, bz, bw = b
+    dot = ax * bx + ay * by + az * bz + aw * bw
+    if dot < 0.0:
+        bx, by, bz, bw, dot = -bx, -by, -bz, -bw, -dot
+    if dot > 0.9995:
+        return _lerp_vec(a, [bx, by, bz, bw], t)
+    theta = math.acos(max(-1.0, min(1.0, dot)))
+    s = math.sin(theta)
+    wa = math.sin((1.0 - t) * theta) / s
+    wb = math.sin(t * theta) / s
+    return [wa * ax + wb * bx, wa * ay + wb * by, wa * az + wb * bz, wa * aw + wb * bw]
+
+
+def _sample_channel(times, values, t, path_kind, interpolation):
+    if t <= times[0]:
+        return list(values[0])
+    if t >= times[-1]:
+        return list(values[-1])
+    for i in range(len(times) - 1):
+        t0, t1 = times[i], times[i + 1]
+        if t0 <= t <= t1:
+            if interpolation == "STEP" or t1 == t0:
+                return list(values[i])
+            u = (t - t0) / (t1 - t0)
+            if path_kind == "rotation":
+                return _slerp_quat(values[i], values[i + 1], u)
+            return _lerp_vec(values[i], values[i + 1], u)
+    return list(values[-1])
+
+
+def _default_retarget(node_names, sitelist_names):
+    """Identity map where glTF node names already match sitelist bone names."""
+    allowed = set(sitelist_names)
+    return {n: n for n in node_names if n in allowed}
+
+
+def read_animation(path, animation_index=0, fps=24.0, retarget=None,
+                   sitelist_names=None):
+    """Pure reader: glTF animation samplers -> per-frame local rotations + root translation.
+
+    Returns a motion-shaped record:
+
+      * `frames` — list of `{frame, t, local: {bone: 3x3}, root: [x,y,z]}`
+      * `retarget` — node-name -> sitelist-bone map actually used
+      * `source` — animation name/index, fps, duration
+
+    Unmapped animated joints are refused by name (no silent drop). Atlas / mesh identity
+    gates are untouched — this path never opens image bufferViews.
+    """
+    if sitelist_names is None:
+        from . import sitelist as _sitelist
+        sitelist_names = list(_sitelist.ALL_NAMES)
+
+    js, bin_chunk = read_chunks(path)
+    animations = js.get("animations") or []
+    if not animations:
+        raise MalformedGLB(
+            f"{path}: the container carries no animations[]; a static mesh has nothing "
+            f"for the lift/resample/aapose chain to ingest as a performance",
+            {"gate": None, "andon": "MalformedGLB", "clause": "no_animations",
+             "path": str(path)})
+    if not isinstance(animation_index, int) or animation_index < 0 \
+            or animation_index >= len(animations):
+        raise MalformedGLB(
+            f"{path}: animation_index {animation_index!r} is outside the "
+            f"{len(animations)} animation(s) declared",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_index_out_of_range",
+             "animation_index": animation_index, "n_animations": len(animations),
+             "path": str(path)})
+    anim = animations[animation_index]
+    nodes = js.get("nodes") or []
+    node_names = []
+    for i, node in enumerate(nodes):
+        node_names.append(node.get("name") or f"node_{i}")
+
+    if retarget is None:
+        retarget = _default_retarget(node_names, sitelist_names)
+    else:
+        retarget = dict(retarget)
+
+    channels = anim.get("channels") or []
+    samplers = anim.get("samplers") or []
+    if not channels:
+        raise MalformedGLB(
+            f"{path}: animation {animation_index} declares no channels",
+            {"gate": None, "andon": "MalformedGLB", "clause": "animation_has_no_channels",
+             "animation_index": animation_index, "path": str(path)})
+
+    # Collect per-target sampled tracks first; refuse unmapped joints up front.
+    tracks = []  # (bone_or_None_for_root_only, path_kind, times, values, interpolation)
+    unmapped = []
+    duration = 0.0
+    for ci, ch in enumerate(channels):
+        target = ch.get("target") or {}
+        node_i = target.get("node")
+        path_kind = target.get("path")
+        samp_i = ch.get("sampler")
+        if path_kind not in ("rotation", "translation", "scale"):
+            continue
+        if path_kind == "scale":
+            # Scale is not part of the sitelist motion record; refuse rather than drop.
+            raise MalformedGLB(
+                f"{path}: animation channel {ci} targets scale on node {node_i!r}; "
+                f"this reader maps rotation + root translation only",
+                {"gate": None, "andon": "MalformedGLB",
+                 "clause": "animation_scale_channel_unsupported",
+                 "channel": ci, "node": node_i, "path": str(path)})
+        if not isinstance(node_i, int) or node_i < 0 or node_i >= len(nodes):
+            raise MalformedGLB(
+                f"{path}: animation channel {ci} names node {node_i!r} outside the "
+                f"{len(nodes)} node(s)",
+                {"gate": None, "andon": "MalformedGLB",
+                 "clause": "animation_node_out_of_range",
+                 "channel": ci, "node": node_i, "path": str(path)})
+        node_name = node_names[node_i]
+        bone = retarget.get(node_name)
+        if bone is None or bone not in sitelist_names:
+            unmapped.append({"channel": ci, "node": node_i, "name": node_name,
+                             "mapped_to": bone, "path": path_kind})
+            continue
+        if not isinstance(samp_i, int) or samp_i < 0 or samp_i >= len(samplers):
+            raise MalformedGLB(
+                f"{path}: animation channel {ci} names sampler {samp_i!r} outside the "
+                f"{len(samplers)} sampler(s)",
+                {"gate": None, "andon": "MalformedGLB",
+                 "clause": "animation_sampler_out_of_range",
+                 "channel": ci, "sampler": samp_i, "path": str(path)})
+        samp = samplers[samp_i]
+        times_raw, ttype = _accessor_values(js, bin_chunk, samp["input"], path)
+        values_raw, vtype = _accessor_values(js, bin_chunk, samp["output"], path)
+        if ttype != "SCALAR":
+            raise MalformedGLB(
+                f"{path}: sampler {samp_i} input type is {ttype!r}, expected SCALAR",
+                {"gate": None, "andon": "MalformedGLB",
+                 "clause": "animation_sampler_input_not_scalar",
+                 "sampler": samp_i, "type": ttype, "path": str(path)})
+        times = [row[0] for row in times_raw]
+        if path_kind == "rotation" and vtype != "VEC4":
+            raise MalformedGLB(
+                f"{path}: rotation sampler {samp_i} output type is {vtype!r}, expected VEC4",
+                {"gate": None, "andon": "MalformedGLB",
+                 "clause": "animation_rotation_not_vec4",
+                 "sampler": samp_i, "type": vtype, "path": str(path)})
+        if path_kind == "translation" and vtype != "VEC3":
+            raise MalformedGLB(
+                f"{path}: translation sampler {samp_i} output type is {vtype!r}, "
+                f"expected VEC3",
+                {"gate": None, "andon": "MalformedGLB",
+                 "clause": "animation_translation_not_vec3",
+                 "sampler": samp_i, "type": vtype, "path": str(path)})
+        if len(values_raw) < len(times):
+            raise MalformedGLB(
+                f"{path}: sampler {samp_i} has {len(times)} times and "
+                f"{len(values_raw)} values",
+                {"gate": None, "andon": "MalformedGLB",
+                 "clause": "animation_sampler_length_mismatch",
+                 "sampler": samp_i, "n_times": len(times), "n_values": len(values_raw),
+                 "path": str(path)})
+        interp = samp.get("interpolation", "LINEAR")
+        if interp not in ("LINEAR", "STEP", "CUBICSPLINE"):
+            raise MalformedGLB(
+                f"{path}: sampler {samp_i} interpolation {interp!r} is unsupported",
+                {"gate": None, "andon": "MalformedGLB",
+                 "clause": "animation_interpolation_unsupported",
+                 "sampler": samp_i, "interpolation": interp, "path": str(path)})
+        if interp == "CUBICSPLINE":
+            # glTF packs [in-tangent, value, out-tangent] per key; take the middle.
+            if len(values_raw) != len(times) * 3:
+                raise MalformedGLB(
+                    f"{path}: CUBICSPLINE sampler {samp_i} expected {len(times) * 3} "
+                    f"values, got {len(values_raw)}",
+                    {"gate": None, "andon": "MalformedGLB",
+                     "clause": "animation_cubicspline_length_mismatch",
+                     "sampler": samp_i, "path": str(path)})
+            values_raw = [values_raw[i * 3 + 1] for i in range(len(times))]
+            interp = "LINEAR"
+        duration = max(duration, times[-1] if times else 0.0)
+        tracks.append({
+            "bone": bone,
+            "path": path_kind,
+            "times": times,
+            "values": values_raw[:len(times)],
+            "interpolation": interp,
+            "node_name": node_name,
+        })
+
+    if unmapped:
+        names = sorted({u["name"] for u in unmapped})
+        raise MalformedGLB(
+            f"{path}: animation {animation_index} drives {len(unmapped)} channel(s) on "
+            f"joint(s) with no retarget into the sitelist: {names}. Pass an explicit "
+            f"retarget table (glTF node name -> sitelist bone) or rename the nodes; "
+            f"silent drops are refused",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_joint_unmapped",
+             "unmapped": unmapped, "unmapped_names": names,
+             "retarget": dict(retarget), "path": str(path)})
+
+    if not tracks:
+        raise MalformedGLB(
+            f"{path}: animation {animation_index} produced no rotation/translation tracks "
+            f"after retarget",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_no_usable_tracks",
+             "animation_index": animation_index, "path": str(path)})
+
+    fps = float(fps)
+    if not (fps > 0.0) or fps != fps:
+        raise MalformedGLB(
+            f"{path}: fps={fps!r} is not a positive finite frame rate",
+            {"gate": None, "andon": "MalformedGLB", "clause": "animation_fps_not_positive",
+             "fps": fps, "path": str(path)})
+    n_frames = max(1, int(math.floor(duration * fps + 1e-9)) + 1)
+    identity = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]]
+    root_bone_candidates = [t["bone"] for t in tracks if t["path"] == "translation"]
+    # Prefer sitelist root "hips" when present; otherwise the sole translation target.
+    root_bone = "hips" if "hips" in root_bone_candidates else (
+        root_bone_candidates[0] if len(root_bone_candidates) == 1 else None)
+    if root_bone_candidates and root_bone is None:
+        raise MalformedGLB(
+            f"{path}: translation channels target multiple bones "
+            f"{sorted(set(root_bone_candidates))} and none is 'hips'; name the root or "
+            f"retarget exactly one translation channel to hips",
+            {"gate": None, "andon": "MalformedGLB",
+             "clause": "animation_ambiguous_root_translation",
+             "translation_bones": sorted(set(root_bone_candidates)), "path": str(path)})
+
+    frames = []
+    for fi in range(n_frames):
+        t = fi / fps
+        local = {}
+        root = [0.0, 0.0, 0.0]
+        for tr in tracks:
+            sample = _sample_channel(tr["times"], tr["values"], t, tr["path"],
+                                     tr["interpolation"])
+            if tr["path"] == "rotation":
+                local[tr["bone"]] = _quat_to_mat3(sample)
+            elif tr["path"] == "translation" and tr["bone"] == root_bone:
+                root = sample
+        for name in sitelist_names:
+            local.setdefault(name, [row[:] for row in identity])
+        frames.append({"frame": fi, "t": t, "local": local, "root": root})
+
+    return {
+        "frames": frames,
+        "retarget": dict(retarget),
+        "root_bone": root_bone,
+        "source": {
+            "path": str(path),
+            "animation_index": animation_index,
+            "animation_name": anim.get("name"),
+            "fps": fps,
+            "duration": duration,
+            "n_frames": n_frames,
+            "n_tracks": len(tracks),
+        },
+    }
+

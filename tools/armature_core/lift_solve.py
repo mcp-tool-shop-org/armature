@@ -181,11 +181,18 @@ UNUSED_LANDMARKS = {
     4: "right_eye_inner — same", 5: "right_eye — same", 6: "right_eye_outer — same",
     9: "mouth_left — the mesh carries no mouth feature",
     10: "mouth_right — same",
-    17: "left_pinky — mitten hands; the rig has no finger bones",
+    17: "left_pinky — mitten hands; the rig has no finger bones (mapped when "
+        "hand_mode='articulated')",
     18: "right_pinky — same", 21: "left_thumb — same", 22: "right_thumb — same",
     29: "left_heel — the ankle bone's tail is the toe; the heel would fix the foot's twist "
         "but the rig has no bone past the ankle to carry it",
     30: "right_heel — same",
+}
+
+#: MediaPipe/WholeBody hand tip indices mapped only when sitelist carries finger deform
+#: bones (F-f821776d). Keys are landmark indices; values are sitelist landmark names.
+HAND_SITES_WHEN_ARTICULATED = {
+    17: "pinky_L", 18: "pinky_R", 21: "thumb_L", 22: "thumb_R",
 }
 
 #: The rig sites this module places by forward kinematics but never observes. Recorded so
@@ -452,7 +459,75 @@ def hip_center(sites):
 
 # ------------------------------------------------------------------------ the solve
 
-def solve_frame(rest, obs):
+def resolve_root_provider(root_provider, rest, obs, hips_delta):
+    """Resolve an optional metric root stream (F-e1d071d0).
+
+    `root_provider` forms:
+      * None — hip-origin delta only (legacy; not metric locomotion)
+      * {"source": "hips_delta"} — explicit same
+      * {"source": "walk_gait", "root": [x,y,z]} — authored walk.build_gait hips translation
+      * {"source": "image_trajectory", "root": [x,y,z], "scale": m_per_px?} — 2D traj + scale
+      * {"source": "depth_hips", "root": [x,y,z]} — depth-metered hip midpoint
+      * callable(rest, obs, hips_delta) -> (root_xyz, source_name)
+
+    Returns (root_xyz_list, source_name).
+    """
+    if root_provider is None:
+        return list(hips_delta), "hips_delta_non_metric"
+    if callable(root_provider):
+        root, source = root_provider(rest, obs, hips_delta)
+        return [float(v) for v in root], str(source)
+    if not isinstance(root_provider, dict) or "source" not in root_provider:
+        raise SolveError(
+            f"root_provider must be None, a dict with 'source', or a callable; got "
+            f"{type(root_provider).__name__}",
+            {"gate": None, "andon": "SolveError",
+             "clause": "root_provider_unreadable"})
+    source = str(root_provider["source"])
+    if source == "hips_delta":
+        return list(hips_delta), "hips_delta_non_metric"
+    if "root" not in root_provider:
+        raise SolveError(
+            f"root_provider source={source!r} needs a 'root' [x,y,z] vector",
+            {"gate": None, "andon": "SolveError",
+             "clause": "root_provider_missing_root", "source": source})
+    root = [float(v) for v in root_provider["root"]]
+    if len(root) != 3:
+        raise SolveError(
+            f"root_provider root must be length 3, got {root!r}",
+            {"gate": None, "andon": "SolveError",
+             "clause": "root_provider_root_not_3vector", "root": root})
+    if source == "image_trajectory" and "scale" in root_provider:
+        scale = float(root_provider["scale"])
+        root = [v * scale for v in root]
+        return root, "image_trajectory_scaled"
+    if source in ("walk_gait", "image_trajectory", "depth_hips"):
+        return root, source
+    raise SolveError(
+        f"root_provider source={source!r} is not one of hips_delta / walk_gait / "
+        f"image_trajectory / depth_hips",
+        {"gate": None, "andon": "SolveError",
+         "clause": "root_provider_unknown_source", "source": source})
+
+
+def site_map_for(hand_mode="mitten"):
+    """SITE_FROM_LANDMARK, extended with finger tips when articulated hands are registered."""
+    mapping = dict(SITE_FROM_LANDMARK)
+    if hand_mode == "articulated":
+        mapping.update(HAND_SITES_WHEN_ARTICULATED)
+    return mapping
+
+
+def unused_landmarks_for(hand_mode="mitten"):
+    """UNUSED_LANDMARKS with finger indices removed when articulated hands are in MODEL."""
+    unused = dict(UNUSED_LANDMARKS)
+    if hand_mode == "articulated":
+        for idx in HAND_SITES_WHEN_ARTICULATED:
+            unused.pop(idx, None)
+    return unused
+
+
+def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
     """Joint rotations on the 22-bone rig from one frame of observed site positions.
 
     `rest` is the rig's own landmark table (E07's manifest). `obs` holds the observed
@@ -462,19 +537,28 @@ def solve_frame(rest, obs):
                    `armature_core.walk.rotation_matrix` produces, so the applier, the
                    authored ground truth and this solve all speak one language;
       * `total`  — bone -> 3x3 accumulated rotation (parent-composed);
-      * `root`   — the hips' translation, and what it does and does not mean;
+      * `root`   — the hips' translation, which root source produced it, and what it
+                   does and does not mean (F-e1d071d0);
       * `underdetermined` — bone -> why its twist was not recovered;
       * `held`   — bone -> why it carries no rotation at all.
 
+    `root_provider` supplies optional metric locomotion (walk gait root, image-space
+    trajectory + scale, or depth-metered hips). Resample already lerps `root` — this
+    extends the schema, not a second kinematics.
+
+    `hand_mode`: 'mitten' (default) leaves finger MediaPipe indices unused; 'articulated'
+    maps them when sitelist finger deform bones exist (F-f821776d).
+
     Nothing here is a gate. `round_trip_report` is where a defect raises.
     """
-    missing = [s for s in SITE_FROM_LANDMARK if s not in obs]
+    site_map = site_map_for(hand_mode)
+    missing = [s for s in site_map if s not in obs]
     if missing:
         raise SolveError(f"observed sites missing: {sorted(missing)}; the solve would place "
                          f"those joints at invented positions with nothing pointing at it",
             {"gate": None, "andon": "SolveError",
              "clause": "observed_sites_missing"})
-    rest_missing = [s for s in SITE_FROM_LANDMARK if s not in rest]
+    rest_missing = [s for s in site_map if s not in rest]
     if rest_missing:
         raise SolveError(f"the rest landmark table is missing {sorted(rest_missing)}",
             {"gate": None, "andon": "SolveError",
@@ -610,20 +694,31 @@ def solve_frame(rest, obs):
     # does not rotate is exactly the kind this gate exists for.
     want_total = _sub(o["hip_mid"], mat_vec(total["hips"], r["hip_mid"]))
     pivot_term = _sub(rest["crotch"], mat_vec(local["hips"], rest["crotch"]))
-    root = _sub(want_total, pivot_term)
+    hips_delta = _sub(want_total, pivot_term)
+    root, root_source = resolve_root_provider(root_provider, rest, obs, hips_delta)
+    if root_source == "hips_delta_non_metric":
+        means = ("the translation that puts the rest hip midpoint on the observed "
+                 "one. It is NOT metric root motion: MediaPipe world landmarks are "
+                 "hip-origin and the model card puts metric depth out of scope, so "
+                 "locomotion through the scene is not recoverable from this stream "
+                 "unless a root_provider (walk_gait / image_trajectory / depth_hips) "
+                 "is supplied")
+    else:
+        means = (f"metric root from root_provider source={root_source!r}; "
+                 f"hips_delta_translation is retained for diagnostics")
     return {
         "local": local,
         "total": total,
         "root": {
-            "hips_delta_translation": root,
-            "means": ("the translation that puts the rest hip midpoint on the observed "
-                      "one. It is NOT metric root motion: MediaPipe world landmarks are "
-                      "hip-origin and the model card puts metric depth out of scope, so "
-                      "locomotion through the scene is not recoverable from this stream"),
+            "hips_delta_translation": tuple(hips_delta),
+            "translation": tuple(root),
+            "source": root_source,
+            "means": means,
         },
         "underdetermined": underdetermined,
         "twist_conditioning": conditioning,
         "held": held,
+        "hand_mode": hand_mode,
         "tool_version": TOOL_VERSION,
     }
 
@@ -636,7 +731,11 @@ def fk_sites(rest, solved):
     solve can be checked against the authored ground truth without two kinematics
     implementations quietly disagreeing.
     """
-    local, root = solved["local"], solved["root"]["hips_delta_translation"]
+    local = solved["local"]
+    root_rec = solved["root"]
+    # Prefer metric `translation` when a root_provider supplied one (F-e1d071d0);
+    # fall back to hips_delta for legacy records.
+    root = root_rec.get("translation", root_rec["hips_delta_translation"])
     deltas = {}
     for bone in _bones():
         name = bone.name

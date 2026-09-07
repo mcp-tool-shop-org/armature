@@ -714,3 +714,205 @@ def solve_camera(all_points, end_points, azimuth_deg, elevation_deg,
         "in_frame": (union[0] >= 0.0 and union[1] <= 1.0
                      and union[2] >= 0.0 and union[3] <= 1.0),
     }
+
+
+# ---------------------------------------------------------------- camera path (F-46f5e906)
+
+def _lerp(a, b, t):
+    return a + (b - a) * t
+
+
+def _lerp_vec(a, b, t):
+    return tuple(_lerp(float(a[i]), float(b[i]), t) for i in range(len(a)))
+
+
+def normalize_camera_keys(keys):
+    """Validate and sort a keyframed camera path.
+
+    Each key is a dict with `frame` (int >= 0) plus orbit knobs:
+    `azimuth_deg`, `elevation_deg`, `radius`, and `target` (len-3). Keys must cover
+    distinct frames; at least one key is required.
+    """
+    if not keys:
+        raise FramingError(
+            "a camera path needs at least one keyframe",
+            {"gate": None, "andon": "FramingError", "clause": "empty_camera_path"})
+    out = []
+    seen = set()
+    for i, raw in enumerate(keys):
+        if not isinstance(raw, dict):
+            raise FramingError(
+                f"camera key {i} is {type(raw).__name__}, not a dict",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "camera_key_not_a_dict", "index": i})
+        try:
+            frame = int(raw["frame"])
+            az = float(raw["azimuth_deg"])
+            el = float(raw["elevation_deg"])
+            radius = float(raw["radius"])
+            target = tuple(float(v) for v in raw["target"])
+        except (KeyError, TypeError, ValueError) as exc:
+            raise FramingError(
+                f"camera key {i} is missing or unreadable ({exc})",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "camera_key_unreadable", "index": i,
+                 "keys_present": sorted(raw) if isinstance(raw, dict) else []}) from exc
+        if frame < 0:
+            raise FramingError(
+                f"camera key {i} has frame {frame}; frames are non-negative",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "camera_key_frame_negative", "index": i, "frame": frame})
+        if frame in seen:
+            raise FramingError(
+                f"camera path repeats frame {frame}",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "camera_key_frame_duplicate", "frame": frame})
+        if not _finite_positive(radius):
+            raise FramingError(
+                f"camera key at frame {frame}: radius={radius!r} is not a finite "
+                f"positive distance",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "camera_key_radius_not_positive", "frame": frame,
+                 "radius": radius})
+        if len(target) != 3 or not all(_finite(c) for c in target):
+            raise FramingError(
+                f"camera key at frame {frame}: target={target!r} is not three finite "
+                f"coordinates",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "camera_key_target_not_finite", "frame": frame,
+                 "target": list(target)})
+        for name, value in (("azimuth_deg", az), ("elevation_deg", el)):
+            if not _finite(value):
+                raise FramingError(
+                    f"camera key at frame {frame}: {name}={value!r} is not finite",
+                    {"gate": None, "andon": "FramingError",
+                     "clause": "camera_key_angle_not_finite", "frame": frame,
+                     "flag": name, name: value})
+        seen.add(frame)
+        out.append({"frame": frame, "azimuth_deg": az, "elevation_deg": el,
+                    "radius": radius, "target": target})
+    out.sort(key=lambda k: k["frame"])
+    return out
+
+
+def sample_camera_at(keys, frame):
+    """Interpolate a normalised key list to one frame's orbit parameters."""
+    keys = normalize_camera_keys(keys)
+    f = int(frame)
+    if f <= keys[0]["frame"]:
+        k = keys[0]
+        return {"frame": f, "azimuth_deg": k["azimuth_deg"],
+                "elevation_deg": k["elevation_deg"], "radius": k["radius"],
+                "target": list(k["target"]), "segment": "hold_start"}
+    if f >= keys[-1]["frame"]:
+        k = keys[-1]
+        return {"frame": f, "azimuth_deg": k["azimuth_deg"],
+                "elevation_deg": k["elevation_deg"], "radius": k["radius"],
+                "target": list(k["target"]), "segment": "hold_end"}
+    for i in range(len(keys) - 1):
+        a, b = keys[i], keys[i + 1]
+        if a["frame"] <= f <= b["frame"]:
+            span = b["frame"] - a["frame"]
+            t = 0.0 if span == 0 else (f - a["frame"]) / span
+            return {
+                "frame": f,
+                "azimuth_deg": _lerp(a["azimuth_deg"], b["azimuth_deg"], t),
+                "elevation_deg": _lerp(a["elevation_deg"], b["elevation_deg"], t),
+                "radius": _lerp(a["radius"], b["radius"], t),
+                "target": list(_lerp_vec(a["target"], b["target"], t)),
+                "segment": f"{a['frame']}:{b['frame']}",
+                "t": t,
+            }
+    raise FramingError(
+        f"frame {f} fell through the camera-path sampler",
+        {"gate": None, "andon": "FramingError", "clause": "camera_path_sample_miss",
+         "frame": f})
+
+
+def solve_path(all_points, keys, lens_mm, sensor_mm, width, height,
+               n_frames=None, require_in_frame=True):
+    """Sample a keyframed orbit path and run the same in-frame checks `solve_camera` uses.
+
+    `keys` are orbit keyframes (`normalize_camera_keys`). `all_points` is the union
+    silhouette that must stay composed across the shot (same cloud `solve_camera` takes).
+    Returns a path record: per-frame azimuth/elevation/radius/target + extent + `in_frame`.
+
+    Reusable by `startframe.framing_cloud` and turnaround plans: pass the same cloud and
+    lens/sensor/resolution the single-orbit solver already consumes.
+    """
+    keys = normalize_camera_keys(keys)
+    if not all_points:
+        raise FramingError(
+            "no points to frame along the camera path",
+            {"gate": None, "andon": "FramingError", "clause": "empty_point_cloud",
+             "n_all_points": 0})
+    for i, p in enumerate(all_points):
+        if not all(_finite(c) for c in tuple(p)[:3]):
+            raise FramingError(
+                f"all_points[{i}] carries a non-finite coordinate: {tuple(p)[:3]!r}",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "point_cloud_not_finite", "index": i})
+    last = keys[-1]["frame"]
+    n = int(n_frames) if n_frames is not None else last + 1
+    if n < 1:
+        raise FramingError(
+            f"n_frames={n_frames!r} is not a positive frame count",
+            {"gate": None, "andon": "FramingError", "clause": "n_frames_not_positive",
+             "n_frames": n_frames})
+    frames = []
+    out_of_frame = []
+    for f in range(n):
+        sample = sample_camera_at(keys, f)
+        extent = _extent(all_points, tuple(sample["target"]), sample["radius"],
+                         sample["azimuth_deg"], sample["elevation_deg"],
+                         lens_mm, sensor_mm, width, height)
+        if extent is None:
+            in_frame = False
+            achieved = None
+        else:
+            in_frame = (extent[0] >= 0.0 and extent[1] <= 1.0
+                        and extent[2] >= 0.0 and extent[3] <= 1.0)
+            achieved = {
+                "union_x": [extent[0], extent[1]],
+                "union_y": [extent[2], extent[3]],
+                "union_height_frac": extent[3] - extent[2],
+            }
+        rec = {
+            "frame": f,
+            "azimuth_deg": sample["azimuth_deg"],
+            "elevation_deg": sample["elevation_deg"],
+            "radius": sample["radius"],
+            "target": sample["target"],
+            "position": list(camera_position(
+                tuple(sample["target"]), sample["radius"],
+                sample["elevation_deg"], sample["azimuth_deg"])),
+            "achieved": achieved,
+            "in_frame": in_frame,
+            "segment": sample.get("segment"),
+        }
+        if not in_frame:
+            out_of_frame.append(f)
+        frames.append(rec)
+    if require_in_frame and out_of_frame:
+        raise FramingError(
+            f"{len(out_of_frame)} of {n} path frame(s) put the union outside the frame "
+            f"(first at frame {out_of_frame[0]}). The same in-frame coverage "
+            f"`solve_camera` reports is required along the path unless "
+            f"require_in_frame=False",
+            {"gate": None, "andon": "FramingError",
+             "clause": "path_puts_union_out_of_frame",
+             "n_frames": n, "n_out_of_frame": len(out_of_frame),
+             "out_of_frame": out_of_frame[:24],
+             "first_out_of_frame": out_of_frame[0]})
+    return {
+        "n_frames": n,
+        "keys": keys,
+        "lens_mm": lens_mm,
+        "sensor_mm": sensor_mm,
+        "resolution": [width, height],
+        "frames": frames,
+        "n_out_of_frame": len(out_of_frame),
+        "out_of_frame": out_of_frame,
+        "in_frame": len(out_of_frame) == 0,
+    }
+
