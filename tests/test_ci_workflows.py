@@ -4630,12 +4630,10 @@ def _drive_prerelease(event_name, value):
 #: only way to exercise this file before a tag is public.
 #:
 #: WAVE-37: the same step now also enforces the release.yml header STATUS obligation on
-#: `release` arrivals. Header is currently `STATUS: STALE` (pre-pip-audit rehearsal), so
-#: a live `release` + `prerelease=false` refuses on STATUS even though the pre-release
-#: clause itself would pass. Flip the first row back to proceeds=True only when STATUS
-#: is rewritten to a fresh `RUN <id>` after a post-pip-audit rehearsal.
+#: `release` arrivals. Header is `STATUS: RUN 34098347849` (post-pip-audit rehearsal at
+#: throwaway tag rehearse-390b688), so a live `release` + `prerelease=false` proceeds.
 PRERELEASE_ARRIVALS = [
-    ("release", "false", False),
+    ("release", "false", True),
     ("release", "true", False),
     ("release", "", False),
     ("release", "maybe", False),

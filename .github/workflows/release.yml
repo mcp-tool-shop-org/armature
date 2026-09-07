@@ -64,12 +64,11 @@ on:
   # Do NOT cut a live public version tag solely to rehearse. Prefer an existing release
   # tag that already carries the actions (see STATUS) or a throwaway `rehearse-*` tag.
   #
-  # STATUS: STALE 34073888719 at tag v0.4.0 on 2026-09-07 (workflow_dispatch,
+  # STATUS: RUN 34098347849 at tag rehearse-390b688 on 2026-09-07 (workflow_dispatch,
   # rehearse=true; verify success; pypi+npm skipped — no publish jobs created). That run
-  # predates `audit Python dependencies` (pip-audit) on this job — measured: `git show
-  # 275fcca` has zero pip-audit hits; HEAD installs `pip-audit>=2.7,<3`. A live
+  # exercised `audit Python dependencies` (setuptools>=83.0.0,<84 + pip-audit). A live
   # `release: published` refuses while STATUS is NOT YET RUN, STALE, or still names
-  # run 34073888719 (STATUS clause in the pre-release gate; ci.yml mirrors it).
+  # run 34073888719 (pre-pip-audit; STATUS clause in the pre-release gate; ci.yml mirrors it).
   # Re-dispatch after any change to this workflow or to
   # `.github/actions/{clean-room,npm-clean-room,sheet-fonts}`, then rewrite as:
   #   STATUS: RUN <id> at tag <tag> on <date> (workflow_dispatch, rehearse=true; ...)
