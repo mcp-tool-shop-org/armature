@@ -3,6 +3,7 @@
 
     <venv-python> tools/encode_control.py --frames=<dir> --out=<video> --codec=<name>
                                    [--invert] [--survey]
+    <venv-python> tools/encode_control.py --run=<stage_render out> --codec=<name>
 
 E02 Stage 0. There is no folder loader on Comfy Cloud, so a control *sequence* reaches
 the graph as a video file that `LoadVideo` -> `GetVideoComponents` decodes back into an
@@ -582,6 +583,175 @@ def survey_codecs():
     return rows
 
 
+def channel_pixel_mode(frames_dir, sample_n=1):
+    """`gray` when every sampled frame is R=G=B; `rgb` otherwise (F-b8bf8e7d).
+
+    The survey measures both probes; the channel's OWN pixels pick which column gates
+    the codec. A true-RGB normal channel must not inherit a grayscale-safe trap.
+    """
+    names = frame_population(frames_dir)
+    take = names[:max(1, min(len(names), sample_n))]
+    for n in take:
+        arr = np.array(Image.open(os.path.join(frames_dir, n)).convert("RGB"))
+        if not (arr[..., 0] == arr[..., 1]).all() or not (arr[..., 1] == arr[..., 2]).all():
+            return "rgb"
+    return "gray"
+
+
+def survey_row_for(codec, survey_rows=None):
+    """The survey table row for `codec`, or raise naming the unknown bridge."""
+    rows = survey_rows if survey_rows is not None else survey_codecs()
+    for row in rows:
+        if row.get("codec") == codec:
+            return row
+    raise EncodeFailure(
+        f"codec {codec!r} is not in the survey table; known: "
+        f"{sorted(r.get('codec') for r in rows)}",
+        {"gate": "CODEC", "andon": "EncodeFailure",
+         "clause": "codec_not_in_survey", "codec": codec,
+         "survey_codecs": [r.get("codec") for r in rows]},
+    )
+
+
+def gate_codec_safe_for_mode(codec, mode, survey_rows=None):
+    """ANDON — refuse a codec `--survey` does not mark lossless for this channel mode.
+
+    F-b8bf8e7d: a multi-channel pack used to let each channel pick a codec in isolation;
+    grayscale channels could quietly take `x264-qp0-yuv420` while the RGB normal needed
+    an RGB-safe bridge. Survey column is `grayscale` for gray, `rgb` for rgb; only the
+    literal `lossless` passes.
+    """
+    if mode not in ("gray", "rgb"):
+        raise EncodeFailure(
+            f"channel mode {mode!r} is not gray or rgb",
+            {"gate": "CODEC", "andon": "EncodeFailure",
+             "clause": "unknown_channel_mode", "mode": mode, "codec": codec})
+    row = survey_row_for(codec, survey_rows=survey_rows)
+    col = "grayscale" if mode == "gray" else "rgb"
+    verdict = row.get(col)
+    if verdict != "lossless":
+        raise EncodeFailure(
+            f"codec {codec!r} is not lossless for {mode} channels per --survey "
+            f"({col}={verdict!r}); a mixed-fidelity control pack would upload quietly "
+            f"damaged chroma on true-RGB channels",
+            {"gate": "CODEC", "andon": "EncodeFailure",
+             "clause": "codec_unsafe_for_channel_mode",
+             "codec": codec, "mode": mode, "survey_column": col,
+             "survey_verdict": verdict, "survey_row": row},
+        )
+    return {"codec": codec, "mode": mode, "survey_column": col,
+            "survey_verdict": verdict, "verdict": "PASS"}
+
+
+def read_stage_render_channel_dirs(run_dir):
+    """`manifest.json` `channel_dirs` from a stage_render out, or raise by name."""
+    manifest_path = os.path.join(run_dir, "manifest.json")
+    if not os.path.isfile(manifest_path):
+        raise EncodeFailure(
+            f"{run_dir} has no manifest.json; --run expects a stage_render out that "
+            f"already published channel_dirs",
+            {"gate": "RUN", "andon": "EncodeFailure",
+             "clause": "stage_render_manifest_missing",
+             "run": os.path.abspath(run_dir), "manifest": manifest_path})
+    try:
+        with open(manifest_path, encoding="utf-8") as fh:
+            manifest = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise EncodeFailure(
+            f"{manifest_path} is not readable JSON: {exc}",
+            {"gate": "RUN", "andon": "EncodeFailure",
+             "clause": "stage_render_manifest_unreadable",
+             "run": os.path.abspath(run_dir), "manifest": manifest_path,
+             "error": str(exc)}) from exc
+    channel_dirs = manifest.get("channel_dirs")
+    if not isinstance(channel_dirs, dict) or not channel_dirs:
+        raise EncodeFailure(
+            f"{manifest_path} carries no channel_dirs map; nothing to encode into a "
+            f"control pack",
+            {"gate": "RUN", "andon": "EncodeFailure",
+             "clause": "channel_dirs_missing",
+             "run": os.path.abspath(run_dir), "manifest": manifest_path,
+             "channel_dirs": channel_dirs})
+    resolved = {}
+    for channel, rel in channel_dirs.items():
+        path = rel if os.path.isabs(str(rel)) else os.path.join(run_dir, str(rel))
+        if not os.path.isdir(path):
+            raise EncodeFailure(
+                f"channel {channel!r} names {path} which is not a directory",
+                {"gate": "RUN", "andon": "EncodeFailure",
+                 "clause": "channel_dir_missing",
+                 "run": os.path.abspath(run_dir), "channel": channel,
+                 "channel_dir": path, "channel_dirs": channel_dirs})
+        resolved[channel] = path
+    return manifest, resolved
+
+
+def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
+                       alpha_over=None, progress=None, survey_rows=None):
+    """Encode every stage_render channel into one pack receipt (F-b8bf8e7d).
+
+    Videos land under `<run>/control_videos/<channel>.<ext>`. A codec that `--survey`
+    marks unsafe for a channel's measured mode is refused before that channel encodes,
+    so a grayscale-safe trap cannot ride beside an RGB normal under one green pack.
+    """
+    manifest, channel_dirs = read_stage_render_channel_dirs(run_dir)
+    rows = survey_rows if survey_rows is not None else survey_codecs()
+    if codec not in CODECS:
+        raise EncodeFailure(
+            f"unknown codec {codec!r}; known: {sorted(CODECS)}",
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "unknown_codec", "flag": "--codec", "codec": codec,
+             "known": sorted(CODECS)})
+    ext = CODECS[codec]["ext"]
+    videos_dir = os.path.join(run_dir, "control_videos")
+    os.makedirs(videos_dir, exist_ok=True)
+    channels = {}
+    for channel, frames_dir in sorted(channel_dirs.items()):
+        mode = channel_pixel_mode(frames_dir)
+        safety = gate_codec_safe_for_mode(codec, mode, survey_rows=rows)
+        out_path = os.path.join(videos_dir, f"{channel}{ext}")
+        receipt = build(frames_dir, out_path, codec, invert=invert, fps=fps,
+                        expect=expect, alpha_over=alpha_over, progress=progress)
+        channels[channel] = {
+            "channel": channel,
+            "frames_dir": os.path.abspath(frames_dir),
+            "mode": mode,
+            "codec_safety": safety,
+            "video": os.path.abspath(out_path),
+            "video_sha256": receipt["video_sha256"],
+            "source_frames_sha256": receipt["source_frames_sha256"],
+            "n_frames": receipt["n_frames"],
+            "gate_R": receipt["gate_R"],
+            "receipt": out_path + ".receipt.json",
+        }
+    pack = {
+        "tool": "encode_control",
+        "kind": "control_pack",
+        "run": os.path.abspath(run_dir),
+        "manifest": os.path.abspath(os.path.join(run_dir, "manifest.json")),
+        "channel_dirs": {k: os.path.abspath(v) for k, v in channel_dirs.items()},
+        "codec": codec,
+        "codec_args": CODECS[codec]["args"],
+        "fps": fps,
+        "inverted": invert,
+        "ffmpeg": FFMPEG,
+        "ffmpeg_version": ffmpeg_version(),
+        "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        **runtime_provenance({"numpy": np, "Pillow": Image}),
+        "channels": channels,
+        "gate_R_all": {
+            "verdict": "PASS",
+            "channels": sorted(channels),
+        },
+        "stage_render_tool_version": manifest.get("tool_version"),
+    }
+    pack_path = os.path.join(run_dir, "control_pack.receipt.json")
+    with open(pack_path, "w", encoding="utf-8") as fh:
+        json.dump(pack, fh, indent=2)
+    pack["pack_receipt"] = os.path.abspath(pack_path)
+    return pack
+
+
 def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
           alpha_over=None, progress=None):
     """Encode a control sequence and run Gate R on it. **Raises** on any difference.
@@ -644,12 +814,20 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="build the control video a paid run uploads, and prove the encoder "
-                    "round trip is lossless (Gate R)",
+                    "round trip is lossless (Gate R). --run=<stage_render out> encodes "
+                    "every manifest.channel_dirs entry into one control_pack.receipt.json "
+                    "(F-b8bf8e7d)",
         epilog=HALT_EPILOG)
     ap.add_argument("--frames", help="the channel directory of NNNNN.png control frames "
-                                     "to encode, in index order")
+                                     "to encode, in index order (single-channel mode)")
     ap.add_argument("--out", help="the video file to write; its receipt is written beside "
-                                  "it as <out>.receipt.json")
+                                  "it as <out>.receipt.json (single-channel mode)")
+    ap.add_argument("--run", default=None,
+                    help="a stage_render out directory whose manifest.json publishes "
+                         "channel_dirs; encodes each channel to "
+                         "<run>/control_videos/<channel>.<ext>, refuses a codec "
+                         "--survey marks unsafe for that channel's gray/rgb mode, and "
+                         "writes <run>/control_pack.receipt.json")
     # WAVE 28 (F-7c3f8a26): `choices=` and a `help=`. The legal values are a closed set of
     # five literal keys in `CODECS` above, and the ONLY place that set reached the operator
     # was the refusal inside `encode()` — which fires from `build()` AFTER `read_frames` has
@@ -668,7 +846,8 @@ def main(argv=None):
                          "preference). x264-qp0-yuv420 is THE TRAP: its 4:2:0 chroma "
                          "subsampling is a no-op on grayscale depth/mask/edge channels and "
                          "quietly corrupts the true-RGB normal channel. Run --survey to "
-                         "see every candidate measured")
+                         "see every candidate measured. With --run, unsafe-for-mode is "
+                         "refused per channel before encode")
     ap.add_argument("--fps", type=int, default=16,
                     help="the rate written into the control video and into its receipt "
                          "(default 16); it reaches ffmpeg as `-r <fps>` on the INPUT side, "
@@ -704,12 +883,18 @@ def main(argv=None):
                           fh, indent=2)
         return 0
 
-    if not args.frames or not args.out:
+    if args.run and (args.frames or args.out):
         raise EncodeFailure(
-            "--frames and --out are required unless --survey",
+            "--run is the multi-channel pack path; do not also pass --frames/--out",
+            {"gate": "ARGS", "andon": "EncodeFailure",
+             "clause": "run_excludes_frames_and_out",
+             "run": args.run, "frames": args.frames, "out": args.out})
+    if not args.run and (not args.frames or not args.out):
+        raise EncodeFailure(
+            "--frames and --out are required unless --survey or --run",
             {"gate": "ARGS", "andon": "EncodeFailure",
              "clause": "frames_and_out_are_required",
-             "frames": args.frames, "out": args.out,
+             "frames": args.frames, "out": args.out, "run": args.run,
              "survey": bool(args.survey)})
     # ---- the ONE parser. `compose_over_named_plate`'s docstring states the contract the
     #      wave-6 sweep delivered -- "there is one refusal, one composite and one record
@@ -744,6 +929,19 @@ def main(argv=None):
         print(f"encode_control {stage} {done}/{total}  "
               f"elapsed {time.monotonic() - _started:.1f}s  bound {bound_s:.0f}s",
               file=sys.stderr, flush=True)
+
+    if args.run:
+        pack = build_control_pack(args.run, args.codec, invert=args.invert, fps=args.fps,
+                                  expect=args.expect, alpha_over=plate,
+                                  progress=_progress)
+        print("ENCODE_CONTROL_PACK " + json.dumps({
+            "run": pack["run"],
+            "pack_receipt": pack["pack_receipt"],
+            "channels": sorted(pack["channels"]),
+            "codec": pack["codec"],
+            "gate_R_all": "PASS",
+        }))
+        return 0
 
     receipt = build(args.frames, args.out, args.codec, invert=args.invert, fps=args.fps,
                     expect=args.expect, alpha_over=plate, progress=_progress)

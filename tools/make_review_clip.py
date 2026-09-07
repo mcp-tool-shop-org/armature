@@ -68,6 +68,67 @@ FRAME_SUBDIR_NAMES = ("lossless", "frames")
 #: clip's FILENAME is a label the Director opens.
 NO_RUN_TOKEN = "NOT DERIVED"
 
+#: MediaPipe POSE_LANDMARKS indices for hard-structure stills (F-cdd95afb).
+#: 15/16 = wrists, 27/28 = ankles, 0 = nose (face turns). Hands/feet/face are where a
+#: video model's structure fails first; the default population includes face when a
+#: detection record is present so a melted face reaches the review pack.
+KNOWN_TARGETS = {
+    "hand_L": 15,
+    "hand_R": 16,
+    "foot_L": 27,
+    "foot_R": 28,
+    "face": 0,
+}
+DEFAULT_TARGET_ORDER = ("hand_L", "hand_R", "foot_L", "foot_R", "face")
+
+
+def resolve_targets(text, detection_present):
+    """Ordered `{label: landmark_index}` for the still loop, or raise by name.
+
+    F-cdd95afb: without `--targets`, detection mode defaults to hands+feet+face; with
+    `--targets=` the operator names the population. Without `--detection`, landmark
+    centres are unavailable so an explicit `--targets` is refused (centre-fallback still
+    cuts hands/feet only — the pre-face contract — rather than inventing a face crop).
+    """
+    if text is None or str(text).strip() == "":
+        if detection_present:
+            labels = list(DEFAULT_TARGET_ORDER)
+        else:
+            labels = [t for t in DEFAULT_TARGET_ORDER if t != "face"]
+    else:
+        if not detection_present:
+            raise ReviewClipError(
+                "--targets requires --detection; without a detector record there are no "
+                "landmark centres to crop to, and a face still would be a centre crop "
+                "wearing a face label",
+                {"gate": "ARGS", "andon": "ReviewClipError",
+                 "clause": "targets_require_detection",
+                 "targets": text, "detection": None,
+                 "known": sorted(KNOWN_TARGETS)})
+        labels = [p.strip() for p in str(text).split(",") if p.strip()]
+        if not labels:
+            raise ReviewClipError(
+                "--targets= is empty; name at least one of "
+                f"{','.join(DEFAULT_TARGET_ORDER)}",
+                {"gate": "ARGS", "andon": "ReviewClipError",
+                 "clause": "targets_empty", "targets": text,
+                 "known": sorted(KNOWN_TARGETS)})
+    unknown = [t for t in labels if t not in KNOWN_TARGETS]
+    if unknown:
+        raise ReviewClipError(
+            f"--targets names unknown target(s) {unknown}; known: "
+            f"{sorted(KNOWN_TARGETS)}",
+            {"gate": "ARGS", "andon": "ReviewClipError",
+             "clause": "unknown_still_target", "unknown": unknown,
+             "targets": labels, "known": sorted(KNOWN_TARGETS)})
+    # Preserve operator order; drop duplicates while keeping first occurrence.
+    seen, ordered = set(), []
+    for t in labels:
+        if t not in seen:
+            seen.add(t)
+            ordered.append(t)
+    return {t: KNOWN_TARGETS[t] for t in ordered}
+
 
 def run_token(frames_dir, explicit=None):
     """`(token, source)` -- the run this review pass is OF, or `(None, 'NOT DERIVED')`.
@@ -222,6 +283,11 @@ def main(argv=None):
                     help="the frame indices extracted as full-size stills (argparse eats "
                          "leading minus signs: pass as --stills=0,16,32). Pick where "
                          "structure is hardest: fast motion, occlusion, hands, face turns")
+    ap.add_argument("--targets", default=None,
+                    help="comma-separated still targets when --detection is given "
+                         f"(default {','.join(DEFAULT_TARGET_ORDER)}). Known: "
+                         f"{','.join(sorted(KNOWN_TARGETS))}. face uses MediaPipe nose "
+                         "(POSE_LANDMARKS[0]); without --detection this flag is refused")
     ap.add_argument("--crop", type=int, default=224, help="still crop size, native pixels")
     a = ap.parse_args(argv)
 
@@ -281,6 +347,9 @@ def main(argv=None):
     #      bound was positional.
     require_frames(idx, ims, what="clip frame(s)", where=a.frames,
                    numbers=sorted(by_number))
+    # F-cdd95afb: resolve targets ABOVE os.makedirs so a refused --targets leaves --out
+    # absent. Hands/feet AND face (nose) when --detection is present.
+    targets = resolve_targets(a.targets, detection_present=bool(det))
 
     # ---- the output directory is created only once every in-tool andon above has
     #      fired. A refused run that has already made its directory leaves an empty
@@ -307,11 +376,8 @@ def main(argv=None):
 
     W, H = ims[0].size
     half = a.crop // 2
-    # 15/16 = left/right wrist, 27/28 = ankles. Hands and feet are where a video model's
-    # structure fails first (G17 for contact; hands are the classic melt), so those are the
-    # stills. A landmark the detector placed OUTSIDE the image is still cut — and the
-    # sidecar records that it was outside, which is the finding rather than a missing file.
-    targets = {"hand_L": 15, "hand_R": 16, "foot_L": 27, "foot_R": 28}
+    # A landmark the detector placed OUTSIDE the image is still cut — and the sidecar
+    # records that it was outside, which is the finding rather than a missing file.
     cuts = []
     for i in idx:
         for label, li in targets.items():
@@ -341,6 +407,8 @@ def main(argv=None):
                    "clip_lossless": True,
                    "source_frame_files": list(names),
                    "stills_requested": idx, "n_stills_requested": len(idx),
+                   "targets": list(targets),
+                   "target_landmarks": targets,
                    "gate_OUT": gate_out,
                    "run_token": token if token else NO_RUN_TOKEN,
                    "run_token_source": token_source,

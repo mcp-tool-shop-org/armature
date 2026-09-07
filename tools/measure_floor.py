@@ -2,6 +2,7 @@
 """measure_floor — the provider's repeat variance, per frame index.
 
     <venv-python> tools/measure_floor.py --runs=A0r1,A0r2,A0r3 [--early=0-4] [--late=29-32]
+    <venv-python> tools/measure_floor.py --mode=seed-spread --seeds=s1,s2,s3 --out=seed_spread.json
 
 A0. Three identical submissions, same seed, same payload — so every difference between
 them is the provider, not us.
@@ -28,11 +29,12 @@ and this tool must be able to catch the day a provider stops being deterministic
 EARLY/LATE rows stay for the same reason — they are how a returning gradient would
 announce itself. **What must not be inherited is the claim that the gradient is there.**
 
-⚠ **This is the fixed-seed floor and nothing else.** Zero here means *re-running one
-submission* costs nothing. It says nothing about the spread across *different seeds*,
-which is a separate quantity measured by E04, and nothing about any statistic other than
-the pixel one — the timing correlation has its own floor and its own instrument
-(`measure_tracking.py`).
+⚠ **`--mode=fixed-seed` (default) is the fixed-seed floor and nothing else.** Zero there
+means *re-running one submission* costs nothing. The spread across *different seeds* is a
+separate quantity — `--mode=seed-spread` with `--seeds=` — and nothing about any statistic
+other than the pixel one; the timing correlation has its own floor and its own instrument
+(`measure_tracking.py`). F-38b79919: seed-spread used to have no first-class CLI, so an
+E04-style seed A/B could only quote the wrong denominator.
 
 Read on the **lossless** frames only (`lossless/`, the VAEDecode tap). The earlier floor
 came through H.264 on both sides; on this rig the codec alone moves a single generation's
@@ -440,14 +442,67 @@ def pair_stats(A, B, big=8, names=None):
     return out
 
 
+def resolve_population(mode, runs_text, seeds_text):
+    """ANDON — which run names this mode measures, and under which quantity label.
+
+    F-38b79919: `--mode=seed-spread` is the different-seed denominator; it takes
+    `--seeds=` (not `--runs=`) so a record cannot be misread as the fixed-seed floor.
+    """
+    if mode == "fixed-seed":
+        if not runs_text:
+            raise FloorError(
+                "--runs is required for --mode=fixed-seed",
+                {"gate": "ARGS", "andon": "FloorError",
+                 "clause": "runs_required_for_fixed_seed", "mode": mode,
+                 "runs": runs_text, "seeds": seeds_text})
+        if seeds_text:
+            raise FloorError(
+                "--seeds belongs to --mode=seed-spread; fixed-seed takes --runs=",
+                {"gate": "ARGS", "andon": "FloorError",
+                 "clause": "seeds_not_valid_for_fixed_seed", "mode": mode,
+                 "runs": runs_text, "seeds": seeds_text})
+        return check_runs([r for r in runs_text.split(",") if r]), "fixed_seed_floor"
+    if mode == "seed-spread":
+        if not seeds_text:
+            raise FloorError(
+                "--seeds is required for --mode=seed-spread (comma-separated run names "
+                "under --root whose seeds differ); this is the different-seed "
+                "denominator, not the fixed-seed floor",
+                {"gate": "ARGS", "andon": "FloorError",
+                 "clause": "seeds_required_for_seed_spread", "mode": mode,
+                 "runs": runs_text, "seeds": seeds_text})
+        if runs_text:
+            raise FloorError(
+                "--runs belongs to --mode=fixed-seed; seed-spread takes --seeds=",
+                {"gate": "ARGS", "andon": "FloorError",
+                 "clause": "runs_not_valid_for_seed_spread", "mode": mode,
+                 "runs": runs_text, "seeds": seeds_text})
+        return check_runs([r for r in seeds_text.split(",") if r]), "seed_spread"
+    raise FloorError(
+        f"--mode={mode!r} is not a known quantity; use fixed-seed or seed-spread",
+        {"gate": "ARGS", "andon": "FloorError",
+         "clause": "unknown_floor_mode", "mode": mode,
+         "known": ["fixed-seed", "seed-spread"]})
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the provider's repeat variance per frame index — the noise floor "
-                    "every one-run gap has to be read against",
+                    "every one-run gap has to be read against. --mode=fixed-seed is the "
+                    "same-seed repeats; --mode=seed-spread is the different-seed "
+                    "denominator (F-38b79919)",
         epilog=HALT_EPILOG)
-    ap.add_argument("--runs", required=True,
-                    help="comma-separated run names to compare; at least two DISTINCT "
-                         "names, since a floor needs repeats of the same request")
+    ap.add_argument("--mode", default="fixed-seed", choices=("fixed-seed", "seed-spread"),
+                    help="fixed-seed (default): same payload, same seed, different "
+                         "submissions — takes --runs=. seed-spread: different seeds — "
+                         "takes --seeds= and labels the record seed_spread")
+    ap.add_argument("--runs", default=None,
+                    help="comma-separated run names for --mode=fixed-seed; at least two "
+                         "DISTINCT names, since a floor needs repeats of the same request")
+    ap.add_argument("--seeds", default=None,
+                    help="comma-separated run names for --mode=seed-spread; at least two "
+                         "DISTINCT names whose seeds differ. Required when --mode="
+                         "seed-spread; refused under fixed-seed")
     ap.add_argument("--root", default="outputs/E02/runs",
                     help="cwd-relative directory the run names are resolved under "
                          "(default: outputs/E02/runs)")
@@ -464,18 +519,23 @@ def main(argv=None):
     ap.add_argument("--expect", type=int, default=None,
                     help="the frame count the spec declares; every run's numbered frames "
                          "must be exactly shotspec.frame_names(expect, 'png')")
-    ap.add_argument("--out", default="outputs/E02/floor.json",
-                    help="cwd-relative path the floor record is written to "
-                         "(default: outputs/E02/floor.json). An existing file is refused "
-                         "unless --overwrite is passed")
+    ap.add_argument("--out", default=None,
+                    help="cwd-relative path the record is written to. Default "
+                         "outputs/E02/floor.json for fixed-seed, "
+                         "outputs/E02/seed_spread.json for seed-spread. An existing file "
+                         "is refused unless --overwrite is passed")
     ap.add_argument("--overwrite", action="store_true",
                     help="replace an existing --out floor record. WITHOUT it the run "
                          "REFUSES rather than overwriting, by name "
                          "(clause output_already_exists), before any write")
     a = ap.parse_args(argv)
 
-    # ---- ANDON, before a single PNG is opened: distinct runs, at least two of them.
-    runs = check_runs([r for r in a.runs.split(",") if r])
+    # ---- ANDON, before a single PNG is opened: the mode names its population flag.
+    runs, quantity = resolve_population(a.mode, a.runs, a.seeds)
+    out_path = a.out
+    if out_path is None:
+        out_path = ("outputs/E02/seed_spread.json" if a.mode == "seed-spread"
+                    else "outputs/E02/floor.json")
     # ---- ANDON, before a single pair is compared: each run's population is its
     #      NUMBERED frames and nothing else. A contact strip beside them is refused.
     loaded = {r: _stack(os.path.join(a.root, r), expect=a.expect) for r in runs}
@@ -494,8 +554,10 @@ def main(argv=None):
     for x, y in itertools.combinations(runs, 2):
         pairs[f"{x}|{y}"] = pair_stats(stacks[x], stacks[y], a.big, names=frame_names)
 
-    print(f"A0 — repeat variance on LOSSLESS frames · {len(runs)} runs · {n} frames · "
-          f"{len(pairs)} pairs")
+    heading = ("SEED-SPREAD — variance across DIFFERENT seeds"
+               if a.mode == "seed-spread"
+               else "A0 — repeat variance on LOSSLESS frames (fixed seed)")
+    print(f"{heading} · {len(runs)} runs · {n} frames · {len(pairs)} pairs")
     print()
     print("P1 clause A — bit-identical pairs")
     for k, ps in pairs.items():
@@ -579,6 +641,11 @@ def main(argv=None):
           f"(samples_per_pixel {spp})")
 
     payload = {
+        # F-38b79919: the quantity this record IS. fixed_seed_floor and seed_spread share
+        # pair_stats / windows / provenance; the label is what stops an E04 seed A/B from
+        # quoting the wrong denominator.
+        "mode": a.mode,
+        "quantity": quantity,
         "runs": runs, "n_frames": n, "big_threshold": a.big, "expect": a.expect,
         "frames_per_run": {r: len(s) for r, s in stacks.items()},
         # The REALISED names, per run and shared. They were derived and discarded, which
@@ -604,24 +671,24 @@ def main(argv=None):
         },
     }
     # F-a28128a4: refuse a silent replace of the published floor; --overwrite says so.
-    prior_mtime = os.path.getmtime(a.out) if os.path.isfile(a.out) else None
-    pre_existed, prior = gate_floor_overwrite(a.out, a.overwrite)
+    prior_mtime = os.path.getmtime(out_path) if os.path.isfile(out_path) else None
+    pre_existed, prior = gate_floor_overwrite(out_path, a.overwrite)
     payload["out_dir_pre_existed"] = pre_existed
-    payload["overwrote"] = [os.path.basename(a.out)] if pre_existed else []
-    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
-    with open(a.out, "w", encoding="utf-8") as fh:
+    payload["overwrote"] = [os.path.basename(out_path)] if pre_existed else []
+    os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+    with open(out_path, "w", encoding="utf-8") as fh:
         payload.update(runtime_provenance())
         json.dump(payload, fh, indent=1)
     if pre_existed and prior is not None:
         when = (time.strftime("%Y-%m-%dT%H:%M:%S", time.localtime(prior_mtime))
                 if prior_mtime is not None else "UNKNOWN")
         print(
-            f"\nwrote {a.out}  runs={runs}  n_frames={n}  "
+            f"\nwrote {out_path}  quantity={quantity}  runs={runs}  n_frames={n}  "
             f"replacing a record of runs={prior.get('runs')!r} "
             f"n_frames={prior.get('n_frames')!r} written {when}"
         )
     else:
-        print(f"\nwrote {a.out}  runs={runs}  n_frames={n}")
+        print(f"\nwrote {out_path}  quantity={quantity}  runs={runs}  n_frames={n}")
     return payload
 
 
