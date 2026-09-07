@@ -260,6 +260,15 @@ SEED_NODES = {
 #: pixel rules against it was the second vacuous gate the E13 halt report recorded, and the
 #: halt ruling owed this table to the first spec that arms the tier. A check that cannot
 #: fail is not a check.
+#:
+#: **This table is the sole hosted envelope (F-83facf0b).** `hosted_enums`,
+#: `hosted_frame_legality`, and `verify(..., hosted_tier=)` all read it and nothing else.
+#: A second hosted partner tier does not invent a parallel check: it adds a row here — with
+#: every key in `HOSTED_TIER_ROW_KEYS` — in the same change that wires its builder. String
+#: literals passed as `hosted_tier=` across the tree are censused by
+#: `hosted_tier_string_literals`; every literal must be a key of this table.
+HOSTED_TIER_ROW_KEYS = ("resolutions", "ratios", "duration_s", "measured")
+
 HOSTED_TIER_RULES = {
     "wan2.7-r2v": {
         "resolutions": ("720P", "1080P"),
@@ -269,6 +278,64 @@ HOSTED_TIER_RULES = {
                      "byte-consistent 2026-08-13"),
     },
 }
+
+
+def _assert_hosted_tier_table():
+    """Every HOSTED_TIER_RULES row carries the envelope keys the legality clause reads."""
+    for tier, row in HOSTED_TIER_RULES.items():
+        if not isinstance(row, dict):
+            raise RuntimeError(
+                f"HOSTED_TIER_RULES[{tier!r}] must be a mapping of envelope keys; "
+                f"got {type(row).__name__}")
+        missing = [k for k in HOSTED_TIER_ROW_KEYS if k not in row]
+        if missing:
+            raise RuntimeError(
+                f"HOSTED_TIER_RULES[{tier!r}] is missing required envelope key(s) "
+                f"{missing}; every hosted tier records resolutions, ratios, "
+                f"duration_s and measured in this one table")
+
+
+_assert_hosted_tier_table()
+
+
+def known_hosted_tiers():
+    """Sorted names of hosted tiers that have an envelope row."""
+    return sorted(HOSTED_TIER_RULES)
+
+
+def hosted_tier_string_literals(paths):
+    """Every string-literal `hosted_tier=` kwarg in the given Python source paths.
+
+    Returns a list of `{"path", "lineno", "tier"}` rows. A suite (or builders pin) that
+    wants every call site to name a RULES key filters `tier not in HOSTED_TIER_RULES`.
+    Variable / attribute kwargs are invisible here by design — only literals can be
+    checked without executing the call.
+    """
+    import ast
+    import os
+
+    rows = []
+    for path in paths:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                src = fh.read()
+        except OSError:
+            continue
+        try:
+            tree = ast.parse(src, filename=path)
+        except SyntaxError:
+            continue
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            for kw in node.keywords:
+                if kw.arg != "hosted_tier":
+                    continue
+                val = kw.value
+                if isinstance(val, ast.Constant) and isinstance(val.value, str):
+                    rows.append({"path": os.path.normpath(path), "lineno": node.lineno,
+                                 "tier": val.value})
+    return rows
 
 #: Node classes that size a video latent, and where width/height/length live in save
 #: format's positional `widgets_values`.
@@ -3704,3 +3771,17 @@ def load_graph(path):
             f"{path}: {exc}",
             dict(exc.evidence or {}, gate="ROUTE", andon="RouteGate",
                  path=str(path))) from None
+
+
+# Publish spend-boundary classes into the errors catalog once this module has
+# finished loading (F-77ed7f42). Safe no-op if errors is absent from sys.modules.
+def _publish_gates_to_errors_catalog():
+    import sys
+    err = sys.modules.get("armature_core.errors")
+    if err is None:
+        return
+    err.RouteGate = RouteGate
+    err.PairGate = PairGate
+
+
+_publish_gates_to_errors_catalog()

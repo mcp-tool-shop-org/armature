@@ -13,9 +13,11 @@ one would be a promise the package cannot keep. They stay in the repository, whe
 invocation that works is the one written down.
 
 Beyond the signpost commands (`modules`, `check`, `where`), this CLI also runs the
-paid-path gates that ship inside the wheel: `armature canon …` (Gate CANON) and
-`armature verify` (Gate ROUTE / PAIR). Those wrap library entry points already in
-`armature_core`; they do not pull Blender render scripts into the console script.
+paid-path and preflight gates that ship inside the wheel: `armature canon …`
+(Gate CANON), `armature verify` (Gate ROUTE / PAIR), `armature spec check` (shot-spec
+schema + optional G1), and `armature donor check` (Gate DONOR). Those wrap library
+entry points already in `armature_core`; they do not pull Blender render scripts into
+the console script.
 """
 import argparse
 import ast
@@ -175,6 +177,47 @@ def _cmd_verify(args):
                           "frame_legality_verdict": ev.get("frame_legality_verdict")})
 
 
+def _cmd_spec_check(args):
+    """Load and normalise a shot spec; optionally run G1 on resolution/frames."""
+    from . import shotspec as SS
+    from .gates import g1_generator_legality
+
+    spec = SS.load_spec(args.spec)
+    payload = {
+        "cmd": "check",
+        "path": os.path.abspath(args.spec),
+        "name": spec.get("name"),
+        "generator": spec.get("generator"),
+        "resolution": dict(spec.get("resolution") or {}),
+        "frames": dict(spec.get("frames") or {}),
+        "g1": False,
+    }
+    if args.g1:
+        profile = g1_generator_legality(
+            spec["resolution"]["width"],
+            spec["resolution"]["height"],
+            spec["frames"]["count"],
+            spec["generator"],
+        )
+        payload["g1"] = True
+        payload["g1_profile"] = profile.name if hasattr(profile, "name") else spec["generator"]
+    print(json.dumps({k: v for k, v in payload.items()
+                      if k not in ("cmd",)}, indent=2, default=str))
+    return _ok("SPEC", payload)
+
+
+def _cmd_donor_check(args):
+    """Grade a clip for baseline fitness before lift (Gate DONOR)."""
+    from . import donor_gate as DG
+
+    ev = DG.check_donor_clip(args.frames, args.detection)
+    print(json.dumps(ev, indent=2, default=str))
+    return _ok("DONOR", {"cmd": "check",
+                         "frames": os.path.abspath(args.frames),
+                         "detection": os.path.abspath(args.detection),
+                         "verdict": ev.get("verdict")})
+
+
 class _EpilogUnwrapped(argparse.HelpFormatter):
     """Keep newlines in the epilog (the repo URL); description still fills."""
 
@@ -235,7 +278,7 @@ SURFACE = [
     ("glb", "GLB reading helpers — gates: ATLAS, RELIFT"),
     ("pngio", "a dependency-free PNG writer"),
     ("errors", "the exception types the gates raise — gates: G1, G2, G4, G5, G6, R, B, S, "
-               "N, P, D, CANON"),
+               "N, P, D, CANON, ROUTE, PAIR, DONOR"),
     ("blender_scene", "the only module that imports bpy — needs Blender's interpreter — "
                       "gates: COMPOSITOR, FRAME"),
 ]
@@ -278,6 +321,9 @@ def _gates_carried(name):
         mod = importlib.import_module(f"armature_core.{name}")
     except Exception:  # noqa: BLE001 — a broken module still lists as a row with no gates
         return []
+    # errors re-exports ROUTE/PAIR/DONOR lazily (F-77ed7f42); force-bind so vars() sees them.
+    if name == "errors" and hasattr(mod, "_bind_reexports"):
+        mod._bind_reexports()
     return sorted({
         getattr(obj, "gate")
         for obj in vars(mod).values()
@@ -551,6 +597,47 @@ def main(argv=None):
                        dest="carries_no_sampler",
                        help="assert the graph is not expected to carry a sampler")
 
+    # Shot-spec preflight — schema (+ optional G1) before Blender (F-6a125ca5).
+    p_spec = sub.add_parser(
+        "spec",
+        help="shot-spec preflight: schema check, optional G1",
+        description=(
+            "Validate a shot spec under plain CPython before a Blender render. "
+            "Wraps shotspec.load_spec; with --g1 also runs g1_generator_legality "
+            "on resolution and frame count."),
+    )
+    spec_sub = p_spec.add_subparsers(dest="spec_cmd", required=True,
+                                     metavar="{check}")
+    p_spec_chk = spec_sub.add_parser(
+        "check", help="load and normalise a shot spec; refuse on schema or G1")
+    p_spec_chk.add_argument("spec", help="path to a shot-spec JSON file")
+    p_spec_chk.add_argument(
+        "--g1", action="store_true",
+        help="also run Gate G1 on resolution.width/height and frames.count")
+    p_spec_chk.set_defaults(_spec_func=_cmd_spec_check)
+
+    # Gate DONOR — grade a clip before lift (F-debb7f91).
+    p_donor = sub.add_parser(
+        "donor",
+        help="Gate DONOR: grade a clip for baseline fitness before lift",
+        description=(
+            "Ask whether a clip is fit to be a baseline. Reuses frame_paths, "
+            "mean_consecutive_frame_difference, ankle_framing, and gate_donor. "
+            "Detection rows come from a JSON file (lift_clip's detection_raw.json "
+            "shape, or a bare list of rows) — this command does not run MediaPipe."),
+    )
+    donor_sub = p_donor.add_subparsers(dest="donor_cmd", required=True,
+                                       metavar="{check}")
+    p_donor_chk = donor_sub.add_parser(
+        "check", help="run Gate DONOR on a frames directory + detection JSON")
+    p_donor_chk.add_argument("--frames", required=True,
+                             help="directory of numerically named PNG frames")
+    p_donor_chk.add_argument(
+        "--detection", required=True,
+        help="detection JSON: a list of rows, or {\"rows\": [...]} "
+             "(lift_clip detection_raw.json)")
+    p_donor_chk.set_defaults(_donor_func=_cmd_donor_check)
+
     a = ap.parse_args(argv)
 
     if a.cmd == "modules":
@@ -626,6 +713,20 @@ def main(argv=None):
             return _cmd_verify(a)
         except ArmatureError as exc:
             return _halt("VERIFY", exc)
+
+    if a.cmd == "spec":
+        from .errors import ArmatureError
+        try:
+            return a._spec_func(a)
+        except ArmatureError as exc:
+            return _halt("SPEC", exc)
+
+    if a.cmd == "donor":
+        from .errors import ArmatureError
+        try:
+            return a._donor_func(a)
+        except ArmatureError as exc:
+            return _halt("DONOR", exc)
 
     ap.print_help()
     return 0
