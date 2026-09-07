@@ -134,7 +134,8 @@ def reference_display(meta):
     return os.path.basename(str(ref))
 
 
-def provenance_lines(meta, output_sha=None, control_sha=None, reference_sha=None):
+def provenance_lines(meta, output_sha=None, control_sha=None, reference_sha=None,
+                     measurements=None):
     """Every line of the provenance panel, derived from the run's record. A value the
     record does not carry prints `NOT RECORDED`. This panel used to bake E02-era
     literals — model, sampler line, a control denominator, a Gate R route claim and a
@@ -144,6 +145,10 @@ def provenance_lines(meta, output_sha=None, control_sha=None, reference_sha=None
     F-6f968906: also prints `output sha` and per-input `control sha` / `reference sha`,
     the shape `make_e13_sheet.provenance_lines` already writes — from the record when
     present, else `NOT RECORDED`, or from the optional overrides the caller measured.
+
+    F-e2e302b5: optional `measurements` dict (from measure_clip / measure_tracking) prints
+    under provenance as diagnostics that gate nothing — same convention as
+    `make_startframe_sheet.provenance_lines`.
     """
     models = _get(meta, "models", default={})
     models = models if isinstance(models, dict) else {}
@@ -186,11 +191,44 @@ def provenance_lines(meta, output_sha=None, control_sha=None, reference_sha=None
     ]
     if is_ctl:
         lines += ["", f"bridge fidelity {ctl_d.get('bridge_fidelity', MISSING)}"]
+    if isinstance(measurements, dict) and measurements:
+        lines += ["", "MEASURED (diagnostics; they gate nothing)"]
+        for k, v in measurements.items():
+            lines.append(f"{k:<14} {v}")
     return lines
 
 
+def load_measurements(path):
+    """Headline diagnostics from measure_clip.json and/or measure_tracking.json (F-e2e302b5).
+
+    Same NOT RECORDED / round_or_none conventions as make_startframe_sheet. A tracking
+    record contributes the `r=` timing-correlation line when present.
+    """
+    from measure_clip import round_or_none  # noqa: PLC0415
+
+    with open(path, encoding="utf-8") as fh:
+        rec = json.load(fh)
+    if not isinstance(rec, dict):
+        return None
+    out = {}
+    # measure_clip shape
+    arms = rec.get("arms")
+    if isinstance(arms, list) and arms:
+        arm = arms[0]
+        out["frames"] = f"{arm['n_frames']}, {arm['distinct']['n_distinct']} distinct"
+        out["d(frame) med"] = round_or_none(arm["frame_deltas"]["stats"]["median"], 3)
+        out["d(luma) med"] = round_or_none(arm["luma"]["stats"]["median"], 3)
+        out["corr to f0"] = round_or_none(
+            arm["similarity_to_first"]["per_frame_correlation"][-1], 4)
+        out["horizon"] = f"found on {arm['horizon']['n_found']}/{arm['n_frames']}"
+    # measure_tracking shape (optional r= line)
+    if "timing_correlation" in rec:
+        out["r="] = round_or_none(rec["timing_correlation"], 4)
+    return out or None
+
+
 def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, captions=None,
-          plate=SHEET_PLATE):
+          plate=SHEET_PLATE, measurements=None):
     """Assemble the panel.
 
     `reference` may be None. E03 runs with **no reference image at all** — held constant
@@ -251,7 +289,7 @@ def build(control_dir, frames_dir, reference, meta, frame_idx, tile_h=416, capti
     # default bitmap — overflow budgets must match what CI actually renders.
     f_body = sheet_font("arial.ttf", PROV_FONT_SIZE)
     f_hdr = sheet_font("arial.ttf", HDR_FONT_SIZE)
-    lines = provenance_lines(meta)
+    lines = provenance_lines(meta, measurements=measurements)
     # F-061259da: size the provenance column to the measured text, not a fixed +430.
     prov_w = int(max_text_width(
         [(ln, f_body) for ln in lines if ln]
@@ -336,6 +374,15 @@ def main(argv=None):
                          "drawn. Named and recorded, never assumed: the reference column "
                          "of a panel must not show the character against a plate the "
                          "route did not submit")
+    # F-e2e302b5: Gate 0 is the sheet that must exist before any number is quoted; the
+    # numbers themselves had no slot on it. Same loader conventions as startframe.
+    ap.add_argument("--measurements", default=None,
+                    help="a measure_clip record; headline diagnostics print under "
+                         "provenance, labelled as diagnostics that gate nothing "
+                         "(F-e2e302b5)")
+    ap.add_argument("--tracking", default=None,
+                    help="optional measure_tracking.json; contributes the r= line beside "
+                         "--measurements (F-e2e302b5)")
     a = ap.parse_args(argv)
 
     with open(a.meta, encoding="utf-8") as fh:
@@ -349,11 +396,21 @@ def main(argv=None):
             captions[int(k)] = v
     reference = None if a.reference.lower() == "none" else a.reference
     plate = parse_plate(a.sheet_plate, SheetPopulationError, flag="--sheet-plate")
+    measurements = None
+    if a.measurements:
+        measurements = load_measurements(a.measurements) or {}
+    if a.tracking:
+        tracking = load_measurements(a.tracking) or {}
+        measurements = dict(measurements or {})
+        # tracking contributes r=; keep clip headlines from --measurements when both set
+        for k, v in tracking.items():
+            if k == "r=" or k not in measurements:
+                measurements[k] = v
     # ---- the output directory is created only once every in-tool andon above
     #      has fired -- the plate parse included.
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
     sheet = build(a.run, a.frames_dir, reference, meta, idx, captions=captions,
-                  plate=plate)
+                  plate=plate, measurements=measurements)
     sheet.save(a.out)
     print(f"GATE0_SHEET {a.out} {sheet.width}x{sheet.height} "
           f"plate={tuple(int(v) for v in plate)}")

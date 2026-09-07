@@ -88,7 +88,7 @@ import sys
 import time
 
 import numpy as np
-from PIL import Image
+from PIL import Image, ImageDraw
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -485,12 +485,179 @@ def resolve_population(mode, runs_text, seeds_text):
          "known": ["fixed-seed", "seed-spread"]})
 
 
+# --------------------------------------------------------------------------- floor sheet
+# F-88c4045d: the JSON/terminal product alone hid a returning early/late gradient from the
+# dailies surface. The sheet puts the three re-run frames beside each other at chosen
+# indices and prints window_source + pair bit-identical flags in the provenance column.
+# Owned path is this module (make_floor_sheet.py is outside the frozen glob).
+
+MISSING = "NOT RECORDED"
+_SHEET_MARGIN = 10
+_SHEET_LABEL_H = 18
+_SHEET_HDR_H = 22
+_SHEET_LINE_H = 16
+_SHEET_BG = (18, 18, 20)
+_SHEET_FG = (235, 235, 235)
+_SHEET_DIM = (140, 140, 150)
+
+
+def floor_provenance_lines(floor_rec):
+    """Provenance column for the floor sheet — window_source and pair bit-identical."""
+    ws = floor_rec.get("window_source") if isinstance(floor_rec, dict) else None
+    ws = ws if isinstance(ws, dict) else {}
+    pairs = floor_rec.get("pairs") if isinstance(floor_rec, dict) else None
+    pairs = pairs if isinstance(pairs, dict) else {}
+    runs = floor_rec.get("runs") if isinstance(floor_rec, dict) else None
+    lines = [
+        f"mode           {floor_rec.get('mode', MISSING) if isinstance(floor_rec, dict) else MISSING}",
+        f"quantity       {floor_rec.get('quantity', MISSING) if isinstance(floor_rec, dict) else MISSING}",
+        f"runs           {','.join(runs) if isinstance(runs, list) else MISSING}",
+        f"n_frames       {floor_rec.get('n_frames', MISSING) if isinstance(floor_rec, dict) else MISSING}",
+        f"window_source  early={ws.get('early', MISSING)} late={ws.get('late', MISSING)}",
+        f"early_window   {floor_rec.get('early_window', MISSING) if isinstance(floor_rec, dict) else MISSING}",
+        f"late_window    {floor_rec.get('late_window', MISSING) if isinstance(floor_rec, dict) else MISSING}",
+        "",
+        "PAIR bit-identical (overall)",
+    ]
+    if not pairs:
+        lines.append(f"  {MISSING}")
+    for key, rows in pairs.items():
+        if not isinstance(rows, list):
+            lines.append(f"  {key:<14} {MISSING}")
+            continue
+        n = len(rows)
+        ident = sum(1 for p in rows if isinstance(p, dict) and p.get("identical"))
+        overall = "YES" if n and ident == n else "NO"
+        lines.append(f"  {key:<14} {ident}/{n} frames  overall={overall}")
+    return lines
+
+
+def build_floor_sheet(floor_rec, root, frame_idx, tile_h=240, plate=None):
+    """Re-run frames side by side at each requested index, plus floor provenance.
+
+    `root` is the same directory measure_floor resolved run names under; each run's
+    frames live at `<root>/<run>/lossless/NNNNN.png`.
+    """
+    from sheet_compose import (SHEET_PLATE, font as sheet_font,  # noqa: PLC0415
+                               frames_by_number, load_rgb_over_plate, max_text_width,
+                               require_frames)
+    plate = SHEET_PLATE if plate is None else plate
+    runs = list(floor_rec.get("runs") or [])
+    if len(runs) < 2:
+        raise FloorError(
+            "floor sheet needs a floor record with at least two runs",
+            {"gate": "SHEET", "andon": "FloorError", "clause": "floor_sheet_needs_runs",
+             "runs": runs})
+
+    def _rgb(path):
+        return load_rgb_over_plate(path, plate)[0]
+
+    def fit(im):
+        s = tile_h / im.height
+        return im.resize((max(1, round(im.width * s)), tile_h), Image.LANCZOS)
+
+    # One population per run; require every requested frame number on every run.
+    run_by = {}
+    for r in runs:
+        d = os.path.join(root, r, "lossless")
+        if not os.path.isdir(d):
+            raise FloorError(
+                f"floor sheet: {d} is not a frames directory",
+                {"gate": "SHEET", "andon": "FloorError",
+                 "clause": "floor_sheet_run_dir_missing", "run": r, "dir": d, "root": root})
+        names = sorted(n for n in os.listdir(d) if n.lower().endswith(".png"))
+        by = frames_by_number(names, where=d, what=f"{r} frame(s)")
+        require_frames(frame_idx, names, what=f"{r} frame(s)", where=d,
+                       numbers=sorted(by))
+        run_by[r] = (d, by)
+
+    sample = fit(_rgb(os.path.join(run_by[runs[0]][0], run_by[runs[0]][1][frame_idx[0]])))
+    tile_w = sample.width
+    lines = floor_provenance_lines(floor_rec)
+    f_body = sheet_font("arial.ttf", 13)
+    f_hdr = sheet_font("arial.ttf", 15)
+    prov_w = int(max_text_width(
+        [(ln, f_body) for ln in lines if ln] + [("PROVENANCE", f_hdr),
+                                               ("FLOOR SHEET", f_hdr)]))
+    n_cols = len(runs)
+    n_rows = len(frame_idx)
+    grid_w = _SHEET_MARGIN + n_cols * (tile_w + _SHEET_MARGIN)
+    width = grid_w + prov_w + _SHEET_MARGIN
+    height = max(
+        _SHEET_HDR_H + _SHEET_MARGIN + n_rows * (_SHEET_LABEL_H + tile_h + _SHEET_LABEL_H)
+        + _SHEET_MARGIN,
+        _SHEET_HDR_H + _SHEET_MARGIN + _SHEET_LABEL_H + _SHEET_LINE_H * len(lines)
+        + _SHEET_MARGIN,
+    )
+    sheet = Image.new("RGB", (width, height), _SHEET_BG)
+    d = ImageDraw.Draw(sheet)
+    header = (f"FLOOR SHEET  {floor_rec.get('quantity', floor_rec.get('mode', ''))}  ·  "
+              f"{len(runs)} runs  ·  frames {','.join(str(i) for i in frame_idx)}")
+    d.text((_SHEET_MARGIN, 6), header, fill=_SHEET_FG, font=f_hdr)
+
+    y = _SHEET_HDR_H + _SHEET_MARGIN
+    for fi in frame_idx:
+        d.text((_SHEET_MARGIN, y), f"f{fi:03d}", fill=_SHEET_DIM, font=f_body)
+        x = _SHEET_MARGIN
+        for r in runs:
+            rundir, by = run_by[r]
+            tile = fit(_rgb(os.path.join(rundir, by[fi])))
+            sheet.paste(tile, (x, y + _SHEET_LABEL_H))
+            d.text((x, y + _SHEET_LABEL_H + tile_h + 2), r, fill=_SHEET_DIM, font=f_body)
+            x += tile_w + _SHEET_MARGIN
+        y += _SHEET_LABEL_H + tile_h + _SHEET_LABEL_H
+
+    px = grid_w
+    d.text((px, _SHEET_HDR_H + _SHEET_MARGIN), "PROVENANCE", fill=_SHEET_DIM, font=f_hdr)
+    yy = _SHEET_HDR_H + _SHEET_MARGIN + _SHEET_LABEL_H
+    for ln in lines:
+        d.text((px, yy), ln, fill=_SHEET_FG if "bit-identical" in ln else _SHEET_DIM,
+               font=f_body)
+        yy += _SHEET_LINE_H
+    return sheet
+
+
+def sheet_main(a):
+    """CLI half of F-88c4045d: --sheet --floor=... --root=... --frames=... --out=..."""
+    if not a.floor:
+        raise FloorError(
+            "--sheet requires --floor=<floor.json>",
+            {"gate": "ARGS", "andon": "FloorError", "clause": "sheet_requires_floor",
+             "flag": "--floor"})
+    if not a.out:
+        raise FloorError(
+            "--sheet requires --out=<sheet.png>",
+            {"gate": "ARGS", "andon": "FloorError", "clause": "sheet_requires_out",
+             "flag": "--out"})
+    with open(a.floor, encoding="utf-8") as fh:
+        floor_rec = json.load(fh)
+    if not isinstance(floor_rec, dict):
+        raise FloorError(
+            f"--floor={a.floor} must be a JSON object",
+            {"gate": "ARGS", "andon": "FloorError", "clause": "floor_not_object",
+             "floor": os.path.abspath(a.floor)})
+    idx = [int(v) for v in a.frames.split(",") if v.strip()]
+    if not idx:
+        raise FloorError(
+            "--frames named no indices",
+            {"gate": "ARGS", "andon": "FloorError", "clause": "sheet_frames_empty",
+             "frames": a.frames})
+    os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
+    sheet = build_floor_sheet(floor_rec, a.root, idx)
+    sheet.save(a.out)
+    print(f"FLOOR_SHEET {a.out} {sheet.width}x{sheet.height} "
+          f"runs={floor_rec.get('runs')} frames={idx}")
+    return {"out": os.path.abspath(a.out), "size": [sheet.width, sheet.height],
+            "runs": floor_rec.get("runs"), "frames": idx}
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the provider's repeat variance per frame index — the noise floor "
                     "every one-run gap has to be read against. --mode=fixed-seed is the "
                     "same-seed repeats; --mode=seed-spread is the different-seed "
-                    "denominator (F-38b79919)",
+                    "denominator (F-38b79919). --sheet builds the floor visual "
+                    "(F-88c4045d)",
         epilog=HALT_EPILOG)
     ap.add_argument("--mode", default="fixed-seed", choices=("fixed-seed", "seed-spread"),
                     help="fixed-seed (default): same payload, same seed, different "
@@ -503,9 +670,12 @@ def main(argv=None):
                     help="comma-separated run names for --mode=seed-spread; at least two "
                          "DISTINCT names whose seeds differ. Required when --mode="
                          "seed-spread; refused under fixed-seed")
-    ap.add_argument("--root", default="outputs/E02/runs",
-                    help="cwd-relative directory the run names are resolved under "
-                         "(default: outputs/E02/runs)")
+    # F-d5940490: --root/--out used to hard-point at outputs/E02/…. The instrument is the
+    # repo's provider-variance tool, not an E02 script; an omitted --root must refuse
+    # rather than silently write under another experiment's tree.
+    ap.add_argument("--root", required=True,
+                    help="directory the run names are resolved under. Required — no "
+                         "experiment-named default (F-d5940490)")
     ap.add_argument("--early", default=None,
                     help="a-b, inclusive. Omitted, the window is derived from the run's "
                          "own frame count (argparse eats leading minus signs, so pass "
@@ -520,22 +690,35 @@ def main(argv=None):
                     help="the frame count the spec declares; every run's numbered frames "
                          "must be exactly shotspec.frame_names(expect, 'png')")
     ap.add_argument("--out", default=None,
-                    help="cwd-relative path the record is written to. Default "
-                         "outputs/E02/floor.json for fixed-seed, "
-                         "outputs/E02/seed_spread.json for seed-spread. An existing file "
-                         "is refused unless --overwrite is passed")
+                    help="path the record is written to. Default <root>/floor.json for "
+                         "fixed-seed, <root>/seed_spread.json for seed-spread "
+                         "(F-d5940490). An existing file is refused unless --overwrite")
     ap.add_argument("--overwrite", action="store_true",
                     help="replace an existing --out floor record. WITHOUT it the run "
                          "REFUSES rather than overwriting, by name "
                          "(clause output_already_exists), before any write")
+    # F-88c4045d: the floor sheet lives HERE (make_floor_sheet.py is outside the frozen
+    # owned glob). --sheet builds the visual beside the JSON product.
+    ap.add_argument("--sheet", action="store_true",
+                    help="build the floor sheet (re-run frames beside each other) from "
+                         "--floor JSON instead of measuring. Equivalent of make_floor_sheet "
+                         "(F-88c4045d); owned path is this tool")
+    ap.add_argument("--floor", default=None,
+                    help="with --sheet: path to a floor.json / seed_spread.json record")
+    ap.add_argument("--frames", default="0,8,16",
+                    help="with --sheet: frame indices to tile (default 0,8,16)")
     a = ap.parse_args(argv)
+
+    if a.sheet:
+        return sheet_main(a)
 
     # ---- ANDON, before a single PNG is opened: the mode names its population flag.
     runs, quantity = resolve_population(a.mode, a.runs, a.seeds)
     out_path = a.out
     if out_path is None:
-        out_path = ("outputs/E02/seed_spread.json" if a.mode == "seed-spread"
-                    else "outputs/E02/floor.json")
+        # F-d5940490: beside --root, not under an experiment-named literal.
+        out_path = os.path.join(
+            a.root, "seed_spread.json" if a.mode == "seed-spread" else "floor.json")
     # ---- ANDON, before a single pair is compared: each run's population is its
     #      NUMBERED frames and nothing else. A contact strip beside them is refused.
     loaded = {r: _stack(os.path.join(a.root, r), expect=a.expect) for r in runs}

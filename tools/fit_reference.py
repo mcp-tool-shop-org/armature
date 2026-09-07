@@ -65,6 +65,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from encode_control import runtime_provenance  # noqa: E402
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from armature_core.gates import (  # noqa: E402
+    GENERATOR_PROFILES, g1_generator_legality, resolve_generator)
 from composite_reference import (  # noqa: E402
     compose_over_named_plate, parse_plate)
 
@@ -113,6 +115,17 @@ def parse_args(argv=None):
                     help="frame height in pixels. The default 480 is the other half of "
                          "E08's 832x480 WanAnimate frame; see --width for the per-model "
                          "legality table these two are checked against")
+    # F-c3572bf5: without --route this tool happily wrote an illegal plate that Gate G1
+    # only refused later at control export / payload build. When set, G1 runs HERE.
+    ap.add_argument("--route", default=None, choices=sorted(GENERATOR_PROFILES),
+                    help="generator profile to hold the fit against via "
+                         "gates.g1_generator_legality before writing. Omitted, bare "
+                         "--width/--height stay exploratory and ungated (F-c3572bf5)")
+    ap.add_argument("--length", type=int, default=None,
+                    help="frame count checked with --route. Omitted under --route, the "
+                         "profile's frame_residue is used as a legal placeholder so a "
+                         "reference fit that does not author a clip still exercises G1 "
+                         "on width/height (F-c3572bf5)")
     ap.add_argument("--mode", default="letterbox", choices=("letterbox",),
                     help="how the source is fitted. Only 'letterbox' exists, and that is "
                          "the Director's 2026-08-12 ruling: the node's own centre-crop "
@@ -257,6 +270,24 @@ def main(argv=None):
         pad = tuple(parts[::-1])          # the caller says RGB; cv2 arrays are BGR
         pad_source = f"caller-supplied RGB {parts}"
 
+    # F-c3572bf5: when --route is set, G1 fires BEFORE the write so an illegal plate
+    # never lands with provenance claiming a finished fit.
+    route_record = None
+    if a.route:
+        profile = resolve_generator(a.route)
+        length = a.length if a.length is not None else int(profile.frame_residue)
+        length_source = ("caller" if a.length is not None
+                         else "frame_residue_placeholder")
+        g1_generator_legality(a.width, a.height, length, a.route)
+        route_record = {
+            "route": a.route,
+            "profile": profile.as_dict(),
+            "profile_source": profile.source,
+            "length_checked": length,
+            "length_source": length_source,
+            "g1": "checked",
+        }
+
     fitted, placement = letterbox(img, a.width, a.height, pad)
     stem = os.path.splitext(os.path.basename(a.src))[0]
     # ---- the output directory is created only once every in-tool andon above has
@@ -288,6 +319,8 @@ def main(argv=None):
                    "consequence was measured and shown: the whole figure reaches the model "
                    "and the cost is flat margin rather than a missing head"),
     }
+    if route_record is not None:
+        rec["generator_route"] = route_record
     rpath = os.path.join(out_dir, f"{stem}_fit_provenance.json")
     with open(rpath, "w", encoding="utf-8") as fh:
         rec.update(runtime_provenance())
