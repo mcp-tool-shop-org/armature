@@ -5606,7 +5606,7 @@ def test_the_release_gate_census_reads_the_job_it_claims_to_read():
 
 def test_the_python_audit_step_upgrades_setuptools_before_it_audits():
     """Hosted setuptools 79.0.1 is PYSEC-2026-3447; pip-audit sees the whole env."""
-    needle = 'python -m pip install "setuptools>=83.0.0" "pip-audit>=2.7,<3"'
+    needle = 'python -m pip install "setuptools>=83.0.0,<84" "pip-audit>=2.7,<3"'
     assert needle in CI, "ci.yml python-tests audit must upgrade setuptools before pip-audit"
     assert needle in RELEASE, "release.yml verify audit must upgrade setuptools before pip-audit"
 

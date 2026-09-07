@@ -193,6 +193,10 @@ dev = [
     # the same ceiling those steps carry — release day must not pick up a new major
     # of the auditor.
     "pip-audit>=2.7,<3",
+    # WAVE 35/CI: hosted CPython ships setuptools 79.0.1 (PYSEC-2026-3447, fix 83).
+    # The audit step installs this before pip-audit; the suite-dependency census
+    # requires the same specifier here. Ceiling so release day cannot pick up 84.
+    "setuptools>=83.0.0,<84",
 ]
 
 [project.urls]

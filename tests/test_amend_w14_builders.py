@@ -196,7 +196,8 @@ def test_without_the_record_the_assembly_route_is_still_refused(tmp_path):
     out = tmp_path / "out" / "admission.json"
     with pytest.raises(RG.RouteGate) as exc:
         GSG.main([f"--saved={saved}", f"--api={api}", f"--seeds={seeds}",
-                  f"--out={out}", "--frame=832,480,81"])
+                  f"--out={out}", "--frame=832,480,81",
+                  "--experiment=E09", "--stage=B2"])
     assert "INDETERMINATE" in str(exc.value)
     assert not out.parent.exists()
 

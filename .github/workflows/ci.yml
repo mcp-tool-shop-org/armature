@@ -308,7 +308,7 @@ jobs:
         run: |
           # The hosted interpreter ships setuptools 79.0.1 (PYSEC-2026-3447, fix 83.0.0).
           # pip-audit inspects the whole env, not only extras, so upgrade before the audit.
-          python -m pip install "setuptools>=83.0.0" "pip-audit>=2.7,<3"
+          python -m pip install "setuptools>=83.0.0,<84" "pip-audit>=2.7,<3"
           python -m pip_audit --progress-spinner off
 
       # The sheet composers resolve a real font (Arial → Liberation Sans → Noto Sans, all
