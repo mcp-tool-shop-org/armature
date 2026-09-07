@@ -24,7 +24,7 @@ import pytest
 import build_assembly_payload as B
 from armature_core import assembly as AS
 from armature_core import route_gates as RG
-from conftest import TOOLS
+from conftest import TOOLS, load_ok_payload  # noqa: F401
 
 
 # ---------------------------------------------------------------------------------------

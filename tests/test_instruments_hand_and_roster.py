@@ -1,4 +1,6 @@
-"""Wave 35 feature-execute — instruments MEDIUM fixes.
+"""Instruments hand/roster/compose pins — graduated from test_instruments_amend_w35 (wave 37).
+
+Wave 35 feature-execute — instruments MEDIUM fixes.
 
 F-30f9bf58 — finger/toe bones + hand binding + author_walk hold reason.
 F-5b7048d5 — appendable --glb on staging tools.

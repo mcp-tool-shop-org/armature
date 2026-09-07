@@ -8,7 +8,7 @@ import re
 
 import pytest
 
-from conftest import TOOLS, REPO  # noqa: F401
+from conftest import TOOLS, REPO, load_ok_payload  # noqa: F401
 from armature_core import canon
 from armature_core import route_gates as RG
 

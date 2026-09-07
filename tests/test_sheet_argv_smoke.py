@@ -601,17 +601,19 @@ def test_the_argv_smoke_population_is_the_plate_parsing_population():
 import test_paid_argv_smoke as _PAID_SMOKE  # noqa: E402
 import test_measure_argv_smoke as _MEASURE_SMOKE  # noqa: E402
 import test_extended_sheet_argv_smoke as _EXT_SHEET_SMOKE  # noqa: E402
+import test_instrument_argv_smoke as _INSTR_SMOKE  # noqa: E402
 
 PAID_SUCCESS = set(_PAID_SMOKE.PAID)
 MEASURE_SUCCESS = set(_MEASURE_SMOKE.MEASURE)
 EXTENDED_SHEETS = set(_EXT_SHEET_SMOKE.EXTENDED_SHEETS)
 BLENDER_SHEET_SUCCESS = set(_EXT_SHEET_SMOKE.BLENDER_SHEET_SUCCESS)
+INSTRUMENT_SUCCESS = set(_INSTR_SMOKE.INSTRUMENTS)
 #: WAVE 35: owned routes dispatcher carries a list SUCCESS fixture below so the gap
 #: does not grow when the tool joins CLI_TOOLS.
 ROUTES_SUCCESS = {"build_routes_payload"}
 NO_SUCCESS_FIXTURE = sorted(
     set(CLI_TOOLS) - set(SHEETS) - PAID_SUCCESS - MEASURE_SUCCESS
-    - EXTENDED_SHEETS - BLENDER_SHEET_SUCCESS - ROUTES_SUCCESS)
+    - EXTENDED_SHEETS - BLENDER_SHEET_SUCCESS - ROUTES_SUCCESS - INSTRUMENT_SUCCESS)
 
 #: The members of `CLI_TOOLS` that cannot be driven from a CPython process at all, keyed on
 #: the BEHAVIOUR "runs under Blender" (`blender_stub.blender_reach`, wave 12 F-6b3040d1) and
@@ -629,11 +631,12 @@ CPYTHON_CLI_TOOLS = _cpython_cli_tools()
 
 
 def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
-    """29 of 70 after wave 35 routes SUCCESS (was 29 of 69 before routes joined CLI;
-    measure + extended sheets had already shrunk the gap). A fixture added moves a tool
-    out of this set; nothing may move the other way."""
+    """13 of 70 after wave 37 instrument SUCCESS (was 29 after wave 35). The sixteen
+    CPython residuals move into INSTRUMENT_SUCCESS; the thirteen blender_reach members
+    remain. A fixture added moves a tool out of this set; nothing may move the other way."""
     covered = (set(SHEETS) | PAID_SUCCESS | MEASURE_SUCCESS
-               | EXTENDED_SHEETS | BLENDER_SHEET_SUCCESS | ROUTES_SUCCESS)
+               | EXTENDED_SHEETS | BLENDER_SHEET_SUCCESS | ROUTES_SUCCESS
+               | INSTRUMENT_SUCCESS)
     assert set(NO_SUCCESS_FIXTURE) | covered == set(CLI_TOOLS)
     assert set(SHEETS) <= set(CLI_TOOLS), sorted(set(SHEETS) - set(CLI_TOOLS))
     assert PAID_SUCCESS <= set(CLI_TOOLS), sorted(PAID_SUCCESS - set(CLI_TOOLS))
@@ -642,15 +645,18 @@ def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
     assert BLENDER_SHEET_SUCCESS <= set(CLI_TOOLS), sorted(
         BLENDER_SHEET_SUCCESS - set(CLI_TOOLS))
     assert ROUTES_SUCCESS <= set(CLI_TOOLS), sorted(ROUTES_SUCCESS - set(CLI_TOOLS))
-    assert len(NO_SUCCESS_FIXTURE) <= 29, (
+    assert INSTRUMENT_SUCCESS <= set(CLI_TOOLS), sorted(
+        INSTRUMENT_SUCCESS - set(CLI_TOOLS))
+    assert len(NO_SUCCESS_FIXTURE) <= 13, (
         f"{len(NO_SUCCESS_FIXTURE)} command-line tools have no end-to-end success fixture; "
-        f"29 was the count after wave 35's measure + extended sheet + routes SUCCESS "
+        f"13 was the count after wave 37's sixteen CPython instrument SUCCESS "
         f"fixtures and it may only fall: {NO_SUCCESS_FIXTURE}")
     assert len(PAID_SUCCESS) == 17, sorted(PAID_SUCCESS)
     assert len(MEASURE_SUCCESS) == 7, sorted(MEASURE_SUCCESS)
     assert len(EXTENDED_SHEETS) == 7, sorted(EXTENDED_SHEETS)
     assert len(BLENDER_SHEET_SUCCESS) == 4, sorted(BLENDER_SHEET_SUCCESS)
     assert len(ROUTES_SUCCESS) == 1, sorted(ROUTES_SUCCESS)
+    assert len(INSTRUMENT_SUCCESS) == 16, sorted(INSTRUMENT_SUCCESS)
 
 
 def test_build_routes_payload_list_is_a_success_fixture(capsys):

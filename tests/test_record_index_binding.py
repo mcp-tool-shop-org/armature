@@ -6,9 +6,11 @@ module-level skip below takes the whole file when it is absent. The checks that 
 never skip - the committed index and its certificate - live in `test_record_index.py`
 and read those two files with the standard library alone.
 
-Run this half with:
+Run this half with ARMATURE_RECORD_INDEX set (or the default sibling present):
 
-    PYTHONPATH=E:/AI/record-index .venv/Scripts/python.exe -m pytest tests/test_record_index_binding.py
+    ARMATURE_RECORD_INDEX=E:/AI/record-index .venv/Scripts/python.exe -m pytest tests/test_record_index_binding.py
+
+conftest prepends that lever (or `E:/AI/record-index` when it exists) before collection.
 """
 
 import hashlib
@@ -23,7 +25,8 @@ import pytest
 pytest.importorskip(
     "record_index",
     reason="record_index is a sibling working copy, not a dependency of this venv; "
-           "run with PYTHONPATH=E:/AI/record-index to cover the binding")
+           "set ARMATURE_RECORD_INDEX to your record-index checkout "
+           "(default E:/AI/record-index when present) to cover the binding")
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

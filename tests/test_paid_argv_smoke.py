@@ -18,7 +18,7 @@ import numpy as np
 import pytest
 from PIL import Image
 
-from conftest import TOOLS, FIXTURES  # noqa: F401
+from conftest import TOOLS, FIXTURES, load_ok_payload  # noqa: F401
 import _census_nodes as CN
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -440,4 +440,6 @@ def test_every_paid_cli_main_runs_end_to_end_from_argv(name, tmp_path, capsys, m
     assert mod.main(argv) == 0, name
     out = capsys.readouterr().out
     assert sentinel in out, (name, out[:400])
+    if sentinel.endswith("_OK"):
+        load_ok_payload(out, sentinel)
     assert _artifact_exists(str(artifact)), (name, artifact)

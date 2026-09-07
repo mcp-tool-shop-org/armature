@@ -3,6 +3,9 @@
 `load_ok_payload` in conftest is the ONE receipt reader (one-line JSON or sentinel +
 pretty body). Modules that still hand-roll `startswith`/`split` against an OK token must
 migrate or sit on the shrinking exemption list below.
+
+Wave 37, F-643e9c27 — paid/measure/extended argv SUCCESS + high-traffic paid unit homes
+migrated onto `load_ok_payload`; exemption list shrinks deliberately.
 """
 
 from __future__ import annotations
@@ -25,13 +28,13 @@ HAND_PARSE_RE = re.compile(
 #: Modules that mention an `*_OK` token but do not parse a JSON receipt through
 #: `load_ok_payload` — presence checks, source-scan pins, halt/OK pairing censuses.
 #: May only shrink.
+#: WAVE 37: 42 -> 34. Migrated paid/measure/extended argv SUCCESS + assembly/cascade/
+#: gate_saved_graph/route_gates onto load_ok_payload; instruments_measure_amend_w35
+#: graduated into a durable home that imports load_ok_payload.
 OK_PAYLOAD_EXEMPT = {
     "test_amend_w10_builders.py",
     "test_amend_w22_core_gates.py",
     "test_amend_w28_builders.py",
-    "test_assembly.py",
-    "test_cascade.py",
-    "test_route_gates.py",
     "test_build_t2v_payload_a3.py",
     "test_ci_workflows.py",
     "test_instruments_amend_w10.py",
@@ -48,12 +51,8 @@ OK_PAYLOAD_EXEMPT = {
     "test_instruments_measure_amend_w25.py",
     "test_instruments_measure_amend_w28.py",
     "test_instruments_measure_amend_w34.py",
-    "test_instruments_measure_amend_w35.py",
     "test_packaging.py",
-    "test_paid_argv_smoke.py",
-    "test_measure_argv_smoke.py",
     "test_measure_clip.py",
-    "test_extended_sheet_argv_smoke.py",
     "test_sheet_argv_smoke.py",
     "test_sheet_pairing.py",
     "test_sheet_compose.py",
@@ -61,7 +60,6 @@ OK_PAYLOAD_EXEMPT = {
     "test_make_e08_sheet.py",
     "test_make_lift_sheet.py",
     "test_render_pose_sticks.py",
-    "test_gate_saved_graph.py",
     "test_build_camera_i2v_payload.py",
     "test_build_i2v_payload.py",
     "test_record_index_binding.py",
@@ -111,9 +109,8 @@ def test_every_ok_mention_imports_load_ok_payload_or_is_exempt():
 
 def test_the_exemption_list_may_only_shrink():
     """Ceiling pin — bump only with a reason naming the module that joined."""
-    # WAVE 35: 42 -> 42 stays; test_instruments_measure_amend_w35.py joins the
-    # presence-check exemption set (source-scan pins, not receipt parsers).
-    assert len(OK_PAYLOAD_EXEMPT) <= 42, len(OK_PAYLOAD_EXEMPT)
+    # WAVE 37: 42 -> 34 (paid/measure/extended + four paid unit homes migrated).
+    assert len(OK_PAYLOAD_EXEMPT) <= 34, len(OK_PAYLOAD_EXEMPT)
 
 
 def test_load_ok_payload_reads_one_line_and_pretty_bodies():

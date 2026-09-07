@@ -3,7 +3,10 @@
 From the repo root, with this worktree first on the path and the sibling record-index
 binding available:
 
-    PYTHONPATH=<repo>;<repo>/tools;E:/AI/record-index .venv/Scripts/python.exe -m pytest -q
+    PYTHONPATH=<repo>;<repo>/tools .venv/Scripts/python.exe -m pytest -q
+
+(`ARMATURE_RECORD_INDEX` or the default sibling `E:/AI/record-index` is prepended by this
+conftest when present — hand-extending PYTHONPATH is no longer required for the binding.)
 
 Use the repo venv interpreter by path (never a bare `python` on PATH — that is the system
 install this suite forbids). Re-derivation recipes in test comments cite this same
@@ -16,12 +19,18 @@ Expected wall-clock on this rig for a full plain-interpreter pass is about 10–
 advancing past that bound is a stall, not a slow suite; external-binary subprocesses in
 the suite carry a short timeout so a hung `git`/`node`/`bash` raises TimeoutExpired.
 
-Suite selection (wave 34, F-19d81931) — registered in `pytest_configure` below; applied
-mechanically by module path/name in `pytest_collection_modifyitems`:
+Suite selection (wave 34, F-19d81931; wave 37, F-4b60724b) — registered in
+`pytest_configure` below; applied mechanically by module path/name in
+`pytest_collection_modifyitems`:
 
 - `-m paid` / `-m "not blender"` / `-m sheet` / `-m measure` / `-m amend` /
-  `-m control_sequence`
+  `-m control_sequence` / `-m fast` / `-m full`
 - `--suite-family=<name>` — second axis that keeps only items carrying that marker
+- `--suite-speed=fast` — census/pure unit tests (excludes blender + paid); short local loop
+- `--suite-speed=full` — entire suite (default when the option is omitted)
+
+pytest-xdist (parallel workers) is OUT-OF-DOMAIN for this seat — ci-packaging owns the
+dependency install; this harness only owns the mark/partition scheme.
 
 Operator levers (defaults are this rig's paths; set them on any other machine):
 
@@ -29,6 +38,8 @@ Operator levers (defaults are this rig's paths; set them on any other machine):
   `C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe`
 - `ARMATURE_GIT` — git executable; default `git` (resolved on PATH)
 - `ARMATURE_FONT_DIR` — optional extra font directory for sheet/label tests
+- `ARMATURE_RECORD_INDEX` — sibling `record-index` checkout; default `E:/AI/record-index`
+  when that directory exists (prepended to `sys.path` before collection)
 
 Skip families, one sentence each:
 
@@ -37,8 +48,8 @@ Skip families, one sentence each:
 - git missing — packaging ignore-list tests skip when `ARMATURE_GIT`/`git` is absent.
 - bash / node missing — workflow and launcher tests that shell out skip when the binary
   is not on PATH.
-- record_index absent — `test_record_index_binding.py` skips unless
-  `PYTHONPATH` includes `E:/AI/record-index`.
+- record_index absent — `test_record_index_binding.py` skips unless `ARMATURE_RECORD_INDEX`
+  (or the default sibling) resolves and imports.
 - banked / sibling trees — tests that read gitignored `outputs/` banks or a sibling
   facet tree skip when those paths are not present.
 - fonts — label/sheet tests skip when no permitted face is in `ARMATURE_FONT_DIR` or a
@@ -65,6 +76,25 @@ BLENDER = os.environ.get(
     "ARMATURE_BLENDER", r"C:\Program Files\Blender Foundation\Blender 5.2\blender.exe"
 )
 GIT = os.environ.get("ARMATURE_GIT", "git")
+#: Wave 37, F-1f71ab4b — single documented lever for the sibling record-index binding.
+RECORD_INDEX_DEFAULT = os.path.join(os.path.dirname(REPO), "record-index")
+RECORD_INDEX = os.environ.get("ARMATURE_RECORD_INDEX", RECORD_INDEX_DEFAULT)
+
+
+def _ensure_record_index_on_path():
+    """Prepend ARMATURE_RECORD_INDEX (or the default sibling) before collection."""
+    configured = os.environ.get("ARMATURE_RECORD_INDEX")
+    path = configured if configured else (
+        RECORD_INDEX_DEFAULT if os.path.isdir(RECORD_INDEX_DEFAULT) else None)
+    if not path:
+        return None
+    path = os.path.abspath(path)
+    if os.path.isdir(path) and path not in sys.path:
+        sys.path.insert(0, path)
+    return path if os.path.isdir(path) else None
+
+
+_ensure_record_index_on_path()
 
 #: Wave 35, F-4515289b — skip-family levers named in this module's docstring. Every
 #: `pytest.mark.skipif` reason in tests/** must name one of these (or sit on the
@@ -73,6 +103,7 @@ SKIP_LEVER_VOCABULARY = (
     "ARMATURE_BLENDER",
     "ARMATURE_GIT",
     "ARMATURE_FONT_DIR",
+    "ARMATURE_RECORD_INDEX",
     "bash",
     "node",
     "record-index",
@@ -758,6 +789,8 @@ SUITE_MARKERS = (
     ("sheet", "sheet composers and sheet argv SUCCESS fixtures"),
     ("measure", "measure_* clip/floor/lift/tracking diagnostics"),
     ("amend", "wave amend pins (test_amend_* / test_instruments_*amend_*)"),
+    ("fast", "census/pure unit tests — excludes blender and paid (wave 37 F-4b60724b)"),
+    ("full", "full suite including blender, paid, and subprocess instruments"),
 )
 
 
@@ -771,6 +804,10 @@ def pytest_addoption(parser):
         "--suite-family", action="store", default=None,
         help="keep only tests carrying this suite marker "
              f"(one of: {', '.join(n for n, _ in SUITE_MARKERS)})")
+    parser.addoption(
+        "--suite-speed", action="store", default=None, choices=("fast", "full"),
+        help="fast = census/pure (no blender/paid); full = entire suite "
+             "(wave 37 F-4b60724b; xdist install is ci-packaging's)")
 
 
 def _module_marker_names(path):
@@ -778,6 +815,9 @@ def _module_marker_names(path):
     base = os.path.basename(path)
     stem = base[:-3] if base.endswith(".py") else base
     marks = set()
+    norm = path.replace("\\", "/")
+    if "/tests/blender/" in norm or norm.rstrip("/").endswith("/tests/blender"):
+        marks.add("blender")
     if stem.startswith("test_amend_") or "amend_w" in stem:
         marks.add("amend")
     if (stem.startswith("test_build_") or stem.startswith("test_fetch_")
@@ -804,10 +844,10 @@ def _module_marker_names(path):
                         "test_turnaround_ortho", "test_turnaround_pin",
                         "test_framing", "test_pinned_camera", "test_pinned_framing",
                         "test_startframe", "test_aapose_convention",
-                        "test_openpose_convention")):
+                        "test_openpose_convention", "test_check_pack")):
         marks.add("blender")
     if stem in ("test_encode_control", "test_invert_frames", "test_pack_pose_pack",
-                "test_extract_clip_frames"):
+                "test_extract_clip_frames", "test_instrument_argv_smoke"):
         marks.add("control_sequence")
     # Source scan: a module that skipifs on ARMATURE_BLENDER / BLENDER is blender-family
     # even when its name does not say so.
@@ -818,19 +858,26 @@ def _module_marker_names(path):
             text = ""
         if "ARMATURE_BLENDER" in text or "blender_stub" in text:
             marks.add("blender")
+    # Wave 37 F-4b60724b: every item is `full`; `fast` is the non-blender/non-paid partition.
+    marks.add("full")
+    if "blender" not in marks and "paid" not in marks:
+        marks.add("fast")
     return marks
 
 
 def pytest_collection_modifyitems(config, items):
     family = config.getoption("--suite-family")
+    speed = config.getoption("--suite-speed")
     kept = []
     for item in items:
         path = str(getattr(item, "fspath", "") or getattr(item, "path", ""))
         for name in _module_marker_names(path):
             item.add_marker(getattr(pytest.mark, name))
-        if family:
-            if family not in {m.name for m in item.iter_markers()}:
-                continue
+        names = {m.name for m in item.iter_markers()}
+        if family and family not in names:
+            continue
+        if speed == "fast" and "fast" not in names:
+            continue
         kept.append(item)
-    if family:
+    if family or speed == "fast":
         items[:] = kept

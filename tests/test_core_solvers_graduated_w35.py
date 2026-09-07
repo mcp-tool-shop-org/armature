@@ -1,4 +1,8 @@
-"""Wave-35 feature-execute: core-solvers MEDIUM findings (reverted-red proofs)."""
+"""Core-solvers pins graduated from test_amend_w35_core_solvers (wave 37).
+
+Wave-35 feature-execute: core-solvers MEDIUM findings (reverted-red proofs).
+Left the amend glob via GRADUATION_PATH.
+"""
 
 import json
 import math

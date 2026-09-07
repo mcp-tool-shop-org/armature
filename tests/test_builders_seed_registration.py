@@ -1,4 +1,8 @@
-"""Wave 35 builders — MEDIUM fixes (seed shim, overwrite, route table, E10, dispatcher, admission labels, catalog)."""
+"""Builders seed/registration/overwrite/routes pins — graduated from test_amend_w35_builders (wave 37).
+
+Wave 35 MEDIUM fixes (seed shim, overwrite, route table, E10, dispatcher, admission
+labels, catalog). Left the amend glob via GRADUATION_PATH.
+"""
 
 from __future__ import annotations
 

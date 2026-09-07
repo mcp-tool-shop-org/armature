@@ -39,10 +39,13 @@ FINDING_RE = re.compile(r"\bF-[0-9a-f]{8}\b")
 #: Measured 2026-09-06 on ca26d0a worktree before this wave's own amend file landed.
 #: May only fall; bump deliberately with a comment naming the wave that grew it.
 #: WAVE 35: 60 -> 64. Four `test_*_w35_*.py` amend modules landed with the MEDIUM
-#: execute (builders / core-solvers / instruments / instruments-measure); graduate
-#: later rather than delete product pins to clear the ceiling.
-AMEND_FILE_CEILING = 64
-AMEND_BYTE_FRACTION_CEILING = 0.42
+#: execute (builders / core-solvers / instruments / instruments-measure).
+#: WAVE 37: 64 -> 60. Those four graduated into durable homes
+#: (test_builders_seed_registration / test_core_solvers_graduated_w35 /
+#: test_instruments_hand_and_roster / test_instruments_measure_progress_and_timeout)
+#: and left the amend glob — first live exercise of GRADUATION_PATH.
+AMEND_FILE_CEILING = 60
+AMEND_BYTE_FRACTION_CEILING = 0.41
 
 
 def _amend_paths():

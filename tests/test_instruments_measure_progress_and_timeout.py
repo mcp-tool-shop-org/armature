@@ -1,7 +1,7 @@
-"""Wave 35 — instruments-measure feature-execute (five MEDIUM findings).
+"""Instruments-measure progress/timeout pins — graduated from amend_w35 (wave 37).
 
-Each test goes red without the fix and green beside it. In-process claims read the
-module the worktree's PYTHONPATH resolves.
+Wave 35 instruments-measure feature-execute (five MEDIUM findings). Each test goes
+red without the fix and green beside it. Left the amend glob via GRADUATION_PATH.
 """
 
 from __future__ import annotations
@@ -13,6 +13,8 @@ import sys
 import numpy as np
 import pytest
 from PIL import Image
+
+from conftest import load_ok_payload  # noqa: F401
 
 TESTS = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.dirname(TESTS)

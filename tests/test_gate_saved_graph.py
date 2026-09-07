@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from conftest import TOOLS  # noqa: F401
+from conftest import TOOLS, load_ok_payload  # noqa: F401
 import gate_saved_graph as GSG
 from armature_core import route_gates as RG
 
