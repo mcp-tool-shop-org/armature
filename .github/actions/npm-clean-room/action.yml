@@ -26,8 +26,25 @@
 # The runner's own node/npm run this. release.yml's version gate already reads
 # npm/package.json through the preinstalled `node`, so this adds no new assumption; nothing
 # here publishes, so the npm that packs need not be the pinned `npm@^11.5.1` that does.
+#
+# THE HANDOFF HALF. `--node-selftest` needs no Python and proves the shim parses; it does not
+# prove `spawn(python, ['-m', 'armature_core.cli', ...])` works. Measured across `.github/**`
+# before this input: every CI / release / verify path stopped at `--node-selftest`, while the
+# Python console script (`[project.scripts] armature`) was heavily probed in the wheel room.
+# When `python` is set to a toolkit-bearing interpreter (wheel-room python after clean-room,
+# or the repo venv on the rig), this action also runs `"$SHIM" --version` and `"$SHIM" check`
+# under `ARMATURE_PYTHON=<that exe>`. Empty keeps the no-Python half alone — ci.yml's
+# `launcher` matrix still exercises that half on node 18/22 without a wheel in the job.
 name: npm clean room
 description: Pack the npm package, install the tarball into a scratch prefix, and run the installed command.
+
+inputs:
+  python:
+    description: >-
+      Toolkit-bearing interpreter for the Node→Python handoff (`--version` / `check` under
+      ARMATURE_PYTHON). Empty runs `--node-selftest` only.
+    required: false
+    default: ""
 
 runs:
   using: composite
@@ -35,11 +52,13 @@ runs:
     - name: pack the npm package and run it from a clean install
       shell: bash
       working-directory: npm
+      env:
+        ARMATURE_HANDOFF_PYTHON: ${{ inputs.python }}
       run: |
         set -eu
-        # Collapsible phases (pack / install / selftest) match the wheel clean room's groups
-        # so a red npm log is not one unsectioned transcript. Andon `::error::` stays at
-        # group end so the Actions annotation still surfaces.
+        # Collapsible phases (pack / install / selftest [/ handoff]) match the wheel clean
+        # room's groups so a red npm log is not one unsectioned transcript. Andon `::error::`
+        # stays at group end so the Actions annotation still surfaces.
         echo ::group::pack
         rm -f ./*.tgz
         npm pack
@@ -83,4 +102,23 @@ runs:
         echo ::group::selftest
         "$SHIM" --node-selftest
         echo ::endgroup::
+        # Optional handoff: the packed shim must reach a real CLI through the pin, not only
+        # the no-Python self-test. The pin SUBSTITUTES for PATH (npm/bin/armature.mjs), so a
+        # wheel-room interpreter that cannot import armature_core is a refusal by name here
+        # rather than a fall-through to some other Python on the runner.
+        if [ -n "${ARMATURE_HANDOFF_PYTHON}" ]; then
+          echo ::group::handoff
+          if [ ! -x "${ARMATURE_HANDOFF_PYTHON}" ]; then
+            echo "::error::handoff python is not executable: ${ARMATURE_HANDOFF_PYTHON}"
+            exit 1
+          fi
+          if ! "${ARMATURE_HANDOFF_PYTHON}" -c "import armature_core"; then
+            echo "::error::handoff python cannot import armature_core: ${ARMATURE_HANDOFF_PYTHON}"
+            exit 1
+          fi
+          export ARMATURE_PYTHON="${ARMATURE_HANDOFF_PYTHON}"
+          "$SHIM" --version
+          "$SHIM" check
+          echo ::endgroup::
+        fi
         rm -f ./*.tgz
