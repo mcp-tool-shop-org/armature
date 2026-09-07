@@ -12,8 +12,10 @@ on the user's Python could not import `bpy` and would fail at the first line. Sh
 one would be a promise the package cannot keep. They stay in the repository, where the
 invocation that works is the one written down.
 
-So this command reports what is installed and where the rest lives. It is a signpost,
-not a pipeline stage.
+Beyond the signpost commands (`modules`, `check`, `where`), this CLI also runs the
+paid-path gates that ship inside the wheel: `armature canon …` (Gate CANON) and
+`armature verify` (Gate ROUTE / PAIR). Those wrap library entry points already in
+`armature_core`; they do not pull Blender render scripts into the console script.
 """
 import argparse
 import ast
@@ -27,6 +29,150 @@ import textwrap
 
 REPO = "https://github.com/mcp-tool-shop-org/armature"
 DOCS = "https://mcp-tool-shop-org.github.io/armature/"
+
+
+def _halt(prefix, exc):
+    """Print `<PREFIX>_HALT` with the six-key receipt and return the exit code."""
+    from .errors import ArmatureError
+    from .parts import halt_keysafe, halt_outcome, printable_halt_line
+
+    code, outcome = halt_outcome(exc)
+    evidence = getattr(exc, "evidence", None)
+    record = {
+        "tool": prefix.lower(),
+        "outcome": outcome,
+        "gate": getattr(exc, "gate", None),
+        "error": type(exc).__name__,
+        "message": str(exc),
+        "evidence": halt_keysafe(evidence) if evidence is not None else None,
+    }
+    line = json.dumps(record, default=str, allow_nan=False, sort_keys=True)
+    print(printable_halt_line(f"{prefix}_HALT {line}"))
+    return code if isinstance(exc, ArmatureError) else 1
+
+
+def _ok(prefix, payload):
+    print(f"{prefix}_OK " + json.dumps(payload, default=str, allow_nan=False,
+                                       sort_keys=True))
+    return 0
+
+
+def _load_census(path):
+    if not path:
+        return None
+    with open(path, encoding="utf-8") as fh:
+        return json.load(fh)
+
+
+def _cmd_canon_resolve(args):
+    from . import canon as C
+    from . import canon_census
+    from .errors import GateCanon
+
+    census = _load_census(args.census)
+    rec = canon_census.row(args.subject, census=census)
+    if rec is None:
+        raise GateCanon(
+            f"unknown subject {args.subject!r}: it is in no canon census this "
+            f"invocation can see, so nothing can be resolved for it",
+            {"gate": "CANON", "andon": "GateCanon", "clause": "unknown_subject",
+             "subject": args.subject, "census": args.census, "roots": args.roots})
+    if rec.get("surfaces") is None:
+        print(f"IDENTITY_ONLY {args.subject}")
+        if rec.get("reason"):
+            print(rec["reason"])
+        return _ok("CANON", {"cmd": "resolve", "subject": args.subject,
+                             "verdict": "IDENTITY_ONLY"})
+    doc = C.resolve(args.subject, census=census, search_roots=args.roots)
+    print(f"RESOLVED {args.subject} {doc['_path']}")
+    print(json.dumps(C.coverage(doc), indent=2))
+    return _ok("CANON", {"cmd": "resolve", "subject": args.subject,
+                         "path": doc["_path"], "verdict": "RESOLVED"})
+
+
+def _cmd_canon_coverage(args):
+    from . import canon as C
+
+    doc = C.load(args.canon)
+    cov = C.coverage(doc)
+    print(json.dumps(cov, indent=2))
+    return _ok("CANON", {"cmd": "coverage", "path": args.canon, **{
+        k: cov[k] for k in ("ratified", "holes") if k in cov}})
+
+
+def _cmd_canon_check(args):
+    from . import canon as C
+
+    if args.canon:
+        doc = C.load(args.canon)
+    else:
+        doc = C.resolve(args.subject, census=_load_census(args.census),
+                        search_roots=args.roots)
+    ev = C.cover(doc, args.prompt)
+    print(json.dumps({k: ev[k] for k in ev if k != "prompt"}, indent=2))
+    return _ok("CANON", {"cmd": "check", "verdict": ev.get("verdict")})
+
+
+def _cmd_canon_spend(args):
+    from . import canon as C
+    from .errors import GateCanon
+
+    # Same andon tools/canon_gate.gate_canon_ships_what_it_gated carries: the text
+    # handed to the router IS the text being sent.
+    if args.canon_prompt is not None and args.canon_prompt != args.prompt:
+        raise GateCanon(
+            "--canon-prompt is not the text this payload ships. The router would have "
+            "checked one string while the graph carried another, and every other gate "
+            "would still be green. Either fix the shipped prompt or drop the flag",
+            {"gate": "CANON", "andon": "GateCanon",
+             "clause": "gated_text_is_not_shipped_text",
+             "canon_prompt": args.canon_prompt, "shipped": args.prompt})
+    ev = C.gate_write(
+        args.subject, args.prompt,
+        no_canon=args.no_canon, out_dir=args.out,
+        census=_load_census(args.census), search_roots=args.roots,
+    )
+    line = ev.get("announcement") or f"[canon] {ev.get('verdict')}: {ev.get('subject')}"
+    print(line)
+    print(json.dumps(ev, indent=2, default=str))
+    return _ok("CANON", {"cmd": "spend", "verdict": ev.get("verdict"),
+                         "subject": ev.get("subject")})
+
+
+def _parse_frame(text):
+    """`W,H,L` → (width, height, length). argparse eats leading minus signs — pass
+    `--frame=-16,480,81` if a signed probe is ever needed."""
+    parts = [p.strip() for p in text.split(",")]
+    if len(parts) != 3:
+        raise SystemExit(f"--frame needs width,height,length; got {text!r}")
+    try:
+        return tuple(int(p) for p in parts)
+    except ValueError as exc:
+        raise SystemExit(f"--frame values must be ints: {text!r}") from exc
+
+
+def _cmd_verify(args):
+    from . import route_gates as RG
+
+    graph = RG.load_graph(args.graph)
+    frame = _parse_frame(args.frame) if args.frame else None
+    attribution = ()
+    if args.attribution:
+        raw = json.loads(args.attribution)
+        attribution = tuple(raw) if isinstance(raw, list) else (raw,)
+    ev = RG.verify(
+        graph,
+        family=args.family,
+        frame=frame,
+        hosted_tier=args.hosted_tier,
+        allow=tuple(args.allow or ()),
+        carries_no_sampler=args.carries_no_sampler,
+        attribution=attribution,
+    )
+    print(json.dumps(ev, indent=2, default=str))
+    return _ok("VERIFY", {"cmd": "verify", "graph": args.graph,
+                          "family": args.family,
+                          "frame_legality_verdict": ev.get("frame_legality_verdict")})
 
 
 class _EpilogUnwrapped(argparse.HelpFormatter):
@@ -336,6 +482,75 @@ def main(argv=None):
 
     sub.add_parser("where", help="print where the docs and the render scripts live")
 
+    # Gate CANON — the four subcommands tools/canon_gate.py exposes, on the installed
+    # console script (F-4b9ee614). Nested under `canon` so the top-level `check`
+    # (import probe) keeps its name.
+    p_canon = sub.add_parser(
+        "canon",
+        help="Gate CANON: resolve, coverage, check, or spend",
+        description=(
+            "Gate CANON at the command line: resolve a subject to its canon, measure "
+            "coverage, check a prompt, or run the spend gate every payload builder "
+            "calls before authoring a submission."),
+    )
+    p_canon.add_argument("--roots", action="append", default=None,
+                         help="a canon root directory to search; repeatable")
+    p_canon.add_argument("--census", default=None, help="override census JSON")
+    canon_sub = p_canon.add_subparsers(dest="canon_cmd", required=True,
+                                       metavar="{resolve,coverage,check,spend}")
+
+    p_res = canon_sub.add_parser(
+        "resolve", help="name the canon file a subject resolves to")
+    p_res.add_argument("--subject", required=True)
+    p_res.set_defaults(_canon_func=_cmd_canon_resolve)
+
+    p_cov = canon_sub.add_parser(
+        "coverage", help="report what a canon file covers")
+    p_cov.add_argument("--canon", required=True, help="the canon file to measure")
+    p_cov.set_defaults(_canon_func=_cmd_canon_coverage)
+
+    p_cchk = canon_sub.add_parser(
+        "check", help="check a prompt against a canon; spends nothing")
+    p_cchk.add_argument("--subject", default=None)
+    p_cchk.add_argument("--canon", default=None,
+                        help="canon file instead of resolving --subject")
+    p_cchk.add_argument("--prompt", required=True)
+    p_cchk.set_defaults(_canon_func=_cmd_canon_check)
+
+    p_spend = canon_sub.add_parser(
+        "spend", help="the spend gate every payload builder calls")
+    from . import canon as _canon_mod
+    _canon_mod.add_spend_flags(p_spend)
+    p_spend.add_argument("--prompt", dest="prompt", required=True,
+                         help="the prompt that will actually be sent; this is gated")
+    p_spend.add_argument("--out", default=None,
+                         help="directory to write the canon evidence JSON into")
+    p_spend.set_defaults(_canon_func=_cmd_canon_spend)
+
+    # Gate ROUTE / PAIR — load a saved/API graph and run verify (F-656ac783).
+    p_ver = sub.add_parser(
+        "verify",
+        help="Gate ROUTE/PAIR: load a graph and admit it before credits are spent",
+        description=(
+            "Run Gate ROUTE / PAIR on a saved or API-format graph. Pure CPython — "
+            "no Blender. Reuses the frame/hosted-tier/attribution kwargs builders pass."),
+    )
+    p_ver.add_argument("graph", help="path to a saved or API-format graph JSON")
+    p_ver.add_argument("--family", default="wan",
+                       help="generator family or G1 profile name (default: wan)")
+    p_ver.add_argument("--frame", default=None,
+                       help="width,height,length to supply to Gate L "
+                            "(argparse eats leading minus signs: pass --frame=W,H,L)")
+    p_ver.add_argument("--hosted-tier", default=None, dest="hosted_tier",
+                       help="hosted tier name when the graph carries no pixel latent")
+    p_ver.add_argument("--allow", action="append", default=None,
+                       help="component key with an explicit ruling; repeatable")
+    p_ver.add_argument("--attribution", default=None,
+                       help="JSON list/object of attribution entries for CONDITIONAL rows")
+    p_ver.add_argument("--carries-no-sampler", action="store_true",
+                       dest="carries_no_sampler",
+                       help="assert the graph is not expected to carry a sampler")
+
     a = ap.parse_args(argv)
 
     if a.cmd == "modules":
@@ -397,6 +612,20 @@ def main(argv=None):
         print("render   scripts run inside Blender, from a repo checkout:")
         print("         blender -b -P tools/render_turnaround.py -- --glb X.glb --out D")
         return 0
+
+    if a.cmd == "canon":
+        from .errors import ArmatureError
+        try:
+            return a._canon_func(a)
+        except ArmatureError as exc:
+            return _halt("CANON", exc)
+
+    if a.cmd == "verify":
+        from .errors import ArmatureError
+        try:
+            return _cmd_verify(a)
+        except ArmatureError as exc:
+            return _halt("VERIFY", exc)
 
     ap.print_help()
     return 0

@@ -34,6 +34,12 @@ SPEC_VERSION = 1
 
 KNOWN_CHANNELS = ("depth", "normal", "mask", "edge", "pose")
 
+#: Camera models this contract accepts. `orbit` is the E01 turntable. `static` is a
+#: locked-off camera (no azimuth sweep) — a first-class previz need for cutscenes and
+#: held frames. Path/track types wait until framing solvers accept them; unknown names
+#: stay refused so a typo cannot silently fall through to orbit defaults.
+KNOWN_CAMERA_TYPES = ("orbit", "static")
+
 #: The render engines a spec may name. `blender_scene.configure_render` assigns
 #: `scene.render.engine = r["engine"]` verbatim, so an unknown identifier is refused by
 #: Blender's own RNA with a `TypeError` from inside the render layer — the loud-not-silent
@@ -361,7 +367,21 @@ def normalise_spec(raw, spec_path=None):
                  'supported': SPEC_VERSION})
 
     _require(spec, "name", str, "spec")
-    _require(spec, "generator", str, "spec")
+    generator = _require(spec, "generator", str, "spec")
+    # Name check only — dimensions still belong to G1 at write time. The vocabulary is
+    # the union of G1 profiles and Gate L family rows so a shotspec cannot parse green
+    # on a generator neither gate knows (F-a9e809dd). Lazy imports: `gates` imports
+    # `ANIMATION_MODES` from this module at load time.
+    from .gates import GENERATOR_PROFILES
+    from .route_gates import GENERATOR_RULES
+    known_generators = sorted(set(GENERATOR_PROFILES) | set(GENERATOR_RULES))
+    if generator not in GENERATOR_PROFILES and generator not in GENERATOR_RULES:
+        _refuse(
+            f"spec.generator {generator!r} is not in the unified generator table "
+            f"(G1 profiles + Gate L families); known: {known_generators}",
+            {'clause': 'generator_unknown', 'where': 'spec', 'key': 'generator',
+             'value': repr(generator), 'known_generators': known_generators}
+        )
 
     # A number a gate compares against may not arrive through the spec. gates.py makes
     # this argument for `dim_divisor` in its own opening lines; `g4_tolerance_px` was
@@ -506,12 +526,14 @@ def normalise_spec(raw, spec_path=None):
         )
 
     cam = spec["camera"]
-    if cam.get("type") != "orbit":
-        _refuse(f"spec.camera.type {cam.get('type')!r} is not implemented "
-                f"(only 'orbit')", {'clause': 'camera_type_not_implemented',
-                                    'where': 'spec.camera', 'key': 'type',
-                                    'value': repr(cam.get('type')),
-                                    'implemented': ['orbit']})
+    cam_type = cam.get("type")
+    if cam_type not in KNOWN_CAMERA_TYPES:
+        _refuse(f"spec.camera.type {cam_type!r} is not implemented "
+                f"(known: {list(KNOWN_CAMERA_TYPES)})",
+                {'clause': 'camera_type_not_implemented',
+                 'where': 'spec.camera', 'key': 'type',
+                 'value': repr(cam_type),
+                 'implemented': list(KNOWN_CAMERA_TYPES)})
     radius = cam.get("radius")
     # `bool` is a subclass of `int`, so `radius: true` was accepted as a number and
     # resolved to an orbit radius of 1.0. The `target` clause immediately below already

@@ -65,10 +65,12 @@ CENSUS = {
         ),
     },
     "BLACKGUARD": {
-        "surfaces": None,
+        # Package-data path under armature_core/canon/ (DEFAULT_ROOT). Director
+        # identity-sheet occupants: horned helm, tattered cape, segmented pauldrons.
+        "surfaces": "blackguard.surfaces.json",
         "reason": (
-            "E01/E02 armored warrior. Named in prompts (plate, helm, cloak) "
-            "but no surfaces file has been ratified."
+            "E01/E02 armored warrior. Surfaces ratified from the Director's "
+            "identity-sheet ruling; --no-canon on this subject is the checkbox refuse."
         ),
     },
     "WIRE": {
