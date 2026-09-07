@@ -456,6 +456,82 @@ def require_rig_map(available_sites):
     return True
 
 
+def body_from_sites(sites, conf=1.0):
+    """Pack projected/world sites into an AAPose-20 `(20, 3)` body array (F-2b26bedc).
+
+    Order follows `LANDMARK_SITES`. Each row is `(x, y[, z-or-ignored], conf)` truncated
+    to `(x, y, conf)` for the draw path — callers that already projected to pixels pass
+    2-vectors; 3-vectors keep x,y and drop z. Lives next to `require_rig_map` so a second
+    stick producer does not re-implement the map inside an instrument.
+    """
+    require_rig_map(sites)
+    c = float(conf)
+    if not (c == c) or c < 0.0:  # NaN or negative
+        raise ArmatureError(
+            f"body_from_sites conf={conf!r} is not a non-negative finite confidence",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "body_confidence_unreadable", "conf": repr(conf)})
+    rows = []
+    for name in LANDMARK_SITES:
+        p = np.asarray(sites[name], dtype=np.float64).reshape(-1)
+        if p.size < 2:
+            raise ArmatureError(
+                f"site {name!r} needs at least 2 coordinates, got shape {p.shape}",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "body_site_too_short", "site": name,
+                 "shape": list(p.shape)})
+        rows.append((float(p[0]), float(p[1]), c))
+    out = np.asarray(rows, dtype=np.float64)
+    if out.shape != (KEYPOINT_COUNT, 3):
+        raise ArmatureError(
+            f"body_from_sites built shape {out.shape}, convention wants "
+            f"({KEYPOINT_COUNT}, 3)",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "body_from_sites_wrong_shape",
+             "shape": list(out.shape), "recorded": KEYPOINT_COUNT})
+    return out
+
+
+def hands_from_sites(sites, hand_mode="mitten", measured_left=None, measured_right=None,
+                     conf=1.0):
+    """Build left/right hand `(21, 3)` arrays from rig sites (F-2b26bedc).
+
+    Uses `HAND_SITES` + `hand_frame` + `pack_hand`. Returns
+    `(left, right, provenance)` where provenance records mitten vs articulated per side.
+    """
+    require_rig_map(sites)
+    out = {}
+    prov = {}
+    measured = {"left": measured_left, "right": measured_right}
+    for side, triple in HAND_SITES.items():
+        wrist, hand_end, elbow = triple
+        d, s, length = hand_frame(sites[wrist], sites[hand_end], sites[elbow])
+        pts, meta = pack_hand(
+            sites[wrist], d, s, length,
+            measured_points=measured[side], hand_mode=hand_mode)
+        # pack_hand mitten returns (21,4)=xyz+conf; articulated may be (21,3)=xy+conf.
+        # Draw path wants (21,3)=(x, y, conf) — same contract as body_from_sites.
+        arr = np.asarray(pts, dtype=np.float64)
+        if arr.shape[1] >= 4:
+            xy = arr[:, :2]
+            ccol = arr[:, 3:4]
+        elif arr.shape[1] == 3:
+            xy = arr[:, :2]
+            ccol = arr[:, 2:3]
+        elif arr.shape[1] == 2:
+            xy = arr
+            ccol = np.full((arr.shape[0], 1), float(conf), dtype=np.float64)
+        else:
+            raise ArmatureError(
+                f"hands_from_sites got unexpected point width {arr.shape[1]}",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "hands_from_sites_bad_columns",
+                 "n_columns": int(arr.shape[1])})
+        out[side] = np.concatenate([xy, ccol], axis=1)
+        prov[side] = meta
+    return out["left"], out["right"], prov
+
+
 def hand_frame(wrist, hand_end, elbow):
     """(palm_dir, palm_side, length) for one hand, from three rig landmarks.
 

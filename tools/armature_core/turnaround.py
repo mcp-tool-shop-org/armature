@@ -102,6 +102,76 @@ OPAQUE = 255
 TRANSPARENT_BELOW = 0.5
 
 
+def normalize_elevations(n_views, elevations):
+    """Optional elevation list for a turnaround plan (F-31bce024).
+
+    `None` → every view at elevation 0 (azimuth-only orbit, the historical default).
+    A list/tuple must be length `n_views`, every entry finite degrees. Top/bottom identity
+    references (crown, shoes, foreshortened shoulders) are first-class plan outputs when
+    the caller supplies non-zero elevations — not left to the render instrument alone.
+    """
+    n = int(n_views)
+    if elevations is None:
+        return [0.0] * n
+    try:
+        seq = list(elevations)
+    except TypeError:
+        raise TurnaroundPlanRefusal(
+            f"elevations={elevations!r} is not a sequence of degree values",
+            {"gate": None, "andon": "TurnaroundPlanRefusal",
+             "clause": "elevations_not_a_sequence",
+             "elevations": repr(elevations)})
+    if len(seq) != n:
+        raise TurnaroundPlanRefusal(
+            f"elevations carries {len(seq)} value(s) against {n} view(s); the plan needs "
+            f"one elevation per view (or None for all-zero)",
+            {"gate": None, "andon": "TurnaroundPlanRefusal",
+             "clause": "elevations_length_mismatch",
+             "n_views": n, "n_elevations": len(seq)})
+    out = []
+    for i, raw in enumerate(seq):
+        try:
+            v = float(raw)
+        except (TypeError, ValueError):
+            v = float("nan")
+        if not math.isfinite(v):
+            raise TurnaroundPlanRefusal(
+                f"elevations[{i}]={raw!r} is not a finite degree value",
+                {"gate": None, "andon": "TurnaroundPlanRefusal",
+                 "clause": "elevation_not_finite",
+                 "index": i, "value": repr(raw)})
+        out.append(v)
+    return out
+
+
+def compose_view_list(azimuths, elevations=None):
+    """Full view list as `{azimuth_deg, elevation_deg}` records (F-31bce024).
+
+    Closed-path revisit refusal covers the (azimuth mod 360, elevation) pair — two views
+    that revisit the same direction at the same elevation are refused here, before
+    `gate_set_distinct` spends renders comparing pixels.
+    """
+    az = [float(a) for a in azimuths]
+    el = normalize_elevations(len(az), elevations)
+    views = [{"azimuth_deg": a, "elevation_deg": e, "index": i}
+             for i, (a, e) in enumerate(zip(az, el))]
+    seen = {}
+    for v in views:
+        key = (v["azimuth_deg"] % 360.0, v["elevation_deg"])
+        if key in seen:
+            raise TurnaroundGate(
+                f"view list revisits direction azimuth={key[0]} elevation={key[1]} at "
+                f"indices {seen[key]} and {v['index']}; a closed-path revisit is refused "
+                f"on the plan, before the first file exists",
+                {"gate": "TURN", "andon": "TurnaroundGate",
+                 "clause": "view_list_revisits_a_direction",
+                 "first_index": seen[key], "second_index": v["index"],
+                 "azimuth_deg": key[0], "elevation_deg": key[1],
+                 "n_views": len(views)})
+        seen[key] = v["index"]
+    return views
+
+
 def orbit_azimuths(n_views, start_deg, sweep_deg):
     """The azimuth of each view, in order.
 
@@ -185,9 +255,15 @@ SOLVED = "solved"
 PINNED = "pinned"
 
 
-def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
+def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None, elevations=None,
+                    n_views=None):
     """Which camera the run stands on, what is shared across its views, and where it
     came from.
+
+    `elevations` (F-31bce024) is an optional per-view elevation list recorded on the plan.
+    When `n_views` is given it is normalised to that length; when omitted and elevations
+    is a sequence, length is taken from the sequence; when both omitted, elevations
+    default to None on the plan (azimuth-only consumers unchanged).
 
     The whole branch between the two projections is this function, so that the claim "the
     perspective path is untouched when the flag is absent" is a property of one testable
@@ -304,6 +380,12 @@ def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
                      "clause": f"{name}_not_finite_and_positive",
                      "projection": PERSPECTIVE, name: value})
 
+    if elevations is None and n_views is None:
+        elev_list = None
+    else:
+        n = int(n_views) if n_views is not None else len(list(elevations))
+        elev_list = normalize_elevations(n, elevations)
+
     if ortho:
         return {
             "projection": ORTHOGRAPHIC,
@@ -316,6 +398,7 @@ def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
             "height_frac_participates": not pinned,
             "lens_mm": None,
             "sensor_mm": None,
+            "elevations_deg": elev_list,
             "radius_role": ("standoff only — parallel projection makes screen size "
                             "independent of distance, so the radius has to be clipping-"
                             "safe and nothing else"),
@@ -331,6 +414,7 @@ def projection_plan(ortho, lens_mm, sensor_mm, ortho_scale_pin=None):
         "height_frac_participates": True,
         "lens_mm": float(lens_mm),
         "sensor_mm": float(sensor_mm),
+        "elevations_deg": elev_list,
         "radius_role": "composes the shot — it sets how large the subject draws",
     }
 

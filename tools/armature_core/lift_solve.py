@@ -92,6 +92,10 @@ from .parts import require_finite, tightened
 
 TOOL_VERSION = "E09.1"
 
+#: JSON motion-record schema version owned here (F-08663836). Writers that invent their
+#: own shape drift until a bone is missing at apply time; load/save refuse anything else.
+MOTION_SCHEMA = 1
+
 #: Position round-trip tolerance, as a fraction of the CHARACTER'S OWN bbox diagonal — a
 #: global constant in metres must not govern a local feature. 1e-9 sits far above float64
 #: noise on a chain this shallow and far below any error a defect would produce.
@@ -103,6 +107,13 @@ ROTATION_TOL_RAD = 1e-9
 #: the twist it would define is underdetermined. Dimensionless: it is compared against the
 #: product of the two segment lengths, so it scales with the character.
 COLLINEAR_SIN_EPS = 1e-6
+
+#: Optional landmarks that unlock torso/neck solves when present (F-96d82898). Absent →
+#: the MODEL holds remain the default; present → spine/neck leave the held set.
+OPTIONAL_TORSO_LANDMARKS = {
+    "mid_torso": ("spine", "direction from spine_base toward mid_torso"),
+    "crown": ("neck", "direction from neck_base toward crown — a second head frame"),
+}
 
 
 class SolveError(ArmatureError):
@@ -244,6 +255,21 @@ MODEL = {
     "knee.R":  ("direction", "ankle_R", "toe_R", LATERAL_AXIS),
     "ankle.R": ("direction", "toe_R", None, LATERAL_AXIS),
 }
+
+
+def model_for(obs):
+    """MODEL with optional mid-torso / crown landmarks unlocking spine/neck (F-96d82898).
+
+    Hold remains the default when only the 33 are present. When `mid_torso` is observed,
+    spine is solved as a direction toward it; when `crown` is observed, neck is solved
+    toward the crown. Soft prior: absent optionals leave the held reasons unchanged.
+    """
+    model = dict(MODEL)
+    if obs is not None and "mid_torso" in obs:
+        model["spine"] = ("direction", "mid_torso", "shoulder_mid", LATERAL_AXIS)
+    if obs is not None and "crown" in obs:
+        model["neck"] = ("direction", "crown", None, LATERAL_AXIS)
+    return model
 
 
 # ------------------------------------------------------------------ small numerics
@@ -564,15 +590,25 @@ def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
             {"gate": None, "andon": "SolveError",
              "clause": "rest_landmarks_missing"})
 
+    # Optional mid_torso / crown must exist on BOTH rest and obs when unlocking spine/neck.
+    for opt in OPTIONAL_TORSO_LANDMARKS:
+        if opt in obs and opt not in rest:
+            raise SolveError(
+                f"observed sites carry optional {opt!r} but the rest landmark table does "
+                f"not; unlocking spine/neck needs the same site on both sides",
+                {"gate": None, "andon": "SolveError",
+                 "clause": "optional_landmark_missing_from_rest", "site": opt})
+
     r = _derived_points(rest)
     o = _derived_points(obs)
+    active_model = model_for(obs)
 
     local, total = {}, {}
-    underdetermined, held, conditioning = {}, {}, {}
+    underdetermined, held, conditioning, solved = {}, {}, {}, {}
 
     for bone in _bones():
         name = bone.name
-        rule = MODEL.get(name)
+        rule = active_model.get(name)
         if rule is None:
             raise SolveError(f"bone {name!r} is registered in sitelist but MODEL says "
                              f"nothing about it; a bone with no recorded rule would be "
@@ -591,6 +627,7 @@ def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
             f_obs = frame_from(_sub(o[xa], o[xb]), _sub(o[ya], o[yb]), f"{name} observed frame")
             world = mat_mul(f_obs, mat_t(f_rest))
             local[name] = mat_mul(mat_t(parent_total), world)
+            solved[name] = "frame"
 
         elif rule[0] == "direction":
             tail_site, twist_site, hinge_hint = rule[1], rule[2], rule[3]
@@ -600,6 +637,7 @@ def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
             u_obs = _unit(seg_obs, f"{name} observed segment")
             v = mat_vec(mat_t(parent_total), u_obs)
             swing = rotation_between(u_rest, v)
+            solved[name] = "direction"
 
             twist_ok = False
             if twist_site is not None:
@@ -718,6 +756,11 @@ def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
         "underdetermined": underdetermined,
         "twist_conditioning": conditioning,
         "held": held,
+        "solved": solved,
+        "held_bones": sorted(held),
+        "solved_bones": sorted(solved),
+        "optional_landmarks_used": sorted(
+            s for s in OPTIONAL_TORSO_LANDMARKS if s in obs),
         "hand_mode": hand_mode,
         "tool_version": TOOL_VERSION,
     }
@@ -1022,6 +1065,107 @@ def validate_motion_record(frames):
     return {"gate": "SOLVE", "andon": "SolveGate", "n_frames": len(frames),
             "verdict": f"{len(frames)} contiguous frames, all {len(sitelist.ALL_NAMES)} "
                        f"registered bones present on each"}
+
+
+def _as_rotation_matrix(m):
+    """Accept a 3x3 nested list/tuple as the motion-record stores it."""
+    return tuple(tuple(float(v) for v in row) for row in m)
+
+
+def require_motion_rotations(frames):
+    """Every bone matrix on every frame is a rotation (F-08663836). · ANDON
+
+    Lazy-imports `resample.require_rotation` so this module stays importable without
+    pulling the resampler's andons into every lift caller.
+    """
+    from .resample import require_rotation
+    for i, fr in enumerate(frames):
+        local = fr.get("local") or {}
+        for name, mat in local.items():
+            require_rotation(_as_rotation_matrix(mat), f"frame {i}, bone {name!r}")
+    return {"n_frames": len(frames), "n_bones": len(frames[0].get("local") or {})}
+
+
+def dump_motion_record(frames, *, tool=None, tool_version=None, extra=None):
+    """Build the canonical motion-record dict (schema version + validated frames).
+
+    Owns the JSON shape instruments previously re-implemented (F-08663836). Calls
+    `validate_motion_record` and `require_motion_rotations` before returning.
+    """
+    gate = validate_motion_record(frames)
+    require_motion_rotations(frames)
+    out = {
+        "motion_schema": MOTION_SCHEMA,
+        "tool": tool or "lift_solve",
+        "tool_version": tool_version or TOOL_VERSION,
+        "frames": frames,
+        "validate": gate,
+    }
+    if extra:
+        for k, v in extra.items():
+            if k in out:
+                raise SolveError(
+                    f"dump_motion_record extra key {k!r} collides with the schema",
+                    {"gate": None, "andon": "SolveError",
+                     "clause": "motion_record_extra_key_collision", "key": k})
+            out[k] = v
+    return out
+
+
+def save_motion_record(path, frames, *, tool=None, tool_version=None, extra=None):
+    """Write a validated motion record JSON. Creates parent dirs."""
+    import json
+    import os
+    record = dump_motion_record(
+        frames, tool=tool, tool_version=tool_version, extra=extra)
+    parent = os.path.dirname(os.path.abspath(path))
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(path, "w", encoding="utf-8") as fh:
+        json.dump(record, fh, indent=2)
+    return record
+
+
+def load_motion_record(path):
+    """Read a motion-record JSON; refuse schema drift and non-rotations (F-08663836).
+
+    Accepts legacy writers that omitted `motion_schema` only when frames still pass
+    `validate_motion_record` — but stamps the loaded dict with the current schema so the
+    next save is versioned. A future schema (> MOTION_SCHEMA) is refused by name.
+    """
+    import json
+    with open(path, encoding="utf-8") as fh:
+        doc = json.load(fh)
+    if not isinstance(doc, dict) or "frames" not in doc:
+        raise SolveGate(
+            f"{path}: motion record is not an object with a 'frames' list",
+            {"clause": "motion_record_unreadable",
+             "gate": "SOLVE", "andon": "SolveGate", "path": str(path)})
+    schema = doc.get("motion_schema", 1)
+    try:
+        schema_i = int(schema)
+    except (TypeError, ValueError):
+        schema_i = -1
+    if schema_i < 1:
+        raise SolveGate(
+            f"{path}: motion_schema {schema!r} is not a positive integer",
+            {"clause": "motion_schema_unreadable",
+             "gate": "SOLVE", "andon": "SolveGate", "path": str(path),
+             "motion_schema": schema})
+    if schema_i > MOTION_SCHEMA:
+        raise SolveGate(
+            f"{path}: motion_schema {schema_i} is newer than this consumer "
+            f"(MOTION_SCHEMA={MOTION_SCHEMA}); refuse rather than silently drop fields",
+            {"clause": "motion_schema_too_new",
+             "gate": "SOLVE", "andon": "SolveGate", "path": str(path),
+             "motion_schema": schema_i, "consumer_schema": MOTION_SCHEMA})
+    frames = doc["frames"]
+    gate = validate_motion_record(frames)
+    require_motion_rotations(frames)
+    doc = dict(doc)
+    doc["motion_schema"] = MOTION_SCHEMA
+    doc["validate"] = gate
+    return doc
 
 
 def compare_rotations(solved_local, authored_local):

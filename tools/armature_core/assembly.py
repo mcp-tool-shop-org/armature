@@ -31,6 +31,18 @@ because the two fail differently: the allowlist catches an unexpected class, and
 catches somebody widening the allowlist without reading what they widened it to.
 
 --------------------------------------------------------------------------------
+Audio mux stance (F-2ad2d7cf) — route disclosure
+
+`ALLOWED_CLASSES` is LoadImage / BatchImagesNode / CreateVideo / SaveVideo. No free
+in-graph audio mux class has been measured `api_node: false` with `get_node`, so this
+module does **not** widen the allowlist for dialogue or score. Movie-scope assembly that
+needs audio muxes **out of band** after the free silent-VIDEO path — ffmpeg (or equivalent)
+against the SaveVideo receipt — and the receipt stays split on purpose until a free mux
+node is measured and landed in the same deliberate diff as its `MEASURED_FREE_CLASSES`
+receipt plus `gate_batch_topology` optional-audio clauses. Widening without that
+measurement is refused by construction (`OPTIONAL_AUDIO_CLASSES` is empty).
+
+--------------------------------------------------------------------------------
 Why the batch topology gets its own gate
 
 `GateBBatching` already exists for the quantity that moves when `BatchImagesNode`'s auto-grow
@@ -74,6 +86,26 @@ class CascadeGate(AssemblyGate):
 #: The only classes this graph may contain. Every one re-measured `api_node: false` with
 #: `get_node` on 2026-08-13. Widening this list is a deliberate diff, which is the point.
 ALLOWED_CLASSES = ("LoadImage", "BatchImagesNode", "CreateVideo", "SaveVideo")
+
+#: Free audio-mux classes admitted into the assembly graph. Empty until a candidate is
+#: measured `api_node: false` with `get_node` and recorded in `MEASURED_FREE_CLASSES` in
+#: the same diff (F-2ad2d7cf). A non-empty value here without a matching measurement
+#: receipt is what `gate_no_paid_nodes` exists to refuse.
+OPTIONAL_AUDIO_CLASSES = ()
+
+#: Product stance for movie-scope audio until OPTIONAL_AUDIO_CLASSES is non-empty.
+AUDIO_MUX_STANCE = {
+    "in_graph_audio": False,
+    "reason": ("no free mux node measured api_node:false; ALLOWED_CLASSES stays "
+               "image->batch->CreateVideo->SaveVideo"),
+    "product": "out_of_band_mux",
+    "how": ("mux dialogue/score onto the SaveVideo output with a local tool after the "
+            "free silent assembly path; do not widen ALLOWED_CLASSES without a "
+            "MEASURED_FREE_CLASSES receipt"),
+    "optional_audio_classes": list(OPTIONAL_AUDIO_CLASSES),
+    "disclosure": ("assembly route emits silent VIDEO only; audio is out-of-band until "
+                   "a free mux class is measured and allowlisted by deliberate diff"),
+}
 
 #: Substrings that mark a class as a paid partner node. The WEAK clause — see the module
 #: docstring: its recall is unknown, and it is here to catch a careless widening of the
@@ -631,14 +663,34 @@ def gate_batch_topology(graph, n_frames, batch_id, video_id, save_id, *, expecte
             f"SaveVideo.video is {save['inputs'].get('video')!r}, not CreateVideo's "
             f"output; CreateVideo is `output_node: false`, so nothing would be saved at all")
 
+    # Optional audio (F-2ad2d7cf): until OPTIONAL_AUDIO_CLASSES is measured non-empty,
+    # any class whose name suggests audio/mux is a topology defect — the product stance
+    # is out-of-band mux, not a silent in-graph widen.
+    audio_hits = []
+    for nid, node in graph.items():
+        ct = (node or {}).get("class_type") or ""
+        low = ct.lower()
+        if ct in OPTIONAL_AUDIO_CLASSES:
+            continue
+        if any(tok in low for tok in ("audio", "mux", "soundtrack", "voiceover")):
+            audio_hits.append({"node": str(nid), "class_type": ct})
+    if audio_hits and not OPTIONAL_AUDIO_CLASSES:
+        _problem(problems, "audio_class_without_allowlist",
+                 f"graph carries audio/mux class(es) {audio_hits!r} but "
+                 f"OPTIONAL_AUDIO_CLASSES is empty — assembly is silent VIDEO only; "
+                 f"mux out of band per AUDIO_MUX_STANCE, or measure a free mux node and "
+                 f"widen by deliberate diff")
+
     if problems:
         ev["problems"] = problems
         ev["clauses"] = [p["clause"] for p in problems]
         ev["clause"] = problems[0]["clause"]
         raise AssemblyGate("; ".join(p["detail"] for p in problems), ev)
 
+    ev["audio_mux_stance"] = dict(AUDIO_MUX_STANCE)
     ev["verdict"] = (f"{n} distinct LoadImage nodes -> batch -> CreateVideo -> SaveVideo, "
-                     f"dotted slot keys, slot k bound to frame k, every link resolved")
+                     f"dotted slot keys, slot k bound to frame k, every link resolved; "
+                     f"silent VIDEO (audio out-of-band per AUDIO_MUX_STANCE)")
     return ev
 
 

@@ -23,6 +23,8 @@ import math
 from .errors import SpecError
 
 #: The arcs this subject can perform. Adding one is a data change, not a code change.
+#: Extra arcs (F-72d73808): elbow bend, spine lean, contralateral raise — E03-style
+#: transfer checks and sheet fixtures cover more than one performance without editing code.
 POSE_ARCS = {
     "arm_r_raise": {
         "pivot": "shoulder_r",
@@ -43,6 +45,55 @@ POSE_ARCS = {
             "the arm named _r in the generator (the +X side) rises straight from the "
             "T-pose to overhead, rotating rigidly about the shoulder; the elbow does not "
             "bend and no other joint moves"
+        ),
+    },
+    "arm_l_raise": {
+        "pivot": "shoulder_l",
+        "axis": "Y",
+        # Contralateral of arm_r_raise: the -X arm rises about +Y with opposite sign so
+        # +theta maps it UP (right-hand rule on -X).
+        "sign": 1.0,
+        "moving_joints": ("elbow_l", "wrist_l"),
+        "moving_parts": (
+            "bone_shoulder_l__elbow_l",
+            "bone_elbow_l__wrist_l",
+            "joint_elbow_l",
+        ),
+        "readout_deg": 45.0,
+        "description": (
+            "the arm named _l (the -X side) rises straight from the T-pose to overhead, "
+            "rotating rigidly about the shoulder; contralateral of arm_r_raise"
+        ),
+    },
+    "elbow_r_bend": {
+        "pivot": "elbow_r",
+        "axis": "X",
+        "sign": 1.0,
+        "moving_joints": ("wrist_r",),
+        "moving_parts": (
+            "bone_elbow_r__wrist_r",
+            "joint_wrist_r",
+        ),
+        "readout_deg": 45.0,
+        "description": (
+            "the right elbow bends about the lateral hinge (+X); only the wrist moves, "
+            "so transfer checks can see an articulated elbow rather than a rigid raise"
+        ),
+    },
+    "spine_lean": {
+        "pivot": "spine_base",
+        "axis": "Y",
+        "sign": -1.0,
+        "moving_joints": ("chest_base", "neck_base", "head_top", "shoulder_l", "shoulder_r"),
+        "moving_parts": (
+            "bone_spine",
+            "bone_chest",
+            "joint_chest_base",
+        ),
+        "readout_deg": 15.0,
+        "description": (
+            "the torso leans about the spine base on +Y; upper sites move as a rigid "
+            "group so sheet fixtures can cover spine-led motion"
         ),
     },
 }
@@ -91,6 +142,45 @@ def rotate_about_y(point, pivot, deg):
     )
 
 
+def rotate_about_x(point, pivot, deg):
+    """Right-handed R_x through `pivot`: (x, y, z) -> (x, y cos - z sin, y sin + z cos)."""
+    rad = math.radians(deg)
+    c, s = math.cos(rad), math.sin(rad)
+    dx, dy, dz = (point[0] - pivot[0], point[1] - pivot[1], point[2] - pivot[2])
+    return (
+        pivot[0] + dx,
+        pivot[1] + dy * c - dz * s,
+        pivot[2] + dy * s + dz * c,
+    )
+
+
+def rotate_about_z(point, pivot, deg):
+    """Right-handed R_z through `pivot`: (x, y, z) -> (x cos - y sin, x sin + y cos, z)."""
+    rad = math.radians(deg)
+    c, s = math.cos(rad), math.sin(rad)
+    dx, dy, dz = (point[0] - pivot[0], point[1] - pivot[1], point[2] - pivot[2])
+    return (
+        pivot[0] + dx * c - dy * s,
+        pivot[1] + dx * s + dy * c,
+        pivot[2] + dz,
+    )
+
+
+def rotate_about_axis(point, pivot, deg, axis):
+    """Dispatch to the axis named on the arc data entry (F-72d73808)."""
+    key = str(axis).upper()
+    if key == "Y":
+        return rotate_about_y(point, pivot, deg)
+    if key == "X":
+        return rotate_about_x(point, pivot, deg)
+    if key == "Z":
+        return rotate_about_z(point, pivot, deg)
+    raise SpecError(
+        f"pose arc axis {axis!r} is not one of X/Y/Z",
+        {"gate": None, "andon": "SpecError",
+         "clause": "unknown_pose_arc_axis", "axis": axis})
+
+
 def joints_at_frame(joints, arc, index, count, start_deg, end_deg):
     """Every joint's true world position at control frame `index`.
 
@@ -101,10 +191,11 @@ def joints_at_frame(joints, arc, index, count, start_deg, end_deg):
     theta = angle_at_frame(index, count, start_deg, end_deg)
     applied = arc["sign"] * theta
     pivot = joints[arc["pivot"]]
+    axis = arc.get("axis", "Y")
     out = {}
     for name, p in joints.items():
         if name in arc["moving_joints"]:
-            out[name] = rotate_about_y(p, pivot, applied)
+            out[name] = rotate_about_axis(p, pivot, applied, axis)
         else:
             out[name] = tuple(float(v) for v in p)
     return theta, out
