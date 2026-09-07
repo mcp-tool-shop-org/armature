@@ -52,6 +52,8 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 # both in the sibling renderer. This is their third caller. Stage B: they belong in
 # `armature_core.startframe`.
 from render_start_frame import require_frame_size, require_shot_fraction  # noqa: E402
+# Control/performer plate — ONE name with render_turnaround (F-cade389c).
+from render_turnaround import WORLD_LINEAR  # noqa: E402
 
 
 #: The engine identifiers this tool will accept, in the order it tries them.
@@ -278,7 +280,7 @@ def main():
     world = bpy.data.worlds.new("preview")
     scene.world = world
     world.use_nodes = True
-    world.node_tree.nodes["Background"].inputs[0].default_value = (0.16, 0.16, 0.18, 1.0)
+    world.node_tree.nodes["Background"].inputs[0].default_value = (*WORLD_LINEAR, 1.0)
 
     key = bpy.data.lights.new("key", type="SUN")
     key.energy = 3.2

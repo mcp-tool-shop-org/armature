@@ -330,7 +330,11 @@ def main():
     # than completed, because the two objects this row compares are exactly the skinned
     # mesh and the reference, and a cleanup here would have had to spare both.
     # `ref` was imported and hidden above the first write (F-4db23b72).
-    fidelity = []
+    # Full figures and insets are SEPARATE rows (F-b2a06c70). A single panels list that
+    # mixed 700×1120 with 700×700 left inset captions floating under empty sheet beside
+    # the tall neighbour — sheet_compose top-aligns and labels at y+row_h.
+    fidelity_figures = []
+    fidelity_insets = []
     after_label = args["after_label"] or (
         f"after — {len(mesh.data.polygons):,} faces, {len(mesh.data.vertices):,} verts")
     before_label = (f"before — original mesh, {len(ref.data.polygons):,} tris, "
@@ -339,20 +343,22 @@ def main():
         ref.hide_render = shown is not ref
         mesh.hide_render = shown is not mesh
         ortho_camera(scene, f"cam_fid_{shown.name}", centre, height * 1.10, (700, 1120))
-        fidelity.append({"body": shoot(scene, os.path.join(
+        fidelity_figures.append({"body": shoot(scene, os.path.join(
             panel_dir, f"fidelity_{'before' if shown is ref else 'after'}.png")),
             "label": label})
         for label2, target, oscale, _ in insets[:1]:
             ortho_camera(scene, f"cam_fid_{shown.name}_{label2}", Vector(target),
                          height * 0.22, (700, 700))
-            fidelity.append({"body": shoot(scene, os.path.join(
+            fidelity_insets.append({"body": shoot(scene, os.path.join(
                 panel_dir,
                 f"fidelity_{'before' if shown is ref else 'after'}_{label2}.png")),
                 "label": f"{label2}, same camera"})
     ref.hide_render = False
     mesh.hide_render = False
     rows.append({"title": "Texture fidelity — at rest, same camera, nothing else changed",
-                 "panels": fidelity})
+                 "panels": fidelity_figures})
+    rows.append({"title": "Texture fidelity — shoulder insets, same camera",
+                 "panels": fidelity_insets})
 
     spec = {"tool": "make_rig_sheet",
             "blender": blender_scene.blender_provenance(),
