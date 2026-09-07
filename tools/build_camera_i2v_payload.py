@@ -125,7 +125,8 @@ from armature_core.errors import ArmatureError  # noqa: E402
 # no longer referenced here are dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
     canonical_payload_digest, comfy_cloud_oss_disclosure, disclosure_lines,
-    fetch_recipe, gate_create_video_fps, read_seed_registration, single_path_segment)
+    fetch_recipe, gate_create_video_fps, gate_output_not_overwritten,
+    read_seed_registration, single_path_segment)
 
 import build_animate_payload as E08  # noqa: E402  - the identity clause's source of record
 import build_i2v_payload as W1  # noqa: E402  - wave 1's trajectory, weights and frame
@@ -376,7 +377,12 @@ def parse_args(argv=None):
     build_opts.add_argument("--uploads", required=True, help="JSON: {start_frame: <server name>}")
     output_opts.add_argument("--out", required=True,
                     help="the directory the graph and its payload record are written into, "
-                         "created below the last gate so a refusal leaves nothing behind")
+                         "created below the last gate so a refusal leaves nothing behind; "
+                         "an existing build there is refused unless --overwrite is passed")
+    output_opts.add_argument("--overwrite", action="store_true",
+                    help="replace an existing graph/record pair in --out. Without it a "
+                         "rebuild over an earlier build refuses by name "
+                         "(`output_already_exists`) and names both digests")
     build_opts.add_argument("--seed", type=int, default=None,
                     help="the seed to submit; omitted, the first seed in --seeds-registry "
                          "is used. Gate S refuses an unregistered number either way")
@@ -1329,11 +1335,18 @@ def main(argv=None):
                             "same code wave 1 and E08 read them through"),
     }
 
-    os.makedirs(out, exist_ok=True)
     gpath = os.path.join(out, f"{a.experiment}-w{a.wave}-camera-i2v.api.json")
+    mpath = os.path.join(out, f"{a.experiment}-w{a.wave}-payload-record.json")
+    # Wave 35, F-0bd5c9c9: same overwrite shape as assembly/cascade.
+    gate_overwrite = gate_output_not_overwritten(
+        [gpath, mpath], out, a.overwrite, PayloadError, gate="PAYLOAD")
+    meta["gates"] = dict(meta.get("gates") or {})
+    meta["gates"]["PAYLOAD_overwrite"] = gate_overwrite
+    meta["out_dir_pre_existed"] = gate_overwrite["out_dir_pre_existed"]
+    meta["overwrote"] = gate_overwrite["overwrote"]
+    os.makedirs(out, exist_ok=True)
     with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=2, ensure_ascii=False)
-    mpath = os.path.join(out, f"{a.experiment}-w{a.wave}-payload-record.json")
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 

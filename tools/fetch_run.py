@@ -104,6 +104,60 @@ DEFAULT_ROOT = "outputs/E02/runs"
 #: what wrote a clip's frames to one path and printed a plausible count.
 VIDEO_NODES = ("114",)
 
+#: Named fetch profiles for post-credit retrieval (wave 35, F-b68afab7). Fed by the same
+#: tap maps the builders emit via `fetch_recipe` / record `fetch.*`. Prefer `--record` when
+#: a payload record exists; `--route` is the operator index when it does not. Routes whose
+#: cloud filenames are content hashes (`order_gate`) stay on `fetch_t2v_run` — Gate ORDER
+#: is not cloned here.
+ROUTE_FETCH_PROFILES = {
+    "e02": {
+        "node_map": "301=batchprobe,302=lossless", "video_nodes": "114",
+        "root_hint": "outputs/E02/runs", "order_gate": False,
+        "builder": "build_payload.py",
+    },
+    "animate": {
+        "node_map": "301=batchprobe,302=lossless", "video_nodes": "114",
+        "root_hint": "outputs/E08/runs", "order_gate": False,
+        "builder": "build_animate_payload.py",
+    },
+    "i2v": {
+        "node_map": "41=startprobe,71=lossless", "video_nodes": "81",
+        "root_hint": "outputs/E11/runs", "order_gate": False,
+        "builder": "build_i2v_payload.py",
+    },
+    "camera_i2v": {
+        "node_map": "41=startprobe,71=lossless", "video_nodes": "81",
+        "root_hint": "outputs/E11/runs", "order_gate": False,
+        "builder": "build_camera_i2v_payload.py",
+    },
+    "t2v": {
+        "node_map": "70=lossless", "video_nodes": "81",
+        "root_hint": "outputs/E09/runs", "order_gate": True,
+        "builder": "build_t2v_payload.py",
+        "fetch_tool": "fetch_t2v_run.py",
+    },
+    "r2v": {
+        "node_map": "none", "video_nodes": "81",
+        "root_hint": "outputs/E13/runs", "order_gate": False,
+        "builder": "build_r2v_payload.py",
+    },
+    "lora_arm": {
+        "node_map": "none", "video_nodes": "81",
+        "root_hint": "outputs/E14/runs", "order_gate": False,
+        "builder": "build_lora_arm_payload.py",
+    },
+    "assembly": {
+        "node_map": "none", "video_nodes": "81",
+        "root_hint": "outputs/S03/runs", "order_gate": False,
+        "builder": "build_assembly_payload.py",
+    },
+    "cascade": {
+        "node_map": "none", "video_nodes": "81",
+        "root_hint": "outputs/E13/runs", "order_gate": False,
+        "builder": "build_cascade_payload.py",
+    },
+}
+
 #: The environment variable the downloader reads the manifest path out of. Nothing about
 #: the operator's input reaches the command string.
 MANIFEST_ENV = "ARMATURE_FETCH_MANIFEST"
@@ -1161,7 +1215,37 @@ def main(argv=None):
                          "fetch.video_nodes / fetch.root_hint (wave 34, F-dc84b444). "
                          "When given, missing --node-map/--video-nodes/--root are read "
                          "from it so a post-credit fetch does not invent E02 defaults")
+    ap.add_argument("--route", default=None, choices=sorted(ROUTE_FETCH_PROFILES),
+                    help="named fetch profile from ROUTE_FETCH_PROFILES (wave 35, "
+                         "F-b68afab7). Fills missing --node-map/--video-nodes/--root from "
+                         "the builder-emitted recipe for that route. Prefer --record when "
+                         "a payload record exists. Routes with order_gate refuse here and "
+                         "point at fetch_t2v_run")
+    ap.add_argument("--force", action="store_true",
+                    help="replace an existing run directory at --root/--run. Without it a "
+                         "re-fetch into a used directory refuses by name "
+                         "(`output_already_exists`) rather than blending two runs "
+                         "(wave 35, F-0bd5c9c9; fetch_t2v_run refuses a used --out the "
+                         "same way via plan-to-disk / --force)")
     a = ap.parse_args(argv)
+    # Wave 35, F-b68afab7 — named route profile fills missing tap flags.
+    if a.route:
+        profile = ROUTE_FETCH_PROFILES[a.route]
+        if profile.get("order_gate"):
+            raise FetchHalt(
+                f"--route={a.route!r} needs Gate ORDER (content-hash filenames shuffle "
+                f"temporal order). Use {profile.get('fetch_tool', 'fetch_t2v_run.py')} "
+                f"for that retrieval rather than inventing a second ORDER gate here",
+                {"gate": "FETCH", "andon": "FetchHalt",
+                 "clause": "route_requires_order_gate", "route": a.route,
+                 "fetch_tool": profile.get("fetch_tool"),
+                 "known_routes": sorted(ROUTE_FETCH_PROFILES)})
+        if a.node_map is None:
+            a.node_map = profile["node_map"]
+        if a.video_nodes is None:
+            a.video_nodes = profile["video_nodes"]
+        if a.root is None and profile.get("root_hint"):
+            a.root = profile["root_hint"]
     # Wave 34, F-dc84b444 — consume the fetch recipe the builder wrote beside the graph.
     if a.record:
         try:
@@ -1248,6 +1332,22 @@ def main(argv=None):
     results = read_results_dump(a.dump, flag="--dump")
 
     base = os.path.join(a.root, a.run)
+    # Wave 35, F-0bd5c9c9: refuse a silent blend with an earlier fetch's frames.
+    # fetch_t2v_run refuses a used --out the same way (plan-to-disk + --force).
+    if os.path.isdir(base) and not a.force:
+        prior = sorted(
+            n for n in os.listdir(base)
+            if os.path.isfile(os.path.join(base, n)) or os.path.isdir(os.path.join(base, n)))
+        if prior:
+            raise FetchHalt(
+                f"--root/--run {base!r} already holds {len(prior)} entr(y/ies) from an "
+                f"earlier fetch ({', '.join(prior[:8])}{'…' if len(prior) > 8 else ''}). "
+                f"A re-fetch without --force would blend two runs under one receipt. Pass "
+                f"--force to replace, or point --run at a directory of its own. "
+                f"fetch_t2v_run refuses a used --out the same way",
+                {"gate": "FETCH", "andon": "FetchHalt",
+                 "clause": "output_already_exists", "out": os.path.abspath(base),
+                 "already_present": prior, "flag": "--force"})
     # The plan raises before anything is created, so a dump this tool cannot sort leaves
     # no run directory to be read later as a run that happened.
     jobs, counts = plan(results, base, a.run, node_dir, video_nodes)

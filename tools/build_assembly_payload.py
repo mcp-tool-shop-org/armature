@@ -118,6 +118,28 @@ class SeedRegistrationError(ArmatureError):
     """
 
 
+class SeedRegistration(list):
+    """Committed seeds list that also carries ceiling / allocation from the same JSON.
+
+    Wave 35, F-0a3b5362. Eight Gate S callers index and membership-test this object as a
+    list; a bare `return seeds` discarded the ceiling and allocation that sit beside it in
+    every committed registration. This subclass keeps list semantics and exposes
+    `.ceiling` / `.allocation` / `.path` / `.flag` / `.doc` so a budget or allocation gate
+    does not open the file a second time or bypass the shared reader.
+    """
+
+    __slots__ = ("ceiling", "allocation", "path", "flag", "doc")
+
+    def __init__(self, seeds, *, ceiling=None, allocation=None, path=None, flag=None,
+                 doc=None):
+        super().__init__(seeds)
+        self.ceiling = ceiling
+        self.allocation = allocation
+        self.path = path
+        self.flag = flag
+        self.doc = doc if doc is not None else {}
+
+
 def canonical_payload_digest(graph):
     """The ONE derivation of a payload record's `payload_sha256`.
 
@@ -209,6 +231,10 @@ def read_seed_registration(path, *, flag="--seeds"):
     each site naming its own flag.
 
     One implementation, eight callers — the same rule `gate_create_video_fps` above states.
+
+    Wave 35, F-0a3b5362: returns a `SeedRegistration` list subclass so `.ceiling` and
+    `.allocation` ride with the seeds the Gate S callers already index. Missing keys stay
+    `None` here; `read_seed_registration_budget` still raises when a submitter needs them.
     """
     ev = {"gate": "PAYLOAD", "andon": "seed_registration", "flag": flag,
           "path": os.path.abspath(path)}
@@ -294,25 +320,25 @@ def read_seed_registration(path, *, flag="--seeds"):
             dict(ev, clause="registration_seed_is_not_an_integer",
                  n_seeds=len(seeds), offending=offending,
                  read_as=sorted({type(v).__name__ for v in seeds})))
-    return seeds
+    ceiling = doc.get("ceiling") if isinstance(doc.get("ceiling"), dict) else None
+    allocation = doc.get("allocation") if isinstance(doc.get("allocation"), dict) else None
+    return SeedRegistration(
+        seeds, ceiling=ceiling, allocation=allocation,
+        path=os.path.abspath(path), flag=flag, doc=doc)
 
 
 def read_seed_registration_budget(path, *, flag="--seeds"):
     """Seeds plus the ceiling/allocation a submitter counts against.
 
-    Wave 34, F-43868378. `read_seed_registration` returns only the seeds list — eight
-    callers still need that shape. The sanctioned submitter cannot see prior spends from a
-    graph builder, so the budget half lives here as a sibling reader: same open/parse/shape
-    clauses for `seeds`, then named clauses for `ceiling.submissions` (int > 0) and
-    `allocation` (non-empty mapping). Returns
-    `{"seeds", "ceiling", "allocation", "path", "flag"}`.
+    Wave 34, F-43868378. Wave 35, F-0a3b5362: the shared reader now returns a
+    `SeedRegistration` carrying `.ceiling` / `.allocation`, so this sibling validates those
+    attributes rather than re-opening the file. Returns
+    `{"seeds", "ceiling", "allocation", "path", "flag", "submissions"}`.
     """
     seeds = read_seed_registration(path, flag=flag)
     ev = {"gate": "PAYLOAD", "andon": "seed_registration_budget", "flag": flag,
           "path": os.path.abspath(path)}
-    with open(path, encoding="utf-8") as fh:
-        doc = json.load(fh)
-    ceiling = doc.get("ceiling")
+    ceiling = getattr(seeds, "ceiling", None)
     if not isinstance(ceiling, dict):
         raise SeedRegistrationError(
             f"{flag} {path!r} declares `ceiling` as a "
@@ -321,7 +347,7 @@ def read_seed_registration_budget(path, *, flag="--seeds"):
             f"sits beside `note`; without it the bound is prose again",
             dict(ev, clause="registration_no_ceiling",
                  read_as=type(ceiling).__name__ if ceiling is not None else None,
-                 keys=sorted(doc)))
+                 keys=sorted(getattr(seeds, "doc", {}) or {})))
     submissions = ceiling.get("submissions")
     if not isinstance(submissions, int) or isinstance(submissions, bool) or submissions < 1:
         raise SeedRegistrationError(
@@ -331,7 +357,7 @@ def read_seed_registration_budget(path, *, flag="--seeds"):
             dict(ev, clause="registration_ceiling_submissions_not_a_positive_int",
                  submissions=submissions,
                  read_as=type(submissions).__name__))
-    allocation = doc.get("allocation")
+    allocation = getattr(seeds, "allocation", None)
     if not isinstance(allocation, dict) or not allocation:
         raise SeedRegistrationError(
             f"{flag} {path!r} declares `allocation` as a "
@@ -339,7 +365,7 @@ def read_seed_registration_budget(path, *, flag="--seeds"):
             f"not a non-empty object. The per-seed rows are the other half of the bound",
             dict(ev, clause="registration_no_allocation",
                  read_as=type(allocation).__name__ if allocation is not None else None,
-                 keys=sorted(doc)))
+                 keys=sorted(getattr(seeds, "doc", {}) or {})))
     return {"seeds": seeds, "ceiling": ceiling, "allocation": allocation,
             "path": os.path.abspath(path), "flag": flag,
             "submissions": int(submissions)}

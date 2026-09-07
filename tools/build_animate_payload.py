@@ -78,10 +78,22 @@ from armature_core.errors import ArmatureError  # noqa: E402
 # no longer referenced here are dropped rather than left dangling.
 from build_assembly_payload import (  # noqa: E402
     canonical_payload_digest, comfy_cloud_oss_disclosure, disclosure_lines,
-    fetch_recipe, gate_create_video_fps, read_seed_registration, single_path_segment)
+    fetch_recipe, gate_create_video_fps, gate_output_not_overwritten,
+    read_seed_registration, single_path_segment)
 
 TOOL_VERSION = "E10.1"
 EXPERIMENT = "E08"
+
+#: Committed seed registrations this animate builder binds Gate S against. E10 densified
+#: driving reuses this builder at length 81 (docs/experiments/E10-densified-driving.md);
+#: naming `E10-seeds.json` here is what makes the registration a live spend path rather
+#: than an orphan ceiling file (wave 35, F-cb85098b).
+SEEDS_REGISTRY_BY_EXPERIMENT = {
+    "E08": "specs/E08-seeds.json",
+    "E10": "specs/E10-seeds.json",
+}
+E10_SEEDS = SEEDS_REGISTRY_BY_EXPERIMENT["E10"]
+E10_LENGTH = 81
 
 #: E08's shot, and the defaults. `--length` and `--fps` are E10's variables and nothing
 #: else moves: E10 drives the SAME dance resampled to 81 samples over the identical
@@ -231,7 +243,12 @@ def parse_args(argv=None):
                     help="JSON: {reference, pose_pack, pose_frames}")
     output_opts.add_argument("--out", required=True,
                     help="the directory the graph and its payload record are written into, "
-                         "created below the last gate so a refusal leaves nothing behind")
+                         "created below the last gate so a refusal leaves nothing behind; "
+                         "an existing build there is refused unless --overwrite is passed")
+    output_opts.add_argument("--overwrite", action="store_true",
+                    help="replace an existing graph/record pair in --out. Without it a "
+                         "rebuild over an earlier build refuses by name "
+                         "(`output_already_exists`) and names both digests")
     build_opts.add_argument("--seed", type=int, default=None,
                     help="the seed to submit; omitted, the first seed in --seeds-registry "
                          "is used. Gate S refuses an unregistered number either way")
@@ -255,12 +272,16 @@ def parse_args(argv=None):
                          "carries)")
     build_opts.add_argument("--seeds-registry", default=None,
                     help="the committed seed registration Gate S checks --seed against, and "
-                         "the list the default seed is taken from")
+                         "the list the default seed is taken from. Omitted, defaults from "
+                         "SEEDS_REGISTRY_BY_EXPERIMENT for E08/E10")
     build_opts.add_argument("--experiment", default=EXPERIMENT,
-                    help="names the output files and the server-side filename prefixes")
-    build_opts.add_argument("--length", type=int, default=LENGTH,
+                    help="names the output files and the server-side filename prefixes; "
+                         "E10 selects specs/E10-seeds.json and length 81 when those flags "
+                         "are omitted")
+    build_opts.add_argument("--length", type=int, default=None,
                     help="frame count; Gate L and Gate ROUTE both check it (argparse eats "
-                         "leading minus signs, so pass flags as --flag=value)")
+                         "leading minus signs, so pass flags as --flag=value). Default "
+                         f"{LENGTH} for E08, {E10_LENGTH} for E10")
     build_opts.add_argument("--fps", type=float, default=FPS,
                     help="the CreateVideo rate. Presentation only — it is downstream of "
                          "VAEDecode and cannot change a generated pixel")
@@ -703,6 +724,10 @@ def main(argv=None):
                                         "<out>/{experiment}-probe-payload-record.json",
                                         "the server-side filename prefixes"]})
     out = os.path.abspath(a.out)
+    if a.length is None:
+        a.length = E10_LENGTH if a.experiment == "E10" else LENGTH
+    if a.seeds_registry is None:
+        a.seeds_registry = SEEDS_REGISTRY_BY_EXPERIMENT.get(a.experiment)
 
     with open(a.uploads, encoding="utf-8") as fh:
         uploads = json.load(fh)
@@ -712,7 +737,7 @@ def main(argv=None):
     if a.seeds_registry:
         # ONE reader, eight callers (wave 16, F-0682bd00). The bare `json.load(fh)["seeds"]`
         # this replaces raised a stdlib KeyError naming a key and nothing else on a
-        # registration with no `seeds` key.
+        # registration with no `seeds` key. E10 defaults to specs/E10-seeds.json (F-cb85098b).
         registry = read_seed_registration(a.seeds_registry, flag="--seeds-registry")
 
     neg_path = a.negative_source
@@ -734,6 +759,8 @@ def main(argv=None):
                      experiment=a.experiment, length=a.length, fps=a.fps,
                      reference_file=a.reference_file)
     meta["gate_CANON"] = canon_ev
+    meta["seeds_registry"] = (os.path.abspath(a.seeds_registry)
+                              if a.seeds_registry else None)
     meta["prompt_record"] = {
         "identity_clause_source": TWIN_PROMPT_JSON,
         "identity_clause_original": ident_original,
@@ -745,11 +772,18 @@ def main(argv=None):
             open(neg_path, "rb").read()).hexdigest(),
     }
 
-    os.makedirs(out, exist_ok=True)
     gpath = os.path.join(out, f"{a.experiment}-probe-animate.api.json")
+    mpath = os.path.join(out, f"{a.experiment}-probe-payload-record.json")
+    # Wave 35, F-0bd5c9c9: same overwrite shape as assembly/cascade.
+    gate_overwrite = gate_output_not_overwritten(
+        [gpath, mpath], out, a.overwrite, PayloadError, gate="PAYLOAD")
+    meta["gates"] = dict(meta.get("gates") or {})
+    meta["gates"]["PAYLOAD_overwrite"] = gate_overwrite
+    meta["out_dir_pre_existed"] = gate_overwrite["out_dir_pre_existed"]
+    meta["overwrote"] = gate_overwrite["overwrote"]
+    os.makedirs(out, exist_ok=True)
     with open(gpath, "w", encoding="utf-8") as fh:
         json.dump(wf, fh, indent=2, ensure_ascii=False)
-    mpath = os.path.join(out, f"{a.experiment}-probe-payload-record.json")
     with open(mpath, "w", encoding="utf-8") as fh:
         json.dump(meta, fh, indent=2, ensure_ascii=False)
 

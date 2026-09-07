@@ -300,8 +300,13 @@ def main(argv=None):
     ap.add_argument("--out", required=True,
                     help="the run directory. Frames land in <out>/lossless/, the donor "
                          "video beside them, and the four JSON records this tool writes in "
-                         "the root. A re-fetch into a used --out is refused by the plan-"
-                         "to-disk clause rather than blended with the earlier run")
+                         "the root. A re-fetch into a used --out is refused unless --force "
+                         "is passed (wave 35, F-0bd5c9c9; deliberate — same shape as "
+                         "fetch_run --force, plus plan-to-disk as a second line of defence)")
+    ap.add_argument("--force", action="store_true",
+                    help="replace an existing run directory at --out. Without it a "
+                         "re-fetch into a used directory refuses by name "
+                         "(`output_already_exists`) rather than blending two runs")
     ap.add_argument("--prompt-id", default=None,
                     help="the cloud prompt id, recorded in download_manifest.json so a run "
                          "directory can be tied back to the submission that produced it")
@@ -314,6 +319,22 @@ def main(argv=None):
         # The operator's own input, named in the receipt: the halt is about THIS dump.
         exc.evidence["dump"] = os.path.abspath(a.dump)
         raise
+    # Wave 35, F-0bd5c9c9: explicit used--out refusal (matches fetch_run --force). The
+    # plan-to-disk clause remains the second line of defence for stale frames inside a
+    # partially cleaned directory.
+    if os.path.isdir(a.out) and not a.force:
+        prior = sorted(
+            n for n in os.listdir(a.out)
+            if os.path.isfile(os.path.join(a.out, n)) or os.path.isdir(os.path.join(a.out, n)))
+        if prior:
+            raise FetchHalt(
+                f"--out {a.out!r} already holds {len(prior)} entr(y/ies) from an earlier "
+                f"fetch ({', '.join(prior[:8])}{'…' if len(prior) > 8 else ''}). A "
+                f"re-fetch without --force would blend two runs under one receipt. Pass "
+                f"--force to replace, or point --out at a directory of its own",
+                {"gate": "FETCH", "andon": "FetchHalt",
+                 "clause": "output_already_exists", "out": os.path.abspath(a.out),
+                 "already_present": prior, "flag": "--force"})
     # ---- Gate FETCH · ANDON, wave 25 (F-edf3a80b). The sibling's ONE implementation,
     # imported like `download` itself rather than spelled again, armed above the first
     # `os.makedirs` so a rig with no downloader leaves no run directory behind.
