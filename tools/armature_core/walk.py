@@ -416,6 +416,7 @@ class GaitParams:
         nod_peak_deg=15.0, nod_settle_deg=6.0,
         gesture_lift_deg=105.0, gesture_abduct_deg=30.0, gesture_elbow_deg=55.0,
         gesture_wrist_deg=12.0,
+        heading_deg=None,
     ):
         self.n_walk = int(n_walk)
         self.n_decel = int(n_decel)
@@ -446,6 +447,10 @@ class GaitParams:
         self.gesture_abduct_deg = float(gesture_abduct_deg)
         self.gesture_elbow_deg = float(gesture_elbow_deg)
         self.gesture_wrist_deg = float(gesture_wrist_deg)
+        # Optional planar heading (F-7f15fb7f). None → straight-Y default. Scalar =
+        # constant yaw; sequence of floats = per-frame yaw; list of {frame,heading_deg}
+        # = keyframed bearing (held between keys).
+        self.heading_deg = heading_deg
 
         if min(self.n_walk, self.n_decel, self.n_gesture, self.n_hold) < 1:
             raise WalkError(
@@ -615,7 +620,76 @@ def _stance_delta(s_of, L, a, b, amp_a, amp_b, key):
     return -L * (s_of(b[key], amp_b) - s_of(a[key], amp_a))
 
 
-def _integrate_forward(performer, p, phase, speed, legs):
+def resolve_heading_schedule(heading_deg, n_frames):
+    """Expand heading_deg into a per-frame yaw list (degrees). None → all zeros."""
+    n = int(n_frames)
+    if heading_deg is None:
+        return [0.0] * n
+    if isinstance(heading_deg, (int, float)):
+        yaw = float(heading_deg)
+        if not math.isfinite(yaw):
+            raise WalkError(
+                f"heading_deg={heading_deg!r} is not finite",
+                {"gate": None, "andon": "WalkError",
+                 "clause": "heading_not_finite", "heading_deg": heading_deg})
+        return [yaw] * n
+    if isinstance(heading_deg, (list, tuple)) and heading_deg:
+        if all(isinstance(v, (int, float)) for v in heading_deg):
+            if len(heading_deg) != n:
+                raise WalkError(
+                    f"heading_deg sequence length {len(heading_deg)} != n_frames {n}",
+                    {"gate": None, "andon": "WalkError",
+                     "clause": "heading_length_mismatch",
+                     "n_heading": len(heading_deg), "n_frames": n})
+            out = [float(v) for v in heading_deg]
+            if not all(math.isfinite(v) for v in out):
+                raise WalkError(
+                    "heading_deg sequence carries a non-finite yaw",
+                    {"gate": None, "andon": "WalkError",
+                     "clause": "heading_not_finite"})
+            return out
+        if all(isinstance(v, dict) for v in heading_deg):
+            keys = []
+            for i, raw in enumerate(heading_deg):
+                try:
+                    fr = int(raw["frame"])
+                    yaw = float(raw["heading_deg"])
+                except (KeyError, TypeError, ValueError) as exc:
+                    raise WalkError(
+                        f"heading key {i} is missing or unreadable ({exc})",
+                        {"gate": None, "andon": "WalkError",
+                         "clause": "heading_key_unreadable", "index": i}) from exc
+                if not math.isfinite(yaw):
+                    raise WalkError(
+                        f"heading key at frame {fr}: heading_deg={yaw!r} is not finite",
+                        {"gate": None, "andon": "WalkError",
+                         "clause": "heading_not_finite", "frame": fr})
+                keys.append((fr, yaw))
+            keys.sort(key=lambda kv: kv[0])
+            if keys[0][0] > 0:
+                keys.insert(0, (0, keys[0][1]))
+            if keys[-1][0] < n - 1:
+                keys.append((n - 1, keys[-1][1]))
+            out = []
+            for fi in range(n):
+                # Hold each key's yaw until the next key (step, not lerp — authorship
+                # of turns is discrete bearings; continuous arcs use a dense sequence).
+                yaw = keys[0][1]
+                for fr, y in keys:
+                    if fr <= fi:
+                        yaw = y
+                    else:
+                        break
+                out.append(yaw)
+            return out
+    raise WalkError(
+        f"heading_deg={heading_deg!r} is not None, a scalar, a float sequence, or "
+        f"keyframed {{frame, heading_deg}} entries",
+        {"gate": None, "andon": "WalkError", "clause": "heading_unreadable",
+         "type": type(heading_deg).__name__})
+
+
+def _integrate_forward(performer, p, phase, speed, legs, headings=None):
     """The hips' forward travel, integrated from the planted-leg set.
 
     `d(hip_y) = -L * d(sin theta_stance)` is "the planted ankle does not move". F-ce5896e5
@@ -625,6 +699,10 @@ def _integrate_forward(performer, p, phase, speed, legs):
       flips between adjacent samples);
     * both planted (double support) → average the two stance contributions;
     * neither planted (flight) → coast: repeat the previous frame's dy (run_flight).
+
+    When `headings` (per-frame yaw degrees) is supplied (F-7f15fb7f), each forward step is
+    rotated into world XY by that yaw; returns `(xs, ys)` world translations. Default
+    headings=None keeps the measured straight-Y path as a single `ys` list.
     """
     gate_cadence_is_representable(phase, getattr(p, "stance_frac", STANCE_FRAC_MODELLED),
                                   where="_integrate_forward")
@@ -643,11 +721,13 @@ def _integrate_forward(performer, p, phase, speed, legs):
         return keys
 
     ys = [0.0]
+    xs = [0.0]
     prev_dy = 0.0
     for i in range(1, len(phase)):
         a, b = legs[i - 1], legs[i]
         amp_a, amp_b = speed[i - 1], speed[i]
         y = ys[-1]
+        x = xs[-1]
         keys_a, keys_b = planted_keys(a), planted_keys(b)
         du = (phase[i] - phase[i - 1]) / (2.0 * math.pi)
         if du > MAX_CYCLES_PER_FRAME:
@@ -687,8 +767,17 @@ def _integrate_forward(performer, p, phase, speed, legs):
             dy = sum(_stance_delta(s_of, L, a, b, amp_a, amp_b, k)
                      for k in keys_b) / float(len(keys_b))
         prev_dy = dy
-        ys.append(y + dy)
-    return ys
+        if headings is None:
+            xs.append(x)
+            ys.append(y + dy)
+        else:
+            # Rotate the character-forward step by heading: 0° stays +Y.
+            yaw = math.radians(headings[i])
+            xs.append(x + dy * math.sin(yaw))
+            ys.append(y + dy * math.cos(yaw))
+    if headings is None:
+        return ys
+    return xs, ys
 
 
 def build_gait(performer, params):
@@ -736,7 +825,16 @@ def build_gait(performer, params):
                      "kn_L": kn_L, "kn_R": kn_R,
                      "stance_L": stance_L, "stance_R": stance_R})
 
-    hips_y = _integrate_forward(performer, p, phase, speed, legs)
+    headings = resolve_heading_schedule(getattr(p, "heading_deg", None), n)
+    heading_active = any(abs(h) > 1e-12 for h in headings)
+    integrated = _integrate_forward(
+        performer, p, phase, speed, legs,
+        headings=headings if heading_active else None)
+    if heading_active:
+        hips_x_path, hips_y = integrated
+    else:
+        hips_y = integrated
+        hips_x_path = [0.0] * n
 
     # phase boundaries, 0-based frame indices, half-open at the top
     f_decel = p.n_walk
@@ -750,18 +848,26 @@ def build_gait(performer, params):
         u_L, psi_L, psi_R = st["u_L"], st["psi_L"], st["psi_R"]
         kn_L, kn_R = st["kn_L"], st["kn_R"]
         stance_L, stance_R = st["stance_L"], st["stance_R"]
+        yaw = headings[i]
+        # Facing signs rotate with heading so swing stays character-forward (F-7f15fb7f).
+        yaw_rad = math.radians(yaw)
+        fy_h = fy * math.cos(yaw_rad) + lx * math.sin(yaw_rad)
+        # Keep a unit-ish sign for swing amplitudes: use the dominant cardinal of the
+        # rotated facing rather than a vanishing projection at 90°.
+        if abs(fy_h) < 1e-9:
+            fy_h = 1.0 if math.cos(yaw_rad) >= 0 else -1.0
+        fy_h = 1.0 if fy_h >= 0 else -1.0
 
         # ---- legs. `fy` puts the swing in the direction the character actually faces:
         # positive about +X carries a hanging limb toward +Y, so forward is fy's sign.
-        th_hip_L = p.hip_swing_deg * amp * fy * psi_L
-        th_hip_R = p.hip_swing_deg * amp * fy * psi_R
+        th_hip_L = p.hip_swing_deg * amp * fy_h * psi_L
+        th_hip_R = p.hip_swing_deg * amp * fy_h * psi_R
         # A knee bends backward: positive about +X carries the shin toward +Y, which is
         # backward when the character faces -Y, so the sign follows -fy.
-        knee_L = p.knee_flex_deg * amp * kn_L * -fy
-        knee_R = p.knee_flex_deg * amp * kn_R * -fy
+        knee_L = p.knee_flex_deg * amp * kn_L * -fy_h
+        knee_R = p.knee_flex_deg * amp * kn_R * -fy_h
         th_ankle_L = -p.ankle_level_frac * (th_hip_L + knee_L)
         th_ankle_R = -p.ankle_level_frac * (th_hip_R + knee_R)
-        hip_y = hips_y[i]
 
         # ---- vertical bob from the planted SET (F-ce5896e5). Single support rides that
         # leg; double support averages; flight averages both swing angles (no plant).
@@ -772,23 +878,26 @@ def build_gait(performer, params):
         else:
             th_stance = 0.5 * (th_hip_L + th_hip_R)
         hip_z = L * (math.cos(math.radians(th_stance)) - 1.0)
-        hip_x = (p.sway_frac * performer.hip_half_separation * lx * amp
-                 * math.sin(2.0 * math.pi * u_L))
+        sway = (p.sway_frac * performer.hip_half_separation * lx * amp
+                * math.sin(2.0 * math.pi * u_L))
+        # Sway stays lateral in character space; rotate into world with heading.
+        hip_x = hips_x_path[i] + sway * math.cos(yaw_rad)
+        hip_y = hips_y[i] - sway * math.sin(yaw_rad)
 
         # ---- arms counter-swing the same-side leg, on that leg's own profile.
-        th_sh_L = -p.arm_swing_deg * amp * fy * psi_L
-        th_sh_R = -p.arm_swing_deg * amp * fy * psi_R
+        th_sh_L = -p.arm_swing_deg * amp * fy_h * psi_L
+        th_sh_R = -p.arm_swing_deg * amp * fy_h * psi_R
         # The elbow bends the forearm forward, so its sign is fy; the extra bend rides
         # the forward half of that arm's swing.
-        el_L = fy * (p.elbow_base_deg + p.elbow_swing_deg * amp * max(0.0, -psi_L))
-        el_R = fy * (p.elbow_base_deg + p.elbow_swing_deg * amp * max(0.0, -psi_R))
+        el_L = fy_h * (p.elbow_base_deg + p.elbow_swing_deg * amp * max(0.0, -psi_L))
+        el_R = fy_h * (p.elbow_base_deg + p.elbow_swing_deg * amp * max(0.0, -psi_R))
 
         # ---- torso counter-twist about Z. Sign derived, not guessed: the forward-going
         # shoulder must travel toward `fy`, and +Z carries the +X shoulder toward +Y.
-        twist = p.chest_twist_deg * amp * -psi_L * lx * (-fy)
+        twist = p.chest_twist_deg * amp * -psi_L * lx * (-fy_h)
 
         pose = {b: {"rx": 0.0, "ry": 0.0, "rz": 0.0} for b in GAIT_BONES}
-        pose["hips"].update(rz=-0.5 * twist)
+        pose["hips"].update(rz=-0.5 * twist + yaw)
         pose["hips"]["translation"] = [hip_x, hip_y, hip_z]
         pose["spine"]["rz"] = 0.35 * twist
         pose["chest"]["rz"] = 0.65 * twist
@@ -836,6 +945,7 @@ def build_gait(performer, params):
             "gait_speed": amp,
             "stance_L": bool(stance_L),
             "stance_R": bool(stance_R),
+            "heading_deg": yaw,
             "phase_name": ("walk" if i < f_decel else
                            "decelerate" if i < f_gesture else
                            "gesture" if i < f_hold else "hold"),
@@ -843,19 +953,23 @@ def build_gait(performer, params):
         })
 
     step_distance = 2.0 * L * math.sin(math.radians(p.hip_swing_deg))
+    last_t = frames[-1]["pose"]["hips"]["translation"]
     return {
         "frames": frames,
         "omega_rad_per_frame": omega,
         "gait_speed": speed,
         "phase_rad": phase,
+        "heading_deg": headings,
         "phase_boundaries": {"walk": [0, f_decel], "decelerate": [f_decel, f_gesture],
                              "gesture": [f_gesture, f_hold], "hold": [f_hold, n]},
         "derived": {
             "leg_length_measured": L,
             "step_distance_derived": step_distance,
-            "total_forward_travel": abs(frames[-1]["pose"]["hips"]["translation"][1]),
-            "forward_axis": "Y",
+            "total_forward_travel": abs(last_t[1]) if not heading_active else math.hypot(
+                last_t[0], last_t[1]),
+            "forward_axis": "Y" if not heading_active else "heading",
             "forward_sign": fy,
+            "heading_active": heading_active,
         },
         "params": p.as_dict(),
         "performer": performer.as_dict(),
@@ -950,23 +1064,36 @@ def foot_slip(fk, ground_margin_frac=0.25):
     for a, b in zip(fk, fk[1:]):
         def h(name):
             return math.hypot(b[name][0] - a[name][0], b[name][1] - a[name][1])
+        def lat(name):
+            # Lateral (world-X) component — surfaces when heading turns the path
+            # off the measured +Y axis (F-7f15fb7f).
+            return abs(b[name][0] - a[name][0])
         v_hips = h("hips")
         slower = min(h("toe_L"), h("toe_R"))
+        slower_lat = min(lat("toe_L"), lat("toe_R"))
         speeds.append({
             "frame": a["frame"],
             "hips_speed": v_hips,
+            "hips_lateral_speed": lat("hips"),
             "slower_foot_speed": slower,
+            "slower_foot_lateral_speed": slower_lat,
             "slide_fraction": (slower / v_hips) if v_hips > 1e-9 else None,
         })
     moving = [s for s in speeds if s["slide_fraction"] is not None
               and s["hips_speed"] > 1e-6]
     foot_path = sum(s["slower_foot_speed"] for s in speeds)
     hips_path = sum(s["hips_speed"] for s in speeds)
+    foot_lat_path = sum(s["slower_foot_lateral_speed"] for s in speeds)
+    hips_lat_path = sum(s["hips_lateral_speed"] for s in speeds)
     worst = max(moving, key=lambda s: s["slide_fraction"]) if moving else None
     report["slide"] = {
         "slide_fraction_total": (foot_path / hips_path) if hips_path > 1e-9 else 0.0,
         "slower_foot_path": foot_path,
         "hips_path": hips_path,
+        "lateral_slip_fraction_total": (
+            (foot_lat_path / hips_lat_path) if hips_lat_path > 1e-9 else 0.0),
+        "slower_foot_lateral_path": foot_lat_path,
+        "hips_lateral_path": hips_lat_path,
         "n_moving_frames": len(moving),
         "worst_frame": worst["frame"] if worst else None,
         "worst_frame_ratio": worst["slide_fraction"] if worst else None,
@@ -974,8 +1101,10 @@ def foot_slip(fk, ground_margin_frac=0.25):
         "worst_frame_slower_foot_speed": worst["slower_foot_speed"] if worst else None,
         "note": ("headline is slide_fraction_total = (path of the slower foot) / (path "
                  "of the hips) over the whole shot; 0 = a foot is always planted, 1 = "
-                 "both feet glide with the body. The per-frame worst is reported WITH "
-                 "its denominator because that denominator vanishes at the stop."),
+                 "both feet glide with the body. lateral_slip_fraction_total is the "
+                 "same ratio on world-X only — informative when heading changes. The "
+                 "per-frame worst is reported WITH its denominator because that "
+                 "denominator vanishes at the stop."),
     }
     for side in ("L", "R"):
         key = f"toe_{side}"

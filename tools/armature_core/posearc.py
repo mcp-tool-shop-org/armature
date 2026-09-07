@@ -96,6 +96,39 @@ POSE_ARCS = {
             "group so sheet fixtures can cover spine-led motion"
         ),
     },
+    # Lower-body arcs (F-71579a7f). Wave-35 covered upper arcs only; knee bend and a
+    # seated hip hinge are the calibration fixtures procedural wire subjects still needed.
+    "knee_r_bend": {
+        "pivot": "knee_r",
+        "axis": "X",
+        "sign": 1.0,
+        "moving_joints": ("ankle_r", "toe_r"),
+        "moving_parts": (
+            "bone_knee_r__ankle_r",
+            "joint_ankle_r",
+        ),
+        "readout_deg": 45.0,
+        "description": (
+            "the right knee bends about the lateral hinge (+X); ankle and toe travel with "
+            "the shin so transfer checks can see a lower-limb articulation"
+        ),
+    },
+    "hip_sit": {
+        "pivot": "hip_r",
+        "axis": "X",
+        "sign": 1.0,
+        "moving_joints": ("knee_r", "ankle_r", "toe_r"),
+        "moving_parts": (
+            "bone_hip_r__knee_r",
+            "bone_knee_r__ankle_r",
+            "joint_knee_r",
+        ),
+        "readout_deg": 60.0,
+        "description": (
+            "the right hip hinges toward a seated posture about +X; the whole lower limb "
+            "moves as a rigid group from the hip so sit/stand fixtures need no hand edit"
+        ),
+    },
 }
 
 

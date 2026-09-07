@@ -726,12 +726,16 @@ def _lerp_vec(a, b, t):
     return tuple(_lerp(float(a[i]), float(b[i]), t) for i in range(len(a)))
 
 
+CAMERA_INTERP_KINDS = ("lerp", "cut")
+
+
 def normalize_camera_keys(keys):
     """Validate and sort a keyframed camera path.
 
     Each key is a dict with `frame` (int >= 0) plus orbit knobs:
-    `azimuth_deg`, `elevation_deg`, `radius`, and `target` (len-3). Keys must cover
-    distinct frames; at least one key is required.
+    `azimuth_deg`, `elevation_deg`, `radius`, and `target` (len-3). Optional
+    `interp`: `lerp` (default) or `cut` — a cut uses the right-hand key's values with
+    no blend (F-68c9af38). Keys must cover distinct frames; at least one key is required.
     """
     if not keys:
         raise FramingError(
@@ -757,6 +761,14 @@ def normalize_camera_keys(keys):
                 {"gate": None, "andon": "FramingError",
                  "clause": "camera_key_unreadable", "index": i,
                  "keys_present": sorted(raw) if isinstance(raw, dict) else []}) from exc
+        interp = raw.get("interp", "lerp")
+        if interp not in CAMERA_INTERP_KINDS:
+            raise FramingError(
+                f"camera key at frame {frame}: interp={interp!r} is not one of "
+                f"{list(CAMERA_INTERP_KINDS)}",
+                {"gate": None, "andon": "FramingError",
+                 "clause": "camera_key_interp_unknown", "frame": frame,
+                 "interp": interp, "known": list(CAMERA_INTERP_KINDS)})
         if frame < 0:
             raise FramingError(
                 f"camera key {i} has frame {frame}; frames are non-negative",
@@ -790,7 +802,7 @@ def normalize_camera_keys(keys):
                      "flag": name, name: value})
         seen.add(frame)
         out.append({"frame": frame, "azimuth_deg": az, "elevation_deg": el,
-                    "radius": radius, "target": target})
+                    "radius": radius, "target": target, "interp": interp})
     out.sort(key=lambda k: k["frame"])
     return out
 
@@ -803,15 +815,33 @@ def sample_camera_at(keys, frame):
         k = keys[0]
         return {"frame": f, "azimuth_deg": k["azimuth_deg"],
                 "elevation_deg": k["elevation_deg"], "radius": k["radius"],
-                "target": list(k["target"]), "segment": "hold_start"}
+                "target": list(k["target"]), "segment": "hold_start",
+                "segment_kind": "hold_start", "interp": k["interp"]}
     if f >= keys[-1]["frame"]:
         k = keys[-1]
         return {"frame": f, "azimuth_deg": k["azimuth_deg"],
                 "elevation_deg": k["elevation_deg"], "radius": k["radius"],
-                "target": list(k["target"]), "segment": "hold_end"}
+                "target": list(k["target"]), "segment": "hold_end",
+                "segment_kind": "hold_end", "interp": k["interp"]}
     for i in range(len(keys) - 1):
         a, b = keys[i], keys[i + 1]
         if a["frame"] <= f <= b["frame"]:
+            # Cut is owned by the RIGHT-hand key: hold the left key until the cut
+            # frame, then snap to b with no blend (F-68c9af38).
+            kind = b.get("interp", "lerp")
+            if kind == "cut":
+                src = b if f >= b["frame"] else a
+                return {
+                    "frame": f,
+                    "azimuth_deg": src["azimuth_deg"],
+                    "elevation_deg": src["elevation_deg"],
+                    "radius": src["radius"],
+                    "target": list(src["target"]),
+                    "segment": f"{a['frame']}:{b['frame']}",
+                    "segment_kind": "cut",
+                    "interp": "cut",
+                    "t": 1.0 if f >= b["frame"] else 0.0,
+                }
             span = b["frame"] - a["frame"]
             t = 0.0 if span == 0 else (f - a["frame"]) / span
             return {
@@ -821,6 +851,8 @@ def sample_camera_at(keys, frame):
                 "radius": _lerp(a["radius"], b["radius"], t),
                 "target": list(_lerp_vec(a["target"], b["target"], t)),
                 "segment": f"{a['frame']}:{b['frame']}",
+                "segment_kind": "lerp",
+                "interp": "lerp",
                 "t": t,
             }
     raise FramingError(

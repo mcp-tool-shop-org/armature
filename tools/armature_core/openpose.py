@@ -65,8 +65,52 @@ SOURCE = {
              "by F20"),
 }
 
+#: ControlNet `draw_handpose` `edges`, retrieved 2026-09-07 from the same util.py on
+#: `main` (F-3cc4b5d6). 20 pairs over 21 keypoints, **0-indexed**. Edge colours are HSV
+#: (`ie / len(edges)`); joint dots use HAND_JOINT_COLOR.
+HAND_EDGES = (
+    (0, 1), (1, 2), (2, 3), (3, 4),
+    (0, 5), (5, 6), (6, 7), (7, 8),
+    (0, 9), (9, 10), (10, 11), (11, 12),
+    (0, 13), (13, 14), (14, 15), (15, 16),
+    (0, 17), (17, 18), (18, 19), (19, 20),
+)
+HAND_KEYPOINT_COUNT = 21
+HAND_JOINT_COLOR = (0, 0, 255)  # ControlNet draw_handpose circle colour (BGR-ish RGB)
+HAND_SOURCE = {
+    "path": "lllyasviel/ControlNet annotator/openpose/util.py",
+    "function": "draw_handpose",
+    "retrieved": "2026-09-07",
+    "note": "edges + joint colour banked for F-3cc4b5d6; HSV limb colours are procedural",
+}
+
+#: Rig site name aliases for packing into COCO-18 / OpenPose KEYPOINT_NAMES order
+#: (F-588e3daf). AAPose uses `neck_base` and foot toes; OpenPose-18 wants `neck` and
+#: drops toes. Each entry is tried in order until a site is present.
+BODY_SITE_ALIASES = (
+    ("nose", ("nose",)),
+    ("neck", ("neck", "neck_base")),
+    ("right_shoulder", ("shoulder_R", "right_shoulder")),
+    ("right_elbow", ("elbow_R", "right_elbow")),
+    ("right_wrist", ("wrist_R", "right_wrist")),
+    ("left_shoulder", ("shoulder_L", "left_shoulder")),
+    ("left_elbow", ("elbow_L", "left_elbow")),
+    ("left_wrist", ("wrist_L", "left_wrist")),
+    ("right_hip", ("hip_R", "right_hip")),
+    ("right_knee", ("knee_R", "right_knee")),
+    ("right_ankle", ("ankle_R", "right_ankle")),
+    ("left_hip", ("hip_L", "left_hip")),
+    ("left_knee", ("knee_L", "left_knee")),
+    ("left_ankle", ("ankle_L", "left_ankle")),
+    ("right_eye", ("eye_R", "right_eye")),
+    ("left_eye", ("eye_L", "left_eye")),
+    ("right_ear", ("ear_R", "right_ear")),
+    ("left_ear", ("ear_L", "left_ear")),
+)
+
 DEFAULT_THRESHOLD = 0.1
 DEFAULT_STICKWIDTH = 4
+DEFAULT_HAND_STICKWIDTH = 2  # ControlNet draw_handpose line thickness
 LIMB_BLEND = (0.4, 0.6)  # ControlNet: canvas*0.4 + limb*0.6
 
 
@@ -138,6 +182,61 @@ def blank_canvas(height, width):
     return np.zeros((int(height), int(width), 3), dtype=np.uint8)
 
 
+def body_from_sites(sites, conf=1.0):
+    """Pack projected/world sites into an OpenPose-18 `(18, 3)` body array (F-588e3daf).
+
+    Mirrors `aapose.body_from_sites` shape guard with an explicit site-name adapter:
+    `neck_base` → neck slot, L/R rig names → right_* / left_* COCO-18 order, toes dropped.
+    AAPose-20 stays in `aapose`; this packer is the OpenPose-18 half.
+    """
+    require_drawing_convention()
+    if not isinstance(sites, dict):
+        raise ArmatureError(
+            f"body_from_sites sites must be a dict of name -> xy, got "
+            f"{type(sites).__name__}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "body_sites_not_a_mapping"})
+    c = float(conf)
+    if not (c == c) or c < 0.0:
+        raise ArmatureError(
+            f"body_from_sites conf={conf!r} is not a non-negative finite confidence",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "body_confidence_unreadable", "conf": repr(conf)})
+    have = set(sites)
+    missing = []
+    rows = []
+    for name, aliases in BODY_SITE_ALIASES:
+        key = next((a for a in aliases if a in sites), None)
+        if key is None:
+            missing.append(name)
+            continue
+        p = np.asarray(sites[key], dtype=np.float64).reshape(-1)
+        if p.size < 2:
+            raise ArmatureError(
+                f"site {key!r} (OpenPose {name!r}) needs at least 2 coordinates, "
+                f"got shape {p.shape}",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "body_site_too_short", "site": key, "openpose": name,
+                 "shape": list(p.shape)})
+        rows.append((float(p[0]), float(p[1]), c))
+    if missing:
+        raise ArmatureError(
+            f"OpenPose-18 body_from_sites missing site(s) for {missing}; available: "
+            f"{sorted(have)}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "required_landmark_missing",
+             "missing": missing, "available": sorted(have)})
+    out = np.asarray(rows, dtype=np.float64)
+    if out.shape != (KEYPOINT_COUNT, 3):
+        raise ArmatureError(
+            f"body_from_sites built shape {out.shape}, convention wants "
+            f"({KEYPOINT_COUNT}, 3)",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "body_from_sites_wrong_shape",
+             "shape": list(out.shape), "recorded": KEYPOINT_COUNT})
+    return out
+
+
 def draw_body(canvas, kp2ds, threshold=DEFAULT_THRESHOLD, stickwidth=DEFAULT_STICKWIDTH):
     """ControlNet `draw_bodypose` body pass over an (18, 3) keypoint array.
 
@@ -180,16 +279,71 @@ def draw_body(canvas, kp2ds, threshold=DEFAULT_THRESHOLD, stickwidth=DEFAULT_STI
     return canvas
 
 
-def draw_frame(height, width, body, threshold=DEFAULT_THRESHOLD,
-               stickwidth=DEFAULT_STICKWIDTH, receipt=None):
+def draw_hand(canvas, keypoints, threshold=DEFAULT_THRESHOLD,
+              stickwidth=DEFAULT_HAND_STICKWIDTH, receipt=None):
+    """ControlNet `draw_handpose` over a (21, 3) hand array (F-3cc4b5d6).
+
+    Edges and joint colour are the banked HAND_EDGES / HAND_JOINT_COLOR record; limb
+    colours follow ControlNet's HSV `ie / len(edges)` recipe. Drawn in place.
+    """
+    import cv2
+    import matplotlib.colors as mcolors
+
+    require_drawing_convention()
+    kp = np.asarray(keypoints, dtype=np.float64)
+    if kp.shape != (HAND_KEYPOINT_COUNT, 3):
+        raise ArmatureError(
+            f"hand keypoints must be ({HAND_KEYPOINT_COUNT}, 3) — x, y, confidence — got "
+            f"{kp.shape}",
+            {"gate": None, "andon": "ArmatureError", "clause": "hand_keypoints_wrong_shape",
+             "shape": list(kp.shape), "expected": [HAND_KEYPOINT_COUNT, 3]})
+    sw = int(stickwidth)
+    drawn_limbs = 0
+    drawn_joints = 0
+    for ie, (e1, e2) in enumerate(HAND_EDGES):
+        a, b = kp[e1], kp[e2]
+        if a[2] < threshold or b[2] < threshold:
+            continue
+        rgb = mcolors.hsv_to_rgb([ie / float(len(HAND_EDGES)), 1.0, 1.0]) * 255
+        cv2.line(canvas, (int(a[0]), int(a[1])), (int(b[0]), int(b[1])),
+                 rgb, thickness=sw)
+        drawn_limbs += 1
+    for point in kp:
+        if point[2] < threshold:
+            continue
+        cv2.circle(canvas, (int(point[0]), int(point[1])), 4,
+                   list(HAND_JOINT_COLOR), thickness=-1)
+        drawn_joints += 1
+    if receipt is not None:
+        receipt.update({
+            "hand_limbs_drawn": drawn_limbs,
+            "hand_joints_drawn": drawn_joints,
+            "hand_stickwidth_px": sw,
+            "hand_source": dict(HAND_SOURCE),
+        })
+    return canvas
+
+
+def draw_frame(height, width, body, left_hand=None, right_hand=None,
+               threshold=DEFAULT_THRESHOLD, stickwidth=DEFAULT_STICKWIDTH,
+               hands=False, receipt=None):
     """One OpenPose-18 pose-stick frame: black canvas then body pass.
 
-    Refuses with clause `drawn_ink_empty` when the finished plate has zero non-black
-    pixels — same andon posture as `aapose.draw_frame`.
+    Body-only is the default (`hands=False`). Pass `hands=True` (and optional left/right
+    hand arrays) to also run ControlNet `draw_handpose` (F-3cc4b5d6). Refuses with clause
+    `drawn_ink_empty` when the finished plate has zero non-black pixels — same andon
+    posture as `aapose.draw_frame`.
     """
     require_drawing_convention()
     canvas = blank_canvas(height, width)
     draw_body(canvas, body, threshold=threshold, stickwidth=stickwidth)
+    hand_receipts = []
+    if hands:
+        for hand in (left_hand, right_hand):
+            if hand is not None:
+                hr = {}
+                draw_hand(canvas, hand, threshold=threshold, receipt=hr)
+                hand_receipts.append(hr)
     n_ink = int(np.count_nonzero(np.any(canvas != 0, axis=2)))
     arr = np.asarray(body, dtype=np.float64)
     n_confident = int(np.sum(arr[:, 2] >= float(threshold))) if arr.ndim == 2 else 0
@@ -199,6 +353,8 @@ def draw_frame(height, width, body, threshold=DEFAULT_THRESHOLD,
             "n_confident": n_confident,
             "stickwidth_px": int(stickwidth),
             "convention": "openpose-18",
+            "hands": bool(hands),
+            "hand_receipts": hand_receipts,
             "source": dict(SOURCE),
         })
     if n_ink == 0:

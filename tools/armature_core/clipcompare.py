@@ -239,3 +239,71 @@ def order_check(sources, decoded, step=8):
         "min_margin": float(np.min(margins)),
         "median_margin": float(np.median(margins)),
     }
+
+
+def lag_sweep(sources, decoded, max_lag=5, step=8):
+    """Optional ±N frame lag search beside `order_check` (F-7441d205).
+
+    Reuses `downsample` / mean-abs distance. For each candidate offset `d` in
+    `[-max_lag, +max_lag]`, scores the overlapping window where decoded[i] is compared to
+    sources[i + d]. Returns `best_offset`, the per-offset mean error, and the same
+    `order_check` fields for the zero-lag case plus `order_at_best` after applying the
+    winning shift. A temporally shifted decode that used to read as wholesale displacement
+    surfaces as a recoverable offset here.
+    """
+    if len(sources) != len(decoded):
+        raise ClipCompareError(
+            f"{len(sources)} source frame(s) against {len(decoded)} decoded",
+            {"gate": None, "andon": "ClipCompareError", "clause": "length_mismatch",
+             "n_sources": len(sources), "n_decoded": len(decoded)})
+    n = len(sources)
+    lag = int(max_lag)
+    if lag < 0:
+        raise ClipCompareError(
+            f"max_lag={max_lag!r} must be non-negative",
+            {"gate": None, "andon": "ClipCompareError",
+             "clause": "lag_max_negative", "max_lag": max_lag})
+    if n < 2:
+        raise ClipCompareError(
+            f"lag_sweep needs at least 2 frames, got {n}",
+            {"gate": None, "andon": "ClipCompareError",
+             "clause": "lag_too_few_frames", "n": n})
+    S = np.stack([downsample(f, step).ravel() for f in sources])
+    D = np.stack([downsample(f, step).ravel() for f in decoded])
+    scores = {}
+    for d in range(-lag, lag + 1):
+        errs = []
+        for i in range(n):
+            j = i + d
+            if 0 <= j < n:
+                errs.append(float(np.abs(S[j] - D[i]).mean()))
+        if len(errs) < max(1, n - abs(d)):
+            continue
+        scores[d] = float(np.mean(errs)) if errs else float("inf")
+    if not scores:
+        raise ClipCompareError(
+            "lag_sweep produced no overlapping windows",
+            {"gate": None, "andon": "ClipCompareError",
+             "clause": "lag_no_overlap", "n": n, "max_lag": lag})
+    best_offset = min(scores, key=lambda k: (scores[k], abs(k)))
+    zero = order_check(sources, decoded, step=step)
+    # Align decoded against sources shifted by best_offset for the order-at-best view.
+    aligned_src = []
+    aligned_dec = []
+    for i in range(n):
+        j = i + best_offset
+        if 0 <= j < n:
+            aligned_src.append(sources[j])
+            aligned_dec.append(decoded[i])
+    at_best = order_check(aligned_src, aligned_dec, step=step) if aligned_src else zero
+    return {
+        "n": n,
+        "step": int(step),
+        "max_lag": lag,
+        "best_offset": int(best_offset),
+        "mean_err_by_offset": {str(k): v for k, v in sorted(scores.items())},
+        "mean_err_at_best": scores[best_offset],
+        "mean_err_at_zero": scores.get(0),
+        "order_check": zero,
+        "order_at_best": at_best,
+    }

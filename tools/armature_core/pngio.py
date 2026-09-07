@@ -21,8 +21,12 @@ Row 0 of the array is the TOP row of the image, which is PNG's own order. Blende
 
 RGBA (F-219a7aba): the alpha law's authored master is an (H,W,4) array; without color
 type 6 this writer refused it (`unsupported_shape`) and every Blender-side RGBA export
-had to stay on Blender's own encoder. No paired reader here — EXTERNAL_VERIFIER
-(Pillow) still reads the bytes back.
+had to stay on Blender's own encoder.
+
+`read_png` (F-69a1f058) loads the same filter-0 gray/RGB/RGBA surfaces this writer
+emits, so a core-side alpha/composite check after disk does not have to import Pillow.
+Pillow remains the EXTERNAL_VERIFIER for the *writer*; the reader exists so the alpha
+law path stays inside this module.
 """
 
 import struct
@@ -175,3 +179,160 @@ def write_png(path, arr, bit_depth=8):
     with open(path, "wb") as fh:
         fh.write(blob)
     return len(blob)
+
+
+def _read_chunk(data, offset):
+    if offset + 8 > len(data):
+        raise PngWriteError(
+            f"PNG truncated while reading chunk header at offset {offset}",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_truncated",
+             "offset": offset})
+    length = struct.unpack(">I", data[offset:offset + 4])[0]
+    tag = data[offset + 4:offset + 8]
+    start = offset + 8
+    end = start + length
+    crc_end = end + 4
+    if crc_end > len(data):
+        raise PngWriteError(
+            f"PNG truncated while reading chunk {tag!r}",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_truncated",
+             "tag": tag.decode("latin1", "replace"), "length": length})
+    payload = data[start:end]
+    want = struct.unpack(">I", data[end:crc_end])[0]
+    got = zlib.crc32(tag + payload) & 0xFFFFFFFF
+    if want != got:
+        raise PngWriteError(
+            f"PNG chunk {tag!r} CRC mismatch",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_crc_mismatch",
+             "tag": tag.decode("latin1", "replace")})
+    return tag, payload, crc_end
+
+
+def read_png(path):
+    """Read a filter-0 gray/RGB/RGBA PNG written by this module (F-69a1f058).
+
+    Returns `(arr, color_type)` where `arr` is uint8 with shape (H,W), (H,W,3), or
+    (H,W,4), and `color_type` is COLOR_GRAY / COLOR_RGB / COLOR_RGBA. Same path-named
+    refusals as `write_png`. Interlaced, filtered, or exotic bit-depth files are refused
+    rather than half-decoded — Pillow stays the EXTERNAL_VERIFIER for those.
+    """
+    try:
+        with open(path, "rb") as fh:
+            data = fh.read()
+    except OSError as exc:
+        raise PngWriteError(
+            f"{path}: cannot open for read ({exc})",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_unreadable",
+             "path": str(path)}) from exc
+    if not data.startswith(_PNG_MAGIC):
+        raise PngWriteError(
+            f"{path}: not a PNG (missing signature)",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_bad_signature",
+             "path": str(path)})
+    offset = len(_PNG_MAGIC)
+    tag, ihdr, offset = _read_chunk(data, offset)
+    if tag != b"IHDR" or len(ihdr) != 13:
+        raise PngWriteError(
+            f"{path}: first chunk is not a 13-byte IHDR",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_ihdr_missing",
+             "path": str(path)})
+    width, height, bit_depth, color_type, compression, filt, interlace = struct.unpack(
+        ">IIBBBBB", ihdr)
+    if compression != 0 or filt != 0 or interlace != 0:
+        raise PngWriteError(
+            f"{path}: only non-interlaced filter-method-0 zlib PNGs are readable here "
+            f"(compression={compression}, filter={filt}, interlace={interlace})",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_unsupported_encoding",
+             "path": str(path), "compression": compression, "filter": filt,
+             "interlace": interlace})
+    if width == 0 or height == 0:
+        raise PngWriteError(
+            f"{path}: IHDR width/height {width}x{height} has a zero dimension",
+            {"gate": None, "andon": "PngWriteError", "clause": "zero_dimension",
+             "path": str(path), "width": width, "height": height})
+    if color_type == COLOR_GRAY:
+        channels = 1
+    elif color_type == COLOR_RGB:
+        channels = 3
+    elif color_type == COLOR_RGBA:
+        channels = 4
+    else:
+        raise PngWriteError(
+            f"{path}: color type {color_type} is not gray/RGB/RGBA",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_unsupported_color_type",
+             "path": str(path), "color_type": color_type})
+    if bit_depth not in (1, 8):
+        raise PngWriteError(
+            f"{path}: unsupported bit depth {bit_depth}",
+            {"gate": None, "andon": "PngWriteError", "clause": "unsupported_bit_depth",
+             "path": str(path), "bit_depth": bit_depth})
+    if bit_depth == 1 and color_type != COLOR_GRAY:
+        raise PngWriteError(
+            f"{path}: bit_depth=1 is grayscale only",
+            {"gate": None, "andon": "PngWriteError", "clause": "bit1_not_grayscale",
+             "path": str(path)})
+
+    idat = bytearray()
+    while offset < len(data):
+        tag, payload, offset = _read_chunk(data, offset)
+        if tag == b"IDAT":
+            idat.extend(payload)
+        elif tag == b"IEND":
+            break
+    if not idat:
+        raise PngWriteError(
+            f"{path}: no IDAT chunks",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_no_idat",
+             "path": str(path)})
+    try:
+        raw = zlib.decompress(bytes(idat))
+    except zlib.error as exc:
+        raise PngWriteError(
+            f"{path}: IDAT zlib decompress failed ({exc})",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_zlib_error",
+             "path": str(path)}) from exc
+
+    if bit_depth == 1:
+        row_bytes = (width + 7) // 8
+        expect = height * (1 + row_bytes)
+        if len(raw) != expect:
+            raise PngWriteError(
+                f"{path}: bit1 scanline bytes {len(raw)} != expected {expect}",
+                {"gate": None, "andon": "PngWriteError", "clause": "png_scanline_length",
+                 "path": str(path)})
+        rows = []
+        for r in range(height):
+            base = r * (1 + row_bytes)
+            if raw[base] != 0:
+                raise PngWriteError(
+                    f"{path}: filter type {raw[base]} on row {r}; only filter 0 is read",
+                    {"gate": None, "andon": "PngWriteError",
+                     "clause": "png_unsupported_filter", "path": str(path),
+                     "row": r, "filter_type": int(raw[base])})
+            packed = np.frombuffer(raw[base + 1:base + 1 + row_bytes], dtype=np.uint8)
+            bits = np.unpackbits(packed)[:width]
+            rows.append(bits)
+        arr = np.asarray(rows, dtype=np.uint8)
+        return arr, COLOR_GRAY
+
+    row_bytes = width * channels
+    expect = height * (1 + row_bytes)
+    if len(raw) != expect:
+        raise PngWriteError(
+            f"{path}: scanline bytes {len(raw)} != expected {expect}",
+            {"gate": None, "andon": "PngWriteError", "clause": "png_scanline_length",
+             "path": str(path), "got": len(raw), "expected": expect})
+    rows = np.empty((height, width, channels), dtype=np.uint8)
+    for r in range(height):
+        base = r * (1 + row_bytes)
+        if raw[base] != 0:
+            raise PngWriteError(
+                f"{path}: filter type {raw[base]} on row {r}; only filter 0 is read",
+                {"gate": None, "andon": "PngWriteError",
+                 "clause": "png_unsupported_filter", "path": str(path),
+                 "row": r, "filter_type": int(raw[base])})
+        rows[r] = np.frombuffer(
+            raw[base + 1:base + 1 + row_bytes], dtype=np.uint8).reshape(width, channels)
+    if channels == 1:
+        return rows[:, :, 0], COLOR_GRAY
+    return rows, color_type

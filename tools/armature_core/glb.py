@@ -786,3 +786,57 @@ def read_animation(path, animation_index=0, fps=24.0, retarget=None,
         },
     }
 
+
+def as_motion_record(path, animation_index=0, fps=24.0, retarget=None,
+                     sitelist_names=None, *, tool=None, tool_version=None, extra=None):
+    """`read_animation` frames joined to MOTION_SCHEMA=1 via lift_solve (F-47e3b3af).
+
+    Returns the canonical dump_motion_record dict with `source` / `retarget` /
+    `root_bone` in `extra` (callers may pass more via `extra=`). Atlas gates untouched.
+    """
+    from . import lift_solve
+    anim = read_animation(path, animation_index=animation_index, fps=fps,
+                          retarget=retarget, sitelist_names=sitelist_names)
+    # Strip per-frame `t` for the motion-record contract (frame/local/root only).
+    frames = []
+    for fr in anim["frames"]:
+        frames.append({
+            "frame": fr["frame"],
+            "local": fr["local"],
+            "root": list(fr["root"]),
+        })
+    payload = {
+        "source": anim["source"],
+        "retarget": anim["retarget"],
+        "root_bone": anim.get("root_bone"),
+    }
+    if extra:
+        for k, v in extra.items():
+            if k in payload:
+                raise MalformedGLB(
+                    f"as_motion_record extra key {k!r} collides with animation metadata",
+                    {"gate": None, "andon": "MalformedGLB",
+                     "clause": "motion_record_extra_key_collision", "key": k,
+                     "path": str(path)})
+            payload[k] = v
+    return lift_solve.dump_motion_record(
+        frames, tool=tool or "glb.read_animation",
+        tool_version=tool_version, extra=payload)
+
+
+def save_motion_record(path, glb_path, animation_index=0, fps=24.0, retarget=None,
+                       sitelist_names=None, *, tool=None, tool_version=None, extra=None):
+    """Write a MOTION_SCHEMA record from a partner GLB animation (F-47e3b3af)."""
+    from . import lift_solve
+    record = as_motion_record(
+        glb_path, animation_index=animation_index, fps=fps, retarget=retarget,
+        sitelist_names=sitelist_names, tool=tool, tool_version=tool_version,
+        extra=extra)
+    # Re-save through lift_solve so the on-disk shape matches lift writers exactly.
+    return lift_solve.save_motion_record(
+        path, record["frames"], tool=record.get("tool"),
+        tool_version=record.get("tool_version"),
+        extra={k: v for k, v in record.items()
+               if k not in ("motion_schema", "tool", "tool_version", "frames",
+                            "validate")})
+

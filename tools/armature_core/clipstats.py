@@ -459,3 +459,93 @@ def distinct_frames(frames):
                          "difference in the frames' own units — see `scale` — so a byte "
                          "decode and a float decode of one clip differ by 255x in it while "
                          "both counts are unchanged")}
+
+
+def motion_aware_diagnostics(frames, motion_record, rest=None, obs=None,
+                             authored_locals=None):
+    """Lift/pose-unit diagnostics beside pixel clipstats (F-48da73de).
+
+    Consumes decoded `frames` (for length / scale context only) plus a motion record
+    (`{frames: [...]}` or a bare frame list). Reuses `lift_solve.bone_length_residuals`
+    when `rest`+`obs` site tables are supplied, and `lift_solve.compare_rotations` when
+    `authored_locals` (per-frame bone->3x3, or a single dict broadcast) is supplied.
+    Consecutive-frame geodesic steps come from `resample.step_angles`. No new pixel
+    heuristics — a bad lift is graded in lift/pose units rather than conflated luma deltas.
+    """
+    if not frames:
+        raise ClipStatsError(
+            "motion_aware_diagnostics was given no decoded frames",
+            {"gate": None, "andon": "ClipStatsError",
+             "clause": "motion_diag_no_frames"})
+    if isinstance(motion_record, dict) and "frames" in motion_record:
+        motion_frames = motion_record["frames"]
+        schema = motion_record.get("motion_schema")
+    elif isinstance(motion_record, (list, tuple)):
+        motion_frames = list(motion_record)
+        schema = None
+    else:
+        raise ClipStatsError(
+            "motion_record must be a dict with 'frames' or a frame list",
+            {"gate": None, "andon": "ClipStatsError",
+             "clause": "motion_diag_record_unreadable",
+             "type": type(motion_record).__name__})
+    if not motion_frames:
+        raise ClipStatsError(
+            "motion_aware_diagnostics motion record carries no frames",
+            {"gate": None, "andon": "ClipStatsError",
+             "clause": "motion_diag_empty_motion"})
+    from . import lift_solve
+    from . import resample as _resample
+    step = _resample.step_angles(motion_frames)
+    bone_residuals = None
+    if rest is not None or obs is not None:
+        if rest is None or obs is None:
+            raise ClipStatsError(
+                "bone_length_residuals needs both rest and obs site tables",
+                {"gate": None, "andon": "ClipStatsError",
+                 "clause": "motion_diag_rest_obs_incomplete",
+                 "has_rest": rest is not None, "has_obs": obs is not None})
+        bone_residuals = lift_solve.bone_length_residuals(rest, obs)
+    rotation_compare = None
+    if authored_locals is not None:
+        if isinstance(authored_locals, dict) and "local" not in authored_locals \
+                and all(isinstance(v, (list, tuple)) for v in authored_locals.values()):
+            # Single pose dict broadcast against every motion frame.
+            rotation_compare = [
+                lift_solve.compare_rotations(fr.get("local") or {}, authored_locals)
+                for fr in motion_frames
+            ]
+        elif isinstance(authored_locals, (list, tuple)):
+            if len(authored_locals) != len(motion_frames):
+                raise ClipStatsError(
+                    f"authored_locals length {len(authored_locals)} != motion "
+                    f"{len(motion_frames)}",
+                    {"gate": None, "andon": "ClipStatsError",
+                     "clause": "motion_diag_authored_length_mismatch",
+                     "n_authored": len(authored_locals),
+                     "n_motion": len(motion_frames)})
+            rotation_compare = [
+                lift_solve.compare_rotations(
+                    fr.get("local") or {},
+                    (al.get("local") if isinstance(al, dict) and "local" in al else al) or {},
+                )
+                for fr, al in zip(motion_frames, authored_locals)
+            ]
+        else:
+            raise ClipStatsError(
+                "authored_locals must be a bone->matrix dict or a per-frame sequence",
+                {"gate": None, "andon": "ClipStatsError",
+                 "clause": "motion_diag_authored_unreadable",
+                 "type": type(authored_locals).__name__})
+    return {
+        "n_decoded_frames": len(frames),
+        "n_motion_frames": len(motion_frames),
+        "length_match": len(frames) == len(motion_frames),
+        "motion_schema": schema,
+        "scale": scale_of(frames),
+        "step_angles": step,
+        "bone_length_residuals": bone_residuals,
+        "rotation_compare": rotation_compare,
+        "measures": ("lift/pose units via bone_length_residuals / compare_rotations / "
+                     "step_angles; pixel luma deltas stay in frame_deltas"),
+    }

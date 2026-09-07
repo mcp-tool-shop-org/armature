@@ -206,6 +206,24 @@ HAND_SITES_WHEN_ARTICULATED = {
     17: "pinky_L", 18: "pinky_R", 21: "thumb_L", 22: "thumb_R",
 }
 
+#: Face landmark indices mapped only under face_mode='landmarks' (F-1beb140b). Eye
+#: inners/outers + mouth corners unlock expression DOFs when deform / blendshape targets
+#: exist; default face_mode='hold' leaves them in UNUSED.
+FACE_SITES_WHEN_LANDMARKS = {
+    1: "eye_L_inner", 2: "eye_L", 3: "eye_L_outer",
+    4: "eye_R_inner", 5: "eye_R", 6: "eye_R_outer",
+    9: "mouth_L", 10: "mouth_R",
+}
+FACE_BONES = ("nose", "eye.L", "eye.R", "ear.L", "ear.R")
+FACE_MODES = ("hold", "landmarks")
+
+#: Heel landmark indices mapped only under foot_mode='heel' (F-4c9a4d9e). Default
+#: 'ankle_as_toe' keeps today's ankle-tail-as-toe solve and leaves 29/30 unused.
+HEEL_SITES_WHEN_ENABLED = {
+    29: "heel_L", 30: "heel_R",
+}
+FOOT_MODES = ("ankle_as_toe", "heel")
+
 #: The rig sites this module places by forward kinematics but never observes. Recorded so
 #: a reader can see at a glance which positions in a solved frame are DERIVED.
 UNOBSERVED_SITES = (
@@ -257,18 +275,37 @@ MODEL = {
 }
 
 
-def model_for(obs):
-    """MODEL with optional mid-torso / crown landmarks unlocking spine/neck (F-96d82898).
+def model_for(obs, face_mode="hold", foot_mode="ankle_as_toe"):
+    """MODEL with optional mid-torso / crown / face / heel unlocks.
 
     Hold remains the default when only the 33 are present. When `mid_torso` is observed,
     spine is solved as a direction toward it; when `crown` is observed, neck is solved
-    toward the crown. Soft prior: absent optionals leave the held reasons unchanged.
+    toward the crown (F-96d82898). Soft prior: absent optionals leave the held reasons
+    unchanged.
+
+    `face_mode='landmarks'` upgrades nose/eye.* from hold to direction/frame solves when
+    the mapped face sites are present (F-1beb140b). `foot_mode='heel'` gives ankle bones
+    a heel twist datum instead of the underdetermined ankle-as-toe default (F-4c9a4d9e).
     """
     model = dict(MODEL)
     if obs is not None and "mid_torso" in obs:
         model["spine"] = ("direction", "mid_torso", "shoulder_mid", LATERAL_AXIS)
     if obs is not None and "crown" in obs:
         model["neck"] = ("direction", "crown", None, LATERAL_AXIS)
+    if face_mode == "landmarks" and obs is not None:
+        # Mouth corners give a second head-plane axis; eye outer corners aim the eye
+        # bones (head landmark is eye_L / eye_R; outer is the swing target).
+        if "mouth_L" in obs and "mouth_R" in obs and "nose" in obs:
+            model["nose"] = ("frame", ("mouth_L", "mouth_R"), ("nose", "ear_mid"))
+        if "eye_L" in obs and "eye_L_outer" in obs:
+            model["eye.L"] = ("direction", "eye_L_outer", None, LATERAL_AXIS)
+        if "eye_R" in obs and "eye_R_outer" in obs:
+            model["eye.R"] = ("direction", "eye_R_outer", None, LATERAL_AXIS)
+    if foot_mode == "heel":
+        # Heel fixes ankle twist; toe remains the swing target (ankle-as-toe default kept
+        # as the explicit provenance when foot_mode stays ankle_as_toe).
+        model["ankle.L"] = ("direction", "toe_L", "heel_L", LATERAL_AXIS)
+        model["ankle.R"] = ("direction", "toe_R", "heel_R", LATERAL_AXIS)
     return model
 
 
@@ -536,24 +573,63 @@ def resolve_root_provider(root_provider, rest, obs, hips_delta):
          "clause": "root_provider_unknown_source", "source": source})
 
 
-def site_map_for(hand_mode="mitten"):
-    """SITE_FROM_LANDMARK, extended with finger tips when articulated hands are registered."""
+def site_map_for(hand_mode="mitten", face_mode="hold", foot_mode="ankle_as_toe"):
+    """SITE_FROM_LANDMARK, extended for articulated hands / face landmarks / heels."""
+    if hand_mode not in ("mitten", "articulated"):
+        raise SolveError(
+            f"hand_mode={hand_mode!r} is not one of ['mitten', 'articulated']",
+            {"gate": None, "andon": "SolveError", "clause": "unknown_hand_mode",
+             "hand_mode": hand_mode})
+    if face_mode not in FACE_MODES:
+        raise SolveError(
+            f"face_mode={face_mode!r} is not one of {list(FACE_MODES)}",
+            {"gate": None, "andon": "SolveError", "clause": "unknown_face_mode",
+             "face_mode": face_mode, "known": list(FACE_MODES)})
+    if foot_mode not in FOOT_MODES:
+        raise SolveError(
+            f"foot_mode={foot_mode!r} is not one of {list(FOOT_MODES)}",
+            {"gate": None, "andon": "SolveError", "clause": "unknown_foot_mode",
+             "foot_mode": foot_mode, "known": list(FOOT_MODES)})
     mapping = dict(SITE_FROM_LANDMARK)
     if hand_mode == "articulated":
+        # Index→name kept for landmark-index callers (wave-34 pin); site→index is what
+        # solve_frame iterates as observed site names.
         mapping.update(HAND_SITES_WHEN_ARTICULATED)
+        for idx, site in HAND_SITES_WHEN_ARTICULATED.items():
+            mapping[site] = idx
+    if face_mode == "landmarks":
+        # Require deform / blendshape targets before mapping expression indices.
+        if not sitelist.face_targets_available():
+            raise SolveError(
+                "face_mode='landmarks' needs sitelist face deform bones or blendshape "
+                "targets; none are registered",
+                {"gate": None, "andon": "SolveError",
+                 "clause": "face_targets_unavailable", "face_mode": face_mode})
+        for idx, site in FACE_SITES_WHEN_LANDMARKS.items():
+            mapping[site] = idx
+    if foot_mode == "heel":
+        for idx, site in HEEL_SITES_WHEN_ENABLED.items():
+            mapping[site] = idx
     return mapping
 
 
-def unused_landmarks_for(hand_mode="mitten"):
-    """UNUSED_LANDMARKS with finger indices removed when articulated hands are in MODEL."""
+def unused_landmarks_for(hand_mode="mitten", face_mode="hold", foot_mode="ankle_as_toe"):
+    """UNUSED_LANDMARKS with mode-unlocked indices removed."""
     unused = dict(UNUSED_LANDMARKS)
     if hand_mode == "articulated":
         for idx in HAND_SITES_WHEN_ARTICULATED:
             unused.pop(idx, None)
+    if face_mode == "landmarks":
+        for idx in FACE_SITES_WHEN_LANDMARKS:
+            unused.pop(idx, None)
+    if foot_mode == "heel":
+        for idx in HEEL_SITES_WHEN_ENABLED:
+            unused.pop(idx, None)
     return unused
 
 
-def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
+def solve_frame(rest, obs, root_provider=None, hand_mode="mitten",
+                face_mode="hold", foot_mode="ankle_as_toe"):
     """Joint rotations on the 22-bone rig from one frame of observed site positions.
 
     `rest` is the rig's own landmark table (E07's manifest). `obs` holds the observed
@@ -575,9 +651,15 @@ def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
     `hand_mode`: 'mitten' (default) leaves finger MediaPipe indices unused; 'articulated'
     maps them when sitelist finger deform bones exist (F-f821776d).
 
+    `face_mode`: 'hold' (default) leaves eye/mouth indices unused and facial bones held;
+    'landmarks' maps them when sitelist face deform/blendshape targets exist (F-1beb140b).
+
+    `foot_mode`: 'ankle_as_toe' (default) keeps today's ankle-tail-as-toe solve; 'heel'
+    maps MediaPipe heels and uses them as the ankle twist datum (F-4c9a4d9e).
+
     Nothing here is a gate. `round_trip_report` is where a defect raises.
     """
-    site_map = site_map_for(hand_mode)
+    site_map = site_map_for(hand_mode, face_mode=face_mode, foot_mode=foot_mode)
     missing = [s for s in site_map if s not in obs]
     if missing:
         raise SolveError(f"observed sites missing: {sorted(missing)}; the solve would place "
@@ -601,7 +683,7 @@ def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
 
     r = _derived_points(rest)
     o = _derived_points(obs)
-    active_model = model_for(obs)
+    active_model = model_for(obs, face_mode=face_mode, foot_mode=foot_mode)
 
     local, total = {}, {}
     underdetermined, held, conditioning, solved = {}, {}, {}, {}
@@ -744,6 +826,8 @@ def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
     else:
         means = (f"metric root from root_provider source={root_source!r}; "
                  f"hips_delta_translation is retained for diagnostics")
+    face_held = sorted(b for b in FACE_BONES if b in held)
+    face_solved = sorted(b for b in FACE_BONES if b in solved)
     return {
         "local": local,
         "total": total,
@@ -759,9 +843,15 @@ def solve_frame(rest, obs, root_provider=None, hand_mode="mitten"):
         "solved": solved,
         "held_bones": sorted(held),
         "solved_bones": sorted(solved),
+        "face_held": face_held,
+        "face_solved": face_solved,
         "optional_landmarks_used": sorted(
             s for s in OPTIONAL_TORSO_LANDMARKS if s in obs),
         "hand_mode": hand_mode,
+        "face_mode": face_mode,
+        "foot_mode": foot_mode,
+        "foot_provenance": (
+            "heel_twist" if foot_mode == "heel" else "ankle_as_toe_default"),
         "tool_version": TOOL_VERSION,
     }
 

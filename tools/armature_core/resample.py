@@ -525,3 +525,85 @@ def step_angles(frames, bones=None):
                   "p90_deg": s[min(len(s) - 1, int(round(0.9 * (len(s) - 1))))],
                   "max_deg": s[-1], "sum_deg": sum(d)}
     return out
+
+
+def _frame_step_cost(a, b, bones):
+    """Max geodesic degrees across `bones` between two adjacent motion frames."""
+    worst = 0.0
+    for name in bones:
+        worst = max(worst, geodesic_deg(_as_mat(a["local"][name]),
+                                        _as_mat(b["local"][name])))
+    return worst
+
+
+def decimate_frames(frames, max_step_deg, bones=None):
+    """Keyframe reduction under a geodesic budget (F-54ffc7d4).
+
+    Keeps endpoints. Walks the source left-to-right and drops an interior sample when the
+    geodesic cost from the last *kept* frame stays within `max_step_deg` (max over bones,
+    reusing `geodesic_deg` / the same algebra as `step_angles`). Revalidates with
+    `endpoints_match` and `lift_solve.validate_motion_record`. Densify remains
+    `resample_frames`; this is the reduction half.
+    """
+    n = len(frames)
+    if n < 2:
+        raise ResampleError(
+            f"decimate_frames needs at least 2 frames, got {n}",
+            {"gate": None, "andon": "ResampleError",
+             "clause": "too_few_frames_to_decimate", "n": n})
+    budget = float(max_step_deg)
+    if not (budget > 0.0) or budget != budget:
+        raise ResampleError(
+            f"max_step_deg={max_step_deg!r} is not a finite positive geodesic budget",
+            {"gate": None, "andon": "ResampleError",
+             "clause": "decimate_budget_not_positive", "max_step_deg": max_step_deg})
+    bone_names = list(bones or (frames[0].get("local") or {}))
+    if not bone_names:
+        raise ResampleError(
+            "decimate_frames: frame 0 carries no bone rotations",
+            {"gate": None, "andon": "ResampleError",
+             "clause": "frame_zero_carries_no_bones"})
+    for k, fr in enumerate(frames):
+        local = fr.get("local") or {}
+        missing = [b for b in bone_names if b not in local]
+        if missing:
+            raise ResampleError(
+                f"frame {k} is missing bone(s) {missing} needed to decimate",
+                {"gate": None, "andon": "ResampleError",
+                 "clause": "bone_set_changes_between_frames", "frame": k,
+                 "missing": missing})
+        for name in bone_names:
+            require_rotation(_as_mat(local[name]), f"frame {k}, bone {name!r}")
+
+    kept_idx = [0]
+    last = 0
+    for i in range(1, n - 1):
+        cost = _frame_step_cost(frames[last], frames[i], bone_names)
+        # Also look ahead to the next candidate so a corner past `i` is not absorbed.
+        nxt = _frame_step_cost(frames[i], frames[i + 1], bone_names)
+        if cost > budget or nxt > budget:
+            kept_idx.append(i)
+            last = i
+    kept_idx.append(n - 1)
+
+    out = []
+    for j, src_i in enumerate(kept_idx):
+        src = frames[src_i]
+        local = {b: [list(r) for r in _as_mat(src["local"][b])] for b in bone_names}
+        # Preserve any bones beyond the budget set so validate_motion_record still sees
+        # the full registered set when the caller passed a subset.
+        for b, mat in (src.get("local") or {}).items():
+            local.setdefault(b, [list(r) for r in _as_mat(mat)])
+        root = src.get("root")
+        if not (isinstance(root, (list, tuple)) and len(root) == 3):
+            raise ResampleError(
+                f"frame {src_i}: root is {root!r}, not a 3-vector",
+                {"gate": None, "andon": "ResampleError",
+                 "clause": "root_is_not_a_3_vector", "frame": src_i})
+        out.append({"frame": j, "local": local, "root": list(root),
+                    "source_frame": int(src.get("frame", src_i))})
+
+    endpoints_match(frames, out)
+    from .lift_solve import validate_motion_record
+    validate_motion_record(out)
+    return out

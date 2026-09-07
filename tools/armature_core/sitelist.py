@@ -169,21 +169,80 @@ HAND_CHAIN = (
 
 HAND_MODES = ("mitten", "articulated")
 
+#: Optional face deform chain (F-1beb140b). Default BONES keep eye/ear/nose non-deforming;
+#: face_mode='landmarks' exposes these deform targets so lift_solve may map MediaPipe
+#: eye/mouth indices. validate() does not walk this table.
+FACE_CHAIN = (
+    Bone("mouth.L", "head", "mouth_L", "mouth_L_tip", True, False),
+    Bone("mouth.R", "head", "mouth_R", "mouth_R_tip", True, False),
+    Bone("brow.L",  "head", "eye_L",   "brow_L",      True, False),
+    Bone("brow.R",  "head", "eye_R",   "brow_R",      True, False),
+)
 
-def bones_for(hand_mode="mitten"):
-    """Registered bones, optionally extended with the articulated hand chain."""
+#: Named blendshape targets that also unlock face_mode='landmarks' without deform bones.
+FACE_BLENDSHAPE_TARGETS = (
+    "eyeBlink_L", "eyeBlink_R", "jawOpen", "mouthSmile_L", "mouthSmile_R",
+)
+
+FACE_MODES = ("hold", "landmarks")
+
+#: Optional heel bones (F-4c9a4d9e). Default ankle tails stay on the toe; foot_mode='heel'
+#: registers a heel child so planted-foot twist has a bone past the ankle.
+HEEL_CHAIN = (
+    Bone("heel.L", "ankle.L", "ankle_L", "heel_L", True, False),
+    Bone("heel.R", "ankle.R", "ankle_R", "heel_R", True, False),
+)
+
+FOOT_MODES = ("ankle_as_toe", "heel")
+
+
+def face_targets_available(blendshapes=None):
+    """True when FACE_CHAIN deform bones or known blendshape targets can drive expression."""
+    if FACE_CHAIN:
+        return True
+    if blendshapes:
+        known = set(FACE_BLENDSHAPE_TARGETS)
+        return any(n in known for n in blendshapes)
+    return bool(FACE_BLENDSHAPE_TARGETS)
+
+
+def bones_for(hand_mode="mitten", face_mode="hold", foot_mode="ankle_as_toe"):
+    """Registered bones, optionally extended with hand / face / heel chains."""
     if hand_mode not in HAND_MODES:
         raise SiteListError(
             f"hand_mode={hand_mode!r} is not one of {list(HAND_MODES)}",
             {"gate": None, "andon": "SiteListError", "clause": "unknown_hand_mode",
              "hand_mode": hand_mode, "known": list(HAND_MODES)})
-    if hand_mode == "mitten":
-        return BONES
-    return BONES + HAND_CHAIN
+    if face_mode not in FACE_MODES:
+        raise SiteListError(
+            f"face_mode={face_mode!r} is not one of {list(FACE_MODES)}",
+            {"gate": None, "andon": "SiteListError", "clause": "unknown_face_mode",
+             "face_mode": face_mode, "known": list(FACE_MODES)})
+    if foot_mode not in FOOT_MODES:
+        raise SiteListError(
+            f"foot_mode={foot_mode!r} is not one of {list(FOOT_MODES)}",
+            {"gate": None, "andon": "SiteListError", "clause": "unknown_foot_mode",
+             "foot_mode": foot_mode, "known": list(FOOT_MODES)})
+    out = BONES
+    if hand_mode == "articulated":
+        out = out + HAND_CHAIN
+    if face_mode == "landmarks":
+        out = out + FACE_CHAIN
+    if foot_mode == "heel":
+        out = out + HEEL_CHAIN
+    return out
 
 
 def hand_chain_names():
     return tuple(b.name for b in HAND_CHAIN)
+
+
+def face_chain_names():
+    return tuple(b.name for b in FACE_CHAIN)
+
+
+def heel_chain_names():
+    return tuple(b.name for b in HEEL_CHAIN)
 
 #: The bone that drives the E03 probe arc. E03's `arm_r_raise` rotates the arm on the
 #: **+X side** about +Y — its own docstring says so: "the arm named _r in the generator
