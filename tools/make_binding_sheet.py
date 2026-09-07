@@ -50,6 +50,7 @@ from mathutils import Vector  # noqa: E402
 import rig_character  # noqa: E402
 from armature_core import blender_scene  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+from render_performer import maybe_compose_panels  # noqa: E402
 from make_parts_sheet import (ArcDidNotSurvive, arc_liveness,        # noqa: E402,F401
                               articulated_side, CLAY_STUDIO_LINEAR, side_word)
 
@@ -119,6 +120,10 @@ def parse_args():
                    help="the directory panels.json and its frames are written into; "
                         "`sheet_compose.py <out>/panels.json` composes the sheet. "
                         "Compensator: delete it; owner: the executor session")
+    p.add_argument("--compose", dest="compose", action="store_true", default=True,
+                   help="after panels.json is valid, spawn sheet_compose (default; F-938485d6)")
+    p.add_argument("--no-compose", dest="compose", action="store_false",
+                   help="stop after panels.json; operator runs sheet_compose by hand")
     return p.parse_args(argv)
 
 
@@ -402,8 +407,11 @@ def main():
     path = os.path.join(out, "panels.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
+    compose_rec = maybe_compose_panels(path, compose=bool(getattr(args, "compose", True)))
     print("MAKE_BINDING_SHEET_OK " + json.dumps(
-        {"panels": path, "a_max_displacement": a["max_displacement"],
+        {"panels": path, "sheet": compose_rec.get("sheet"),
+         "compose": compose_rec,
+         "a_max_displacement": a["max_displacement"],
          "b_max_displacement": b["max_displacement"]}))
 
 

@@ -54,6 +54,8 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 from render_start_frame import require_frame_size, require_shot_fraction  # noqa: E402
 # Control/performer plate — ONE name with render_turnaround (F-cade389c).
 from render_turnaround import WORLD_LINEAR  # noqa: E402
+from render_performer import (  # noqa: E402
+    maybe_run_review_clip, review_clip_next, load_camera_path)
 
 
 #: The engine identifiers this tool will accept, in the order it tries them.
@@ -157,6 +159,11 @@ def parse_args():
                     help="the directory the shaded preview frames are written into. "
                          "Compensator: delete it; owner: the executor session")
     ap.add_argument("--scale", type=float, default=0.5, help="fraction of shot resolution")
+    ap.add_argument("--review-clip", action="store_true",
+                    help="after frames gate green, shell make_review_clip on --out "
+                         "(F-cee7b569). Absent: PREVIEW_WALK_OK still carries next:")
+    ap.add_argument("--camera-path", default=None,
+                    help="optional keyframed orbit JSON (F-82f88f23); default shot-spec camera")
     return ap.parse_args(argv)
 
 
@@ -397,9 +404,16 @@ def main():
             {"clause": "preview_is_incomplete", "out": os.path.abspath(a.out), "planned": count,
              "missing": missing, "empty": empty, "unexpected_files_in_out_dir": strays,
              "compensator": "delete --out; owner: the executor session"})
+    review = maybe_run_review_clip(
+        a.out, enabled=bool(getattr(a, "review_clip", False)))
+    if not review.get("ran"):
+        review = dict(review_clip_next(a.out), ran=False,
+                      reason=review.get("reason", "--review-clip not set"))
     print("PREVIEW_WALK_OK " + json.dumps({
         "tool": "preview_walk", "blender": blender_scene.blender_provenance(),
         "out": os.path.abspath(a.out), "frames": len(planned), "resolution": [w, h],
+        "next": review.get("next"),
+        "review_clip": review,
         # the engine ACTUALLY set, from `select_engine`'s return (F-0bf74152) -- never a
         # literal, because the identifier this tool used to pin is not stable across
         # Blender versions and no field in this record could have revealed a substitution.

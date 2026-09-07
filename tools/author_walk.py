@@ -166,15 +166,23 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--glb", required=True,
+    ap.add_argument("--glb", action="append", required=True,
                     help="the RIGGED performer GLB this action is keyed onto (E07's "
-                         "export); read only")
-    ap.add_argument("--manifest", required=True,
+                         "export); read only. Appendable (F-5b7048d5): first entry is the "
+                         "keyed performer; further entries are companion figures imported "
+                         "into the same scene and listed in provenance (not keyed)")
+    ap.add_argument("--manifest", action="append", default=None,
                     help="that rig's own rig_manifest.json -- the rest landmark table the "
-                         "gait is authored against, never typed in")
+                         "gait is authored against, never typed in. Appendable per --glb "
+                         "index when companions carry their own manifests (F-5b7048d5)")
     ap.add_argument("--out", required=True,
                     help="the GLB to write, carrying the walk action. Compensator: delete "
                          "it; owner: the executor session")
+    ap.add_argument("--hand-mode", default="mitten", choices=("mitten", "articulated"),
+                    help="mitten (default) keys walk.GAIT_BONES only and HOLDS any "
+                         "HAND_CHAIN / toe.* bones at identity with a named reason; "
+                         "articulated keys finger sites when the motion record carries "
+                         "them (F-30f9bf58)")
     ap.add_argument("--fps", type=int, default=16,
                     help="frames per second the action is keyed at (default 16); glTF "
                          "stores key times in SECONDS, so this must match the shot spec's")
@@ -203,9 +211,32 @@ def parse_args(argv=None):
     return ap.parse_args(argv)
 
 
-def identity_local_table():
+#: F-30f9bf58: gait factory ends at wrist/ankle; finger/toe bones hold identity.
+HAND_HOLD_REASON = (
+    "gait factory keys walk.GAIT_BONES only (limb chains end at wrist.*/ankle.*); "
+    "HAND_CHAIN and toe.* bones hold IDENTITY so they stay authored sites rather than "
+    "drifting under FK"
+)
+
+
+#: Mirrored from rig_character.TOE_CHAIN_NAMES so this module stays importable
+#: without bpy (F-30f9bf58). Keep spellings in lockstep.
+TOE_HOLD_NAMES = ("toe.L", "toe.R")
+
+
+def extremity_hold_names(hand_mode="mitten"):
+    """Bone names the gait path holds (does not key) when the rig carries them."""
+    if hand_mode != "articulated":
+        return ()
+    return tuple(sitelist.hand_chain_names()) + TOE_HOLD_NAMES
+
+
+def identity_local_table(hand_mode="mitten"):
     """Every registered bone at IDENTITY, as nested lists (JSON-safe)."""
-    return {name: [list(row) for row in LS.IDENTITY] for name in sitelist.ALL_NAMES}
+    names = sitelist.ALL_NAMES
+    if hand_mode == "articulated":
+        names = tuple(b.name for b in sitelist.bones_for("articulated")) + TOE_HOLD_NAMES
+    return {name: [list(row) for row in LS.IDENTITY] for name in names}
 
 
 def build_pose_library_frames(name, *, n_frames=1):
@@ -249,6 +280,36 @@ def load_motion_frames(path):
     return rec, frames, gate
 
 
+def resolve_subjects(args):
+    """Normalise appendable --glb / --manifest into performer + companions (F-5b7048d5)."""
+    glbs = list(args.glb or [])
+    if not glbs:
+        raise ArmatureError(
+            "--glb is required (appendable; first entry is the keyed performer)",
+            {"clause": "glb_required"})
+    manifests = list(args.manifest or [])
+    if not manifests:
+        raise ArmatureError(
+            "--manifest is required for the performer (first --glb)",
+            {"clause": "manifest_required"})
+    if len(manifests) > len(glbs):
+        raise ArmatureError(
+            f"{len(manifests)} --manifest entries for {len(glbs)} --glb entries",
+            {"clause": "manifest_glb_count_mismatch",
+             "n_glb": len(glbs), "n_manifest": len(manifests)})
+    while len(manifests) < len(glbs):
+        manifests.append(None)
+    return {
+        "performer_glb": glbs[0],
+        "performer_manifest": manifests[0],
+        "companions": [
+            {"glb": g, "manifest": m, "index": i + 1}
+            for i, (g, m) in enumerate(zip(glbs[1:], manifests[1:]))
+        ],
+        "all_glbs": glbs,
+    }
+
+
 def resolve_performance(args):
     """Pick gait vs key_motion; refuse overlapping sources.
 
@@ -263,7 +324,20 @@ def resolve_performance(args):
             {"clause": "motion_and_pose_library_both_set",
              "motion": motion, "pose_library": library})
     if library:
+        hm = getattr(args, "hand_mode", "mitten") or "mitten"
         frames = build_pose_library_frames(library, n_frames=args.n_hold)
+        # Rebuild with hand_mode-aware identity when articulated.
+        if hm == "articulated":
+            frames = []
+            for i in range(int(args.n_hold)):
+                local = identity_local_table(hm)
+                root = [0.0, 0.0, 0.0]
+                if library == "idle":
+                    phase = (2.0 * math.pi * i / max(int(args.n_hold), 1))
+                    rx = 2.0 * math.sin(phase)
+                    m = walk.rotation_matrix(rx, 0.0, 0.0)
+                    local["spine"] = [list(row) for row in m]
+                frames.append({"frame": i, "local": local, "root": list(root)})
         gate = LS.validate_motion_record(frames)
         return {"mode": "pose_library", "pose_library": library,
                 "frames": frames, "motion_record": {
@@ -379,14 +453,17 @@ def apply_pose(arm_obj, pose, keyframe=None):
             pb.keyframe_insert(data_path="location", frame=keyframe)
 
 
-def author(arm_obj, scene, gait, fps):
-    """Key the whole performance. Returns (action, n_fcurves).
+def author(arm_obj, scene, gait, fps, hand_mode="mitten"):
+    """Key the whole performance. Returns (action, n_fcurves, hold_record).
 
     E07's GLB ships with the probe arc keyed on one shoulder — MEASURED on import, one
     action named `performer_rigAction`. Unlinking it is not enough: the exporter's
     `ACTIONS` mode walks `bpy.data.actions`, so a merely-unassigned action can still be
     written into the GLB as a second animation, and a consumer picking the first one would
     play a 33-frame arm raise instead of the walk. The datablock is removed.
+
+    F-30f9bf58: finger/toe bones present on an articulated rig are held at identity with
+    HAND_HOLD_REASON rather than left unkeyed (which would drift under FK).
     """
     if arm_obj.animation_data is not None:
         arm_obj.animation_data_clear()
@@ -397,8 +474,29 @@ def author(arm_obj, scene, gait, fps):
         pb.rotation_mode = "QUATERNION"
         pb.matrix_basis = Matrix.Identity(4)
 
+    hold_names = []
+    for name in extremity_hold_names(hand_mode):
+        if name not in arm_obj.pose.bones:
+            continue
+        pb = arm_obj.pose.bones[name]
+        pb.rotation_mode = "QUATERNION"
+        pb.matrix_basis = Matrix.Identity(4)
+        hold_names.append(name)
+
     for rec in gait["frames"]:
         apply_pose(arm_obj, rec["pose"], keyframe=rec["scene_frame"])
+        # Hold extremity bones on every keyed frame so they stay in the action.
+        for name in hold_names:
+            pb = arm_obj.pose.bones[name]
+            pb.matrix_basis = Matrix.Identity(4)
+            pb.keyframe_insert(data_path="rotation_quaternion", frame=rec["scene_frame"])
+            pb.keyframe_insert(data_path="location", frame=rec["scene_frame"])
+
+    hold_record = {
+        "bones": hold_names,
+        "reason": HAND_HOLD_REASON if hold_names else None,
+        "hand_mode": hand_mode,
+    }
 
     action = arm_obj.animation_data.action if arm_obj.animation_data else None
     if action is None:
@@ -420,7 +518,7 @@ def author(arm_obj, scene, gait, fps):
     scene.frame_end = len(gait["frames"])
     scene.frame_set(1)
     bpy.context.view_layer.update()
-    return action, n_curves
+    return action, n_curves, hold_record
 
 
 def posed_heads(arm_obj, scene, n_frames):
@@ -765,25 +863,46 @@ def main():
     started = time.time()
     args = parse_args()
     out_path = os.path.abspath(args.out)
+    subjects = resolve_subjects(args)
     perf = resolve_performance(args)
+    hm = getattr(args, "hand_mode", "mitten") or "mitten"
 
-    source_sha = _sha256(args.glb)
+    performer_glb = subjects["performer_glb"]
+    performer_manifest = subjects["performer_manifest"]
+    source_sha = _sha256(performer_glb)
+    companion_records = []
+    for c in subjects["companions"]:
+        companion_records.append({
+            "index": c["index"], "glb": os.path.abspath(c["glb"]),
+            "sha256": _sha256(c["glb"]),
+            "manifest": (os.path.abspath(c["manifest"]) if c["manifest"] else None),
+            "role": "companion_not_keyed",
+        })
 
     # ---- the fps andon. The rate is pinned on an EMPTY scene, before the import, and
     # `import_glb` raises if it is not. Everything else in this file depends on it.
     scene = rig_character.fresh_scene(args.fps)
-    meshes, arms, info = blender_scene.import_glb(args.glb, expected_fps=args.fps)
+    meshes, arms, info = blender_scene.import_glb(performer_glb, expected_fps=args.fps)
+    # F-5b7048d5: companions share the scene; framing/provenance list them; gait keys only
+    # the first performer.
+    for c in subjects["companions"]:
+        blender_scene.import_glb(c["glb"], expected_fps=args.fps)
     mesh_obj, arm_obj = pick_subject(scene)
 
+    registered = sitelist.ALL_NAMES
+    if hm == "articulated":
+        registered = tuple(b.name for b in sitelist.bones_for("articulated")) + tuple(
+            n for n in extremity_hold_names(hm))
     gate_n_pre = rig_gates.gate_n_names(
-        sorted(b.name for b in arm_obj.data.bones), sitelist.ALL_NAMES,
+        sorted(b.name for b in arm_obj.data.bones), registered,
         "the imported rigged GLB")
     gate_space = gate_space_is_identity(arm_obj)
 
-    performer, rig_manifest = read_performer(args.manifest)
+    performer, rig_manifest = read_performer(performer_manifest)
     diagonal = float(rig_manifest["bbox"]["diagonal"])
-    rest, _ = LA.read_rest(args.manifest)
+    rest, _ = LA.read_rest(performer_manifest)
 
+    hold_record = None
     if perf["mode"] == "gait":
         params = walk.GaitParams(n_walk=args.n_walk, n_decel=args.n_decel,
                                  n_gesture=args.n_gesture, n_hold=args.n_hold,
@@ -795,9 +914,9 @@ def main():
             row["_heads"] = h
 
         # ---- Gate D. Author, snapshot, wipe, author again, compare parsed keys.
-        action, n_curves = author(arm_obj, scene, gait, args.fps)
+        action, n_curves, hold_record = author(arm_obj, scene, gait, args.fps, hand_mode=hm)
         snap_a = fcurve_snapshot(action)
-        action_b, _ = author(arm_obj, scene, gait, args.fps)
+        action_b, _, _ = author(arm_obj, scene, gait, args.fps, hand_mode=hm)
         snap_b = fcurve_snapshot(action_b)
         gate_d = gate_d_determinism(snap_a, snap_b)
 
@@ -870,8 +989,11 @@ def main():
         "tool": "author_walk", "tool_version": TOOL_VERSION,
         "blender": blender_scene.blender_provenance(),
         "performance_mode": perf["mode"],
-        "source": {"glb": os.path.abspath(args.glb), "sha256": source_sha,
-                   "manifest": os.path.abspath(args.manifest)},
+        "source": {"glb": os.path.abspath(performer_glb), "sha256": source_sha,
+                   "manifest": os.path.abspath(performer_manifest),
+                   "companions": companion_records,
+                   "hand_mode": hm,
+                   "extremity_hold": hold_record},
         "output": {"glb": out_path, "sha256": out_sha,
                    "bytes": os.path.getsize(out_path)},
         "import_info": info,

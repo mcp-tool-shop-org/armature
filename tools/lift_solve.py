@@ -126,7 +126,7 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--glb", required=True,
+    ap.add_argument("--glb", action="append", required=True,
                     help="the RIGGED performer GLB the solved lift is keyed onto; read only")
     ap.add_argument("--manifest", required=True,
                     help="that rig's own rig_manifest.json -- the rest landmark table the "
@@ -158,6 +158,9 @@ def parse_args(argv=None):
                     help="the GLB to write, carrying the lifted action. Compensator: "
                          "delete it; owner: the executor session")
     # argparse eats leading minus signs: pass any negative value as --key=value.
+    ap.add_argument("--hand-mode", default="mitten", choices=("mitten", "articulated"),
+                    help="mitten holds unused finger landmarks; articulated keys HAND_CHAIN "
+                         "sites when the motion record carries them (F-30f9bf58)")
     ap.add_argument("--fps", type=int, default=16,
                     help="frame rate the action is keyed at (default 16); glTF key times "
                          "are SECONDS, so this must match the record's own rate")
@@ -630,8 +633,10 @@ def main():
     started = time.time()
     a = require_retarget_flags(parse_args())
     out_path = os.path.abspath(a.out)
+    glbs = list(a.glb) if isinstance(a.glb, (list, tuple)) else [a.glb]
+    primary_glb = glbs[0]
 
-    source_sha = _sha256(a.glb)
+    source_sha = _sha256(primary_glb)
     rest, man = read_rest(a.manifest)
     diagonal = float(man["bbox"]["diagonal"])
 
@@ -646,7 +651,7 @@ def main():
         clip_sha = _sha256(a.retarget)
         scene = rig_character.fresh_scene(a.fps)
         # Performer first so fps andon is armed before either import settles.
-        _, _, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
+        _, _, info = blender_scene.import_glb(primary_glb, expected_fps=a.fps)
         mesh_obj, arm_obj = pick_subject(scene)
         src_arm, src_fmt, src_info = import_retarget_source(
             a.retarget, expected_fps=a.fps)
@@ -679,7 +684,7 @@ def main():
         motion_path_abs = os.path.abspath(a.motion)
         record, frames, gate_record = read_motion(a.motion)
         scene = rig_character.fresh_scene(a.fps)
-        _, _, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
+        _, _, info = blender_scene.import_glb(primary_glb, expected_fps=a.fps)
         mesh_obj, arm_obj = pick_subject(scene)
 
     gate_n_pre = rig_gates.gate_n_names(
@@ -725,7 +730,9 @@ def main():
         "solver_version": LS.TOOL_VERSION,
         "mode": "retarget" if a.retarget else "motion",
         "blender": blender_scene.blender_provenance(),
-        "source": {"glb": os.path.abspath(a.glb), "sha256": source_sha,
+        "source": {"glb": os.path.abspath(primary_glb), "sha256": source_sha,
+                   "subjects": [{"index": i, "glb": os.path.abspath(g)} for i, g in enumerate(glbs)],
+                   "hand_mode": getattr(a, "hand_mode", "mitten"),
                    "manifest": os.path.abspath(a.manifest),
                    "motion": motion_path_abs, "motion_sha256": motion_sha},
         "output": {"glb": out_path, "sha256": out_sha,

@@ -86,6 +86,8 @@ from armature_core import blender_scene, framing, parts, pngio, startframe as SF
 # `rig_bake`'s and `make_parts_sheet`'s -- one implementation, imported.
 import rig_character as rc  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+# Helpers live in render_performer; import LAZILY inside main to avoid the
+# render_performer -> render_turnaround -> render_start_frame cycle (F-5b7048d5).
 
 TOOL_VERSION = "E11.2"
 
@@ -406,7 +408,7 @@ def parse_args(argv=None):
     ap = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--glb", required=True,
+    ap.add_argument("--glb", action="append", required=True,
                     help="the performer GLB whose frame becomes the model's picture of "
                          "the world; read only")
     ap.add_argument("--out", required=True,
@@ -460,6 +462,8 @@ def parse_args(argv=None):
                          "LIGHTS the scene, so the plate is the only thing that changes")
     ap.add_argument("--plate-why", default=None,
                     help="one sentence, into the provenance, on why THIS plate")
+    ap.add_argument("--camera-path", default=None,
+                    help="optional keyframed orbit JSON (F-82f88f23); default solve_camera")
     ap.add_argument("--set", action="append", default=None,
                     help="owned 3D set/prop GLB imported as non-deforming scenery "
                          "(F-91411b51). Appendable. Excluded from subject framing solve; "
@@ -759,6 +763,12 @@ def action_frame_range():
 def main():
     started = time.time()
     a = parse_args()
+    from render_performer import (  # noqa: E402  — lazy; see import note above
+        load_camera_path, subject_glbs, glb_provenance_records)
+    glbs = subject_glbs(a)
+    primary_glb = glbs[0]
+    subjects_prov = glb_provenance_records(glbs, _sha256)
+    cam_keys = load_camera_path(getattr(a, 'camera_path', None))
     out = os.path.abspath(a.out)
     indices = resolve_frame_indices(a)
     width, height = require_frame_size(int(a.width), int(a.height))
@@ -767,7 +777,9 @@ def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
     blender_scene.set_frame_rate(scene, a.fps)
-    meshes, arms, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
+    meshes, arms, info = blender_scene.import_glb(primary_glb, expected_fps=a.fps)
+    for extra in glbs[1:]:
+        blender_scene.import_glb(extra, expected_fps=a.fps)
 
     # F-91411b51: owned 3D sets — scenery, not the framing subject.
     set_records = []
@@ -827,11 +839,11 @@ def main():
     subject = blender_scene.render_visible_meshes(scene, meshes)
     if not subject:
         raise RenderGate(
-            f"{a.glb} imported {len(meshes)} mesh object(s) and none of them is "
+            f"{primary_glb} imported {len(meshes)} mesh object(s) and none of them is "
             f"render-visible ({[o.name for o in meshes]}); there is no figure to stage, "
             f"and framing against hidden geometry would compose a frame of an object the "
             f"renderer will not draw",
-            {"clause": "glb_has_no_render_visible_mesh", "glb": a.glb,
+            {"clause": "glb_has_no_render_visible_mesh", "glb": primary_glb,
              "mesh_objects_all": [o.name for o in meshes],
              "mesh_objects_render_visible": []})
 
@@ -1092,7 +1104,9 @@ def main():
     provenance = {
         "tool": "render_start_frame", "tool_version": TOOL_VERSION,
         "blender": blender_scene.blender_provenance(),
-        "source": {"glb": os.path.abspath(a.glb), "sha256": _sha256(a.glb),
+        "source": {"glb": os.path.abspath(primary_glb), "sha256": _sha256(primary_glb),
+                   "subjects": subjects_prov,
+                   "camera_path": getattr(a, "camera_path", None),
                    "frame_index": first["index"], "scene_frame": first["scene_frame"],
                    "action_frame_range": list(span) if span else None,
                    "frame_indices": list(indices),

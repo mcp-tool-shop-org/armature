@@ -177,7 +177,7 @@ def parse_args():
     ap = argparse.ArgumentParser(
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--glb", required=True,
+    ap.add_argument("--glb", action="append", required=True,
                     help="the performer GLB carrying the action to render; read only")
     ap.add_argument("--motion", default=None,
                     help="an AUTHORED motion record (walk.motion.json) to frame against")
@@ -196,7 +196,120 @@ def parse_args():
                          "are SECONDS, so a mismatch renders a different span")
     ap.add_argument("--floor", type=int, default=1,
                     help="1 draws a ground plane; recorded either way")
+    ap.add_argument("--camera-path", default=None,
+                    help="optional keyframed orbit JSON consumed via framing.sample_camera_at "
+                         "/ solve_path (F-82f88f23). Default: today's single solve_camera")
     return ap.parse_args(argv)
+
+
+
+
+# ---- wave-35 MEDIUM helpers (F-5b7048d5 / F-82f88f23 / F-938485d6 / F-cee7b569) ----
+
+def load_camera_path(path):
+    """Load a keyframed orbit camera path JSON (F-82f88f23).
+
+    Schema is framing.normalize_camera_keys: list of {frame, azimuth_deg,
+    elevation_deg, radius, target[3]} or {"keys": [...]}. Absent path => None
+    (today's solve_camera default).
+    """
+    import json as _json
+    from armature_core import framing as _framing
+    if not path:
+        return None
+    with open(path, encoding="utf-8") as fh:
+        raw = _json.load(fh)
+    keys = raw["keys"] if isinstance(raw, dict) and "keys" in raw else raw
+    return _framing.normalize_camera_keys(keys)
+
+
+def subject_glbs(args):
+    """Normalise appendable --glb into an ordered list (F-5b7048d5)."""
+    glbs = getattr(args, "glb", None)
+    if glbs is None:
+        return []
+    if isinstance(glbs, (list, tuple)):
+        return list(glbs)
+    return [glbs]
+
+
+def glb_provenance_records(glbs, sha_fn):
+    """One provenance row per source GLB with sha256 (F-5b7048d5)."""
+    import os as _os
+    return [{"index": i, "glb": _os.path.abspath(g), "sha256": sha_fn(g)}
+            for i, g in enumerate(glbs)]
+
+
+def maybe_compose_panels(panels_json, *, compose=True, python_exe=None):
+    """Optionally spawn the repo venv sheet_compose on panels.json (F-938485d6).
+
+    Default compose=True. panels.json remains the compensator-friendly intermediate.
+    Returns a record with sheet path / skipped reason; never launches Blender.
+    """
+    import os as _os
+    import subprocess as _sp
+    import sys as _sys
+    panels_json = _os.path.abspath(panels_json)
+    if not compose:
+        return {"composed": False, "panels": panels_json, "sheet": None,
+                "reason": "--no-compose"}
+    if not _os.path.isfile(panels_json):
+        raise ArmatureError(
+            f"panels.json missing at {panels_json}; cannot compose",
+            {"clause": "panels_json_missing_for_compose", "panels": panels_json})
+    tools_dir = _os.path.dirname(_os.path.abspath(__file__))
+    compose_py = _os.path.join(tools_dir, "sheet_compose.py")
+    if not _os.path.isfile(compose_py):
+        # Sibling name used by some sheets.
+        alt = _os.path.join(tools_dir, "rig_sheet_compose.py")
+        compose_py = alt if _os.path.isfile(alt) else compose_py
+    exe = python_exe or _sys.executable
+    proc = _sp.run([exe, compose_py, panels_json], capture_output=True, text=True)
+    sheet = _os.path.join(_os.path.dirname(panels_json), "sheet.png")
+    return {
+        "composed": proc.returncode == 0,
+        "panels": panels_json,
+        "sheet": sheet if proc.returncode == 0 and _os.path.isfile(sheet) else None,
+        "returncode": proc.returncode,
+        "stdout_tail": (proc.stdout or "")[-500:],
+        "stderr_tail": (proc.stderr or "")[-500:],
+        "compose_py": compose_py,
+        "python": exe,
+    }
+
+
+def review_clip_next(frames_dir, out_dir=None):
+    """Invocation string / record for make_review_clip (F-cee7b569)."""
+    import os as _os
+    frames_dir = _os.path.abspath(frames_dir)
+    out = _os.path.abspath(out_dir) if out_dir else _os.path.join(
+        _os.path.dirname(frames_dir), "review")
+    return {
+        "tool": "make_review_clip",
+        "next": f"make_review_clip --frames={frames_dir} --out={out}",
+        "frames_dir": frames_dir,
+        "out": out,
+    }
+
+
+def maybe_run_review_clip(frames_dir, *, enabled=False, out_dir=None, python_exe=None):
+    """Optionally shell make_review_clip after preview frames gate green (F-cee7b569)."""
+    import os as _os
+    import subprocess as _sp
+    import sys as _sys
+    nxt = review_clip_next(frames_dir, out_dir=out_dir)
+    if not enabled:
+        return dict(nxt, ran=False, reason="--review-clip not set")
+    tools_dir = _os.path.dirname(_os.path.abspath(__file__))
+    clip_py = _os.path.join(tools_dir, "make_review_clip.py")
+    exe = python_exe or _sys.executable
+    _os.makedirs(nxt["out"], exist_ok=True)
+    proc = _sp.run(
+        [exe, clip_py, f"--frames={nxt['frames_dir']}", f"--out={nxt['out']}"],
+        capture_output=True, text=True)
+    return dict(nxt, ran=True, returncode=proc.returncode,
+                stdout_tail=(proc.stdout or "")[-500:],
+                stderr_tail=(proc.stderr or "")[-500:])
 
 
 def _sha256(path):
@@ -404,10 +517,26 @@ def main():
     all_points = [p for c in clouds for p in c]
     end_points = clouds[-1]
 
-    sol = framing.solve_camera(all_points, end_points, AZIMUTH_DEG, ELEVATION_DEG,
-                               LENS_MM, SENSOR_MM, WIDTH, HEIGHT,
-                               height_frac=HEIGHT_FRAC, end_x_frac=END_X_FRAC,
-                               target_y_frac=TARGET_Y_FRAC)
+    cam_keys = load_camera_path(getattr(a, "camera_path", None))
+    path_rec = None
+    if cam_keys:
+        # F-82f88f23: authored path wins over the single-orbit solve default.
+        path_rec = framing.solve_path(
+            all_points, cam_keys, LENS_MM, SENSOR_MM, WIDTH, HEIGHT,
+            require_in_frame=True)
+        sample0 = framing.sample_camera_at(cam_keys, 0)
+        sol = framing.solve_camera(
+            all_points, end_points, sample0["azimuth_deg"], sample0["elevation_deg"],
+            LENS_MM, SENSOR_MM, WIDTH, HEIGHT,
+            height_frac=HEIGHT_FRAC, end_x_frac=END_X_FRAC,
+            target_y_frac=TARGET_Y_FRAC)
+        sol = dict(sol)
+        sol["camera_path"] = path_rec
+    else:
+        sol = framing.solve_camera(all_points, end_points, AZIMUTH_DEG, ELEVATION_DEG,
+                                   LENS_MM, SENSOR_MM, WIDTH, HEIGHT,
+                                   height_frac=HEIGHT_FRAC, end_x_frac=END_X_FRAC,
+                                   target_y_frac=TARGET_Y_FRAC)
     if not sol["in_frame"]:
         raise RenderGate(
             f"the solved composition puts part of the performance outside the frame: "
@@ -421,7 +550,12 @@ def main():
     bpy.ops.wm.read_factory_settings(use_empty=True)
     scene = bpy.context.scene
     blender_scene.set_frame_rate(scene, a.fps)
-    meshes, arms, info = blender_scene.import_glb(a.glb, expected_fps=a.fps)
+    glbs = subject_glbs(a)
+    primary = glbs[0]
+    meshes, arms, info = blender_scene.import_glb(primary, expected_fps=a.fps)
+    for extra in glbs[1:]:
+        blender_scene.import_glb(extra, expected_fps=a.fps)
+    subjects_prov = glb_provenance_records(glbs, _sha256)
 
     engine = select_engine(scene)
     scene.render.resolution_x, scene.render.resolution_y = WIDTH, HEIGHT
@@ -464,7 +598,7 @@ def main():
             raise RenderGate(
                 "the GLB imported no render-visible mesh, so the floor has no height to "
                 "sit at", {"clause": "glb_has_no_render_visible_mesh",
-                           "glb": a.glb, "mesh_objects": [o.name for o in meshes]})
+                           "glb": primary, "mesh_objects": [o.name for o in meshes]})
         gob.location = (0.0, 0.0, min(zs))
 
     # Every refusal above this line can fire before a single pixel exists; the output
@@ -588,7 +722,9 @@ def main():
         json.dump({
             "tool": "render_performer", "tool_version": TOOL_VERSION,
             "blender": blender_scene.blender_provenance(),
-            "source": {"glb": os.path.abspath(a.glb), "sha256": _sha256(a.glb),
+            "source": {"glb": os.path.abspath(primary), "sha256": _sha256(primary),
+                       "subjects": subjects_prov,
+                       "camera_path": getattr(a, "camera_path", None),
                        "framed_against": frame_source,
                        "manifest": os.path.abspath(a.manifest)},
             "resolution": [WIDTH, HEIGHT], "frames": count, "fps": a.fps,

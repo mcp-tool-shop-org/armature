@@ -46,6 +46,7 @@ from mathutils import Vector  # noqa: E402
 import rig_character  # noqa: E402
 from armature_core import blender_scene, parts  # noqa: E402
 from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
+from render_performer import maybe_compose_panels  # noqa: E402
 
 FULL_W, FULL_H = 820, 1240
 INSET = 620
@@ -287,6 +288,10 @@ def parse_args():
     p.add_argument("--title", default="E07 arm (c) — the rigid-parts armature",
                    help="the sheet's heading, as the Director reads it (default names "
                         "E07 arm (c)); the SUBTITLE beneath it is measured, not typed")
+    p.add_argument("--compose", dest="compose", action="store_true", default=True,
+                   help="after panels.json is valid, spawn sheet_compose (default; F-938485d6)")
+    p.add_argument("--no-compose", dest="compose", action="store_false",
+                   help="stop after panels.json; operator runs sheet_compose by hand")
     return p.parse_args(argv)
 
 
@@ -629,8 +634,10 @@ def main():
     path = os.path.join(out, "panels.json")
     with open(path, "w", encoding="utf-8") as fh:
         json.dump(spec, fh, indent=2)
+    compose_rec = maybe_compose_panels(path, compose=bool(getattr(args, "compose", True)))
     print("MAKE_PARTS_SHEET_OK " + json.dumps(
-        {"panels": path, "max_displacement": arc["max_displacement"],
+        {"panels": path, "sheet": compose_rec.get("sheet"), "compose": compose_rec,
+         "max_displacement": arc["max_displacement"],
          "displacement_over_diagonal": arc["displacement_over_diagonal"],
          "bbox_diagonal": arc["bbox_diagonal"],
          "parts_rendered": len(visible)}))

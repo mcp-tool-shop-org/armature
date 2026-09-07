@@ -359,6 +359,19 @@ def main():
     # could not see these six because it recognised a refusal by the callee's NAME.
     os.makedirs(out, exist_ok=True)
 
+    heat_empty = all(v["weighted_fraction"] <= 0 for v in arms.values())
+    next_tool = None
+    next_invocation = None
+    if heat_empty:
+        # F-ce65f941: empty heat points at the live arm — repair then character bind.
+        next_tool = "rig_repair"
+        next_invocation = (
+            "blender -b --factory-startup -P tools/rig_repair.py -- "
+            f"--glb={args.glb} --out=<repair-out> ; then "
+            "blender -b --factory-startup -P tools/rig_character.py -- "
+            "--glb=<repaired.glb> --out=<bind-out> --mode=full --binding=hand "
+            "--hand-mode=articulated --pipeline=repair-bind"
+        )
     payload = {
         "tool": "diagnose_bone_heat",
         # WAVE 14, F-252f399d: `blender_provenance()` and not `bpy.app.version_string`.
@@ -368,8 +381,11 @@ def main():
         "blender": blender_scene.blender_provenance(),
         "glb": args.glb,
         "arms": arms,
+        "next_tool": next_tool,
+        "next_invocation": next_invocation,
         "note": ("A DIAGNOSTIC. No arm here is a pipeline stage and none produces a rigged "
-                 "asset. Which route E07 should take, if any, is the advisor's ruling."),
+                 "asset. Which route E07 should take, if any, is the advisor's ruling. "
+                 "When heat is empty, next_tool names the live arm (F-ce65f941)."),
     }
     path = os.path.join(out, "bone_heat_diagnosis.json")
     with open(path, "w", encoding="utf-8") as fh:
@@ -399,6 +415,8 @@ def main():
         "best_weighted_fraction": (round(best[1]["weighted_fraction"], 6)
                                    if best else None),
         "all_arms_weighted_nothing": len(weighted_arms) == 0,
+        "next_tool": next_tool,
+        "next_invocation": next_invocation,
     }))
     for name, rec in arms.items():
         print(f"  {name:<26} weighted {rec['weighted_vertices']:>7}/{rec['vertices']:<7} "
