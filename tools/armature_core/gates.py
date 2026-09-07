@@ -36,18 +36,26 @@ from .shotspec import ANIMATION_MODES
 class GeneratorProfile:
     """A generator's legality constraints, pinned to a retrieved source."""
 
-    def __init__(self, name, dim_divisor, frame_modulus, frame_residue, source):
+    def __init__(self, name, dim_divisor, frame_modulus, frame_residue, source,
+                 max_frames=None):
         self.name = name
         self.dim_divisor = dim_divisor
         self.frame_modulus = frame_modulus
         self.frame_residue = frame_residue
         self.source = source
+        # Trained-horizon bound. None means G1 does not enforce a ceiling (Gate L's
+        # family row may still). Wan profiles carry 81 — the same number
+        # `route_gates.GENERATOR_RULES['wan']['max_frames']` records — so a caller that
+        # trusts G1 alone cannot author an out-of-horizon frame G1 called legal
+        # (F-ecb0a75b).
+        self.max_frames = max_frames
 
     def as_dict(self):
         return {
             "name": self.name,
             "dim_divisor": self.dim_divisor,
             "frame_form": f"{self.frame_modulus}n+{self.frame_residue}",
+            "max_frames": self.max_frames,
             "source": self.source,
         }
 
@@ -55,12 +63,17 @@ class GeneratorProfile:
 # F24 (docs/research-grounding.md): "width and height must be divisible by 16;
 # frame count follows 4n+1 (temporal compression factor 4, first frame padded)".
 # Status in the spec's premise table: RETRIEVED from ComfyUI docs, not tested here.
+#: Wan family's trained-horizon bound (consult #3 / Gate L's GENERATOR_RULES['wan']).
+#: One number, shared by every Wan profile below so G1 and Gate L cannot disagree on it.
+WAN_MAX_FRAMES = 81
+
 GENERATOR_PROFILES = {
     "wan-vace": GeneratorProfile(
         name="wan-vace",
         dim_divisor=16,
         frame_modulus=4,
         frame_residue=1,
+        max_frames=WAN_MAX_FRAMES,
         source="F24 / docs.comfy.org tutorials/video/wan/vace, fetched 2026-08-10",
     ),
     # A3's row. Its provenance is DERIVED, and the derivation is stated rather than
@@ -82,6 +95,7 @@ GENERATOR_PROFILES = {
         dim_divisor=16,
         frame_modulus=4,
         frame_residue=1,
+        max_frames=WAN_MAX_FRAMES,
         source=(
             "DERIVED 2026-08-10 from the shared VAE: both E02 graphs load "
             "wan_2.1_vae.safetensors (measured widget values), and 4n+1 / div-16 are "
@@ -102,6 +116,7 @@ GENERATOR_PROFILES = {
         dim_divisor=16,
         frame_modulus=4,
         frame_residue=1,
+        max_frames=WAN_MAX_FRAMES,
         source=(
             "MEASURED 2026-08-12 from the WanAnimateToVideo schema (width/height step=16, "
             "length step=4 default 77) and its source arithmetic "
@@ -133,6 +148,7 @@ GENERATOR_PROFILES = {
         dim_divisor=16,
         frame_modulus=4,
         frame_residue=1,
+        max_frames=WAN_MAX_FRAMES,
         source=(
             "DERIVED 2026-08-12 (E11) from the shared VAE — this route loads "
             "wan_2.1_vae.safetensors, and 4n+1 / div-16 are properties of that VAE's "
@@ -156,6 +172,7 @@ GENERATOR_PROFILES = {
         dim_divisor=16,
         frame_modulus=4,
         frame_residue=1,
+        max_frames=WAN_MAX_FRAMES,
         source=(
             "DERIVED 2026-08-12 (E11 wave 3) from the shared VAE — this route loads "
             "wan_2.1_vae.safetensors and div-16 / 4n+1 are properties of that VAE's "
@@ -220,6 +237,28 @@ def g1_generator_legality(width, height, frame_count, generator):
             f"{profile.frame_modulus}n+{profile.frame_residue} "
             f"(remainder {frame_count % profile.frame_modulus}, "
             f"want {profile.frame_residue})"
+        )
+    elif (profile.max_frames is not None and frame_count > profile.max_frames):
+        # Horizon after the form check so a malformed count is named first. Clause is
+        # specific when this is the refusal reason (F-ecb0a75b); the aggregate clause
+        # still covers mixed problem lists below.
+        raise G1GeneratorLegality(
+            f"frame is not legal for generator {profile.name!r}: frame count="
+            f"{frame_count} exceeds the {profile.max_frames}-frame trained horizon",
+            {
+                "gate": "G1",
+                "andon": "G1GeneratorLegality",
+                "clause": "frame_exceeds_trained_horizon",
+                "width": width,
+                "height": height,
+                "frame_count": frame_count,
+                "max_frames": profile.max_frames,
+                "profile": profile.as_dict(),
+                "problems": [
+                    f"frame count={frame_count} exceeds the {profile.max_frames}-frame "
+                    f"trained horizon"
+                ],
+            },
         )
 
     if problems:

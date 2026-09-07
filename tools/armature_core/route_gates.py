@@ -43,8 +43,23 @@ WRAPPER_KEYS = GRAPH_WRAPPER_KEYS
 #: Generator constraints, per model family, from the spec that first used each. Wan's are
 #: the ones E02 and E08 measured: both dimensions divisible by 16, frame count of the form
 #: 4n+1, and a trained horizon of 81 frames beyond which the model was never trained.
+#:
+#: Family keys only here — G1 profile names (`wan-vace`, `wan-i2v`, …) resolve onto these
+#: rows inside `frame_legality` (F-a9e809dd). Builders that already pass `family='wan'`
+#: keep working unchanged; a caller that hands a profile name no longer gets a false
+#: `unknown_generator_family` halt.
 GENERATOR_RULES = {
     "wan": {"dim_multiple": 16, "frame_form": "4n+1", "max_frames": 81},
+}
+
+#: G1 profile name → family key in GENERATOR_RULES. Every current profile inherits Wan's
+#: row; a new family gets its own RULES entry and a mapping here when G1 grows a profile.
+PROFILE_FAMILY = {
+    "wan-vace": "wan",
+    "wan-fun-control": "wan",
+    "wan-animate": "wan",
+    "wan-i2v": "wan",
+    "wan-fun-camera": "wan",
 }
 
 #: How old a licence ruling may be before `docs/license-map.md`'s own rule calls it
@@ -2488,6 +2503,29 @@ def _frame_form(rules, family):
              "family": family, "rules": rules}) from None
 
 
+def _family_rules(family):
+    """Resolve a family or G1 profile name to `(rules_key, rules)`.
+
+    `family='wan'` hits GENERATOR_RULES directly. A G1 profile name (`wan-vace`, …) maps
+    through PROFILE_FAMILY onto the same row so Gate L and G1 share one vocabulary
+    (F-a9e809dd). Unknown names still raise `unknown_generator_family`.
+    """
+    rules = GENERATOR_RULES.get(family)
+    if rules is not None:
+        return family, rules
+    mapped = PROFILE_FAMILY.get(family)
+    if mapped is not None:
+        rules = GENERATOR_RULES.get(mapped)
+        if rules is not None:
+            return mapped, rules
+    known = sorted(set(GENERATOR_RULES) | set(PROFILE_FAMILY))
+    raise RouteGate(f"no recorded frame rules for generator family {family!r}; the "
+                    f"constraint is recorded per model in the spec that first uses it",
+                    {"gate": "ROUTE", "andon": "RouteGate",
+                     "clause": "unknown_generator_family",
+                     "family": family, "known": known})
+
+
 def frame_legality(width, height, length, family="wan"):
     """Gate L, standalone: is this frame legal for that generator? Derive, then round.
 
@@ -2504,13 +2542,7 @@ def frame_legality(width, height, length, family="wan"):
     wrong VALUE is an illegality and is reported through `problems` like every other,
     so `verify` halts on it with the whole evidence dict rather than a bare error.
     """
-    rules = GENERATOR_RULES.get(family)
-    if rules is None:
-        raise RouteGate(f"no recorded frame rules for generator family {family!r}; the "
-                        f"constraint is recorded per model in the spec that first uses it",
-                        {"gate": "ROUTE", "andon": "RouteGate",
-                         "clause": "unknown_generator_family",
-                         "known": sorted(GENERATOR_RULES)})
+    rules_key, rules = _family_rules(family)
     for axis, value in (("width", width), ("height", height), ("length", length)):
         if not isinstance(value, int) or isinstance(value, bool):
             raise RouteGate(
@@ -2520,7 +2552,7 @@ def frame_legality(width, height, length, family="wan"):
                 {"gate": "ROUTE", "andon": "RouteGate", "clause": "frame_type",
                  "family": family, "width": width, "height": height, "length": length})
     m = rules["dim_multiple"]
-    modulus, residue = _frame_form(rules, family)
+    modulus, residue = _frame_form(rules, rules_key)
     problems = []
     for axis, value in (("width", width), ("height", height)):
         if value <= 0:

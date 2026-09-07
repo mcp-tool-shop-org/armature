@@ -160,14 +160,18 @@ def load(path):
     fires inside the irreversible write. The sentence now catches up to the receipt, in
     the shape `route_gates.load_graph` already uses for the same job (`f"{path}: …"`).
     """
-    if not os.path.isfile(path):
+    embedded = getattr(canon_census, "EMBEDDED_SURFACES", {}).get(os.path.basename(path))
+    if embedded is not None:
+        doc = json.loads(json.dumps(embedded))
+    elif not os.path.isfile(path):
         _raise(f"no canon file {path}", {"path": path, "clause": "missing_file"})
-    try:
-        with open(path, encoding="utf-8") as fh:
-            doc = json.load(fh)
-    except (OSError, json.JSONDecodeError) as err:
-        _raise(f"could not read canon {path}: {err}",
-               {"path": path, "clause": "unreadable"})
+    else:
+        try:
+            with open(path, encoding="utf-8") as fh:
+                doc = json.load(fh)
+        except (OSError, json.JSONDecodeError) as err:
+            _raise(f"could not read canon {path}: {err}",
+                   {"path": path, "clause": "unreadable"})
     if not isinstance(doc, dict):
         _raise(f"{path}: canon must be an object, got {type(doc).__name__}",
                {"path": path, "clause": "not_object"})
@@ -405,7 +409,10 @@ def resolve(subject, *, census=None, search_roots=None):
     for root in roots:
         path = rel if os.path.isabs(rel) else os.path.join(root, rel)
         tried.append(path)
-        if os.path.isfile(path):
+        if os.path.isfile(path) or (
+            not os.path.isabs(rel)
+            and rel in getattr(canon_census, "EMBEDDED_SURFACES", {})
+        ):
             doc = load(path)
             doc["_path"] = os.path.abspath(path)
             doc["_subject"] = subject
