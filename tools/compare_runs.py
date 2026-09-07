@@ -2,6 +2,7 @@
 """compare_runs — G3's instrument. Compares two run directories **pixel by pixel**.
 
     <venv-python> tools/compare_runs.py --a=<run_a> --b=<run_b> --out=<report.json>
+    <venv-python> tools/compare_runs.py --mode=frames --a=<lossless_a> --b=<lossless_b>
 
 A PNG byte-hash mismatch is **not** evidence a render changed — facet false-halted on
 that twice. So this compares decoded pixels and reports per-channel max and mean
@@ -225,6 +226,42 @@ def compare_channel(dir_a, dir_b):
     return rec
 
 
+FRAMES_CHANNEL_NAME = "lossless"
+
+
+def _verdict_inputs(channels):
+    """Shared verdict block for channel-layout and flat-frames reports."""
+    return {
+        # The size of the population every number below is read over. A verdict without
+        # it can be clean because nothing was opened — or because only part of it was.
+        "frames_compared": sum(v["frames_compared"] for v in channels.values()),
+        "frames_a": sum(v["frames_a"] for v in channels.values()),
+        "frames_b": sum(v["frames_b"] for v in channels.values()),
+        # Not counts. `compare_channel` raises on ANY name disagreement and on ANY shape
+        # disagreement before it can return, so a report that exists at all is a report
+        # over two populations that named the same frames at the same shapes. The counts
+        # that used to sit here could only ever be 0 and 0.
+        "name_mismatch_policy": ("refused, never reported: compare_channel raises "
+                                 "CompareError on any name disagreement before a report "
+                                 "exists"),
+        "shape_mismatch_policy": ("refused, never reported: compare_channel raises "
+                                  "CompareError on any shape disagreement before a report "
+                                  "exists"),
+        "channels_compared": sorted(channels),
+        "max_abs_diff_any_channel": max(
+            (v["max_abs_diff"] for v in channels.values()), default=None
+        ),
+        "channels_with_any_pixel_difference": sorted(
+            c for c, v in channels.items()
+            if v["n_frames_with_any_pixel_difference"] > 0
+        ),
+        "channels_with_byte_difference": sorted(
+            c for c, v in channels.items()
+            if v["n_frames_with_byte_difference"] > 0
+        ),
+    }
+
+
 def compare_runs(run_a, run_b):
     chans_a = {d for d in os.listdir(run_a) if os.path.isdir(os.path.join(run_a, d))}
     chans_b = {d for d in os.listdir(run_b) if os.path.isdir(os.path.join(run_b, d))}
@@ -236,13 +273,15 @@ def compare_runs(run_a, run_b):
         raise CompareError(
             f"{run_a} and {run_b} share no comparable channel directory "
             f"(master is excluded by design); a report over no channels reads exactly "
-            f"like a run that reproduced",
+            f"like a run that reproduced. For two flat NNNNN.png generation directories "
+            f"pass --mode=frames",
             {"run_a": os.path.abspath(run_a), "run_b": os.path.abspath(run_b),
              "channels_a": sorted(chans_a), "channels_b": sorted(chans_b),
-             "shared": []},
+             "shared": [], "hint": "--mode=frames"},
         )
 
     report = {
+        "mode": "channels",
         "run_a": os.path.abspath(run_a),
         "run_b": os.path.abspath(run_b),
         "channels_only_in_a": sorted(chans_a - chans_b),
@@ -254,36 +293,37 @@ def compare_runs(run_a, run_b):
             os.path.join(run_a, c), os.path.join(run_b, c)
         )
 
-    report["verdict_inputs"] = {
-        # The size of the population every number below is read over. A verdict without
-        # it can be clean because nothing was opened — or because only part of it was.
-        "frames_compared": sum(v["frames_compared"] for v in report["channels"].values()),
-        "frames_a": sum(v["frames_a"] for v in report["channels"].values()),
-        "frames_b": sum(v["frames_b"] for v in report["channels"].values()),
-        # Not counts. `compare_channel` raises on ANY name disagreement and on ANY shape
-        # disagreement before it can return, so a report that exists at all is a report
-        # over two populations that named the same frames at the same shapes. The counts
-        # that used to sit here could only ever be 0 and 0.
-        "name_mismatch_policy": ("refused, never reported: compare_channel raises "
-                                 "CompareError on any name disagreement before a report "
-                                 "exists"),
-        "shape_mismatch_policy": ("refused, never reported: compare_channel raises "
-                                  "CompareError on any shape disagreement before a report "
-                                  "exists"),
-        "channels_compared": sorted(report["channels"]),
-        "max_abs_diff_any_channel": max(
-            (v["max_abs_diff"] for v in report["channels"].values()), default=None
-        ),
-        "channels_with_any_pixel_difference": sorted(
-            c for c, v in report["channels"].items()
-            if v["n_frames_with_any_pixel_difference"] > 0
-        ),
-        "channels_with_byte_difference": sorted(
-            c for c, v in report["channels"].items()
-            if v["n_frames_with_byte_difference"] > 0
-        ),
-    }
+    report["verdict_inputs"] = _verdict_inputs(report["channels"])
     return report
+
+
+def compare_frames(dir_a, dir_b, channel_name=FRAMES_CHANNEL_NAME):
+    """Pixel-compare two flat NNNNN.png directories (F-fd89dddf).
+
+    Paid runs' `extract_clip_frames` / VAEDecode taps write flat lossless dirs, not the
+    channel-subdirectory layout `compare_runs` walks. Same receipt shape, one synthetic
+    channel name (default `lossless`).
+    """
+    if not os.path.isdir(dir_a) or not os.path.isdir(dir_b):
+        raise CompareError(
+            f"--mode=frames needs two frame directories; "
+            f"a={dir_a!r} is_dir={os.path.isdir(dir_a)} "
+            f"b={dir_b!r} is_dir={os.path.isdir(dir_b)}",
+            {"run_a": os.path.abspath(dir_a) if dir_a else dir_a,
+             "run_b": os.path.abspath(dir_b) if dir_b else dir_b,
+             "mode": "frames", "clause": "frames_dirs_required"},
+        )
+    rec = compare_channel(dir_a, dir_b)
+    channels = {channel_name: rec}
+    return {
+        "mode": "frames",
+        "run_a": os.path.abspath(dir_a),
+        "run_b": os.path.abspath(dir_b),
+        "channels_only_in_a": [],
+        "channels_only_in_b": [],
+        "channels": channels,
+        "verdict_inputs": _verdict_inputs(channels),
+    }
 
 
 def main(argv=None):
@@ -300,18 +340,33 @@ def main(argv=None):
     argparse gives `--help`, refuses an unknown flag with exit 2, and accepts both forms.
     `--out` stays optional, and the success line says which of the two happened rather than
     leaving a reader to infer a report exists.
+
+    F-fd89dddf: `--mode=frames` exposes `compare_channel` on two flat generation dirs.
     """
     ap = argparse.ArgumentParser(
-        description="compare two run directories pixel by pixel (G3's instrument)",
+        description="compare two run directories pixel by pixel (G3's instrument). "
+                    "--mode=channels (default) walks channel subdirectories; "
+                    "--mode=frames compares two flat NNNNN.png dirs",
         epilog=HALT_EPILOG)
-    ap.add_argument("--a", required=True, help="the first run directory")
-    ap.add_argument("--b", required=True, help="the second run directory")
+    ap.add_argument("--a", required=True,
+                    help="first run directory (channels mode) or flat frames dir "
+                         "(frames mode)")
+    ap.add_argument("--b", required=True,
+                    help="second run directory (channels mode) or flat frames dir "
+                         "(frames mode)")
+    ap.add_argument("--mode", default="channels", choices=("channels", "frames"),
+                    help="channels (default): compare shared channel subdirectories. "
+                         "frames: call compare_channel on --a/--b directly under the "
+                         "synthetic channel name 'lossless' (paid-run VAEDecode layout)")
     ap.add_argument("--out", default=None,
                     help="where to write the JSON report; omitted, none is written and "
                          "the OK line says so")
     args = ap.parse_args(argv)
 
-    report = compare_runs(args.a, args.b)
+    if args.mode == "frames":
+        report = compare_frames(args.a, args.b)
+    else:
+        report = compare_runs(args.a, args.b)
     written = None
     if args.out:
         os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
@@ -324,6 +379,7 @@ def main(argv=None):
     # completed comparison.
     print("COMPARE_RUNS_OK " + json.dumps(
         dict(report["verdict_inputs"],
+             mode=report.get("mode", args.mode),
              report=written or "no report written (--out not given)")))
     return 0
 

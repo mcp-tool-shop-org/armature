@@ -3,6 +3,8 @@
 
     python tools\\make_ab_clip.py --a=<frames dir> --a-fps=16 --a-label="E08 65f @ 16"
            --b=<frames dir> --b-fps=20 --b-label="E10 81f @ 20" --out=<clip.webp>
+    python tools\\make_ab_clip.py --mode=gate0 --a=<control> --b=<output>
+           --a-fps=16 --b-fps=16 --meta=<payload.json> --out=<gate0.webp>
 
 The Director judges motion at true tempo. Two arms that ran at different frame counts over
 the same performance cannot be laid side by side by pairing frame k with frame k — that
@@ -295,21 +297,88 @@ def banner(im, text, height=22):
     return out
 
 
+def _sha256_file(path):
+    import hashlib
+    h = hashlib.sha256()
+    with open(path, "rb") as fh:
+        for block in iter(lambda: fh.read(1 << 20), b""):
+            h.update(block)
+    return h.hexdigest()
+
+
+def frame_sha_population(paths):
+    """`{file_number: sha256}` for every frame path — the Gate 0 motion sidecar."""
+    out = {}
+    for p in paths:
+        stem = os.path.splitext(os.path.basename(p))[0]
+        key = int(stem) if stem.isdigit() else os.path.basename(p)
+        out[key] = _sha256_file(p)
+    return out
+
+
+def load_gate0_meta(path):
+    """Payload record for the provenance banner, or raise by name."""
+    if not path:
+        raise ABClipError(
+            "--meta is required for --mode=gate0; the motion Gate 0 clip binds the "
+            "same provenance the still Gate 0 sheet prints",
+            {"gate": "ARGS", "andon": "ABClipError",
+             "clause": "gate0_meta_required", "meta": path})
+    try:
+        with open(path, encoding="utf-8") as fh:
+            meta = json.load(fh)
+    except (OSError, json.JSONDecodeError) as exc:
+        raise ABClipError(
+            f"--meta={path} is not readable JSON: {exc}",
+            {"gate": "ARGS", "andon": "ABClipError",
+             "clause": "gate0_meta_unreadable", "meta": path,
+             "error": str(exc)}) from exc
+    if not isinstance(meta, dict):
+        raise ABClipError(
+            f"--meta={path} must be a JSON object (payload record)",
+            {"gate": "ARGS", "andon": "ABClipError",
+             "clause": "gate0_meta_not_an_object", "meta": path,
+             "type": type(meta).__name__})
+    return meta
+
+
+def provenance_banner_text(meta, max_lines=6):
+    """Short provenance strip from make_gate0_sheet.provenance_lines (NOT RECORDED)."""
+    from make_gate0_sheet import provenance_lines
+    lines = [ln for ln in provenance_lines(meta) if ln]
+    return " | ".join(lines[:max_lines])
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="two clips side by side in one file, each played at its OWN true "
-                    "tempo, for the Director to judge in motion",
+                    "tempo, for the Director to judge in motion. --mode=gate0 is the "
+                    "control|output motion Gate 0 panel with a provenance banner "
+                    "(F-f174c9e2)",
         epilog=HALT_EPILOG)
-    ap.add_argument("--a", required=True, help="the left clip's frame directory")
-    ap.add_argument("--b", required=True, help="the right clip's frame directory")
+    ap.add_argument("--mode", default="ab", choices=("ab", "gate0"),
+                    help="ab (default): two arms at their own tempos. gate0: "
+                         "control|output at matched fps with a provenance banner from "
+                         "--meta and a sidecar listing control/output sha populations")
+    ap.add_argument("--a", required=True,
+                    help="left frame directory (control when --mode=gate0)")
+    ap.add_argument("--b", required=True,
+                    help="right frame directory (output when --mode=gate0)")
     ap.add_argument("--a-fps", type=float, required=True,
                     help="the LEFT clip's own true rate; it is played at this rate, never "
                          "resampled to match the other side")
     ap.add_argument("--b-fps", type=float, required=True,
                     help="the RIGHT clip's own true rate")
-    ap.add_argument("--a-label", default="A", help="caption drawn over the left panel")
-    ap.add_argument("--b-label", default="B", help="caption drawn over the right panel")
-    ap.add_argument("--out", required=True, help="the A/B file to write")
+    ap.add_argument("--a-label", default=None,
+                    help="caption drawn over the left panel (default A, or control in "
+                         "gate0 mode)")
+    ap.add_argument("--b-label", default=None,
+                    help="caption drawn over the right panel (default B, or output in "
+                         "gate0 mode)")
+    ap.add_argument("--meta", default=None,
+                    help="payload record JSON; required for --mode=gate0. Provenance "
+                         "lines use the same NOT RECORDED convention as make_gate0_sheet")
+    ap.add_argument("--out", required=True, help="the A/B (or Gate 0) file to write")
     ap.add_argument("--lossless", type=int, default=1,
                     help="1 writes a lossless WebP; 0 writes quality 95. Recorded either "
                          "way — the measurement source is the PNGs, never this file")
@@ -319,6 +388,18 @@ def main(argv=None):
     #      are playback rates. See `require_rate` for the measurement this earned.
     a_fps = require_rate("--a-fps", a.a_fps)
     b_fps = require_rate("--b-fps", a.b_fps)
+
+    meta = None
+    if a.mode == "gate0":
+        # Matched fps: Gate 0 binds control index k to output index k under one tempo.
+        if a_fps != b_fps:
+            raise ABClipError(
+                f"--mode=gate0 requires matched fps (control and output at the same "
+                f"rate); got --a-fps={a_fps} and --b-fps={b_fps}",
+                {"gate": "ARGS", "andon": "ABClipError",
+                 "clause": "gate0_fps_mismatch",
+                 "a_fps": a_fps, "b_fps": b_fps})
+        meta = load_gate0_meta(a.meta)
 
     pa, pb = frame_paths(a.a), frame_paths(a.b)
     ia_frames = [Image.open(p).convert("RGB") for p in pa]
@@ -333,17 +414,37 @@ def main(argv=None):
     tail = max(1.0 / a_fps, 1.0 / b_fps)
     delays = durations_ms([t for t, _x, _y in times], tail)
 
-    label_a = f"{a.a_label}"
-    label_b = f"{a.b_label}"
+    if a.mode == "gate0":
+        label_a = a.a_label if a.a_label is not None else "control"
+        label_b = a.b_label if a.b_label is not None else "output"
+        prov = provenance_banner_text(meta)
+    else:
+        label_a = a.a_label if a.a_label is not None else "A"
+        label_b = a.b_label if a.b_label is not None else "B"
+        prov = None
+
     comps = []
     for (t, x, y), _d in zip(times, delays):
         # The FILE's own number, five digits like the file itself — never the position.
         left = banner(ia_frames[x], f"{label_a}   f{na[x]:05d}   t={t:.3f}s")
         right = banner(ib_frames[y], f"{label_b}   f{nb[y]:05d}   t={t:.3f}s")
         h = max(left.height, right.height)
-        canvas = Image.new("RGB", (left.width + right.width + 8, h), (0, 0, 0))
-        canvas.paste(left, (0, 0))
-        canvas.paste(right, (left.width + 8, 0))
+        width = left.width + right.width + 8
+        if prov:
+            # Short provenance strip under the pair — same NOT RECORDED lines as Gate 0.
+            from sheet_compose import font as sheet_font
+            face = sheet_font("arial.ttf", 12)
+            strip_h = 28
+            canvas = Image.new("RGB", (width, h + strip_h), (0, 0, 0))
+            canvas.paste(left, (0, 0))
+            canvas.paste(right, (left.width + 8, 0))
+            d = ImageDraw.Draw(canvas)
+            shown = _ellipsize(d, prov, max(0, width - 12), font=face)
+            d.text((6, h + 6), shown, fill=(180, 180, 190), font=face)
+        else:
+            canvas = Image.new("RGB", (width, h), (0, 0, 0))
+            canvas.paste(left, (0, 0))
+            canvas.paste(right, (left.width + 8, 0))
         comps.append(canvas)
 
     os.makedirs(os.path.dirname(os.path.abspath(a.out)), exist_ok=True)
@@ -351,37 +452,50 @@ def main(argv=None):
                   lossless=bool(a.lossless), quality=100 if a.lossless else 95)
 
     side = os.path.splitext(a.out)[0] + "_manifest.json"
+    record = {
+        "tool": "make_ab_clip", "tool_version": TOOL_VERSION,
+        "mode": a.mode,
+        "a": {"dir": os.path.abspath(a.a), "frames": len(pa), "fps": a_fps,
+              "frame_numbers": na,
+              "label": label_a,
+              "clip_s_frames_over_fps": len(pa) / a_fps,
+              "span_s_first_to_last_frame": (len(pa) - 1) / a_fps},
+        "b": {"dir": os.path.abspath(a.b), "frames": len(pb), "fps": b_fps,
+              "frame_numbers": nb,
+              "label": label_b,
+              "clip_s_frames_over_fps": len(pb) / b_fps,
+              "span_s_first_to_last_frame": (len(pb) - 1) / b_fps},
+        "composite": {"frames": len(comps), "total_ms": sum(delays),
+                      "lossless": bool(a.lossless),
+                      "rule": ("union of both arms' frame times; each side holds its "
+                               "own frame between its own events. NEITHER arm is "
+                               "resampled or retimed"),
+                      # The receipt for that claim: the axis is built from listing
+                      # positions, and Gate TIMELINE checked that each arm's own file
+                      # numbers are the contiguous run those positions assume.
+                      "numbering": {"a": gate_a["verdict"], "b": gate_b["verdict"]},
+                      "gate_TIMELINE": {"a": gate_a, "b": gate_b}},
+        "delays_ms_first16": delays[:16],
+    }
+    if a.mode == "gate0":
+        from make_gate0_sheet import provenance_lines
+        record["gate0"] = {
+            "meta": os.path.abspath(a.meta),
+            "provenance_lines": provenance_lines(meta),
+            "control_sha_population": {
+                str(k): v for k, v in frame_sha_population(pa).items()},
+            "output_sha_population": {
+                str(k): v for k, v in frame_sha_population(pb).items()},
+        }
     with open(side, "w", encoding="utf-8") as fh:
-        json.dump({
-            "tool": "make_ab_clip", "tool_version": TOOL_VERSION,
-            "a": {"dir": os.path.abspath(a.a), "frames": len(pa), "fps": a.a_fps,
-                  "frame_numbers": na,
-                  "label": label_a,
-                  "clip_s_frames_over_fps": len(pa) / a.a_fps,
-                  "span_s_first_to_last_frame": (len(pa) - 1) / a.a_fps},
-            "b": {"dir": os.path.abspath(a.b), "frames": len(pb), "fps": a.b_fps,
-                  "frame_numbers": nb,
-                  "label": label_b,
-                  "clip_s_frames_over_fps": len(pb) / a.b_fps,
-                  "span_s_first_to_last_frame": (len(pb) - 1) / a.b_fps},
-            "composite": {"frames": len(comps), "total_ms": sum(delays),
-                          "lossless": bool(a.lossless),
-                          "rule": ("union of both arms' frame times; each side holds its "
-                                   "own frame between its own events. NEITHER arm is "
-                                   "resampled or retimed"),
-                          # The receipt for that claim: the axis is built from listing
-                          # positions, and Gate TIMELINE checked that each arm's own file
-                          # numbers are the contiguous run those positions assume.
-                          "numbering": {"a": gate_a["verdict"], "b": gate_b["verdict"]},
-                          "gate_TIMELINE": {"a": gate_a, "b": gate_b}},
-            "delays_ms_first16": delays[:16],
-        }, fh, indent=2)
+        json.dump(record, fh, indent=2)
 
     print("MAKE_AB_CLIP_OK " + json.dumps({
-        "out": os.path.abspath(a.out), "composite_frames": len(comps),
+        "out": os.path.abspath(a.out), "mode": a.mode,
+        "composite_frames": len(comps),
         "total_s": sum(delays) / 1000.0,
-        "a": {"frames": len(pa), "fps": a.a_fps, "clip_s": len(pa) / a.a_fps},
-        "b": {"frames": len(pb), "fps": a.b_fps, "clip_s": len(pb) / a.b_fps},
+        "a": {"frames": len(pa), "fps": a_fps, "clip_s": len(pa) / a_fps},
+        "b": {"frames": len(pb), "fps": b_fps, "clip_s": len(pb) / b_fps},
         "manifest": side}))
     return 0
 
