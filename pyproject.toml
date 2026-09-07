@@ -52,7 +52,8 @@ readme = "README.pypi.md"
 # studio's CI-minutes rule; what is claimed and what each version is exercised BY is now
 # written down rather than inferred:
 #   3.11  ci.yml python-tests (the declared floor)
-#   3.12  claimed by a classifier, inside the interval, run by no job — an interpolation
+#   3.12  inside the interval, run by no job — NOT claimed by a classifier (honest metadata;
+#         a 3.12 classifier without a job was an interpolation users read as tested support)
 #   3.13  ci.yml python-tests and release.yml verify (the top classifier)
 #   3.14  the rig's venv, through verify.ps1's four legs; no runner runs it
 # Raising this bound is the same deliberate edit `npm@^11.5.1` and `trove-classifiers<2027`
@@ -90,7 +91,6 @@ classifiers = [
     # removal date, and `license = "MIT"` above is what replaces them.
     "Programming Language :: Python :: 3",
     "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
     "Programming Language :: Python :: 3.13",
     "Topic :: Multimedia :: Graphics :: 3D Rendering",
     # "Topic :: Scientific :: Image Processing" does not exist. PyPI rejected the first

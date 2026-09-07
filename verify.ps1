@@ -64,6 +64,17 @@
        `npm ci` executes every lifecycle script in the tree it resolves — then `npm ci`,
        then `npm run build`, which is what GitHub Pages deploys.
 
+  NOT "READY TO TAG". A green run here is a claim about the four legs above. It is NOT a
+  claim that release.yml's three irreversible-path gates ran: (1) tag/ref equality,
+  (2) repository visibility read for provenance branching, (3) pre-release refusal. Those
+  scripts live only on `release: published` / `workflow_dispatch` and are driven in-suite
+  by `tests/test_ci_workflows.py`; this script never extracts them. Rehearse before a live
+  tag:
+      gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true
+  The summary block names the three gates as NOT exercised so a green local run cannot be
+  read as clearance to cut a public version tag. Python `pip-audit` (ci.yml / release.yml)
+  is also CI-only — the rig venv is a different resolved set than the install line.
+
   Every leg runs even if an earlier one fails, so one invocation reports the whole
   picture rather than the first thing to break. The exit code is 0 only if all legs pass,
   and a leg that could not establish an outcome at all counts as a failure, not a pass.
@@ -558,8 +569,8 @@ if ($NoSite) {
             # install. `npm ci` runs every lifecycle script in the resolved tree, so a scan
             # that follows it reports a compromised dependency that has already run — here,
             # on the rig. `--package-lock-only` reads the committed lockfile and needs no
-            # node_modules. site/ is the repo's only dependency manifest, so this is the
-            # whole scannable surface; `high` is the studio's threshold. Missing locally
+            # node_modules. site/ is the npm lockfile surface (Python is audited in CI via
+            # pip-audit, not here); `high` is the studio's threshold. Missing locally
             # until the legs were enumerated against ci.yml, which meant a green local run
             # could still be a lockfile CI then rejected.
             npm audit --package-lock-only --audit-level=high
@@ -751,6 +762,12 @@ for requested, aliases in FONT_ALIASES.items():
 Write-Host '  fonts (rig vs CI):'
 foreach ($line in @($fontReport)) { Write-Host ("    {0}" -f $line) }
 Write-Host '  (the legs and their order are ci.yml''s; the runtimes are this rig''s venv and PATH)'
+# RELEASE GATES — named here so a green summary cannot be read as "ready to tag". The three
+# pure-shell gates in release.yml's verify job (tag/ref, visibility, pre-release) never run
+# in this script; only a release event or `workflow_dispatch` with rehearse reaches them.
+Write-Host '  release gates: NOT exercised here (tag/ref, visibility, pre-release — release.yml only)'
+Write-Host '    rehearse: gh workflow run release.yml --ref <tag-carrying-actions> -f rehearse=true'
+Write-Host '  python dep audit (pip-audit): NOT exercised here — ci.yml python-tests / release verify'
 Write-Host ''
 
 $legRows = @()

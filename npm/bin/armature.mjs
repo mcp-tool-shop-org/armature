@@ -260,6 +260,29 @@ function reportSignal(signal) {
 
 const argv = process.argv.slice(2);
 
+/**
+ * Launcher-side help when the toolkit is absent (or when `--launcher-help` is asked).
+ *
+ * `--help` / `-h` used to fall through to `locate()` → `fail()`, so a machine without the
+ * Python toolkit printed the install-refusal path for the one flag every CLI teaches.
+ * First-run `npx` users hit that shape. Print purpose + pin + selftest + docs and exit 0;
+ * when `locate()` succeeds, `--help` still forwards to Python so the full command list stays
+ * one source of truth.
+ */
+function printLauncherHelp() {
+  process.stdout.write(
+    `armature — Node launcher for the ${PYPI} Python toolkit.\n\n` +
+      `  This package forwards argv to \`python -m armature_core.cli\`.\n` +
+      `  It does not install Python or the toolkit.\n\n` +
+      `  Install the toolkit:   pip install ${PYPI}\n` +
+      `  Pin an interpreter:    set ARMATURE_PYTHON=<python>\n` +
+      `  Launcher self-test:    armature --node-selftest\n` +
+      `  Launcher-only help:    armature --launcher-help\n` +
+      `  Docs:                  ${DOCS}\n\n` +
+      `  With the toolkit installed, \`armature --help\` prints the full Python CLI.\n`
+  );
+}
+
 // A self-test that does not need Python present: it proves this file parses, resolves its
 // candidate list and reports honestly. `npm test` runs it in CI where Python may be absent.
 if (argv[0] === "--node-selftest") {
@@ -405,14 +428,52 @@ if (argv[0] === "--node-selftest") {
     process.exit(1);
   }
   const reported = mapping.map(([name, code]) => `${name}=${code}`).join(", ");
+  // Launcher blurb content — the absent-toolkit --help intercept is production code below;
+  // assert the text here so a truncated blurb fails npm test without needing a second locate().
+  {
+    const helpOut = [];
+    const realWriteOut = process.stdout.write.bind(process.stdout);
+    process.stdout.write = (chunk) => {
+      helpOut.push(String(chunk));
+      return true;
+    };
+    try {
+      printLauncherHelp();
+    } finally {
+      process.stdout.write = realWriteOut;
+    }
+    const body = helpOut.join("");
+    if (
+      !body.includes("Node launcher") ||
+      !body.includes("--node-selftest") ||
+      !body.includes(`pip install ${PYPI}`) ||
+      !body.includes("ARMATURE_PYTHON")
+    ) {
+      process.stderr.write(`selftest: printLauncherHelp blurb incomplete:\n${body}\n`);
+      process.exit(1);
+    }
+  }
   process.stdout.write(
     `armature launcher ok — candidates: ${list.join(", ")}; signal exits: ${reported}\n`
   );
   process.exit(0);
 }
 
+// --launcher-help is always the short blurb; never forward it to Python.
+if (argv[0] === "--launcher-help") {
+  printLauncherHelp();
+  process.exit(0);
+}
+
 const found = locate();
-if (!found.exe) fail(found);
+if (!found.exe) {
+  // First-run npm users asking --help / -h get the launcher blurb (exit 0), not fail().
+  if (argv[0] === "--help" || argv[0] === "-h") {
+    printLauncherHelp();
+    process.exit(0);
+  }
+  fail(found);
+}
 
 // Forward everything verbatim and inherit the child's exit code, so a gate that raises in
 // Python still fails the shell that called this launcher. A child that did not exit on its
