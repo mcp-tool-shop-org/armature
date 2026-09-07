@@ -315,3 +315,60 @@ class NotInsideBlender(ArmatureError):
     Raised *after* the gates, never before — so a gate failure is always reported
     as a gate failure even when the tool is exercised outside Blender.
     """
+
+
+# ---------------------------------------------------------------------------
+# Spend-boundary / donor gate classes — defined on their home modules, re-exported
+# here so a halt consumer can `from armature_core.errors import RouteGate` (and
+# PairGate / DonorGate) without knowing the split layout (F-77ed7f42).
+#
+# Eager `from .route_gates import RouteGate` at this site is a cycle: route_gates
+# (via canon → canon_census) imports GateCanon from this module while it is still
+# loading, so PairGate/RouteGate are not bound yet. Binding is therefore lazy:
+# `__getattr__` imports the home module on first access, and each home module
+# also publishes its class into this catalog when it finishes loading.
+
+_REEXPORTS = {
+    "RouteGate": ("armature_core.route_gates", "RouteGate"),
+    "PairGate": ("armature_core.route_gates", "PairGate"),
+    "DonorGate": ("armature_core.donor_gate", "DonorGate"),
+}
+
+
+def _bind_reexports():
+    """Populate this module's namespace with the spend-boundary gate classes.
+
+    Skips any home module that is mid-import (attribute not yet defined); that
+    home module's own publish call fills the hole when it finishes.
+    """
+    import importlib
+    import sys
+
+    for name, (mod_name, attr) in _REEXPORTS.items():
+        if name in globals() and isinstance(globals().get(name), type):
+            continue
+        mod = sys.modules.get(mod_name)
+        if mod is not None and not hasattr(mod, attr):
+            continue
+        if mod is None:
+            try:
+                mod = importlib.import_module(mod_name)
+            except Exception:  # noqa: BLE001 — leave unbound; __getattr__ retries
+                continue
+        if hasattr(mod, attr):
+            globals()[name] = getattr(mod, attr)
+
+
+def __getattr__(name):
+    if name in _REEXPORTS:
+        _bind_reexports()
+        if name in globals():
+            return globals()[name]
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+def __dir__():
+    return sorted(set(globals()) | set(_REEXPORTS))
+
+
+_bind_reexports()

@@ -549,3 +549,54 @@ def _require_landmark_table():
              "table": "lift_solve.POSE_LANDMARKS",
              "table_names": list(LS.POSE_LANDMARKS)})
     return {a: LS.POSE_LANDMARKS.index(a) for a in ANKLES}
+
+
+def load_detection_rows(path):
+    """Load detection rows for Gate DONOR from a JSON file.
+
+    Accepts either a bare list of row dicts or an object carrying a `rows` list
+    (the shape `lift_clip` writes to `detection_raw.json`).
+    """
+    import json
+
+    with open(path, encoding="utf-8") as fh:
+        raw = json.load(fh)
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict) and isinstance(raw.get("rows"), list):
+        return raw["rows"]
+    raise DonorGate(
+        f"detection file {path!r} is not a list of rows or an object with a "
+        f"`rows` list (got {type(raw).__name__})",
+        {"gate": "DONOR", "andon": "DonorGate", "clause": "unreadable_gate_input",
+         "path": path, "got": type(raw).__name__})
+
+
+def check_donor_clip(frames_dir, detection):
+    """Grade a clip for baseline fitness: motion over frames + ankle framing.
+
+    `detection` is either a path to a detection JSON or an already-loaded list of
+    rows. Raises `DonorGate` on refuse; returns the gate evidence on pass. This is
+    the library form of `armature donor check` (F-debb7f91).
+    """
+    rows = load_detection_rows(detection) if isinstance(detection, str) else detection
+    if not isinstance(rows, list):
+        raise DonorGate(
+            f"detection rows must be a list; got {type(rows).__name__}",
+            {"gate": "DONOR", "andon": "DonorGate", "clause": "unreadable_gate_input",
+             "got": type(rows).__name__})
+    motion = mean_consecutive_frame_difference(frame_paths(frames_dir))
+    framing = ankle_framing(rows)
+    return gate_donor(motion, framing)
+
+
+def _publish_gate_to_errors_catalog():
+    """Publish DonorGate into the errors catalog (F-77ed7f42)."""
+    import sys
+    err = sys.modules.get("armature_core.errors")
+    if err is None:
+        return
+    err.DonorGate = DonorGate
+
+
+_publish_gate_to_errors_catalog()
