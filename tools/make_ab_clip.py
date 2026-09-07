@@ -257,11 +257,41 @@ def durations_ms(times, tail_s):
     return [edges[i + 1] - edges[i] for i in range(len(edges) - 1)]
 
 
+def _ellipsize(draw, text, max_w, font=None):
+    """Shorten `text` with an ellipsis so its rendered width fits `max_w` (F-7cf7e22f)."""
+    kwargs = {"font": font} if font is not None else {}
+    if draw.textlength(text, **kwargs) <= max_w:
+        return text
+    if max_w <= 0:
+        return ""
+    ell = "..."
+    if draw.textlength(ell, **kwargs) > max_w:
+        return ""
+    lo, hi = 0, len(text)
+    while lo < hi:
+        mid = (lo + hi + 1) // 2
+        candidate = text[:mid].rstrip() + ell
+        if draw.textlength(candidate, **kwargs) <= max_w:
+            lo = mid
+        else:
+            hi = mid - 1
+    return (text[:lo].rstrip() + ell) if lo else ell
+
+
 def banner(im, text, height=22):
-    """A caption strip above a panel, so a still cut from the clip still says what it is."""
+    """A caption strip above a panel, so a still cut from the clip still says what it is.
+
+    F-7cf7e22f: measure and ellipsize so a narrow panel does not crop the trailing `t=`.
+    F-7f9eb100: resolved TrueType face, matching dailies sheets.
+    """
+    from sheet_compose import font as sheet_font
+
+    face = sheet_font("arial.ttf", 13)
     out = Image.new("RGB", (im.width, im.height + height), (0, 0, 0))
     out.paste(im, (0, height))
-    ImageDraw.Draw(out).text((6, 6), text, fill=(235, 235, 235))
+    d = ImageDraw.Draw(out)
+    display = _ellipsize(d, text, max(0, im.width - 12), font=face)
+    d.text((6, 6), display, fill=(235, 235, 235), font=face)
     return out
 
 

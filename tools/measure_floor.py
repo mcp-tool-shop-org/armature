@@ -506,10 +506,17 @@ def main(argv=None):
     print(f"  => {nbit} of {len(pairs)} pairs are bit-identical")
     print()
 
+    # F-7586ba2d: band the table so an ordinary terminal keeps digit columns aligned.
     print("THE SHAPE — per-frame max |delta|, every frame, first pair listed per column")
-    print("  frame :  " + " ".join(f"{i:>3}" for i in range(n)))
-    for k, ps in pairs.items():
-        print(f"  {k[:12]:<12}: " + " ".join(f"{p['max']:>3}" for p in ps))
+    SHAPE_BAND = 16
+    for start in range(0, n, SHAPE_BAND):
+        end = min(n, start + SHAPE_BAND)
+        print("  frame :  " + " ".join(f"{i:>3}" for i in range(start, end)))
+        for k, ps in pairs.items():
+            print(f"  {k[:12]:<12}: "
+                  + " ".join(f"{p['max']:>3}" for p in ps[start:end]))
+        if end < n:
+            print()
     print()
 
     def window(ps, idx):

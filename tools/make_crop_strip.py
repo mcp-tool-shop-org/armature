@@ -28,11 +28,14 @@ from PIL import Image, ImageDraw
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from sheet_compose import font as sheet_font, max_text_width  # noqa: E402
 
 BG = (18, 18, 20)
 FG = (235, 235, 235)
 DIM = (140, 140, 150)
 LABEL_H = 16
+BOX_LABEL_H = 18
+TITLE_H = 18
 
 
 
@@ -231,19 +234,27 @@ def build(by_number, boxes, scale, title):
         tiles.append((number, os.path.basename(path), box, src.size, im))
 
     gap = 8
-    width = sum(t[4].width for t in tiles) + gap * (len(tiles) + 1)
-    height = max(t[4].height for t in tiles) + LABEL_H * 2 + gap * 2
+    f_body = sheet_font("arial.ttf", 13)
+    f_title = sheet_font("arial.ttf", 14)
+    heading = (f"{title}   {scale}x NEAREST of native pixels   "
+               f"(crop boxes printed under each tile)")
+    tile_w = sum(t[4].width for t in tiles) + gap * (len(tiles) + 1)
+    # F-559f46b1: title can overrun a strip sized only from tile widths.
+    width = max(tile_w, int(gap + max_text_width([(heading, f_title)]) + gap))
+    tile_h = max(t[4].height for t in tiles)
+    # Two label lines under each tile (frame number + box); TITLE_H above.
+    height = TITLE_H + gap + tile_h + LABEL_H + BOX_LABEL_H + gap
     strip = Image.new("RGB", (width, height), BG)
     d = ImageDraw.Draw(strip)
-    d.text((gap, 4), f"{title}   {scale}x NEAREST of native pixels   "
-                     f"(crop boxes printed under each tile)", fill=FG)
+    d.text((gap, 4), heading, fill=FG, font=f_title)
     x = gap
+    y_tile = TITLE_H + gap
     for number, fname, box, _size, im in tiles:
-        strip.paste(im, (x, LABEL_H + gap))
+        strip.paste(im, (x, y_tile))
         # The FILE's own number, five digits like the file itself — never a position.
-        d.text((x, LABEL_H + gap + im.height + 2), f"f{number:05d}", fill=FG)
-        d.text((x, LABEL_H + gap + im.height + 2 + 13),
-               f"{box[0]},{box[1]},{box[2]},{box[3]}", fill=DIM)
+        d.text((x, y_tile + im.height + 2), f"f{number:05d}", fill=FG, font=f_body)
+        d.text((x, y_tile + im.height + 2 + LABEL_H),
+               f"{box[0]},{box[1]},{box[2]},{box[3]}", fill=DIM, font=f_body)
         x += im.width + gap
     # `frame_size` rides every crop: a later reader can then see the box was inside the
     # frame it names, rather than only that a box was asked for.

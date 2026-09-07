@@ -186,8 +186,10 @@ def main(argv=None):
             open(os.path.join(out, name), "rb").read()).hexdigest()
         # The wait says it is alive (F-3dc24905, wave 28): lowercase, stderr, not a
         # sentinel — stdout carries this tool's one `EXTRACT_OK` line and nothing else.
+        # F-e28656b8: same clip-derived bound as the decode line — not `bound none`.
         print(f"extract_clip_frames write {i + 1}/{len(frames)}  "
-              f"elapsed {time.monotonic() - started:.1f}s  bound none",
+              f"elapsed {time.monotonic() - started:.1f}s  "
+              f"bound {timeout_for_file(a.clip):.0f}s",
               file=sys.stderr, flush=True)
 
     with open(a.clip, "rb") as fh:

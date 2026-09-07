@@ -38,11 +38,13 @@ from PIL import Image, ImageDraw  # noqa: E402
 from composite_reference import parse_plate  # noqa: E402
 from measure_clip import round_or_none  # noqa: E402
 from sheet_compose import (SHEET_PLATE, SheetPopulationError,  # noqa: E402
-                           frames_by_number, load_rgb_over_plate, require_frames)
+                           font as sheet_font, frames_by_number, load_rgb_over_plate,
+                           require_frames)
 
 MARGIN = 10
 LABEL_H = 18
 HDR_H = 24
+LINE_H = 16
 BG = (18, 18, 20)
 FG = (235, 235, 235)
 DIM = (140, 140, 150)
@@ -159,10 +161,13 @@ def build(start_path, frame_paths, indices, meta, prompt_id=None, measurements=N
     grid_w = per_row * (tw + MARGIN)
     lines = provenance_lines(meta, prompt_id, measurements)
 
+    # F-7f9eb100: resolved TrueType face (sheet_compose), not PIL's default bitmap.
+    f_body = sheet_font("arial.ttf", 13)
+    f_hdr = sheet_font("arial.ttf", 15)
     width = MARGIN + stile.width + MARGIN + grid_w + 470
     height = max(HDR_H + MARGIN + LABEL_H + stile.height + MARGIN,
                  HDR_H + MARGIN + rows * (LABEL_H + th + LABEL_H) + MARGIN,
-                 HDR_H + MARGIN + len(lines) * 15 + MARGIN)
+                 HDR_H + MARGIN + len(lines) * LINE_H + MARGIN)
 
     sheet = Image.new("RGB", (width, height), BG)
     d = ImageDraw.Draw(sheet)
@@ -170,17 +175,18 @@ def build(start_path, frame_paths, indices, meta, prompt_id=None, measurements=N
            f"{_get(meta, 'experiment')}  -  GATE 0 SHEET   "
            f"start frame | output | provenance      "
            f"(tiles at {scale:g}x of {start.width}x{start.height}; "
-           f"sheets locate, full size decides)", fill=FG)
+           f"sheets locate, full size decides)", fill=FG, font=f_hdr)
 
     y0 = HDR_H + MARGIN
     d.text((MARGIN, y0), "START FRAME  (the GLB, staged and rendered - the only image "
-                         "conditioning)", fill=DIM)
+                         "conditioning)", fill=DIM, font=f_body)
     sheet.paste(stile, (MARGIN, y0 + LABEL_H))
     d.text((MARGIN, y0 + LABEL_H + stile.height + 2),
-           os.path.basename(start_path), fill=DIM)
+           os.path.basename(start_path), fill=DIM, font=f_body)
 
     gx = MARGIN + stile.width + MARGIN
-    d.text((gx, y0), "OUTPUT  (everything below frame 0 is the model's)", fill=DIM)
+    d.text((gx, y0), "OUTPUT  (everything below frame 0 is the model's)",
+           fill=DIM, font=f_body)
     for i, (fi, im) in enumerate(otiles):
         cx = gx + (i % per_row) * (tw + MARGIN)
         cy = y0 + LABEL_H + (i // per_row) * (LABEL_H + th + LABEL_H)
@@ -188,14 +194,15 @@ def build(start_path, frame_paths, indices, meta, prompt_id=None, measurements=N
         cap = f"f{fi:03d}"
         if captions and fi in captions:
             cap += f"  {captions[fi]}"
-        d.text((cx, cy + th + 2), cap, fill=DIM)
+        d.text((cx, cy + th + 2), cap, fill=DIM, font=f_body)
 
     px = gx + grid_w + MARGIN
-    d.text((px, y0), "PROVENANCE", fill=DIM)
+    d.text((px, y0), "PROVENANCE", fill=DIM, font=f_hdr)
     yy = y0 + LABEL_H
     for ln in lines:
-        d.text((px, yy), ln, fill=FG if ln.startswith(("Gate", "NO DRIVING")) else DIM)
-        yy += 15
+        d.text((px, yy), ln,
+               fill=FG if ln.startswith(("Gate", "NO DRIVING")) else DIM, font=f_body)
+        yy += LINE_H
     return sheet
 
 

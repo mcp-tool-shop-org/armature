@@ -739,8 +739,10 @@ def main(argv=None):
     _started = time.monotonic()
 
     def _progress(stage, done, total):
+        # F-e28656b8: plumb the real frame-list bound — never the dead token `bound none`.
+        bound_s = timeout_for_frames(total)
         print(f"encode_control {stage} {done}/{total}  "
-              f"elapsed {time.monotonic() - _started:.1f}s  bound none",
+              f"elapsed {time.monotonic() - _started:.1f}s  bound {bound_s:.0f}s",
               file=sys.stderr, flush=True)
 
     receipt = build(args.frames, args.out, args.codec, invert=args.invert, fps=args.fps,
