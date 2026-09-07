@@ -15,6 +15,15 @@ Conventions fixed here, each with the finding that fixes it:
           The depth term is **relative to local depth** and the normal term is an
           angle, so no global constant governs a local feature; the silhouette term
           is exact.
+  softedge  authored soft falloff of a geometric edge (F-e37bc671) — NOT HED /
+          PiDiNet (those detector weights are not licence-mapped here). White ink
+          on black; background 0; non-finite refused.
+  canny   thin geometric edge alias (F-e37bc671) — NOT OpenCV Canny. Same geometric
+          stance as `derive_edge`; named so routes that ask for a canny socket get
+          a byte layout with the non-finite contract instead of a hand-rolled plate.
+  flow    camera-plane UV displacement → RGB (F-e37bc671): R=u', G=v' via
+          n*0.5+0.5 over a stated max magnitude; B unused (0). Authored layout,
+          not a partner optical-flow weight.
 
 `depth` deliberately produces BOTH normalisations. F19 says the ControlNet
 convention is per-frame, but per-frame normalisation on a moving camera re-maps the
@@ -713,6 +722,158 @@ def bbox_of(binary):
     rows = np.flatnonzero(m.any(axis=1))
     cols = np.flatnonzero(m.any(axis=0))
     return (int(cols[0]), int(rows[0]), int(cols[-1]), int(rows[-1]))
+
+
+#: Byte-layout digests for the softedge / canny / flow conventions (F-e37bc671).
+#: Authored layouts — partner detector weights (HED / PiDiNet / OpenCV Canny models)
+#: are not licence-mapped in `docs/license-map.md`, so these encoders never load them.
+CHANNEL_CONVENTIONS = {
+    "softedge": {
+        "layout": "uint8 HxW; white ink on black; soft falloff of geometric edge",
+        "licence": "authored geometric; NOT HED/PiDiNet (unmapped)",
+        "background": 0,
+        "digest_seed": "armature.channels.softedge.v1",
+    },
+    "canny": {
+        "layout": "uint8 HxW; thin geometric edge 0 or 255; NOT OpenCV Canny",
+        "licence": "authored geometric; same stance as derive_edge",
+        "background": 0,
+        "digest_seed": "armature.channels.canny.v1",
+    },
+    "flow": {
+        "layout": "uint8 HxWx3; R=encode_u8(u/max*0.5+0.5), G=same for v, B=0",
+        "licence": "authored UV displacement layout; no partner flow weight",
+        "background": (0, 0, 0),
+        "digest_seed": "armature.channels.flow.v1",
+    },
+}
+
+
+def convention_digest(name):
+    """Stable digest string for Gate CONV-style pinning of a channel byte layout."""
+    import hashlib
+    rec = CHANNEL_CONVENTIONS.get(name)
+    if rec is None:
+        raise ArmatureError(
+            f"no channel convention named {name!r}; known: "
+            f"{sorted(CHANNEL_CONVENTIONS)}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "unknown_channel_convention", "name": name})
+    payload = "|".join([
+        rec["digest_seed"], rec["layout"], rec["licence"], repr(rec["background"]),
+    ])
+    return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+
+def _box_blur_u8(plane, radius):
+    """Separable box blur on a float plane; radius 0 returns the input unchanged."""
+    r = int(radius)
+    if r <= 0:
+        return plane
+    pad = np.pad(plane, r, mode="edge")
+    kern = 2 * r + 1
+    # Horizontal then vertical cumulative sums for O(1) box filter.
+    c = np.cumsum(pad, axis=1)
+    left = np.concatenate(
+        [np.zeros((c.shape[0], 1), dtype=c.dtype), c[:, :-kern]], axis=1)
+    h = (c[:, kern - 1:] - left) / float(kern)
+    c2 = np.cumsum(h, axis=0)
+    top = np.concatenate(
+        [np.zeros((1, c2.shape[1]), dtype=c2.dtype), c2[:-kern, :]], axis=0)
+    return (c2[kern - 1:, :] - top) / float(kern)
+
+
+def encode_softedge(edge, radius=2, extra=None):
+    """Soft geometric edge → uint8 (F-e37bc671). White ink, background 0.
+
+    `edge` is a geometric edge plane (from `derive_edge` or a binary mask). Softness is
+    a box blur of radius `radius` — an authored falloff, not a detector. Non-finite
+    refused via `encode_u8`.
+    """
+    e = np.asarray(edge, dtype=np.float64)
+    if e.ndim != 2:
+        raise ArmatureError(
+            f"encode_softedge expects an HxW plane, got shape {e.shape}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "softedge_bad_shape", "shape": list(e.shape)})
+    # Normalise any uint8 0/255 edge into [0,1] before blur.
+    if e.max() > 1.0:
+        e = e / 255.0
+    soft = _box_blur_u8(e, radius)
+    soft = np.clip(soft, 0.0, 1.0)
+    out = encode_u8(soft, where="encode_softedge", extra=extra)
+    return out, {
+        "convention": "softedge",
+        "digest": convention_digest("softedge"),
+        "radius": int(radius),
+        "ink_px": int((out > 0).sum()),
+        "licence": CHANNEL_CONVENTIONS["softedge"]["licence"],
+    }
+
+
+def encode_canny(edge, extra=None):
+    """Thin geometric edge → uint8 0/255 (F-e37bc671). NOT OpenCV Canny.
+
+    Routes that expose a canny ControlNet socket get this authored layout instead of a
+    hand-rolled plate. Thresholds mid-grey so a soft plane still collapses to binary.
+    """
+    e = np.asarray(edge, dtype=np.float64)
+    if e.ndim != 2:
+        raise ArmatureError(
+            f"encode_canny expects an HxW plane, got shape {e.shape}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "canny_bad_shape", "shape": list(e.shape)})
+    if e.max() > 1.0:
+        e = e / 255.0
+    binary = (e > 0.5).astype(np.float64)
+    out = encode_u8(binary, where="encode_canny", extra=extra)
+    return out, {
+        "convention": "canny",
+        "digest": convention_digest("canny"),
+        "edge_px": int((out > 0).sum()),
+        "licence": CHANNEL_CONVENTIONS["canny"]["licence"],
+        "note": "authored thin geometric edge; not OpenCV Canny",
+    }
+
+
+def encode_flow(flow_uv, mask, max_mag, extra=None):
+    """Camera-plane UV displacement → uint8 RGB (F-e37bc671).
+
+    `flow_uv` is HxWx2 (u, v) in pixels (or any consistent unit). Each component is
+    mapped through `encode_u8((c / max_mag) * 0.5 + 0.5)` so zero flow encodes to
+    (128, 128, 0); background under the mask is black. `max_mag` must be finite and
+    positive — a global constant governing a local feature is refused by requiring the
+    caller to state the magnitude bound for THIS clip.
+    """
+    from .parts import require_finite
+    max_mag = require_finite(
+        "max_mag", max_mag, ArmatureError,
+        {"gate": None, "andon": "ArmatureError",
+         "clause": "flow_max_mag_not_finite_and_positive",
+         "where": "encode_flow"},
+        positive=True)
+    f = np.asarray(flow_uv, dtype=np.float64)
+    if f.ndim != 3 or f.shape[-1] != 2:
+        raise ArmatureError(
+            f"encode_flow expects HxWx2, got shape {f.shape}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "flow_bad_shape", "shape": list(f.shape)})
+    m = np.asarray(mask) > 0
+    u01 = np.clip(f[..., 0] / max_mag * 0.5 + 0.5, 0.0, 1.0)
+    v01 = np.clip(f[..., 1] / max_mag * 0.5 + 0.5, 0.0, 1.0)
+    r = encode_u8(u01, where="encode_flow.u", extra=extra)
+    g = encode_u8(v01, where="encode_flow.v", extra=extra)
+    b = np.zeros(f.shape[:2], dtype=np.uint8)
+    rgb = np.stack([r, g, b], axis=-1)
+    rgb = np.where(m[..., None], rgb, np.uint8(0))
+    return rgb, {
+        "convention": "flow",
+        "digest": convention_digest("flow"),
+        "max_mag": float(max_mag),
+        "geometry_px": int(m.sum()),
+        "licence": CHANNEL_CONVENTIONS["flow"]["licence"],
+        "zero_flow_byte": 128,
+    }
 
 
 def normalization_difference(d_per_frame, d_per_shot, mask):

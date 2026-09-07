@@ -47,6 +47,20 @@ from .errors import ArmatureError
 #: Width of the joint blend, in units of normalised distance. Fixed, and dimensionless.
 BLEND_BAND = 0.35
 
+#: Character-class → binding arm (F-a4aeb565). Rigid segments remain the default for the
+#: clay mannequin; soft/heat-skinned imports use the named alternate behind the flag.
+CHARACTER_BINDING = {
+    "mannequin_balls": "rigid_segment_weights",
+    "imported_sites": "imported_weights",
+    "proportion_fallback": "rigid_segment_weights",
+    "soft_skinned": "bounded_heat_weights",
+}
+
+#: Soft falloff exponent for `bounded_heat_weights`. Dimensionless; larger = closer to
+#: rigid winner-take-all. Bounded so a caller cannot turn heat into an unbounded solver.
+HEAT_POWER = 2.0
+HEAT_POWER_MAX = 8.0
+
 
 def segment_distance(points, head, tail):
     """Distance from each point to a segment, clamped at both ends."""
@@ -212,3 +226,186 @@ def rigid_segment_weights(verts, bones, radii, blend_band=BLEND_BAND):
             "export, where the value can differ."),
     }
     return weights, diagnostics
+
+
+def resolve_binding(character_class):
+    """Which weight arm a character class uses (F-a4aeb565). Unknown class refuses."""
+    arm = CHARACTER_BINDING.get(character_class)
+    if arm is None:
+        raise ArmatureError(
+            f"character_class={character_class!r} has no binding arm; known: "
+            f"{sorted(CHARACTER_BINDING)}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "unknown_binding_character_class",
+             "character_class": character_class,
+             "known": sorted(CHARACTER_BINDING)})
+    return arm
+
+
+def validate_imported_weights(verts, bones, weights_by_bone, sum_tol=1e-5):
+    """Validate pre-authored / exported soft weights for Gate P diagnostics (F-a4aeb565).
+
+    Does not invent weights — refuses shape, non-finite, and partition-of-unity failures
+    so a soft-skinned GLB either arrives with readable weights or stops here rather than
+    growing a one-off inside an instrument. Returns `(weights, diagnostics)`.
+    """
+    p = np.asarray(verts, dtype=np.float64)
+    if p.ndim != 2 or p.shape[1] != 3 or not len(p):
+        raise ArmatureError(
+            f"expected a non-empty (N, 3) vertex array, got {p.shape}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "vertices_not_n_by_3"})
+    if not bones:
+        raise ArmatureError(
+            "no deforming bones to validate imported weights against",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "no_deforming_bones"})
+    names = [b["name"] for b in bones]
+    n = len(p)
+    missing = [name for name in names if name not in weights_by_bone]
+    if missing:
+        raise ArmatureError(
+            f"imported weights missing bone(s) {missing}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "imported_weights_missing_bone", "missing": missing})
+    weights = {}
+    for name in names:
+        w = np.asarray(weights_by_bone[name], dtype=np.float64).reshape(-1)
+        if w.shape[0] != n:
+            raise ArmatureError(
+                f"imported weights for {name!r} length {w.shape[0]} != n_verts {n}",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "imported_weights_length_mismatch",
+                 "bone": name, "got": int(w.shape[0]), "n_verts": n})
+        if not np.isfinite(w).all():
+            raise ArmatureError(
+                f"imported weights for {name!r} carry non-finite values",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "imported_weights_not_finite", "bone": name})
+        if (w < 0).any():
+            raise ArmatureError(
+                f"imported weights for {name!r} carry negative values",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "imported_weights_negative", "bone": name})
+        weights[name] = w
+    totals = sum(weights[name] for name in names)
+    lo, hi = float(totals.min()), float(totals.max())
+    if lo < 1.0 - sum_tol or hi > 1.0 + sum_tol:
+        raise ArmatureError(
+            f"imported weights sum to [{lo}, {hi}] outside 1±{sum_tol}; Gate P needs a "
+            f"partition of unity at bind",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "imported_weights_sum_not_one",
+             "weight_sum_min": lo, "weight_sum_max": hi, "sum_tol": sum_tol})
+    counts = {name: int((weights[name] > 0).sum()) for name in names}
+    dominated = {
+        name: int((np.argmax(np.stack([weights[n] for n in names], axis=0), axis=0)
+                   == j).sum())
+        for j, name in enumerate(names)
+    }
+    diagnostics = {
+        "rule": "imported_weights_validator — authored/exported weights, not solved here",
+        "binding_arm": "imported_weights",
+        "vertices": int(n),
+        "vertices_with_any_weight": int((totals > 0).sum()),
+        "weight_sum_min": lo,
+        "weight_sum_max": hi,
+        "vertices_with_weight": counts,
+        "vertices_dominated": dominated,
+        "bones_with_no_vertices": sorted(k for k, v in counts.items() if v == 0),
+        "gate_p_readable": True,
+    }
+    return weights, diagnostics
+
+
+def bounded_heat_weights(verts, bones, radii, power=HEAT_POWER):
+    """Bounded inverse-distance soft weights for heat-skinned characters (F-a4aeb565).
+
+    Clearly named alternate behind `character_class='soft_skinned'`. Not the mannequin
+    default — rigid segments remain what the clay figure is. Each vertex gets
+    `w_i ∝ 1 / (u_i ** power)` over normalised segment distances, renormalised to sum 1.
+    Power is tightened to `HEAT_POWER` (may only tighten) and capped at `HEAT_POWER_MAX`.
+    """
+    from .parts import tightened
+
+    p = np.asarray(verts, dtype=np.float64)
+    if p.ndim != 2 or p.shape[1] != 3 or not len(p):
+        raise ArmatureError(
+            f"expected a non-empty (N, 3) vertex array, got {p.shape}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "vertices_not_n_by_3"})
+    if not bones:
+        raise ArmatureError(
+            "no deforming bones to assign vertices to",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "no_deforming_bones"})
+    power = tightened(
+        "power", power, HEAT_POWER, ArmatureError,
+        {"gate": None, "andon": "ArmatureError", "where": "bounded_heat_weights",
+         "module_heat_power": HEAT_POWER, "power_requested": power})
+    if not (power > 0) or not (power <= HEAT_POWER_MAX):
+        raise ArmatureError(
+            f"heat power must be in (0, {HEAT_POWER_MAX}], got {power}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "heat_power_out_of_bounds",
+             "power": float(power), "heat_power_max": HEAT_POWER_MAX})
+    names = [b["name"] for b in bones]
+    missing = [n for n in names if n not in radii or not (radii[n] > 0)]
+    if missing:
+        raise ArmatureError(
+            f"no positive measured radius for {missing}",
+            {"gate": None, "andon": "ArmatureError",
+             "clause": "bone_radius_not_positive"})
+    n, m = len(p), len(bones)
+    u = np.empty((n, m), dtype=np.float64)
+    for j, b in enumerate(bones):
+        u[:, j] = segment_distance(p, b["head"], b["tail"]) / float(radii[b["name"]])
+    # Floor so a vertex exactly on a segment does not produce inf weight.
+    u = np.maximum(u, 1e-8)
+    inv = u ** (-float(power))
+    totals = inv.sum(axis=1, keepdims=True)
+    normed = inv / totals
+    weights = {name: normed[:, j].copy() for j, name in enumerate(names)}
+    row_sums = normed.sum(axis=1)
+    counts = {name: int((normed[:, j] > 0).sum()) for j, name in enumerate(names)}
+    dominated = {
+        name: int((np.argmax(normed, axis=1) == j).sum()) for j, name in enumerate(names)
+    }
+    diagnostics = {
+        "rule": (f"bounded_heat_weights — inverse normalised distance to power "
+                 f"{float(power)}; alternate soft-skin arm, not the mannequin default"),
+        "binding_arm": "bounded_heat_weights",
+        "heat_power": float(power),
+        "vertices": int(n),
+        "vertices_with_any_weight": int((row_sums > 0).sum()),
+        "weight_sum_min": float(row_sums.min()),
+        "weight_sum_max": float(row_sums.max()),
+        "vertices_with_weight": counts,
+        "vertices_dominated": dominated,
+        "bones_with_no_vertices": sorted(k for k, v in counts.items() if v == 0),
+        "gate_p_readable": True,
+        "blended_fraction": 1.0,
+    }
+    return weights, diagnostics
+
+
+def bind_weights(verts, bones, radii, character_class="mannequin_balls",
+                 imported=None, **kwargs):
+    """Dispatch binding by character class; rigid segments remain the default."""
+    arm = resolve_binding(character_class)
+    if arm == "rigid_segment_weights":
+        return rigid_segment_weights(verts, bones, radii, **kwargs)
+    if arm == "imported_weights":
+        if imported is None:
+            raise ArmatureError(
+                "character_class requires imported weights; pass imported={{bone: w}}",
+                {"gate": None, "andon": "ArmatureError",
+                 "clause": "imported_weights_required",
+                 "character_class": character_class})
+        return validate_imported_weights(verts, bones, imported)
+    if arm == "bounded_heat_weights":
+        return bounded_heat_weights(verts, bones, radii, **kwargs)
+    raise ArmatureError(
+        f"binding arm {arm!r} is registered but has no dispatcher branch",
+        {"gate": None, "andon": "ArmatureError",
+         "clause": "binding_arm_unimplemented", "arm": arm})
