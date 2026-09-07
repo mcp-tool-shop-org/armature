@@ -52,6 +52,17 @@ PWSH = shutil.which("pwsh") or shutil.which("powershell")
 needs_pwsh = pytest.mark.skipif(PWSH is None, reason="no PowerShell to run verify.ps1's own function with")
 
 
+def _pwsh_capture_encoding():
+    """Encoding for redirected pwsh stdout on this host (F-9071bbb4).
+
+    Windows OEM (cp437 here) emits box-drawing U+2500 / U+2550 as single bytes 0xC4 / 0xCD.
+    `encoding='utf-8', errors='replace'` turned those into U+FFFD and destroyed the Cyan
+    rule banners every red probe reprints. cp1252 once raised inside the reader thread
+    (measured 2026-09-04); OEM does not.
+    """
+    return "cp437" if os.name == "nt" else "utf-8"
+
+
 def invoke_leg_source():
     """`function Invoke-Leg { ... }` lifted verbatim, by brace depth."""
     start = VERIFY.index("function Invoke-Leg")
@@ -86,8 +97,7 @@ def _run_legs(tmp_path, legs):
         [PWSH, "-NoProfile", "-NonInteractive", "-File", str(path)],
         capture_output=True,
         text=True,
-        encoding="utf-8",
-        errors="replace",
+        encoding=_pwsh_capture_encoding(),
     )
     recorded = {}
     for line in (proc.stdout or "").splitlines():
@@ -101,6 +111,36 @@ def _run_legs(tmp_path, legs):
 OK = "& $PY -c 'raise SystemExit(0)'"
 SEVEN = "& $PY -c 'raise SystemExit(7)'"
 ABSENT = "armature-no-such-binary-8481819 --version"
+
+
+@needs_pwsh
+def test_captured_leg_banner_keeps_box_drawing_glyphs(tmp_path):
+    """F-9071bbb4: OEM box-drawing survives capture as U+2500, never U+FFFD."""
+    py = sys.executable.replace("\\", "/")
+    script = (
+        "$ErrorActionPreference = 'Continue'\n"
+        "$results = [System.Collections.Generic.List[object]]::new()\n"
+        f"$PY = '{py}'\n"
+        f"{invoke_leg_source()}\n"
+        "Invoke-Leg -Name 'tests' -Body { & $PY -c 'raise SystemExit(0)' }\n"
+    )
+    path = tmp_path / "banner_pin.ps1"
+    path.write_text(script, encoding="utf-8")
+    got = subprocess.run(
+        [PWSH, "-NoProfile", "-NonInteractive", "-File", str(path)],
+        capture_output=True,
+        text=True,
+        encoding=_pwsh_capture_encoding(),
+    )
+    out = got.stdout or ""
+    assert "\ufffd" not in out, f"replacement glyphs in capture:\n{out!r}"
+    banner = next(
+        (ln for ln in out.splitlines()
+         if ln.lstrip()[:1] in ("\u2500", "\u2550") and "tests" in ln),
+        None,
+    )
+    assert banner is not None, f"no box-drawing banner in:\n{out!r}"
+    assert banner.lstrip()[0] in ("\u2500", "\u2550"), banner
 
 
 def _is_recorded_failure(code):
@@ -625,11 +665,10 @@ def _run_verify(root, *args, path=None):
         [PWSH, "-NoProfile", "-NonInteractive", "-File", str(root / "verify.ps1"), *args],
         capture_output=True,
         text=True,
-        # verify.ps1 prints box-drawing rules; decoded with the console's locale codec (cp1252
-        # under PowerShell) a byte it cannot map raised inside the reader thread and the
-        # CompletedProcess came back with stdout None (measured 2026-09-04, merged wave 6).
-        encoding="utf-8",
-        errors="replace",
+        # verify.ps1 prints box-drawing rules. cp1252 once raised inside the reader thread
+        # (measured 2026-09-04, merged wave 6); utf-8+replace turned OEM 0xC4 into U+FFFD
+        # (F-9071bbb4). Decode with the OEM page the redirected host actually emits.
+        encoding=_pwsh_capture_encoding(),
         env=env,
         cwd=str(root),
     )
@@ -979,7 +1018,7 @@ def _pwsh_json(script):
     """Run a PowerShell script and read the JSON on its stdout."""
     got = subprocess.run(
         [PWSH, "-NoProfile", "-NonInteractive", "-Command", script],
-        capture_output=True, text=True, encoding="utf-8", errors="replace",
+        capture_output=True, text=True, encoding=_pwsh_capture_encoding(),
     )
     assert got.returncode == 0, f"pwsh exited {got.returncode}\n{got.stdout}\n{got.stderr}"
     return json.loads(got.stdout)
@@ -1630,8 +1669,8 @@ def test_the_pin_report_resolves_the_specifiers_and_names_the_cv2_provider(tmp_p
     path = tmp_path / "pin_report.ps1"
     path.write_text(script, encoding="utf-8")
     got = subprocess.run([PWSH, "-NoProfile", "-NonInteractive", "-File", str(path)],
-                         capture_output=True, text=True, encoding="utf-8",
-                         errors="replace")
+                         capture_output=True, text=True,
+                         encoding=_pwsh_capture_encoding())
     out = got.stdout or ""
     assert "pinned dependencies" in out, f"{out}\n{got.stderr}"
     rows = [ln.strip() for ln in out.splitlines() if "->" in ln or "provided by" in ln]
