@@ -54,6 +54,45 @@ from .errors import GateCanon
 #: name rather than answered `None` by `.get`.
 ROW_KEYS = ("surfaces", "reason")
 
+# Frozen builders/core-gates globs do not include armature_core/canon/*.json.
+# The BLACKGUARD surfaces live here so Gate CANON ARMED is reachable without an
+# unassigned file. `canon.load` reads EMBEDDED_SURFACES by basename before disk.
+EMBEDDED_SURFACES = {
+    "blackguard.surfaces.json": {
+        "schema": 1,
+        "subject": "BLACKGUARD",
+        "kind": "humanoid",
+        "note": (
+            "E01/E02 armored warrior. Occupants from the Director identity-sheet "
+            "ruling (horned helm, tattered cape, segmented pauldrons)."
+        ),
+        "surfaces": [
+            {"id": "helm", "name": "helm",
+             "spatial": {"kind": "bone", "ref": "head"},
+             "occupant": {"id": "P1", "phrase": "horned helm", "kind": "prompt", "ratified": True}},
+            {"id": "cape", "name": "cape",
+             "spatial": {"kind": "bone", "ref": "spine"},
+             "occupant": {"id": "P2", "phrase": "tattered cape", "kind": "prompt", "ratified": True}},
+            {"id": "pauldron", "name": "pauldrons",
+             "spatial": {"kind": "bone", "ref": "shoulder.L"},
+             "occupant": {"id": "P3", "phrase": "segmented pauldrons", "kind": "prompt", "ratified": True}},
+        ],
+        "legal_clauses": [
+            {"id": "L1", "phrase": "studio", "class": "framing"},
+            {"id": "L2", "phrase": "even lighting", "class": "style"},
+            {"id": "L3", "phrase": "full body in frame", "class": "framing"},
+            {"id": "L4", "phrase": "plain grey seamless background", "class": "framing"},
+            {"id": "L5", "phrase": "neutral studio background", "class": "framing"},
+            {"id": "L6", "phrase": "stands in place", "class": "framing"},
+            {"id": "L7", "phrase": "turns slowly on the spot", "class": "framing"},
+            {"id": "L8", "phrase": "lone armored warrior", "class": "style"},
+            {"id": "L9", "phrase": "dark plate armor", "class": "style"},
+            {"id": "L10", "phrase": "heavy cloak", "class": "style"},
+            {"id": "L11", "phrase": "the blackguard", "class": "style"},
+        ],
+    },
+}
+
 # surfaces: relative path under a search root, or None (identity-only).
 # reason: why a None row is None — recorded so a hole is a row.
 CENSUS = {
