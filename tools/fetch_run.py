@@ -663,7 +663,7 @@ def download(manifest_path, exits_path=None, record_urls=True):
     # them and inventing one would be a progress bar that is not measuring the work.
     bound_s = timeout_for_jobs(len(planned))
     dest = os.path.dirname(manifest_abs)
-    print(f"fetch_run download 0/{len(planned)}  elapsed 0.0s  bound {bound_s}s -> {dest}",
+    print(f"fetch_run download 0/{len(planned)} elapsed 0.0s bound {bound_s}s -> {dest}",
           file=sys.stderr, flush=True)
     started = time.monotonic()
     try:
@@ -710,7 +710,7 @@ def download(manifest_path, exits_path=None, record_urls=True):
              "error": type(exc).__name__,
              "searched": os.environ.get("PATH", "")}) from exc
     elapsed = time.monotonic() - started
-    print(f"fetch_run download {len(planned)}/{len(planned)}  elapsed {elapsed:.1f}s  bound {bound_s}s",
+    print(f"fetch_run download {len(planned)}/{len(planned)} elapsed {elapsed:.1f}s bound {bound_s}s -> {dest}",
           file=sys.stderr, flush=True)
     base = {"gate": "FETCH", "andon": "FetchHalt", "process_returncode": proc.returncode,
             # the key wave 8's halt carried; kept so a reader of an older receipt and a
@@ -1119,14 +1119,11 @@ def main(argv=None):
             "prove that what landed is what the dump planned. This is the step that runs "
             "AFTER the credits are spent, so every clause here is about not mistaking a "
             "partial fetch for a result."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: the E02-shaped retrieval - a results dump in, a run directory out, with "
-            "the frames filed under the taps --node-map names and the video tap beside them. "
-            "WHAT A REFUSAL COSTS: the generation is already billed, so a refusal here costs "
-            "only the fetch. It never retries for you: read the halt's `partial` evidence, "
-            "clear the run directory, and re-fetch. A re-run into a directory that still "
-            "holds an earlier fetch's frames satisfies the plan-to-disk clause and prints a "
-            "green receipt over a mixture of two runs."))
+                "ROUTE: the E02-shaped retrieval - a results dump in, a run directory out, with the frames filed under the taps --node-map names and the video tap beside them.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: the generation is already billed, so a refusal here costs only the fetch. It never retries for you: read the halt's `partial` evidence, clear the run directory, and re-fetch. A re-run into a directory that still holds an earlier fetch's frames satisfies the plan-to-disk clause and prints a green receipt over a mixture of two runs."))
     ap.add_argument("--dump", required=True,
                     help="the results JSON the cloud returned for this prompt; every "
                          "download this tool performs is planned from it and from nothing "
@@ -1137,10 +1134,10 @@ def main(argv=None):
                          "segment - a nested or escaping name is refused by name")
     ap.add_argument("--root", default=None,
                     help=f"the tree the run directory is created under. Defaults to E02's "
-                         f"run tree ({DEFAULT_ROOT}), exactly as --node-map defaults to "
-                         f"E02's taps; supplying --node-map without --root is refused, "
-                         f"because an operator naming another experiment's taps is by "
-                         f"construction not fetching E02")
+                         f"run tree ({DEFAULT_ROOT}), matching the --node-map flag's "
+                         f"E02 tap default. The --node-map flag without --root is "
+                         f"refused, because an operator naming another experiment's "
+                         f"taps is by construction not fetching E02")
     ap.add_argument("--node-map", default=None,
                     help="`<node id>=<subdir>` pairs, comma separated, e.g. "
                          "--node-map=41=startprobe,71=lossless. Defaults to E02's taps "
@@ -1218,7 +1215,8 @@ def main(argv=None):
         os.makedirs(os.path.dirname(out), exist_ok=True)
     manifest = os.path.join(base, "urls.json")
     with open(manifest, "w", encoding="utf-8") as fh:
-        json.dump([{"url": u, "out": os.path.abspath(o)} for u, o in jobs], fh, indent=1)
+        json.dump([{"url": u, "out": os.path.abspath(o)} for u, o in jobs], fh,
+                  indent=2, ensure_ascii=False)
 
     _proc, gate_exits = download(manifest)
     mapped = sorted({os.path.join(base, sub) for sub in node_dir.values()})
@@ -1245,7 +1243,7 @@ def main(argv=None):
     # The SUCCESS half of the exit convention (wave 10). `<PREFIX>_OK ` uses the SAME
     # prefix this file's `__main__` block prints on a halt, so one AST read of that block
     # derives both directions of the census. The tree spelled this four ways before.
-    print("FETCH_RUN_OK " + json.dumps({
+    print("FETCH_RUN_OK " + json.dumps({"path": base, 
         "run": a.run, "dir": base, "by_node": counts, "downloaded": got, "video": vids,
         "gate_FETCH": landed["verdict"], "gate_EXITS": gate_exits["verdict"]}))
     return 0

@@ -328,9 +328,8 @@ def test_a_receipt_carrying_the_returned_mark_is_still_admitted():
 def test_the_admission_still_passes_end_to_end_on_a_real_builder_receipt(tmp_path, capsys):
     """And through the CLI, so the reader's new key is proven not to close the green path."""
     assert GSG.main(_assembly_cli(tmp_path)) == 0
-    line = [ln for ln in capsys.readouterr().out.splitlines()
-            if ln.startswith("SAVED_ADMISSION_OK ")]
-    assert line, "the green admission stopped printing its OK line"
+    from conftest import load_ok_payload
+    load_ok_payload(capsys.readouterr().out)  # green admission still prints its OK receipt
 
 
 def test_the_halt_line_reads_the_caught_refusal_clause(tmp_path):
@@ -398,10 +397,8 @@ def test_the_same_invocation_without_the_directory_still_reaches_the_OK_line(tmp
     """The direction the gate must not bound, and the proof the operand really is green
     otherwise: one character of difference between this and the refusal above."""
     assert GSG.main(_assembly_cli(tmp_path)) == 0
-    printed = [ln for ln in capsys.readouterr().out.splitlines()
-               if ln.startswith("SAVED_ADMISSION_OK ")]
-    assert printed, "the control invocation stopped printing its OK line"
-    line = json.loads(printed[0][len("SAVED_ADMISSION_OK "):])
+    from conftest import load_ok_payload
+    line = load_ok_payload(capsys.readouterr().out)
     assert line["gate_OUT"], line
     written = json.loads((tmp_path / "out" / "admission.json").read_text(encoding="utf-8"))
     assert written["gates"]["OUT"]["clause"] == "out_path_is_a_directory", written["gates"]
@@ -552,10 +549,8 @@ def _latent_cli(tmp_path, frame=None, out_name="admission.json"):
 
 def _ok_line(tmp_path, capsys, frame=None, out_name="admission.json"):
     assert GSG.main(_latent_cli(tmp_path, frame=frame, out_name=out_name)) == 0
-    printed = [ln for ln in capsys.readouterr().out.splitlines()
-               if ln.startswith("SAVED_ADMISSION_OK ")]
-    assert printed, "no OK line"
-    return json.loads(printed[-1][len("SAVED_ADMISSION_OK "):])
+    from conftest import load_ok_payload
+    return load_ok_payload(capsys.readouterr().out)
 
 
 def test_the_printed_gate_L_line_DIFFERS_between_a_supplied_frame_and_none(tmp_path,
@@ -634,11 +629,9 @@ def test_the_frame_source_reaches_the_subprocess_line_too(tmp_path):
         [sys.executable, os.path.join(TOOLS, "gate_saved_graph.py"),
          *_latent_cli(tmp_path)],
         capture_output=True, text=True, encoding="utf-8", errors="replace", cwd=REPO)
-    line = [ln for ln in proc.stdout.splitlines()
-            if ln.startswith("SAVED_ADMISSION_OK ")]
-    assert line, proc.stdout + proc.stderr
     assert proc.returncode == 0, proc.stdout + proc.stderr
-    printed = json.loads(line[-1][len("SAVED_ADMISSION_OK "):])
+    from conftest import load_ok_payload
+    printed = load_ok_payload(proc.stdout)
     assert printed["gate_L_frame_source"] == "graph alone, no independent frame supplied"
 
 

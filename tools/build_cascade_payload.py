@@ -146,36 +146,36 @@ def build_and_write(argv=None):
             "BatchImagesNode x G -> BatchImagesNode -> CreateVideo -> SaveVideo) from an "
             "upload map. Writes the API graph and its payload record; submits nothing and "
             "loads no weights."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: E13's re-arm, Stage 0. This is the supported route for a clip of any "
-            "length - build_assembly_payload's flat chain was measured executing at 8 slots "
-            "and failing at 81. The cascade's helpers are the ones the paid E13 A2 arm "
-            "shares: the same construction is wired into build_r2v_payload's graph to make "
-            "the reference VIDEO. WHAT A REFUSAL COSTS: nothing but your time, and it is "
-            "spent here rather than on a submission that bills per attempt."))
-    ap.add_argument("--uploads", required=True,
-                    help="the upload step's JSON: local frame filename -> the server's "
-                         "content-addressed name. Keys must be zero-padded frame names "
-                         "with no gaps; the LOCAL name is the frame order")
-    ap.add_argument("--out", required=True,
-                    help="the directory the graph and its payload record are written into. "
-                         "Created below the last gate, so a refusal leaves nothing behind; "
-                         "an existing build there is refused unless --overwrite is passed")
-    ap.add_argument("--overwrite", action="store_true",
-                    help="replace an existing graph/record pair in --out. Without it a "
-                         "rebuild over an earlier build refuses by name "
-                         "(`output_already_exists`) and names both digests")
-    ap.add_argument("--fps", type=float, default=16.0,
-                    help="the CreateVideo rate, inside its measured 1-120 contract "
-                         "(default: %(default)s). Presentation only - it is downstream of "
-                         "the frames and changes no pixel")
-    ap.add_argument("--group", type=int, default=AS.GROUP_SIZE,
-                    help="frames per group BatchImagesNode; the slot ceiling gate checks it "
-                         "against the cascade's own constant (default: %(default)s)")
-    ap.add_argument("--prefix", default="video/E13_cascade",
-                    help="the server-side filename prefix for the saved video "
-                         "(default: %(default)s)")
-    ap.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
+                "ROUTE: E13's re-arm, Stage 0. This is the supported route for a clip of any length - build_assembly_payload's flat chain was measured executing at 8 slots and failing at 81. The cascade's helpers are the ones the paid E13 A2 arm shares: the same construction is wired into build_r2v_payload's graph to make the reference VIDEO.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: nothing but your time, and it is spent here rather than on a submission that bills per attempt."))
+    build_opts = ap.add_argument_group("build")
+    output_opts = ap.add_argument_group("output")
+    build_opts.add_argument("--uploads", required=True,
+                       help="the upload step's JSON: local frame filename -> the server's "
+                            "content-addressed name. Keys must be zero-padded frame names "
+                            "with no gaps; the LOCAL name is the frame order")
+    output_opts.add_argument("--out", required=True,
+                        help="the directory the graph and its payload record are written into. "
+                             "Created below the last gate, so a refusal leaves nothing behind; "
+                             "an existing build there is refused unless --overwrite is passed")
+    output_opts.add_argument("--overwrite", action="store_true",
+                        help="replace an existing graph/record pair in --out. Without it a "
+                             "rebuild over an earlier build refuses by name "
+                             "(`output_already_exists`) and names both digests")
+    build_opts.add_argument("--fps", type=float, default=16.0,
+                       help="the CreateVideo rate, inside its measured 1-120 contract "
+                            "(default: %(default)s). Presentation only - it is downstream of "
+                            "the frames and changes no pixel")
+    build_opts.add_argument("--group", type=int, default=AS.GROUP_SIZE,
+                       help="frames per group BatchImagesNode; the slot ceiling gate checks it "
+                            "against the cascade's own constant (default: %(default)s)")
+    build_opts.add_argument("--prefix", default="video/E13_cascade",
+                       help="the server-side filename prefix for the saved video "
+                            "(default: %(default)s)")
+    build_opts.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
@@ -294,9 +294,9 @@ def build_and_write(argv=None):
 
     os.makedirs(out, exist_ok=True)          # scripts create their own output directories
     with open(graph_path, "w", encoding="utf-8") as fh:
-        json.dump(wf, fh, indent=1)
+        json.dump(wf, fh, indent=2, ensure_ascii=False)
     with open(record_path, "w", encoding="utf-8") as fh:
-        json.dump(record, fh, indent=1)
+        json.dump(record, fh, indent=2, ensure_ascii=False)
 
     print(f"nodes            {len(wf)}")
     print(f"groups           {len(group_ids)} of at most {a.group}")
@@ -310,7 +310,7 @@ def build_and_write(argv=None):
     # receipt, so two runs into one `--out` are distinguishable in a scrollback.
     print(f"payload sha256   {record['payload_sha256']}")
     print(f"overwrite        {gate_overwrite['verdict']}")
-    print(f"BUILD_CASCADE_OK {graph_path}")
+    print("BUILD_CASCADE_OK " + json.dumps({"path": graph_path}, ensure_ascii=False))
     return wf
 
 
@@ -333,3 +333,4 @@ if __name__ == "__main__":
     from armature_core.parts import run_tool_main  # noqa: E402
 
     run_tool_main(main, "BUILD_CASCADE")
+

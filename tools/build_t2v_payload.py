@@ -510,24 +510,26 @@ def main(argv=None):
         description=(
             "Build and gate the t2v route's API graph on a recorded trajectory. Writes the "
             "graph and its payload record; submits nothing."),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=(
-            "ROUTE: E09's A3 arm. The served T2V template is a REFERENCE, never a route - it "
-            "wires the licence map's EXCLUDED 4-step trajectory at strength 1.0 under a "
-            "randomising seed, with no length or seed slot exposed - so this graph is built "
-            "here and gated here. WHAT A REFUSAL COSTS: nothing but your time; every gate "
-            "runs before anything is submitted."))
-    ap.add_argument("--seeds", default="specs/E09-A3-seeds.json",
+                "ROUTE: E09's A3 arm. The served T2V template is a REFERENCE, never a route - it wires the licence map's EXCLUDED 4-step trajectory at strength 1.0 under a randomising seed, with no length or seed slot exposed - so this graph is built here and gated here.\n"
+                "\n"
+                "WHAT A REFUSAL COSTS: nothing but your time; every gate runs before anything is submitted."))
+    build_opts = ap.add_argument_group("build")
+    output_opts = ap.add_argument_group("output")
+
+    build_opts.add_argument("--seeds", default="specs/E09-A3-seeds.json",
                     help="the committed seed registration Gate S checks --seed against, and "
                          "the list the default seed is taken from (default: %(default)s)")
-    ap.add_argument("--out", default="outputs/E09/route2",
+    output_opts.add_argument("--out", default="outputs/E09/route2",
                     help="the directory the graph and its payload record are written into "
                          "(default: %(default)s)")
-    ap.add_argument("--seed", type=int, default=None,
+    build_opts.add_argument("--seed", type=int, default=None,
                     help="which registered seed to use; defaults to the first")
-    ap.add_argument("--profile", default="reference", choices=["reference", "derived"],
+    build_opts.add_argument("--profile", default="reference", choices=["reference", "derived"],
                     help="reference = A3's documented trajectory; derived = the "
                          "superseded probe's, kept runnable")
-    ap.add_argument("--tag", default="A3", help="goes in the written filenames")
+    build_opts.add_argument("--tag", default="A3", help="goes in the written filenames")
     add_spend_flags(ap)
     a = ap.parse_args(argv)
     # ---- ANDON, wave 22 (F-7e45e62b, sibling carry). `--tag` is pasted into this tool's
@@ -709,7 +711,7 @@ def main(argv=None):
         json.dump(record, fh, indent=2, ensure_ascii=False)
 
     print(canon_line(canon_ev))
-    print("BUILD_T2V_OK " + json.dumps({
+    print("BUILD_T2V_OK " + json.dumps({"path": graph_path,
         "profile": a.profile, "graph": graph_path, "sha256": graph_sha,
         "nodes": len(graph), "seed": seed,
         "split_step": split["split_step"], "steps": split["steps"],
@@ -740,3 +742,4 @@ if __name__ == "__main__":
     from armature_core.parts import run_tool_main  # noqa: E402
 
     run_tool_main(main, "BUILD_T2V")
+

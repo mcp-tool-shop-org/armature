@@ -49,7 +49,8 @@ def _drive(tool, argv, sentinel):
                           capture_output=True, text=True, encoding="utf-8",
                           errors="replace", cwd=REPO)
     halts = [ln for ln in proc.stdout.splitlines() if ln.startswith(sentinel + "_HALT ")]
-    oks = [ln for ln in proc.stdout.splitlines() if ln.startswith(sentinel + "_OK ")]
+    oks = [ln for ln in proc.stdout.splitlines()
+           if ln == sentinel + "_OK" or ln.startswith(sentinel + "_OK ")]
     halt = json.loads(halts[-1][len(sentinel) + 6:]) if halts else None
     return proc, halt, oks
 
@@ -182,7 +183,8 @@ def test_the_unmutated_fixture_still_reaches_admission_the_direction_not_bounded
     proc, halt, oks = _gsg(tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert halt is None and len(oks) == 1, (halt, oks)
-    printed = json.loads(oks[0][len("SAVED_ADMISSION_OK "):])
+    from conftest import load_ok_payload
+    printed = load_ok_payload(proc.stdout)
     assert printed["round_trip_values_compared"] >= 1, printed
     assert printed["links_compared"] == 4, printed
 
@@ -808,7 +810,8 @@ def test_the_same_record_with_its_digest_is_admitted(tmp_path):
     proc, halt, oks = _gsg(tmp_path)
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert halt is None and len(oks) == 1, (halt, oks)
-    printed = json.loads(oks[0][len("SAVED_ADMISSION_OK "):])
+    from conftest import load_ok_payload
+    printed = load_ok_payload(proc.stdout)
     assert printed["route_facts"]["payload_sha256"], printed
     written = json.loads((tmp_path / "out" / "admission.json").read_text(encoding="utf-8"))
     assert written["route_facts"]["source"].endswith(
@@ -976,7 +979,8 @@ def test_the_real_tier_on_a_graph_that_carries_its_enums_still_reaches_gate_L(tm
         "--hosted-tier=wan2.7-r2v"], "SAVED_ADMISSION")
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert halt is None and len(oks) == 1, (halt, oks)
-    printed = json.loads(oks[0][len("SAVED_ADMISSION_OK "):])
+    from conftest import load_ok_payload
+    printed = load_ok_payload(proc.stdout)
     assert "pixel clause inapplicable" in printed["gate_L_frame_source"], printed
 
 
