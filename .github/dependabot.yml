@@ -24,3 +24,23 @@ updates:
       python-deps:
         patterns:
           - "*"
+
+  # npm/site: security updates only. `open-pull-requests-limit: 0` switches OFF
+  # version updates for this ecosystem, so this adds no routine PR volume -- it
+  # exists purely to GROUP the security PRs GitHub opens regardless of config.
+  #
+  # Ungrouped, each advisory gets its own PR while `npm audit --audit-level=high`
+  # in ci.yml audits the whole lockfile. Four concurrent /site advisories (astro
+  # critical, sharp/js-yaml/svgo high) therefore produced four PRs that each
+  # still reported the other three, so none could ever go green. Grouping makes
+  # one PR that clears them together.
+  - package-ecosystem: npm
+    directory: /site
+    schedule:
+      interval: monthly
+    open-pull-requests-limit: 0
+    groups:
+      site-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
