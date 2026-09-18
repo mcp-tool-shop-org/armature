@@ -222,9 +222,25 @@ jobs:
       # `--package-lock-only` reads the committed lockfile and needs no node_modules, so the
       # scan is the first thing that touches site/. `high` is the studio's threshold; a
       # build-time low is not worth a red main.
+      # On a push to main this is the absolute audit, exactly as before: standing
+      # debt keeps main red, which is correct and actionable.
       - name: scan site dependencies
+        if: github.event_name != 'pull_request'
         working-directory: site
         run: npm audit --package-lock-only --audit-level=high
+
+      # On a pull request, fail only on advisories THIS PR introduces. The
+      # lockfile-wide audit above failed every one-package Dependabot bump on
+      # its unfixed siblings (#1, #8, #10, #11, #12 on 2026-09-17) and held the
+      # critical astro fix behind three highs it did not touch. Standing debt
+      # is printed under the step, not failed. Same pre-install position: the
+      # action reads the lockfile and the registry, it installs nothing.
+      - name: scan site dependencies (delta vs base)
+        if: github.event_name == 'pull_request'
+        uses: mcp-tool-shop-org/.github/.github/actions/delta-audit@f4a52204518a78c45f388d6c70cf7b727a5cc6a6 # delta-audit v1
+        with:
+          working-directory: site
+          level: high
 
       # `npm ci` and not `npm install`: the lockfile is committed, and a build
       # that resolves fresh dependencies is not the build that was verified on
