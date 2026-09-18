@@ -235,9 +235,9 @@ jobs:
       # critical astro fix behind three highs it did not touch. Standing debt
       # is printed under the step, not failed. Same pre-install position: the
       # action reads the lockfile and the registry, it installs nothing.
-      - name: scan site dependencies (delta vs base)
+      - name: delta-audit site/ against the base branch
         if: github.event_name == 'pull_request'
-        uses: mcp-tool-shop-org/.github/.github/actions/delta-audit@f4a52204518a78c45f388d6c70cf7b727a5cc6a6 # delta-audit v1
+        uses: mcp-tool-shop-org/.github/.github/actions/delta-audit@f4a52204518a78c45f388d6c70cf7b727a5cc6a6 # v1.0.0
         with:
           working-directory: site
           level: high
