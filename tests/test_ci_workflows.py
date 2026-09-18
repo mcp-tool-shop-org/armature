@@ -1693,7 +1693,15 @@ def test_no_action_is_resolved_from_a_branch_ref(source, action, ref, line):
 #: `actions/*` rows until the ci-packaging amend pins them (its brief: "every `uses:`
 #: pinned by SHA, including `actions/*`, comment the version").
 ALL_USES = uses_refs()
-THIRD_PARTY = [row for row in ALL_USES if not row[1].startswith("actions/")]
+#: "Third party" means neither GitHub's own `actions/*` nor this org's own composite
+#: actions under `mcp-tool-shop-org/`. The org gained a first-party cross-repo action on
+#: 2026-09-18 (`.github/.github/actions/delta-audit`, pinned by SHA and tagged); counting
+#: it as a vendor would have made the "exactly one vendor, and it is pypa" law below read
+#: as two vendors, which is not what changed. The law's subject is unchanged: one vendor.
+THIRD_PARTY = [
+    row for row in ALL_USES
+    if not row[1].startswith("actions/") and not row[1].startswith("mcp-tool-shop-org/")
+]
 
 
 # WAVE 26, F-dfdbcff1 — `test_the_repo_still_has_an_action_to_hold_to_the_pin` stood here and
@@ -2144,6 +2152,10 @@ EVERY_USE_TODAY = sorted({
     ("ci.yml", "actions/checkout"),
     ("ci.yml", "actions/setup-node"),
     ("ci.yml", "actions/setup-python"),
+    # The org's delta-audit composite action, pinned to the .github commit that
+    # merged it and tagged delta-audit-v1.0.0 there so the version beside the
+    # hash is real. Runs on pull_request in place of the lockfile-wide audit.
+    ("ci.yml", "mcp-tool-shop-org/.github/.github/actions/delta-audit"),
     ("pages.yml", "actions/checkout"),
     ("pages.yml", "actions/deploy-pages"),
     ("pages.yml", "actions/setup-node"),
@@ -2184,7 +2196,10 @@ def test_the_pinning_census_is_every_external_action_in_the_tree():
     #: rows of which 2 are local `./.github/actions/*` calls, pages.yml 4, release.yml 9 of
     #: which 2 are local — 21 `uses:` lines, 17 external rows). ci-packaging's estimate was
     #: 18; the census read 17 on the tree it exists to measure, so 17 is what stands.
-    assert len(ALL_USES) == 17, [(r[0], r[1]) for r in ALL_USES]
+    #: 18 as of the delta-audit gate (2026-09-18): ci.yml gained one external row,
+    #: `mcp-tool-shop-org/.github/.github/actions/delta-audit`, on pull_request only.
+    #: Measured on this tree the same way the 17 was, not estimated.
+    assert len(ALL_USES) == 18, [(r[0], r[1]) for r in ALL_USES]
     assert len(THIRD_PARTY) == 1, [(r[0], r[1]) for r in THIRD_PARTY]
     assert THIRD_PARTY[0][1] == "pypa/gh-action-pypi-publish", THIRD_PARTY
 
