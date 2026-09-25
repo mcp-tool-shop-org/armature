@@ -1,0 +1,369 @@
+{
+  "authored": [
+    ".github/",
+    "docs/",
+    "root",
+    "site/",
+    "specs/"
+  ],
+  "breaks": [
+    {
+      "doors": 3,
+      "importedBy": [],
+      "importedByTests": [
+        "tests"
+      ],
+      "kind": "part",
+      "name": "tools",
+      "partLabel": "tools"
+    },
+    {
+      "doors": 2,
+      "importedBy": [],
+      "importedByTests": [],
+      "kind": "part",
+      "name": "site",
+      "partLabel": "the site"
+    },
+    {
+      "doors": 2,
+      "importedBy": [],
+      "importedByTests": [],
+      "kind": "part",
+      "name": "tests",
+      "partLabel": "tests"
+    }
+  ],
+  "changes": {
+    "first": true
+  },
+  "changesTogether": [
+    {
+      "a": "tools/author_walk.py",
+      "b": "tools/lift_solve.py",
+      "either": 20,
+      "partLabels": [
+        "tools",
+        "tools"
+      ],
+      "parts": [
+        "tools",
+        "tools"
+      ],
+      "relation": "inside",
+      "shared": 16
+    },
+    {
+      "a": "tools/make_binding_sheet.py",
+      "b": "tools/make_parts_sheet.py",
+      "either": 20,
+      "partLabels": [
+        "tools",
+        "tools"
+      ],
+      "parts": [
+        "tools",
+        "tools"
+      ],
+      "relation": "inside",
+      "shared": 16
+    },
+    {
+      "a": "tools/build_camera_i2v_payload.py",
+      "b": "tools/build_i2v_payload.py",
+      "either": 28,
+      "partLabels": [
+        "tools",
+        "tools"
+      ],
+      "parts": [
+        "tools",
+        "tools"
+      ],
+      "relation": "inside",
+      "shared": 22
+    },
+    {
+      "a": "tools/preview_walk.py",
+      "b": "tools/render_performer.py",
+      "either": 22,
+      "partLabels": [
+        "tools",
+        "tools"
+      ],
+      "parts": [
+        "tools",
+        "tools"
+      ],
+      "relation": "inside",
+      "shared": 16
+    },
+    {
+      "a": "tools/rig_bake.py",
+      "b": "tools/rig_repair.py",
+      "either": 19,
+      "partLabels": [
+        "tools",
+        "tools"
+      ],
+      "parts": [
+        "tools",
+        "tools"
+      ],
+      "relation": "inside",
+      "shared": 13
+    }
+  ],
+  "changesTogetherNote": [
+    "Window: 180 days; a pair counts from 10 shared commits, since 102 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
+  ],
+  "changesTogetherWithTests": 0,
+  "commit": "f57d428d16010f1235b7aa03b9bb55d4e0599043",
+  "defaultBranch": "main",
+  "derived": "8 parts, mostly Python (320 files), JavaScript (2) and TypeScript (2). Work enters through 4 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio (npm) to npm. People run armature.",
+  "doors": [
+    {
+      "checks": [],
+      "checksCount": 0,
+      "checksMore": 0,
+      "file": ".github/workflows/ci.yml",
+      "id": ".github/workflows/ci.yml",
+      "landings": [],
+      "name": "ci",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "npm",
+          "depth": 0,
+          "files": 1
+        },
+        {
+          "boundary": "site",
+          "depth": 0,
+          "files": 3
+        },
+        {
+          "boundary": "tests",
+          "depth": 0,
+          "files": 203
+        },
+        {
+          "boundary": "tools",
+          "depth": 1,
+          "files": 2
+        }
+      ],
+      "runs": [
+        "npm/bin/armature.mjs",
+        "tests/",
+        "site/astro.config.mjs",
+        "site/src/"
+      ],
+      "runsCount": 4,
+      "runsMore": 2,
+      "sends": [],
+      "stages": [],
+      "triggers": [
+        "on a pull request touching 21 paths",
+        "on a push touching 21 paths",
+        "or by hand"
+      ]
+    },
+    {
+      "checks": [],
+      "checksCount": 0,
+      "checksMore": 0,
+      "file": ".github/workflows/release.yml",
+      "id": ".github/workflows/release.yml",
+      "landings": [],
+      "name": "release",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "tests",
+          "depth": 0,
+          "files": 203
+        },
+        {
+          "boundary": "tools",
+          "depth": 1,
+          "files": 2
+        }
+      ],
+      "runs": [
+        "tests/"
+      ],
+      "runsCount": 1,
+      "runsMore": 0,
+      "sends": [
+        "publishes to PyPI and @mcptoolshop/armature-studio (npm) to npm (on a run by hand, only with rehearse false)"
+      ],
+      "stages": [],
+      "triggers": [
+        "when a release is published",
+        "or by hand"
+      ]
+    },
+    {
+      "checks": [],
+      "checksCount": 0,
+      "checksMore": 0,
+      "file": ".github/workflows/pages.yml",
+      "id": ".github/workflows/pages.yml",
+      "landings": [],
+      "name": "pages",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "site",
+          "depth": 0,
+          "files": 3
+        }
+      ],
+      "runs": [
+        "site/astro.config.mjs",
+        "site/src/"
+      ],
+      "runsCount": 2,
+      "runsMore": 0,
+      "sends": [
+        "deploys the site on main"
+      ],
+      "stages": [],
+      "triggers": [
+        "on a push to main touching 2 paths",
+        "or by hand"
+      ]
+    },
+    {
+      "checks": [],
+      "checksCount": 0,
+      "checksMore": 0,
+      "file": "pyproject.toml",
+      "id": "pyproject.toml#armature",
+      "kind": "command",
+      "landings": [],
+      "name": "armature",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "tools",
+          "depth": 0,
+          "files": 11
+        }
+      ],
+      "runs": [
+        "tools/armature_core/cli.py"
+      ],
+      "runsCount": 1,
+      "runsMore": 0,
+      "sends": [],
+      "stages": [],
+      "triggers": []
+    }
+  ],
+  "duplicates": [],
+  "duplicatesLead": null,
+  "duplicatesNote": [],
+  "edges": [
+    {
+      "from": "tests",
+      "fromTests": true,
+      "to": "tools"
+    }
+  ],
+  "generated": [],
+  "generatedAt": "2026-09-25T02:13:13.433Z",
+  "limits": [
+    "1629 import sites could not be resolved.",
+    "141 writes and 181 reads use paths built at run time and are not named here.",
+    "43 writes and 7 reads go to a path their caller passes, not to this repository.",
+    "10 writes go to the directory the command is run in, not to this repository.",
+    "3 commands are built at run time and not followed."
+  ],
+  "mainDoor": ".github/workflows/ci.yml",
+  "partLabels": {
+    ".github": ".github",
+    "docs": "docs",
+    "npm": "npm",
+    "root": "the repository root",
+    "site": "the site",
+    "specs": "specs",
+    "tests": "tests",
+    "tools": "tools"
+  },
+  "parts": 8,
+  "readers": [],
+  "repo": "mcp-tool-shop-org/armature",
+  "sequences": [
+    {
+      "entry": "step_containing",
+      "file": "tests/test_ci_workflows.py",
+      "inner": [],
+      "part": "tests",
+      "partLabel": "tests",
+      "phrase": "step containing",
+      "steps": [
+        {
+          "name": "splitlines",
+          "part": null,
+          "partLabel": null,
+          "phrase": "splitlines"
+        },
+        {
+          "name": "lstrip",
+          "part": null,
+          "partLabel": null,
+          "phrase": "lstrip"
+        }
+      ]
+    },
+    {
+      "entry": "test_a_near_opaque_master_completes_with_n_a_and_the_token_last",
+      "file": "tests/test_instruments_measure_amend_w14.py",
+      "inner": [],
+      "part": "tests",
+      "partLabel": "tests",
+      "phrase": "test a near opaque master completes with n a and the token last",
+      "steps": [
+        {
+          "name": "setattr",
+          "part": null,
+          "partLabel": null,
+          "phrase": "setattr"
+        },
+        {
+          "name": "readouterr",
+          "part": null,
+          "partLabel": null,
+          "phrase": "readouterr"
+        }
+      ]
+    }
+  ],
+  "startDoor": "pyproject.toml#armature",
+  "startHere": [
+    "tools/armature_core/cli.py"
+  ],
+  "startReason": "This path follows armature (a command people run) from its entry, since ci runs only tests and scripts that import no code here.",
+  "summary": null,
+  "summaryFrom": null,
+  "testFiles": 223,
+  "testedBy": {
+    "npm": 0,
+    "tools": 72
+  },
+  "unnamedWrites": 141,
+  "unread": [],
+  "unreadFiles": 0,
+  "unreadNote": [],
+  "untested": [
+    {
+      "part": "npm",
+      "partLabel": "npm",
+      "testedBy": 0
+    }
+  ],
+  "untestedNote": [],
+  "written": 0
+}

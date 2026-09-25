@@ -39,6 +39,7 @@ on:
       # green-by-absence and first surfaced in release.yml, after `release: published`.
       - ".github/workflows/**"
       - ".github/actions/**"
+      - "atlas/**"
       # The packaging manifests. Added at v0.2.0: without these a change to
       # pyproject.toml or the launcher could reach a tag having never been built,
       # and the first place that failure would surface is the release job — after
@@ -111,6 +112,7 @@ on:
       # green-by-absence and first surfaced in release.yml, after `release: published`.
       - ".github/workflows/**"
       - ".github/actions/**"
+      - "atlas/**"
       # The packaging manifests. Added at v0.2.0: without these a change to
       # pyproject.toml or the launcher could reach a tag having never been built,
       # and the first place that failure would surface is the release job — after
@@ -457,6 +459,12 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
+
+      # The committed Atlas map (atlas/) must match the tree. Atlas needs Node 22 or later, so
+      # it runs on the 22 cell only rather than twice.
+      - name: Atlas check
+        if: matrix.node-version == 22
+        run: npx --yes @dogfood-lab/atlas@1.20.0 check
 
       # `npm test` is `node bin/armature.mjs --node-selftest`: it proves the launcher parses
       # and reports honestly, which is the half of it that must work before Python is even
