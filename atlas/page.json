@@ -9,13 +9,23 @@
   "breaks": [
     {
       "doors": 3,
-      "importedBy": [],
+      "importedBy": [
+        ".github"
+      ],
       "importedByTests": [
         "tests"
       ],
       "kind": "part",
       "name": "tools",
       "partLabel": "tools"
+    },
+    {
+      "doors": 2,
+      "importedBy": [],
+      "importedByTests": [],
+      "kind": "part",
+      "name": "npm",
+      "partLabel": "npm"
     },
     {
       "doors": 2,
@@ -35,7 +45,118 @@
     }
   ],
   "changes": {
-    "first": true
+    "fileCounts": {
+      "added": 0,
+      "changed": 1,
+      "moved": 0,
+      "parts": 1,
+      "removed": 0
+    },
+    "items": [
+      {
+        "kind": "import-added",
+        "sentence": ".github now imports tools.",
+        "subjects": [
+          ".github",
+          "tools"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "ci now also runs tools/armature_core/cli.py.",
+        "subjects": [
+          ".github/workflows/ci.yml",
+          "tools/armature_core/cli.py"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "ci now also checks tools/.",
+        "subjects": [
+          ".github/workflows/ci.yml",
+          "tools/"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "release now also runs tools/armature_core/cli.py.",
+        "subjects": [
+          ".github/workflows/release.yml",
+          "tools/armature_core/cli.py"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "And 2 more changes to doors.",
+        "subjects": []
+      },
+      {
+        "kind": "landing",
+        "sentence": "MANIFEST.in is now also read by .github/workflows/ci.yml and .github/workflows/release.yml.",
+        "subjects": [
+          "MANIFEST.in",
+          ".github/workflows/ci.yml",
+          ".github/workflows/release.yml"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "pyproject.toml is now also read by .github/workflows/ci.yml.",
+        "subjects": [
+          "pyproject.toml",
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "tests/ is now also read by tests/test_refusal_clauses.py.",
+        "subjects": [
+          "tests/",
+          "tests/test_refusal_clauses.py"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "And 4 more new writers and readers of places.",
+        "subjects": []
+      },
+      {
+        "kind": "sequence",
+        "sentence": "tests/test_amend_w12_core_gates.py now starts at `test_the_three_gate_p_clauses_refuse_an_infinite_diagonal_too`; it started at `test_the_condition_flipped_back_to_allowed_drops_out_of_the_receipt`.",
+        "subjects": [
+          "tests/test_amend_w12_core_gates.py"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "sentence": "In tests/test_amend_w12_core_solvers.py, `test_gate_conv_refuses_when_the_modules_tables_drift_from_the_recorded_reference` gained a step, `setattr`, before `setattr`.",
+        "subjects": [
+          "tests/test_amend_w12_core_solvers.py"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "sentence": "In tests/test_amend_w12_core_solvers.py, `test_gate_conv_refuses_when_the_modules_tables_drift_from_the_recorded_reference` gained a step, `setattr`, before `setattr`.",
+        "subjects": [
+          "tests/test_amend_w12_core_solvers.py"
+        ]
+      },
+      {
+        "kind": "sequence",
+        "sentence": "And 9 more changes to the order of work.",
+        "subjects": []
+      },
+      {
+        "kind": "counts",
+        "sentence": "1 file changed content, across 1 part.",
+        "subjects": []
+      }
+    ],
+    "since": {
+      "commit": "f57d428d16010f1235b7aa03b9bb55d4e0599043",
+      "generatedAt": "2026-09-25T02:13:13.433Z"
+    },
+    "unchanged": false
   },
   "changesTogether": [
     {
@@ -118,13 +239,15 @@
     "Window: 180 days; a pair counts from 10 shared commits, since 102 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "f57d428d16010f1235b7aa03b9bb55d4e0599043",
+  "commit": "7a70d6fb97ef1cf5b33f8f03d18860611954e386",
   "defaultBranch": "main",
-  "derived": "8 parts, mostly Python (320 files), JavaScript (2) and TypeScript (2). Work enters through 4 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio (npm) to npm. People run armature.",
+  "derived": "8 parts, mostly Python (320 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.",
   "doors": [
     {
-      "checks": [],
-      "checksCount": 0,
+      "checks": [
+        "tools/"
+      ],
+      "checksCount": 1,
       "checksMore": 0,
       "file": ".github/workflows/ci.yml",
       "id": ".github/workflows/ci.yml",
@@ -140,7 +263,7 @@
         {
           "boundary": "site",
           "depth": 0,
-          "files": 3
+          "files": 5
         },
         {
           "boundary": "tests",
@@ -149,18 +272,19 @@
         },
         {
           "boundary": "tools",
-          "depth": 1,
-          "files": 2
+          "depth": 0,
+          "files": 114
         }
       ],
       "runs": [
         "npm/bin/armature.mjs",
         "tests/",
+        "tools/armature_core/cli.py",
         "site/astro.config.mjs",
         "site/src/"
       ],
-      "runsCount": 4,
-      "runsMore": 2,
+      "runsCount": 5,
+      "runsMore": 3,
       "sends": [],
       "stages": [],
       "triggers": [
@@ -170,8 +294,10 @@
       ]
     },
     {
-      "checks": [],
-      "checksCount": 0,
+      "checks": [
+        "tools/"
+      ],
+      "checksCount": 1,
       "checksMore": 0,
       "file": ".github/workflows/release.yml",
       "id": ".github/workflows/release.yml",
@@ -186,17 +312,18 @@
         },
         {
           "boundary": "tools",
-          "depth": 1,
-          "files": 2
+          "depth": 0,
+          "files": 114
         }
       ],
       "runs": [
+        "tools/armature_core/cli.py",
         "tests/"
       ],
-      "runsCount": 1,
+      "runsCount": 2,
       "runsMore": 0,
       "sends": [
-        "publishes to PyPI and @mcptoolshop/armature-studio (npm) to npm (on a run by hand, only with rehearse false)"
+        "publishes to PyPI and @mcptoolshop/armature-studio to npm (on a run by hand, only with rehearse false)"
       ],
       "stages": [],
       "triggers": [
@@ -217,7 +344,7 @@
         {
           "boundary": "site",
           "depth": 0,
-          "files": 3
+          "files": 5
         }
       ],
       "runs": [
@@ -239,6 +366,32 @@
       "checks": [],
       "checksCount": 0,
       "checksMore": 0,
+      "file": "npm/package.json",
+      "id": "npm/package.json#armature",
+      "kind": "command",
+      "landings": [],
+      "name": "armature",
+      "pushes": false,
+      "reach": [
+        {
+          "boundary": "npm",
+          "depth": 0,
+          "files": 1
+        }
+      ],
+      "runs": [
+        "npm/bin/armature.mjs"
+      ],
+      "runsCount": 1,
+      "runsMore": 0,
+      "sends": [],
+      "stages": [],
+      "triggers": []
+    },
+    {
+      "checks": [],
+      "checksCount": 0,
+      "checksMore": 0,
       "file": "pyproject.toml",
       "id": "pyproject.toml#armature",
       "kind": "command",
@@ -249,7 +402,7 @@
         {
           "boundary": "tools",
           "depth": 0,
-          "files": 11
+          "files": 15
         }
       ],
       "runs": [
@@ -272,13 +425,14 @@
       "to": "tools"
     }
   ],
+  "engine": "1.24.0",
   "generated": [],
-  "generatedAt": "2026-09-25T02:13:13.433Z",
+  "generatedAt": "2026-09-30T20:07:32.567Z",
   "limits": [
-    "1629 import sites could not be resolved.",
-    "141 writes and 181 reads use paths built at run time and are not named here.",
-    "43 writes and 7 reads go to a path their caller passes, not to this repository.",
-    "10 writes go to the directory the command is run in, not to this repository.",
+    "43 imports could not be resolved: `tests/blender/test_check_pack.py` imports `conftest`, which is no module on its import path and no declared dependency; `tests/blender_stub.py` imports a path built at run time; `tests/conftest.py` imports a path built at run time; and 40 more.",
+    "116 writes and 73 reads use paths built at run time and are not named here.",
+    "80 writes and 156 reads go to a path their caller passes, not to this repository.",
+    "3 writes go to the directory the command is run in, not to this repository.",
     "3 commands are built at run time and not followed."
   ],
   "mainDoor": ".github/workflows/ci.yml",
@@ -297,73 +451,246 @@
   "repo": "mcp-tool-shop-org/armature",
   "sequences": [
     {
-      "entry": "step_containing",
-      "file": "tests/test_ci_workflows.py",
+      "entry": "test_the_three_gate_p_clauses_refuse_an_infinite_diagonal_too",
+      "file": "tests/test_amend_w12_core_gates.py",
       "inner": [],
       "part": "tests",
       "partLabel": "tests",
-      "phrase": "step containing",
+      "phrase": "`test_the_three_gate_p_clauses_refuse_an_infinite_diagonal_too`",
       "steps": [
         {
-          "name": "splitlines",
-          "part": null,
-          "partLabel": null,
-          "phrase": "splitlines"
-        },
-        {
-          "name": "lstrip",
-          "part": null,
-          "partLabel": null,
-          "phrase": "lstrip"
+          "count": 3,
+          "name": null,
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`__init__.py`"
         }
       ]
     },
     {
-      "entry": "test_a_near_opaque_master_completes_with_n_a_and_the_token_last",
-      "file": "tests/test_instruments_measure_amend_w14.py",
+      "entry": "test_load_pinned_camera_refuses_to_run_with_no_expectation",
+      "file": "tests/test_amend_w6_andons.py",
       "inner": [],
       "part": "tests",
       "partLabel": "tests",
-      "phrase": "test a near opaque master completes with n a and the token last",
+      "phrase": "`test_load_pinned_camera_refuses_to_run_with_no_expectation`",
       "steps": [
         {
-          "name": "setattr",
-          "part": null,
-          "partLabel": null,
-          "phrase": "setattr"
+          "count": 3,
+          "name": null,
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`__init__.py`"
+        }
+      ]
+    },
+    {
+      "entry": "test_the_slot_index_gate_catches_a_permuted_slot_that_topology_calls_clean",
+      "file": "tests/test_assembly.py",
+      "inner": [],
+      "part": "tests",
+      "partLabel": "tests",
+      "phrase": "`test_the_slot_index_gate_catches_a_permuted_slot_that_topology_calls_clean`",
+      "steps": [
+        {
+          "name": "build",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`build`"
         },
         {
-          "name": "readouterr",
-          "part": null,
-          "partLabel": null,
-          "phrase": "readouterr"
+          "name": "gate_batch_topology",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`gate_batch_topology`"
+        },
+        {
+          "name": "gate_slot_frame_index",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`gate_slot_frame_index`"
+        },
+        {
+          "name": "gate_batch_topology",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`gate_batch_topology`"
+        },
+        {
+          "name": "gate_slot_frame_index",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`gate_slot_frame_index`"
+        }
+      ]
+    },
+    {
+      "entry": "test_a_within_group_slot_swap_is_caught_by_the_index_gate",
+      "file": "tests/test_cascade.py",
+      "inner": [
+        {
+          "file": "tools/build_cascade_payload.py",
+          "name": "build",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`build`",
+          "steps": [
+            {
+              "name": "gate_create_video_fps",
+              "part": "tools",
+              "partLabel": "tools",
+              "phrase": "`gate_create_video_fps`"
+            },
+            {
+              "name": "cascade_plan",
+              "part": "tools",
+              "partLabel": "tools",
+              "phrase": "`cascade_plan`"
+            }
+          ]
+        }
+      ],
+      "part": "tests",
+      "partLabel": "tests",
+      "phrase": "`test_a_within_group_slot_swap_is_caught_by_the_index_gate`",
+      "steps": [
+        {
+          "name": "build",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`build`"
+        },
+        {
+          "name": "cascade_plan",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`cascade_plan`"
+        },
+        {
+          "name": "gate_slot_frame_index",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`gate_slot_frame_index`"
+        },
+        {
+          "name": "gate_cascade_topology",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`gate_cascade_topology`"
+        },
+        {
+          "name": "gate_slot_frame_index",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`gate_slot_frame_index`"
+        }
+      ]
+    },
+    {
+      "entry": "test_the_motion_threshold_bites_at_the_stated_number",
+      "file": "tests/test_donor_gate.py",
+      "inner": [],
+      "part": "tests",
+      "partLabel": "tests",
+      "phrase": "`test_the_motion_threshold_bites_at_the_stated_number`",
+      "steps": [
+        {
+          "count": 8,
+          "name": null,
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`__init__.py`"
+        }
+      ]
+    },
+    {
+      "entry": "test_every_float_flag_in_both_parsers_is_bounded_by_name",
+      "file": "tests/test_instruments_amend_w18_optics.py",
+      "inner": [],
+      "part": "tests",
+      "partLabel": "tests",
+      "phrase": "`test_every_float_flag_in_both_parsers_is_bounded_by_name`",
+      "steps": [
+        {
+          "name": "_fn",
+          "part": "tests",
+          "partLabel": "tests",
+          "phrase": "`_fn`"
+        },
+        {
+          "name": "read_source",
+          "part": "tests",
+          "partLabel": "tests",
+          "phrase": "`read_source`"
+        }
+      ]
+    },
+    {
+      "entry": "main",
+      "file": "tools/armature_core/cli.py",
+      "inner": [],
+      "part": "tools",
+      "partLabel": "tools",
+      "phrase": "`main`",
+      "steps": [
+        {
+          "name": "add_spend_flags",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`add_spend_flags`"
+        },
+        {
+          "name": "known_hosted_tiers",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`known_hosted_tiers`"
+        },
+        {
+          "count": 3,
+          "name": null,
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`parts.py`"
+        },
+        {
+          "name": "load_graph",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`load_graph`"
+        },
+        {
+          "name": "verify",
+          "part": "tools",
+          "partLabel": "tools",
+          "phrase": "`verify`"
         }
       ]
     }
   ],
-  "startDoor": "pyproject.toml#armature",
+  "startDoor": ".github/workflows/ci.yml",
   "startHere": [
-    "tools/armature_core/cli.py"
+    ".github/workflows/ci.yml",
+    "tools/armature_core/cli.py",
+    "tools/armature_core/route_gates.py",
+    "tools/armature_core/parts.py"
   ],
-  "startReason": "This path follows armature (a command people run) from its entry, since ci runs only tests and scripts that import no code here.",
   "summary": null,
   "summaryFrom": null,
   "testFiles": 223,
   "testedBy": {
-    "npm": 0,
-    "tools": 72
+    "npm": 1,
+    "tools": 191
   },
-  "unnamedWrites": 141,
+  "testedByScript": [
+    "npm"
+  ],
+  "unnamedWrites": 116,
   "unread": [],
   "unreadFiles": 0,
   "unreadNote": [],
-  "untested": [
-    {
-      "part": "npm",
-      "partLabel": "npm",
-      "testedBy": 0
-    }
+  "untested": [],
+  "untestedNote": [
+    "npm is tested only by its package's own test script, which a workflow runs."
   ],
-  "untestedNote": [],
   "written": 0
 }
