@@ -123,6 +123,7 @@
         "confidence": "full",
         "importsAndCoChanges": [],
         "importsOnly": [
+          ".github",
           "tests"
         ]
       },
@@ -174,8 +175,8 @@
         "path": ".github/dependabot.yml"
       },
       {
-        "commits": 47,
-        "lines": 1252,
+        "commits": 48,
+        "lines": 1260,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -282,6 +283,31 @@
         "commits": 10,
         "lines": 264,
         "path": "SHIP_GATE.md"
+      },
+      {
+        "commits": 1,
+        "lines": 89,
+        "path": "atlas/README.md"
+      },
+      {
+        "commits": 1,
+        "lines": 34,
+        "path": "atlas/boundaries.yaml"
+      },
+      {
+        "commits": 1,
+        "lines": 369,
+        "path": "atlas/page.json"
+      },
+      {
+        "commits": 1,
+        "lines": 3466,
+        "path": "atlas/statistics.json"
+      },
+      {
+        "commits": 1,
+        "lines": 19372,
+        "path": "atlas/structure.json"
       },
       {
         "commits": 1,
@@ -3004,9 +3030,9 @@
     "level": "full",
     "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
   },
-  "generatedAt": "2026-09-25T02:13:13.433Z",
+  "generatedAt": "2026-09-30T20:07:32.567Z",
   "generatedFrom": {
-    "commit": "f57d428d16010f1235b7aa03b9bb55d4e0599043"
+    "commit": "7a70d6fb97ef1cf5b33f8f03d18860611954e386"
   },
   "pairs": [
     {
@@ -3433,16 +3459,16 @@
     "floor": "strong",
     "floorHeld": false,
     "floorTrigger": null,
-    "headDate": "2026-09-17T20:45:51-07:00",
-    "inScopeFiles": 558,
+    "headDate": "2026-09-24T20:13:54-07:00",
+    "inScopeFiles": 563,
     "pinnedStart": null,
-    "priorFloor": null,
-    "qualifyingCommits": 759,
+    "priorFloor": "strong",
+    "qualifyingCommits": 760,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 10,
-    "since": "2026-03-22T03:45:51.000Z",
+    "since": "2026-03-29T03:13:54.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

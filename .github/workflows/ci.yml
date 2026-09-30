@@ -464,7 +464,7 @@ jobs:
       # it runs on the 22 cell only rather than twice.
       - name: Atlas check
         if: matrix.node-version == 22
-        run: npx --yes @dogfood-lab/atlas@1.20.0 check
+        run: npx --yes @dogfood-lab/atlas@1.24.0 check
 
       # `npm test` is `node bin/armature.mjs --node-selftest`: it proves the launcher parses
       # and reports honestly, which is the half of it that must work before Python is even
