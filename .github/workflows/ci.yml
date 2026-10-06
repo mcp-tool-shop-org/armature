@@ -329,7 +329,7 @@ jobs:
       # nothing else here would have noticed the sdist regressing. The specifier is the
       # clean-room action's, character for character; a test holds every copy to one string.
       - name: install test dependencies
-        run: python -m pip install --upgrade pip numpy pillow pytest opencv-python-headless==5.0.0.93 matplotlib==3.11.1 "build>=1.5,<2" "requests>=2.32,<3"
+        run: python -m pip install --upgrade pip numpy pillow pytest opencv-python-headless==5.0.0.93 matplotlib==3.11.2 "build>=1.5,<2" "requests>=2.32,<3"
 
       # Python dependency audit on the environment that mirrors `[project] dependencies` /
       # the `[dev]` pins just installed. site/'s `npm audit --audit-level=high` is the npm
@@ -341,7 +341,7 @@ jobs:
         run: |
           # The hosted interpreter ships setuptools 79.0.1 (PYSEC-2026-3447, fix 83.0.0).
           # pip-audit inspects the whole env, not only extras, so upgrade before the audit.
-          python -m pip install "setuptools>=83.0.0,<84" "pip-audit>=2.7,<3"
+          python -m pip install "setuptools>=83.0.0,<85" "pip-audit>=2.7,<3"
           python -m pip_audit --progress-spinner off
 
       # The sheet composers resolve a real font (Arial → Liberation Sans → Noto Sans, all

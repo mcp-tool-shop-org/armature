@@ -117,7 +117,7 @@ classifiers = [
 # rig and CI have actually run, not the oldest that would resolve", and re-measured with
 # `importlib.metadata` on the repo venv (E:\AI\armature\.venv, Python 3.14.5) that is false
 # for every row: numpy 2.5.2 against a `>=1.24` floor, pillow 12.3.0 against `>=10.0`,
-# matplotlib 3.11.1 against `>=3.7`. CI pins matplotlib==3.11.1 and
+# matplotlib 3.11.1 against `>=3.7`. CI pins matplotlib==3.11.2 and
 # opencv-python-headless==5.0.0.93 (ci.yml, release.yml), so three of the four floors name
 # versions neither the rig nor CI has ever run. A resolver may legitimately install numpy
 # 1.24 / pillow 10.0 / matplotlib 3.7 here, and no job in this repository has.
@@ -177,7 +177,7 @@ dependencies = [
 dev = [
     "pytest>=8.0",
     "opencv-python-headless==5.0.0.93",
-    "matplotlib==3.11.1",
+    "matplotlib==3.11.2",
     "build>=1.5,<2",
     # `tests/test_packaging.py` derives the netrc carrier names from `requests.utils.NETRC_FILES`
     # (the credential census, wave 18) and imports `requests` at module level, so three test
@@ -196,7 +196,7 @@ dev = [
     # WAVE 35/CI: hosted CPython ships setuptools 79.0.1 (PYSEC-2026-3447, fix 83).
     # The audit step installs this before pip-audit; the suite-dependency census
     # requires the same specifier here. Ceiling so release day cannot pick up 84.
-    "setuptools>=83.0.0,<84",
+    "setuptools>=83.0.0,<85",
 ]
 
 [project.urls]
