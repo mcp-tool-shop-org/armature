@@ -2293,8 +2293,9 @@ def test_gate_alias_table_covers_all_five_preprocessor_alias_rows(monkeypatch):
     assert receipt["n_rows"] == 24
     assert receipt["verdict"] == "every alias key names a row: 5 of 24"
 
+    original_components = dict(RG.RULED_COMPONENTS)
     for key in ("insightface", "smpl_", "smplx"):
-        trimmed = {k: v for k, v in RG.RULED_COMPONENTS.items() if k != key}
+        trimmed = {k: v for k, v in original_components.items() if k != key}
         monkeypatch.setattr(RG, "RULED_COMPONENTS", trimmed)
         assert RG.orphaned_component_class_aliases() == [key]
         with pytest.raises(RG.RouteGate) as exc:

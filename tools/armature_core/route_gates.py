@@ -180,12 +180,11 @@ RULED_COMPONENTS = {
             "depth-anything/video-depth-anything-large",
         ),
     },
-    # `DA3-LARGE` 1.0 (`depth-anything/DA3-LARGE`, rev c54c26b16ec0) is CC-BY-NC-4.0,
-    # whereas `DA3-LARGE-1.1` (`depth-anything/DA3-LARGE-1.1`, rev 0e109ae307c5) was
-    # re-licensed to Apache-2.0, and `ComfyUI-DepthAnythingV3` (`configs.py:102`) maps
-    # local `da3_large.safetensors` to `depth-anything/DA3-LARGE-1.1`. `exact_only=True`
-    # disables substring matching on `"da3_large"` so neither `da3_large.safetensors` nor
-    # `da3_large_1.1.safetensors` is caught here; only 1.0 exact/repo names refuse.
+    # `DA3-LARGE` 1.0 (`depth-anything/DA3-LARGE`, rev c54c26b16ec0) is CC-BY-NC-4.0, while
+    # `DA3-LARGE-1.1` (`depth-anything/DA3-LARGE-1.1`, rev 0e109ae307c5) is Apache-2.0 and
+    # `ComfyUI-DepthAnythingV3` (`MODEL_REPO_MAP`) maps local `da3_large.safetensors` to 1.1.
+    # `exact_only=True` disables substring matching on `"da3_large"` so neither
+    # `da3_large.safetensors` nor `da3_large_1.1.safetensors` is caught here; only 1.0 refuses.
     "da3_large": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
@@ -200,11 +199,10 @@ RULED_COMPONENTS = {
             "depth-anything/da3-large",
         ),
     },
-    # Longer `1.1` keys precede their `1.0` siblings so `1.1` local/repo names match the
-    # `1.1` row first (`ComfyUI-DepthAnythingV3` `configs.py:103, 106` maps unversioned
-    # `da3_giant.safetensors` and `da3nested_giant_large.safetensors` to `-1.1`), while
-    # `1.0` repo paths and non-`1.1` local suffixes (`_fp16`, `_1.0`, etc.) hit the `1.0`
-    # row and `_row_provenance` prints the matching repo and revision.
+    # Longer `1.1` keys precede their `1.0` siblings so `1.1` local/repo names match the `1.1`
+    # row first (`ComfyUI-DepthAnythingV3` `MODEL_REPO_MAP` maps `da3_giant.safetensors` and
+    # `da3nested_giant_large.safetensors` to `-1.1`), while `1.0` repo paths and non-`1.1`
+    # local suffixes (`_fp16`, `_1.0`, etc.) hit the `1.0` row with its matching `source`.
     "da3_giant_1.1": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
