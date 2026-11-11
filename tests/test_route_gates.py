@@ -2366,21 +2366,154 @@ def test_gate_alias_table_covers_all_five_preprocessor_alias_rows(monkeypatch):
     """Every `RULED_COMPONENT_CLASSES` key names an existing `RULED_COMPONENTS` row, and
     dropping any of the newly added alias rows makes `gate_alias_table` raise."""
     assert set(RG.RULED_COMPONENT_CLASSES) == {
-        "dwpose", "openpose", "insightface", "smpl_", "smplx"
+        "dwpose", "openpose", "insightface", "smpl_", "smplx", "comfyui-ltxvideo"
     }
     receipt = RG.gate_alias_table()
-    assert receipt["n_alias_keys"] == 5
-    assert receipt["n_rows"] == 25
-    assert receipt["verdict"] == "every alias key names a row: 5 of 25"
+    assert receipt["n_alias_keys"] == 6
+    assert receipt["n_rows"] == 28
+    assert receipt["verdict"] == "every alias key names a row: 6 of 28"
 
     original_components = dict(RG.RULED_COMPONENTS)
-    for key in ("insightface", "smpl_", "smplx"):
+    for key in ("insightface", "smpl_", "smplx", "comfyui-ltxvideo"):
         trimmed = {k: v for k, v in original_components.items() if k != key}
         monkeypatch.setattr(RG, "RULED_COMPONENTS", trimmed)
         assert RG.orphaned_component_class_aliases() == [key]
         with pytest.raises(RG.RouteGate) as exc:
             RG.gate_alias_table()
         assert exc.value.evidence["orphaned"] == [key]
+
+
+EXPECTED_LTX_HOLD_SOURCES = {
+    "ltx-2.5": (
+        "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+        "https://huggingface.co/Lightricks/LTX-2.5"
+    ),
+    "ltx-2.5-22b-ic-lora-layout-to-render": (
+        "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+        "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"
+    ),
+    "comfyui-ltxvideo": (
+        "https://github.com/Lightricks/ComfyUI-LTXVideo/blob/bb70ecba6602/LICENSE + "
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf"
+    ),
+}
+
+
+LTX_HOLD_COMPONENT_TARGETS = (
+    ("ltx-2.5", "ltx-2.5-22b-distilled-transformer-bf16.safetensors"),
+    ("ltx-2.5", "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors"),
+    ("ltx-2.5", "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors"),
+    ("ltx-2.5", "vae/ltx-2.5-audio-vae-bf16.safetensors"),
+    ("ltx-2.5", "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"),
+    ("ltx-2.5", "Lightricks/LTX-2.5"),
+    ("ltx-2.5-22b-ic-lora-layout-to-render",
+     "ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors"),
+    ("ltx-2.5-22b-ic-lora-layout-to-render",
+     "Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"),
+    ("comfyui-ltxvideo", "Lightricks/ComfyUI-LTXVideo"),
+)
+
+
+@pytest.mark.parametrize("expected_key,target", LTX_HOLD_COMPONENT_TARGETS)
+def test_ltx_hold_rows_refuse_in_verify_and_cannot_be_waived_or_credited(
+        expected_key, target):
+    """`Lightricks/LTX-2.5`, `Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render`, and
+    `ComfyUI-LTXVideo` are ruled `CONDITIONAL, not accepted: on hold by the Director` and
+    mirrored as `BANNED` so no graph can load them via `allow=` or `attribution=`."""
+    hits = RG.rulings_for(target)
+    assert hits and hits[0]["matched_on"] == expected_key, (target, hits)
+    assert hits[0]["verdict"] == "BANNED"
+    assert "CONDITIONAL, not accepted: on hold by the Director" in hits[0]["reason"]
+
+    g = graph(top=CLEAN_TOP + [loader(99, target, cls="LoraLoaderModelOnly")])
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    msg = str(exc.value)
+    assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+    assert "CONDITIONAL, not accepted: on hold by the Director" in msg
+    assert "fetched 2026-11-11" in msg
+    assert EXPECTED_LTX_HOLD_SOURCES[expected_key] in msg
+
+    with pytest.raises(RG.RouteGate) as allow_exc:
+        RG.verify(g, allow=(expected_key,))
+    assert allow_exc.value.evidence["clause"] == "conditional_allow_on_a_banned_row"
+
+    with pytest.raises(RG.RouteGate) as attr_exc:
+        RG.attribution_entry_for(expected_key)
+    assert attr_exc.value.evidence["clause"] == "attribution_for_unconditional_row"
+
+
+def test_comfyui_ltxvideo_custom_node_classes_refuse_while_core_ltxv_stays_unruled():
+    """`ComfyUI-LTXVideo` custom-pack node classes refuse under `comfyui-ltxvideo` while
+    GPL-3.0 ComfyUI core LTX classes (which also serve OpenRAIL-M `LTX-Video 0.9.x`) do
+    not match."""
+    for custom_cls in (
+        "LTXAddVideoICLoRAGuide",
+        "LTXAddVideoICLoRAGuideAdvanced",
+        "LTXICLoRALoaderModelOnly",
+        "LTXVGemmaCLIPModelLoader",
+        "LTXVBaseSampler",
+        "LTXVTiledFusionSampler",
+    ):
+        g = graph(top=CLEAN_TOP + [{"id": 99, "type": custom_cls, "widgets_values": [1]}])
+        rows = RG.ruled_node_classes(g)
+        assert [r["matched_on"] for r in rows] == ["comfyui-ltxvideo"], (custom_cls, rows)
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(g)
+        assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+        assert EXPECTED_LTX_HOLD_SOURCES["comfyui-ltxvideo"] in str(exc.value)
+
+    for core_cls in (
+        "EmptyLTXVLatentVideo",
+        "LTXVImgToVideo",
+        "LTXVAddGuide",
+        "GetICLoRAParameters",
+        "LTXVScheduler",
+    ):
+        assert RG.rulings_for_class(core_cls) == [], core_cls
+
+
+def test_license_map_records_ltx_hold_rows_sources_and_six_one_line_conditions():
+    """`docs/license-map.md` records `Lightricks/LTX-2.5`,
+    `Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render`, and `ComfyUI-LTXVideo` under
+    `CONDITIONAL, not accepted: on hold by the Director` with their licence dates,
+    section-1 source URLs, and six one-line condition bullets."""
+    hold_rows = [
+        cells for header, cells in _license_map_rows()
+        if "commercial" in [h.lower() for h in header]
+        and "CONDITIONAL, not accepted: on hold by the Director"
+        in cells[[h.lower() for h in header].index("commercial")]
+    ]
+    assert len(hold_rows) == 3, hold_rows
+    joined_rows = "\n".join(" | ".join(c) for c in hold_rows)
+    for expected in (
+        "Lightricks/LTX-2.5",
+        "Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render",
+        "ComfyUI-LTXVideo",
+        "dated 2026-08-11, amended 2026-10-29",
+        "dated 2026-01-05",
+        "fetched 2026-11-11",
+        "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x",
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf",
+        "https://github.com/Lightricks/ComfyUI-LTXVideo/blob/bb70ecba6602/LICENSE",
+        "https://static.lightricks.com/legal/Privacy%20Policy%20-%20LTX%20Platform.pdf",
+    ):
+        assert expected in joined_rows, expected
+
+    doc_lines = open(LICENSE_MAP, encoding="utf-8").read().splitlines()
+    idx = next(
+        i for i, line in enumerate(doc_lines)
+        if line.startswith("**Conditions on the unaccepted `CONDITIONAL` grant")
+    )
+    bullets = []
+    for line in doc_lines[idx + 1:]:
+        if not line.strip():
+            break
+        assert line.startswith("- "), line
+        bullets.append(line)
+    assert len(bullets) == 6, bullets
 
 
 def test_refreshed_openpose_row_is_in_date_on_2026_11_11_while_dwpose_stays_advisory(

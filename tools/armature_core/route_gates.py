@@ -456,6 +456,74 @@ RULED_COMPONENTS = {
         "reason": ("a licence that cannot be retrieved is treated as NO. Revivable only if "
                    "a source page is found and fetched"),
     },
+
+    # ---- 2026-11-11 LTX-2.5 + Layout-to-Render IC-LoRA + ComfyUI-LTXVideo — Director
+    # ruling: CONDITIONAL, not accepted: on hold by the Director. Mirrored here as BANNED
+    # rather than CONDITIONAL because `CONDITIONAL` in this module represents an ACCEPTED
+    # conditional grant whose obligation is satisfied by passing a credit entry in
+    # `attribution=` (`uncredited_conditional_components`), whereas an unaccepted on-hold
+    # route must refuse unconditionally in `verify` (including if `allow=` is passed).
+    # `ltx-2.5-22b-ic-lora-layout-to-render` precedes `ltx-2.5` so the IC-LoRA matches its
+    # own row first.
+    "ltx-2.5-22b-ic-lora-layout-to-render": {
+        "verdict": "BANNED",
+        "licence": "LTX-2.x Community License Agreement (dated 2026-08-11, amended 2026-10-29)",
+        "fetched": "2026-11-11",
+        "source": (
+            "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+            "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"
+        ),
+        "reason": (
+            "CONDITIONAL, not accepted: on hold by the Director (entity incl. affiliates "
+            "< $10M annual revenue; AUP content limits incl. graphic violence; "
+            "machine-generated disclosure on placed outputs; no training non-LTX models on "
+            "outputs; do not strip provenance; AUP and licence re-read at each use)"
+        ),
+        "files": (
+            "ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors",
+            "lightricks/ltx-2.5-22b-ic-lora-layout-to-render",
+        ),
+    },
+    "ltx-2.5": {
+        "verdict": "BANNED",
+        "licence": "LTX-2.x Community License Agreement (dated 2026-08-11, amended 2026-10-29)",
+        "fetched": "2026-11-11",
+        "source": (
+            "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+            "https://huggingface.co/Lightricks/LTX-2.5"
+        ),
+        "reason": (
+            "CONDITIONAL, not accepted: on hold by the Director (entity incl. affiliates "
+            "< $10M annual revenue; AUP content limits incl. graphic violence; "
+            "machine-generated disclosure on placed outputs; no training non-LTX models on "
+            "outputs; do not strip provenance; AUP and licence re-read at each use)"
+        ),
+        "files": (
+            "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+            "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+            "lightricks/ltx-2.5",
+        ),
+    },
+    "comfyui-ltxvideo": {
+        "verdict": "BANNED",
+        "licence": "LTX-2 Community License Agreement (dated 2026-01-05)",
+        "fetched": "2026-11-11",
+        "source": (
+            "https://github.com/Lightricks/ComfyUI-LTXVideo/blob/bb70ecba6602/LICENSE + "
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf"
+        ),
+        "reason": (
+            "CONDITIONAL, not accepted: on hold by the Director under the older LTX-2 "
+            "Community License of 2026-01-05 (same < $10M group revenue threshold plus "
+            "double-fee liquidated damages, AUP content limits, disclosure, no non-LTX "
+            "model training, provenance retention, and re-read at each use)"
+        ),
+        "files": (
+            "lightricks/comfyui-ltxvideo",
+        ),
+    },
 }
 
 #: Node classes that carry a seed, and where it lives in `widgets_values`.
@@ -758,6 +826,50 @@ RULED_COMPONENT_CLASSES = {
     "smplx": (
         "loadgvhmrmodels",
         "gvhmrinference",
+    ),
+    # `Lightricks/ComfyUI-LTXVideo` custom-pack node classes (`__init__.py` at
+    # `220e1d45aa04`), governed by the LTX-2 Community License (2026-01-05) and on hold by
+    # the Director. GPL-3.0 ComfyUI core LTX classes (`EmptyLTXVLatentVideo`,
+    # `LTXVImgToVideo`, `LTXVAddGuide`, `GetICLoRAParameters`, `LTXVScheduler`, etc.) are
+    # deliberately excluded so OpenRAIL-M `LTX-Video 0.9.x` is not false-refused.
+    "comfyui-ltxvideo": (
+        "ltxaddvideoicloraguide",
+        "ltxicloraloadermodelonly",
+        "ltxvgemmaclipmodelloader",
+        "ltxvgemmaenhanceprompt",
+        "gemmaapitextencode",
+        "ltxvbasesampler",
+        "ltxvincontextsampler",
+        "ltxvextendsampler",
+        "ltxvnormalizingsampler",
+        "ltxvtiledsampler",
+        "ltxvtiledfusionsampler",
+        "ltxvgettilingsizes",
+        "ltxvloopingsampler",
+        "ltxvtiledvaedecode",
+        "ltxvmultipromptprovider",
+        "ltxvimgtovideoadvanced",
+        "ltxvimgtovideoconditiononly",
+        "ltxvlinearoverlaplatenttransition",
+        "ltxvadainlatent",
+        "ltxvapplystg",
+        "ltxq8patch",
+        "ltxvq8loramodelloader",
+        "ltxvselectlatents",
+        "ltxvsetvideolatentnoisemasks",
+        "ltxvsetaudioreftokens",
+        "ltxvloadconditioning",
+        "ltxvdrawtracks",
+        "ltxvsparsetrackeditor",
+        "ltxvdilatevideomask",
+        "ltxvinpaintpreprocess",
+        "ltxvlaplacianpyramidblend",
+        "ltxvhdrdecodepostprocess",
+        "ltxvloadexrsequence",
+        "ltxvvaeforcefloat32",
+        "ltxvaudioonlymodel",
+        "ltxvaudioonlyemptyvideolatent",
+        "ltxfloattoint",
     ),
 }
 
