@@ -378,7 +378,8 @@ POPULATION_MEASURED_2026_09_04 = {
     "compare_runs", "diagnose_bone_heat", "extract_clip_frames", "fetch_run",
     "make_binding_sheet", "make_e08_sheet", "make_parts_sheet", "make_rig_sheet",
     "make_shotset_sheet", "make_test_armature", "make_zoom_sheet", "measure_arm",
-    "measure_cascade_clip", "measure_clip", "measure_smoothness", "measure_tracking",
+    "measure_cascade_clip", "measure_clip", "measure_shot", "measure_smoothness",
+    "measure_tracking",
     "preview_walk", "probe_glb", "probe_subject", "rig_bake", "rig_repair", "rig_retopo",
     # WAVE 26, F-12aacdc4 — the one-hop write half; see the note at the top of this table.
     "encode_control",

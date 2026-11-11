@@ -54,6 +54,7 @@ Every tool under `tools/` answers for itself: `python tools/<name>.py --help` pr
 | `measure_clip.py` | measure_clip — the numbers a generated clip can be quoted by. |
 | `measure_floor.py` | measure_floor — the provider's repeat variance, per frame index. |
 | `measure_lift.py` | measure_lift — the detector, then the solve, then the numbers. In that order. |
+| `measure_shot.py` | measure_shot — camera error and masked identity diagnostics for a generated shot. |
 | `measure_smoothness.py` | measure_smoothness — how big a step the driving signal takes, per keypoint, per frame. |
 | `measure_tracking.py` | measure_tracking — the timing-correlation statistic, as an instrument. |
 | `pack_pose_pack.py` | pack_pose_webp — the pose-stick frames as ONE lossless animated WebP. |

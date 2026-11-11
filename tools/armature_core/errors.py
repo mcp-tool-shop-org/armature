@@ -332,6 +332,7 @@ _REEXPORTS = {
     "RouteGate": ("armature_core.route_gates", "RouteGate"),
     "PairGate": ("armature_core.route_gates", "PairGate"),
     "DonorGate": ("armature_core.donor_gate", "DonorGate"),
+    "MeasureWeightGate": ("armature_core.measure_weights", "MeasureWeightGate"),
 }
 
 
