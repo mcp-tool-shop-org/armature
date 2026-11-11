@@ -116,7 +116,7 @@ RULED_COMPONENTS = {
                    "the non-retrieval, and an unretrievable licence is treated as NO"),
     },
     "openpose": {"verdict": "BANNED", "licence": "CMU Academic / Non-Commercial",
-                 "fetched": "2026-08-10",
+                 "fetched": "2026-11-11",
                  "source": ("https://raw.githubusercontent.com/CMU-Perceptual-Computing-"
                             "Lab/openpose/master/LICENSE"),
                  "reason": "non-commercial preprocessor tier"},
@@ -126,6 +126,162 @@ RULED_COMPONENTS = {
                "reason": ("UNVERIFIED weights tier — treated as NO. The Apache row the "
                           "map carries is the CODE's; the WEIGHTS are a separate grant "
                           "and were never fetched")},
+    "depth_anything_v2_vitb": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Base",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "depth_anything_v2_metric_hypersim_vitb.pth",
+            "depth_anything_v2_metric_vkitti_vitb.pth",
+            "depth-anything/depth-anything-v2-base",
+        ),
+    },
+    "depth_anything_v2_vitl": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Large",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "depth_anything_v2_metric_hypersim_vitl.pth",
+            "depth_anything_v2_metric_vkitti_vitl.pth",
+            "depth_anything_v2_metric_hypersim_vitl_fp32.safetensors",
+            "depth_anything_v2_metric_vkitti_vitl_fp32.safetensors",
+            "depth-anything/depth-anything-v2-large",
+        ),
+    },
+    "depth_anything_v2_vitg": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0 (weights not yet released)",
+        "fetched": "2026-11-11",
+        "source": "https://github.com/DepthAnything/Depth-Anything-V2",
+        "reason": "non-commercial preprocessor tier",
+    },
+    "video_depth_anything_vitl": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/Video-Depth-Anything-Large",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "depth-anything/video-depth-anything-large",
+            "depth-anything/metric-video-depth-anything-large",
+        ),
+    },
+    "da3_large": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/DA3-LARGE",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "da3-large",
+            "da3-large-1.1",
+            "da3-large/model.safetensors",
+            "da3-large-1.1/model.safetensors",
+            "depth-anything/da3-large",
+            "depth-anything/da3-large-1.1",
+        ),
+    },
+    "da3_giant": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/DA3-GIANT",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "da3-giant",
+            "da3-giant-1.1",
+            "da3-giant/model.safetensors",
+            "da3-giant-1.1/model.safetensors",
+            "depth-anything/da3-giant",
+            "depth-anything/da3-giant-1.1",
+            "da3nested_giant_large.safetensors",
+            "da3nested-giant-large",
+            "da3nested-giant-large-1.1",
+            "da3nested-giant-large/model.safetensors",
+            "da3nested-giant-large-1.1/model.safetensors",
+            "depth-anything/da3nested-giant-large",
+            "depth-anything/da3nested-giant-large-1.1",
+        ),
+    },
+    "insightface": {
+        "verdict": "BANNED",
+        "licence": "non-commercial research only",
+        "fetched": "2026-11-11",
+        "source": "https://github.com/deepinsight/insightface",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "antelopev2",
+            "antelopev2.zip",
+            "buffalo_l",
+            "buffalo_l.zip",
+            "buffalo_m",
+            "buffalo_m.zip",
+            "buffalo_s",
+            "buffalo_s.zip",
+            "buffalo_sc",
+            "buffalo_sc.zip",
+            "raccoon_l",
+            "raccoon_l.zip",
+            "raccoon_s",
+            "raccoon_s.zip",
+            "cheetah_l",
+            "cheetah_l.zip",
+            "cheetah_s",
+            "cheetah_s.zip",
+            "inswapper_128.onnx",
+            "scrfd_person_2.5g.onnx",
+            "liveness.onnx",
+            "scrfd_500m.onnx",
+            "scrfd_1g.onnx",
+            "scrfd_2.5g.onnx",
+            "scrfd_10g.onnx",
+            "scrfd_34g.onnx",
+            "scrfd_500m_kps.onnx",
+            "scrfd_2.5g_kps.onnx",
+            "scrfd_10g_kps.onnx",
+            "det_10g.onnx",
+            "w600k_r50.onnx",
+            "genderage.onnx",
+            "2d106det.onnx",
+            "1k3d68.onnx",
+            "arcface_r100_v1",
+            "arcface_r100_v1.zip",
+            "arcface_mfn_v1",
+            "arcface_mfn_v1.zip",
+            "retinaface_r50_v1",
+            "retinaface_r50_v1.zip",
+            "retinaface_mnet025_v1",
+            "retinaface_mnet025_v1.zip",
+            "retinaface_mnet025_v2",
+            "retinaface_mnet025_v2.zip",
+            "genderage_v1",
+            "genderage_v1.zip",
+        ),
+    },
+    "smpl_": {
+        "verdict": "BANNED",
+        "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
+        "fetched": "2026-11-11",
+        "source": "https://smpl.is.tue.mpg.de/modellicense.html",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "basicmodel_neutral_lbs_10_207_0_v1.0.0.pkl",
+            "basicmodel_m_lbs_10_207_0_v1.0.0.pkl",
+            "basicmodel_f_lbs_10_207_0_v1.0.0.pkl",
+        ),
+    },
+    "smplx": {
+        "verdict": "BANNED",
+        "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
+        "fetched": "2026-11-11",
+        "source": "https://smpl-x.is.tue.mpg.de/modellicense.html",
+        "reason": "non-commercial preprocessor tier",
+        "files": ("smpl-x",),
+    },
 
     # ---- the E14 style-LoRA field, mirrored from the licence map's 2026-08-13 fetch pass.
     # Four of these are kills. They are entered BECAUSE they are dead: an absent row reads
@@ -496,6 +652,35 @@ WEIGHT_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".ta
 RULED_COMPONENT_CLASSES = {
     "dwpose": ("dwpreprocessor", "dwposeestimator"),
     "openpose": ("openposepreprocessor", "openpose_preprocessor"),
+    # Preprocessor / face / motion-capture nodes that fetch or load banned weights on
+    # their own without carrying the row key in the class name or a weight filename in
+    # `widgets_values`. Nodes whose model tier (Small vs Base/Large/Giant) is selected
+    # by a widget (`DepthAnythingV2Preprocessor`, `DownloadAndLoadDepthAnythingV2Model`,
+    # `LoadVideoDepthAnythingModel`, `DownloadAndLoadDepthAnythingV3Model`,
+    # `DA3_DownloadModel`) are deliberately omitted here so the widget's weight name
+    # decides: Apache-2.0 Small/Base variants pass while BANNED tiers refuse.
+    "insightface": (
+        "instantidfaceanalysis",
+        "ipadapterunifiedloaderfaceid",
+        "reactorfaceswap",
+        "reactorfaceswapopt",
+        "reactorbuildfacemodel",
+        "reactorfacesimilarity",
+    ),
+    "smpl_": (
+        "loadsmpl",
+        "savesmpl",
+        "smpltobvh",
+        "smpltofbx",
+        "smplretargettosmpl",
+        "smpltomixamo",
+        "smpltoglb",
+        "comparesmpltobvh",
+    ),
+    "smplx": (
+        "loadgvhmrmodels",
+        "gvhmrinference",
+    ),
 }
 
 # =======================================================================================
@@ -1775,8 +1960,29 @@ def unmatched_attribution_entries(comp, attribution):
             if not any(_credits(e, key, c.get("file")) for c, key in keyed)]
 
 
+def _matches_exact_file(norm, basename, target):
+    """Does normalised `filename` match one exact-name or suffix-path entry from `files`?
+
+    Entries containing `/` match the normalised path or a `/`-bounded suffix of it (so
+    `da3-large/model.safetensors` catches `depth-anything/DA3-LARGE/model.safetensors`
+    while sparing `depth-anything/DA3-BASE/model.safetensors`,
+    `depth-anything/DA3MONO-LARGE/model.safetensors`, and bare `model.safetensors`).
+    Entries without `/` match `basename` exactly.
+    """
+    t = str(target).lower().replace("\\", "/").strip("/")
+    if not t:
+        return False
+    if "/" in t:
+        return norm == t or norm.endswith("/" + t)
+    return basename == t
+
+
 def rulings_for(filename):
     """EVERY `RULED_COMPONENTS` row this weight filename matches, strictest first.
+
+    A row matches when its key is a substring of `filename` (lower-cased) OR when
+    `filename` matches an entry in the row's optional `files` tuple (exact basename, or
+    `/`-bounded path suffix when the entry carries `/`).
 
     ⚠ **`components()` used to take the FIRST match in dict-insertion order and record
     no other.** `families_of()` on the same page deliberately does the opposite and its
@@ -1792,8 +1998,11 @@ def rulings_for(filename):
     those names come from.
     """
     low = str(filename).lower()
+    norm = low.replace("\\", "/").strip("/")
+    basename = norm.rsplit("/", 1)[-1]
     hits = [dict(rec, matched_on=key) for key, rec in RULED_COMPONENTS.items()
-            if key in low]
+            if key in low or any(_matches_exact_file(norm, basename, f)
+                                 for f in (rec.get("files") or ()))]
     hits.sort(key=lambda r: -VERDICT_RANK.get(r["verdict"], 0))
     return hits
 
