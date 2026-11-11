@@ -130,7 +130,7 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Base",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Base/tree/a4e71a6c2ce5",
         "reason": "non-commercial preprocessor tier",
         "files": (
             "depth_anything_v2_metric_hypersim_vitb.pth",
@@ -142,7 +142,7 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Large",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Large/tree/cbbb86a30ce1",
         "reason": "non-commercial preprocessor tier",
         "files": (
             "depth_anything_v2_metric_hypersim_vitl.pth",
@@ -156,62 +156,114 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0 (weights not yet released)",
         "fetched": "2026-11-11",
-        "source": "https://github.com/DepthAnything/Depth-Anything-V2",
+        "source": "https://github.com/DepthAnything/Depth-Anything-V2/blob/a561b849ebae/README.md",
         "reason": "non-commercial preprocessor tier",
+    },
+    "metric_video_depth_anything_vitl": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": ("https://huggingface.co/depth-anything/"
+                   "Metric-Video-Depth-Anything-Large/tree/607fcdbd454b"),
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "depth-anything/metric-video-depth-anything-large",
+        ),
     },
     "video_depth_anything_vitl": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/Video-Depth-Anything-Large",
+        "source": "https://huggingface.co/depth-anything/Video-Depth-Anything-Large/tree/7aafbcb5c6af",
         "reason": "non-commercial preprocessor tier",
         "files": (
             "depth-anything/video-depth-anything-large",
-            "depth-anything/metric-video-depth-anything-large",
         ),
     },
+    # `DA3-LARGE` 1.0 (`depth-anything/DA3-LARGE`, rev c54c26b16ec0) is CC-BY-NC-4.0,
+    # whereas `DA3-LARGE-1.1` (`depth-anything/DA3-LARGE-1.1`, rev 0e109ae307c5) was
+    # re-licensed to Apache-2.0, and `ComfyUI-DepthAnythingV3` (`configs.py:102`) maps
+    # local `da3_large.safetensors` to `depth-anything/DA3-LARGE-1.1`. `exact_only=True`
+    # disables substring matching on `"da3_large"` so neither `da3_large.safetensors` nor
+    # `da3_large_1.1.safetensors` is caught here; only 1.0 exact/repo names refuse.
     "da3_large": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/DA3-LARGE",
-        "reason": "non-commercial preprocessor tier",
+        "source": "https://huggingface.co/depth-anything/DA3-LARGE/tree/c54c26b16ec0",
+        "reason": "non-commercial preprocessor tier (1.0 only; DA3-LARGE-1.1 is Apache-2.0)",
+        "exact_only": True,
         "files": (
             "da3-large",
-            "da3-large-1.1",
+            "da3_large_1.0.safetensors",
             "da3-large/model.safetensors",
-            "da3-large-1.1/model.safetensors",
             "depth-anything/da3-large",
-            "depth-anything/da3-large-1.1",
+        ),
+    },
+    # Longer `1.1` keys precede their `1.0` siblings so `1.1` local/repo names match the
+    # `1.1` row first (`ComfyUI-DepthAnythingV3` `configs.py:103, 106` maps unversioned
+    # `da3_giant.safetensors` and `da3nested_giant_large.safetensors` to `-1.1`), while
+    # `1.0` repo paths and non-`1.1` local suffixes (`_fp16`, `_1.0`, etc.) hit the `1.0`
+    # row and `_row_provenance` prints the matching repo and revision.
+    "da3_giant_1.1": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/DA3-GIANT-1.1/tree/72ee9f89ce4e",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "da3_giant.safetensors",
+            "da3-giant-1.1",
+            "da3-giant-1.1/model.safetensors",
+            "depth-anything/da3-giant-1.1",
         ),
     },
     "da3_giant": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/DA3-GIANT",
+        "source": "https://huggingface.co/depth-anything/DA3-GIANT/tree/7cd62ae9315b",
         "reason": "non-commercial preprocessor tier",
         "files": (
             "da3-giant",
-            "da3-giant-1.1",
             "da3-giant/model.safetensors",
-            "da3-giant-1.1/model.safetensors",
             "depth-anything/da3-giant",
-            "depth-anything/da3-giant-1.1",
+        ),
+    },
+    "da3nested_giant_large_1.1": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": ("https://huggingface.co/depth-anything/"
+                   "DA3NESTED-GIANT-LARGE-1.1/tree/b2359bdf726f"),
+        "reason": "non-commercial preprocessor tier",
+        "files": (
             "da3nested_giant_large.safetensors",
-            "da3nested-giant-large",
             "da3nested-giant-large-1.1",
-            "da3nested-giant-large/model.safetensors",
             "da3nested-giant-large-1.1/model.safetensors",
-            "depth-anything/da3nested-giant-large",
             "depth-anything/da3nested-giant-large-1.1",
+        ),
+    },
+    "da3nested_giant_large": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": ("https://huggingface.co/depth-anything/"
+                   "DA3NESTED-GIANT-LARGE/tree/8615eefb62f2"),
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "da3nested-giant-large",
+            "da3nested-giant-large/model.safetensors",
+            "depth-anything/da3nested-giant-large",
         ),
     },
     "insightface": {
         "verdict": "BANNED",
         "licence": "non-commercial research only",
         "fetched": "2026-11-11",
-        "source": "https://github.com/deepinsight/insightface",
+        "source": ("https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/README.md"
+                   " + https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/"
+                   "python-package/README.md"),
         "reason": "non-commercial preprocessor tier",
         "files": (
             "antelopev2",
@@ -658,7 +710,8 @@ RULED_COMPONENT_CLASSES = {
     # by a widget (`DepthAnythingV2Preprocessor`, `DownloadAndLoadDepthAnythingV2Model`,
     # `LoadVideoDepthAnythingModel`, `DownloadAndLoadDepthAnythingV3Model`,
     # `DA3_DownloadModel`) are deliberately omitted here so the widget's weight name
-    # decides: Apache-2.0 Small/Base variants pass while BANNED tiers refuse.
+    # decides: Apache-2.0 variants (Small, DA3 Base/Mono/Metric/Large-1.1) pass while
+    # BANNED tiers refuse.
     "insightface": (
         "instantidfaceanalysis",
         "ipadapterunifiedloaderfaceid",
@@ -1980,9 +2033,9 @@ def _matches_exact_file(norm, basename, target):
 def rulings_for(filename):
     """EVERY `RULED_COMPONENTS` row this weight filename matches, strictest first.
 
-    A row matches when its key is a substring of `filename` (lower-cased) OR when
-    `filename` matches an entry in the row's optional `files` tuple (exact basename, or
-    `/`-bounded path suffix when the entry carries `/`).
+    A row matches when its key is a substring of `filename` (lower-cased, unless the row
+    sets `exact_only=True`) OR when `filename` matches an entry in the row's optional
+    `files` tuple (exact basename, or `/`-bounded path suffix when the entry carries `/`).
 
     ⚠ **`components()` used to take the FIRST match in dict-insertion order and record
     no other.** `families_of()` on the same page deliberately does the opposite and its
@@ -2001,8 +2054,9 @@ def rulings_for(filename):
     norm = low.replace("\\", "/").strip("/")
     basename = norm.rsplit("/", 1)[-1]
     hits = [dict(rec, matched_on=key) for key, rec in RULED_COMPONENTS.items()
-            if key in low or any(_matches_exact_file(norm, basename, f)
-                                 for f in (rec.get("files") or ()))]
+            if (not rec.get("exact_only") and key in low)
+            or any(_matches_exact_file(norm, basename, f)
+                   for f in (rec.get("files") or ()))]
     hits.sort(key=lambda r: -VERDICT_RANK.get(r["verdict"], 0))
     return hits
 
