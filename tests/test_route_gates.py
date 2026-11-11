@@ -1843,12 +1843,13 @@ def test_the_map_kill_population_is_the_one_measured_today():
     """SIZE and MEMBERSHIP of the derived population first, so a new kill row in the map
     fails loudly here instead of quietly widening the gap."""
     kills = [name for name, _ in _map_kills()]
-    assert len(kills) == 22, kills
+    assert len(kills) == 23, kills
     for expect in ("CausVid", "OpenPose (CMU)", "DWPose / ViTPose WEIGHTS",
                    "Depth Anything V2 Base", "Depth Anything V2 Large",
                    "Depth Anything V2 Giant",
                    "Metric-Video-Depth-Anything Large",
                    "Video-Depth-Anything Large",
+                   "da3_large.safetensors",
                    "DA3 Large 1.0",
                    "DA3 Giant 1.1", "DA3 Giant 1.0",
                    "DA3 Nested Giant-Large 1.1", "DA3 Nested Giant-Large 1.0",
@@ -1883,7 +1884,7 @@ def test_the_mirror_census_goes_red_when_a_row_is_retired(monkeypatch):
 
 def test_every_map_kill_is_mirrored_or_named_with_its_reason():
     """The mirror's load-bearing direction: a row the map KILLS must be one a script can
-    fail on, or be named here with why it cannot be. 20 of the 22 kills are mirrored
+    fail on, or be named here with why it cannot be. 21 of the 23 kills are mirrored
     today; the two that are not are the ratchet above."""
     unmirrored = _unmirrored_kills()
     named = [n for n in unmirrored
@@ -1961,8 +1962,10 @@ def test_every_mirror_row_names_something_the_map_names(monkeypatch):
 
 def test_the_map_names_all_five_allowed_da3_repos_with_revisions():
     """The allowed DA3 row in `docs/license-map.md` names all four original Apache-2.0
-    DA3 repos plus `DA3-LARGE-1.1` at their read revisions alongside their ComfyUI local
-    weight names, and the V2 Base/Large rows name their metric checkpoints."""
+    DA3 repos plus `DA3-LARGE-1.1` at their read revisions alongside their unambiguous
+    ComfyUI local weight names, drops `da3_large.safetensors` from the YES model list
+    with the 2025-12-27 (`2bd9c34870a9`) qualifier, and V2 Base/Large name their metric
+    checkpoints."""
     da3_yes_rows = [
         cells for header, cells in _license_map_rows()
         if "commercial" in [h.lower() for h in header]
@@ -1970,18 +1973,20 @@ def test_the_map_names_all_five_allowed_da3_repos_with_revisions():
         and "YES" in cells[[h.lower() for h in header].index("commercial")]
     ]
     assert len(da3_yes_rows) == 1, da3_yes_rows
+    assert "da3_large.safetensors" not in da3_yes_rows[0][0]
+    assert ("since 2025-12-27 (`2bd9c34870a9`); `DA3-LARGE` 1.0 before"
+            in da3_yes_rows[0][4])
     da3_row_text = " | ".join(da3_yes_rows[0])
     for expected in (
-        "depth-anything/DA3-SMALL/tree/e08cab65ca0e",
-        "depth-anything/DA3-BASE/tree/f4a6c9b3c95e",
-        "depth-anything/DA3MONO-LARGE/tree/f465978e618d",
-        "depth-anything/DA3METRIC-LARGE/tree/4010e39f3634",
-        "depth-anything/DA3-LARGE-1.1/tree/0e109ae307c5",
+        "depth-anything/DA3-SMALL/blob/e08cab65ca0e/README.md",
+        "depth-anything/DA3-BASE/blob/f4a6c9b3c95e/README.md",
+        "depth-anything/DA3MONO-LARGE/blob/f465978e618d/README.md",
+        "depth-anything/DA3METRIC-LARGE/blob/4010e39f3634/README.md",
+        "depth-anything/DA3-LARGE-1.1/blob/0e109ae307c5/README.md",
         "da3_small.safetensors",
         "da3_base.safetensors",
         "da3mono_large.safetensors",
         "da3metric_large.safetensors",
-        "da3_large.safetensors",
     ):
         assert expected in da3_row_text, expected
 
@@ -2018,31 +2023,47 @@ def test_a_base_weight_reads_not_in_this_table_and_that_is_recorded_not_silent()
 
 
 EXPECTED_PREPROCESSOR_SOURCES = {
-    "depth_anything_v2_vitb":
-        "https://huggingface.co/depth-anything/Depth-Anything-V2-Base/tree/a4e71a6c2ce5",
-    "depth_anything_v2_vitl":
-        "https://huggingface.co/depth-anything/Depth-Anything-V2-Large/tree/cbbb86a30ce1",
+    "depth_anything_v2_vitb": (
+        "https://huggingface.co/depth-anything/"
+        "Depth-Anything-V2-Base/blob/a4e71a6c2ce5/README.md"
+    ),
+    "depth_anything_v2_vitl": (
+        "https://huggingface.co/depth-anything/"
+        "Depth-Anything-V2-Large/blob/cbbb86a30ce1/README.md"
+    ),
     "depth_anything_v2_vitg":
         "https://github.com/DepthAnything/Depth-Anything-V2/blob/a561b849ebae/README.md",
     "metric_video_depth_anything_vitl": (
         "https://huggingface.co/depth-anything/"
-        "Metric-Video-Depth-Anything-Large/tree/607fcdbd454b"
+        "Metric-Video-Depth-Anything-Large/blob/607fcdbd454b/README.md"
     ),
-    "video_depth_anything_vitl":
-        "https://huggingface.co/depth-anything/Video-Depth-Anything-Large/tree/7aafbcb5c6af",
+    "video_depth_anything_vitl": (
+        "https://huggingface.co/depth-anything/"
+        "Video-Depth-Anything-Large/blob/7aafbcb5c6af/README.md"
+    ),
+    "da3_large.safetensors": (
+        "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+        "9fb61e26fa09/nodes/depth_anything_v3/configs.py + "
+        "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+        "2bd9c34870a9/nodes/depth_anything_v3/configs.py + "
+        "https://huggingface.co/depth-anything/DA3-LARGE/blob/"
+        "c54c26b16ec0/README.md + "
+        "https://huggingface.co/depth-anything/DA3-LARGE-1.1/blob/"
+        "0e109ae307c5/README.md"
+    ),
     "da3_large":
-        "https://huggingface.co/depth-anything/DA3-LARGE/tree/c54c26b16ec0",
+        "https://huggingface.co/depth-anything/DA3-LARGE/blob/c54c26b16ec0/README.md",
     "da3_giant_1.1":
-        "https://huggingface.co/depth-anything/DA3-GIANT-1.1/tree/72ee9f89ce4e",
+        "https://huggingface.co/depth-anything/DA3-GIANT-1.1/blob/72ee9f89ce4e/README.md",
     "da3_giant":
-        "https://huggingface.co/depth-anything/DA3-GIANT/tree/7cd62ae9315b",
+        "https://huggingface.co/depth-anything/DA3-GIANT/blob/7cd62ae9315b/README.md",
     "da3nested_giant_large_1.1": (
         "https://huggingface.co/depth-anything/"
-        "DA3NESTED-GIANT-LARGE-1.1/tree/b2359bdf726f"
+        "DA3NESTED-GIANT-LARGE-1.1/blob/b2359bdf726f/README.md"
     ),
     "da3nested_giant_large": (
         "https://huggingface.co/depth-anything/"
-        "DA3NESTED-GIANT-LARGE/tree/8615eefb62f2"
+        "DA3NESTED-GIANT-LARGE/blob/8615eefb62f2/README.md"
     ),
     "insightface": (
         "https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/README.md"
@@ -2072,6 +2093,8 @@ BANNED_PREPROCESSOR_FILES = (
     ("metric_video_depth_anything_vitl", "depth-anything/Metric-Video-Depth-Anything-Large"),
     ("video_depth_anything_vitl", "video_depth_anything_vitl.pth"),
     ("video_depth_anything_vitl", "depth-anything/Video-Depth-Anything-Large"),
+    ("da3_large.safetensors", "da3_large.safetensors"),
+    ("da3_large.safetensors", "depthanything3/da3_large.safetensors"),
     ("da3_large", "da3-large"),
     ("da3_large", "da3_large_1.0.safetensors"),
     ("da3_large", "da3-large/model.safetensors"),
@@ -2155,7 +2178,6 @@ ALLOWED_PREPROCESSOR_FILES = (
     "da3_small.safetensors",
     "da3mono_large.safetensors",
     "da3metric_large.safetensors",
-    "da3_large.safetensors",
     "da3_large_1.1.safetensors",
     "da3-base",
     "da3-small",
@@ -2180,9 +2202,9 @@ ALLOWED_PREPROCESSOR_FILES = (
 @pytest.mark.parametrize("filename", ALLOWED_PREPROCESSOR_FILES)
 def test_allowed_preprocessor_variants_are_not_refused_by_verify(filename):
     """Apache-2.0 depth / video-depth / DA3 variants (Small, Base, `DA3MONO-LARGE`,
-    `DA3METRIC-LARGE`, and `DA3-LARGE-1.1`, both as HF repo paths/IDs and as ComfyUI
-    local filenames, plus bare `model.safetensors`, SAM ViT-B, and non-InsightFace
-    `GFPGANv1.4.onnx`) match none of the BANNED rows and pass `verify`."""
+    `DA3METRIC-LARGE`, and unambiguous `DA3-LARGE-1.1` repo/1.1 forms, plus bare
+    `model.safetensors`, SAM ViT-B, and non-InsightFace `GFPGANv1.4.onnx`) match none
+    of the BANNED rows and pass `verify`."""
     assert RG.rulings_for(filename) == [], filename
     g = graph(top=CLEAN_TOP + [loader(99, filename, cls="PreprocessorWeightLoader")])
     ev = RG.verify(g)
@@ -2194,6 +2216,60 @@ def test_allowed_preprocessor_variants_are_not_refused_by_verify(filename):
         assert f"{filename!r} at top/99" in ev["unclassified"]
     else:
         assert node_99 == []
+
+
+def test_ambiguous_da3_large_local_filename_refuses_while_1_1_repo_forms_pass():
+    """`da3_large.safetensors` was mapped by `ComfyUI-DepthAnythingV3` to CC-BY-NC-4.0
+    `depth-anything/DA3-LARGE` before 2025-12-27 (`9fb61e26fa09`) and to Apache-2.0
+    `depth-anything/DA3-LARGE-1.1` since 2025-12-27 (`2bd9c34870a9`) without replacing
+    an existing local file; it refuses as UNVERIFIED (treated as NO), while explicit
+    `DA3-LARGE-1.1` repo forms continue to pass."""
+    hits = RG.rulings_for("da3_large.safetensors")
+    assert hits and hits[0]["matched_on"] == "da3_large.safetensors"
+    assert hits[0]["verdict"] == "BANNED"
+    for expected in (
+        "UNVERIFIED (treated as NO)",
+        "9fb61e26fa09",
+        "2bd9c34870a9",
+        "2025-12-27",
+        "depth-anything/DA3-LARGE",
+        "depth-anything/DA3-LARGE-1.1",
+    ):
+        assert expected in hits[0]["reason"], expected
+
+    ambiguous_g = graph(top=CLEAN_TOP + [
+        {"id": 99, "type": "DownloadAndLoadDepthAnythingV3Model",
+         "widgets_values": ["da3_large.safetensors", 512]},
+    ])
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(ambiguous_g)
+    msg = str(exc.value)
+    assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+    assert "UNVERIFIED (treated as NO)" in msg
+    assert "2025-12-27" in msg
+    assert EXPECTED_PREPROCESSOR_SOURCES["da3_large.safetensors"] in msg
+
+    unverified_rows = [
+        cells for header, cells in _license_map_rows()
+        if "commercial" in [h.lower() for h in header]
+        and "`da3_large.safetensors`" in cells[0]
+        and "UNVERIFIED (treated as NO)"
+        in cells[[h.lower() for h in header].index("commercial")]
+    ]
+    assert len(unverified_rows) == 1, unverified_rows
+
+    for repo_form in (
+        "depth-anything/DA3-LARGE-1.1",
+        "depth-anything/DA3-LARGE-1.1/model.safetensors",
+        "da3-large-1.1",
+        "da3-large-1.1/model.safetensors",
+        "da3_large_1.1.safetensors",
+    ):
+        assert RG.rulings_for(repo_form) == [], repo_form
+        clean_g = graph(top=CLEAN_TOP + [
+            loader(99, repo_form, cls="DownloadAndLoadDepthAnythingV3Model"),
+        ])
+        RG.verify(clean_g)
 
 
 BANNED_PREPROCESSOR_CLASS_ALIASES = (
@@ -2244,8 +2320,12 @@ WIDGET_SELECTED_DEPTH_CLASSES = (
      "video_depth_anything_vits.pth", "video_depth_anything_vitl.pth",
      "video_depth_anything_vitl"),
     ("DownloadAndLoadDepthAnythingV3Model",
-     "da3_large.safetensors", "da3nested_giant_large.safetensors",
+     "depth-anything/DA3-LARGE-1.1/model.safetensors",
+     "da3nested_giant_large.safetensors",
      "da3nested_giant_large_1.1"),
+    ("DownloadAndLoadDepthAnythingV3Model",
+     "da3_small.safetensors", "da3_large.safetensors",
+     "da3_large.safetensors"),
     ("DA3_DownloadModel",
      "da3_base.safetensors", "da3_giant.safetensors",
      "da3_giant_1.1"),
@@ -2290,8 +2370,8 @@ def test_gate_alias_table_covers_all_five_preprocessor_alias_rows(monkeypatch):
     }
     receipt = RG.gate_alias_table()
     assert receipt["n_alias_keys"] == 5
-    assert receipt["n_rows"] == 24
-    assert receipt["verdict"] == "every alias key names a row: 5 of 24"
+    assert receipt["n_rows"] == 25
+    assert receipt["verdict"] == "every alias key names a row: 5 of 25"
 
     original_components = dict(RG.RULED_COMPONENTS)
     for key in ("insightface", "smpl_", "smplx"):

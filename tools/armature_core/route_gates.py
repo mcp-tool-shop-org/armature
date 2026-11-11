@@ -130,7 +130,7 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Base/tree/a4e71a6c2ce5",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Base/blob/a4e71a6c2ce5/README.md",
         "reason": "non-commercial preprocessor tier",
         "files": (
             "depth_anything_v2_metric_hypersim_vitb.pth",
@@ -142,7 +142,7 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Large/tree/cbbb86a30ce1",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Large/blob/cbbb86a30ce1/README.md",
         "reason": "non-commercial preprocessor tier",
         "files": (
             "depth_anything_v2_metric_hypersim_vitl.pth",
@@ -164,7 +164,7 @@ RULED_COMPONENTS = {
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
         "source": ("https://huggingface.co/depth-anything/"
-                   "Metric-Video-Depth-Anything-Large/tree/607fcdbd454b"),
+                   "Metric-Video-Depth-Anything-Large/blob/607fcdbd454b/README.md"),
         "reason": "non-commercial preprocessor tier",
         "files": (
             "depth-anything/metric-video-depth-anything-large",
@@ -174,22 +174,49 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/Video-Depth-Anything-Large/tree/7aafbcb5c6af",
+        "source": "https://huggingface.co/depth-anything/Video-Depth-Anything-Large/blob/7aafbcb5c6af/README.md",
         "reason": "non-commercial preprocessor tier",
         "files": (
             "depth-anything/video-depth-anything-large",
         ),
     },
-    # `DA3-LARGE` 1.0 (`depth-anything/DA3-LARGE`, rev c54c26b16ec0) is CC-BY-NC-4.0, while
-    # `DA3-LARGE-1.1` (`depth-anything/DA3-LARGE-1.1`, rev 0e109ae307c5) is Apache-2.0 and
-    # `ComfyUI-DepthAnythingV3` (`MODEL_REPO_MAP`) maps local `da3_large.safetensors` to 1.1.
-    # `exact_only=True` disables substring matching on `"da3_large"` so neither
-    # `da3_large.safetensors` nor `da3_large_1.1.safetensors` is caught here; only 1.0 refuses.
+    # `ComfyUI-DepthAnythingV3` (`MODEL_REPOS` in `nodes/depth_anything_v3/configs.py`,
+    # line 102) mapped `da3_large.safetensors` to `depth-anything/DA3-LARGE` (1.0,
+    # CC-BY-NC-4.0) at `9fb61e26fa09` before 2025-12-27 and to `depth-anything/DA3-LARGE-1.1`
+    # (Apache-2.0) since 2025-12-27 (`2bd9c34870a9`), without replacing an existing local
+    # file. `da3_large.safetensors` precedes `da3_large` and refuses as UNVERIFIED (treated
+    # as NO); `da3_large` sets `exact_only=True` so Apache `DA3-LARGE-1.1` repo forms pass.
+    "da3_large.safetensors": {
+        "verdict": "BANNED",
+        "licence": ("ambiguous local filename: CC-BY-NC-4.0 (DA3-LARGE 1.0) or "
+                    "Apache-2.0 (DA3-LARGE-1.1)"),
+        "fetched": "2026-11-11",
+        "source": (
+            "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+            "9fb61e26fa09/nodes/depth_anything_v3/configs.py + "
+            "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+            "2bd9c34870a9/nodes/depth_anything_v3/configs.py + "
+            "https://huggingface.co/depth-anything/DA3-LARGE/blob/"
+            "c54c26b16ec0/README.md + "
+            "https://huggingface.co/depth-anything/DA3-LARGE-1.1/blob/"
+            "0e109ae307c5/README.md"
+        ),
+        "reason": (
+            "UNVERIFIED (treated as NO): ComfyUI-DepthAnythingV3 "
+            "nodes/depth_anything_v3/configs.py (line 102) mapped da3_large.safetensors to "
+            "depth-anything/DA3-LARGE (1.0, CC-BY-NC-4.0) at 9fb61e26fa09 before 2025-12-27 "
+            "and to depth-anything/DA3-LARGE-1.1 (Apache-2.0) since 2025-12-27 "
+            "(2bd9c34870a9), and never replaces an existing local file"
+        ),
+        "files": (
+            "da3_large.safetensors",
+        ),
+    },
     "da3_large": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/DA3-LARGE/tree/c54c26b16ec0",
+        "source": "https://huggingface.co/depth-anything/DA3-LARGE/blob/c54c26b16ec0/README.md",
         "reason": "non-commercial preprocessor tier (1.0 only; DA3-LARGE-1.1 is Apache-2.0)",
         "exact_only": True,
         "files": (
@@ -200,14 +227,14 @@ RULED_COMPONENTS = {
         ),
     },
     # Longer `1.1` keys precede their `1.0` siblings so `1.1` local/repo names match the `1.1`
-    # row first (`ComfyUI-DepthAnythingV3` `MODEL_REPO_MAP` maps `da3_giant.safetensors` and
+    # row first (`ComfyUI-DepthAnythingV3` `MODEL_REPOS` maps `da3_giant.safetensors` and
     # `da3nested_giant_large.safetensors` to `-1.1`), while `1.0` repo paths and non-`1.1`
     # local suffixes (`_fp16`, `_1.0`, etc.) hit the `1.0` row with its matching `source`.
     "da3_giant_1.1": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/DA3-GIANT-1.1/tree/72ee9f89ce4e",
+        "source": "https://huggingface.co/depth-anything/DA3-GIANT-1.1/blob/72ee9f89ce4e/README.md",
         "reason": "non-commercial preprocessor tier",
         "files": (
             "da3_giant.safetensors",
@@ -220,7 +247,7 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/depth-anything/DA3-GIANT/tree/7cd62ae9315b",
+        "source": "https://huggingface.co/depth-anything/DA3-GIANT/blob/7cd62ae9315b/README.md",
         "reason": "non-commercial preprocessor tier",
         "files": (
             "da3-giant",
@@ -233,7 +260,7 @@ RULED_COMPONENTS = {
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
         "source": ("https://huggingface.co/depth-anything/"
-                   "DA3NESTED-GIANT-LARGE-1.1/tree/b2359bdf726f"),
+                   "DA3NESTED-GIANT-LARGE-1.1/blob/b2359bdf726f/README.md"),
         "reason": "non-commercial preprocessor tier",
         "files": (
             "da3nested_giant_large.safetensors",
@@ -247,7 +274,7 @@ RULED_COMPONENTS = {
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
         "source": ("https://huggingface.co/depth-anything/"
-                   "DA3NESTED-GIANT-LARGE/tree/8615eefb62f2"),
+                   "DA3NESTED-GIANT-LARGE/blob/8615eefb62f2/README.md"),
         "reason": "non-commercial preprocessor tier",
         "files": (
             "da3nested-giant-large",
