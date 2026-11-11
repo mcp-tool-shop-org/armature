@@ -150,35 +150,35 @@ def test_l3_gate_refuses_before_importing_any_ml_dependency_and_publishes_to_err
 
     # Conditional weight without Director ruling -> `weight_conditional_unaccepted`;
     # with Director ruling + pinned sha256 -> admitted, still without importing `torch`.
-    cond_bytes = b"pi3-bsd-checkpoint-bytes"
+    cond_bytes = b"synthetic-conditional-checkpoint-bytes"
     cond_sha = hashlib.sha256(cond_bytes).hexdigest()
     cond_file = tmp_path / "model.safetensors"
     cond_file.write_bytes(cond_bytes)
     cond_table = (
         {
-            "repo_id": "yyfz233/Pi3",
-            "revision": "ae722e70",
+            "repo_id": "example-org/synthetic-conditional-weight",
+            "revision": "00000001",
             "filename": "model.safetensors",
             "sha256": cond_sha,
             "verdict": "CONDITIONAL",
-            "licence": "BSD-2-Clause (training-data composition unaudited)",
+            "licence": "Synthetic-Conditional-1.0 (test-only fixture)",
             "fetched": "2026-11-11",
-            "source": "https://raw.githubusercontent.com/yyfz/Pi3/main/LICENSE",
+            "source": "https://example.invalid/licenses/synthetic-conditional",
         },
     )
     with pytest.raises(MeasureWeightGate) as exc:
         MW.gate_measurement_weight(
             str(cond_file),
-            repo_id="yyfz233/Pi3",
-            revision="ae722e70",
+            repo_id="example-org/synthetic-conditional-weight",
+            revision="00000001",
             table=cond_table,
         )
     assert exc.value.evidence["clause"] == "weight_conditional_unaccepted"
 
     admitted = MW.gate_measurement_weight(
         str(cond_file),
-        repo_id="yyfz233/Pi3",
-        revision="ae722e70",
+        repo_id="example-org/synthetic-conditional-weight",
+        revision="00000001",
         director_ruling="Director test ruling 2026-11-11",
         table=cond_table,
     )
@@ -190,6 +190,48 @@ def test_l3_gate_refuses_before_importing_any_ml_dependency_and_publishes_to_err
     with pytest.raises(MeasureWeightGate) as exc:
         SD.load_dinov2_vitb14_embedder(str(banned_monst3r))
     assert exc.value.evidence["clause"] == "weight_banned"
+
+
+def test_l4_loading_pi3_and_pi3x_refuses_as_banned(tmp_path, monkeypatch):
+    """L4: Fails if `yyfz233/Pi3` or `yyfz233/Pi3X` (CC BY-NC 4.0 weights) is not refused as `weight_banned`."""
+    for heavy in ("torch", "safetensors", "safetensors.torch", "transformers"):
+        monkeypatch.setitem(sys.modules, heavy, None)
+
+    pi3_file = tmp_path / "model.safetensors"
+    pi3_bytes = b"synthetic-pi3-safetensors-bytes"
+    pi3_sha = hashlib.sha256(pi3_bytes).hexdigest()
+    pi3_file.write_bytes(pi3_bytes)
+
+    for repo_id, rev in (("yyfz233/Pi3", "ae722e70"), ("yyfz233/Pi3X", "bb1deea4")):
+        with pytest.raises(MeasureWeightGate) as exc:
+            SD.load_dinov2_vitb14_embedder(str(pi3_file), repo_id=repo_id, revision=rev)
+        assert exc.value.evidence["gate"] == "MEASURE_WEIGHT"
+        assert exc.value.evidence["clause"] == "weight_banned"
+        assert exc.value.evidence["repo_id"] == repo_id
+        assert exc.value.evidence["licence"] == "CC-BY-NC-4.0"
+
+        matches = [
+            r
+            for r in MW.MEASUREMENT_WEIGHTS
+            if r.get("repo_id") == repo_id and r.get("revision") == rev
+        ]
+        assert len(matches) == 1, repo_id
+        row = matches[0]
+        assert row["verdict"] == "BANNED"
+        assert row["licence"] == "CC-BY-NC-4.0"
+        assert "9fa3ddb3f8d53041f8b2738df404f62223bbaa7b/README.md" in row["source"]
+
+        # Even with a pinned sha256 and a `director_ruling`, BANNED Pi3/Pi3X weights cannot be admitted.
+        pinned = (dict(row, sha256=pi3_sha),)
+        with pytest.raises(MeasureWeightGate) as pinned_exc:
+            MW.gate_measurement_weight(
+                str(pi3_file),
+                repo_id=repo_id,
+                revision=rev,
+                director_ruling="Director test ruling 2026-11-11",
+                table=pinned,
+            )
+        assert pinned_exc.value.evidence["clause"] == "weight_banned"
 
 
 def test_m1_every_measurement_weight_row_carries_dated_fetch_and_mirrors_license_map():

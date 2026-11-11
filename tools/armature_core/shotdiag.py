@@ -30,6 +30,7 @@ from .errors import ArmatureError
 TOOL_VERSION = "shotdiag.1"
 
 FOLLOWED_NO_THRESHOLD = "NO THRESHOLD — CALIBRATION NOT YET RUN"
+ATE_NOT_COMPUTABLE = "NOT COMPUTABLE — pairwise unit directions carry no relative scale"
 DIAGNOSTIC_STATUS = "DIAGNOSTIC — every number here gates nothing"
 IDENTITY_EYE_NOTE = "DIAGNOSTIC — gates nothing; identity is judged by eye on the sheet above"
 FLOOR_NOTE = "NOT A VERDICT"
@@ -664,8 +665,9 @@ def score_camera_trajectory(
 
     Gauge alignment is strictly frame-0 anchoring (`R_rel(t) = R_0.T @ R_t` and
     `c_rel(t) = R_0.T @ (C_t - C_0)`): zero parameters are fitted for `rot_err_deg` or
-    `tdir_err_deg`, so Sim(3) rotation absorption cannot occur. A single scalar `s` is
-    fitted by least squares across fired `E` pairs solely to report scale-fitted `ate`.
+    `tdir_err_deg`, so Sim(3) rotation absorption cannot occur. Because two-view essential
+    recovery emits unit translation directions with no inter-pair relative scale,
+    `fitted_scale` and `ate` carry `ATE_NOT_COMPUTABLE` rather than a bogus scalar fit.
     """
     n_frames = len(gt_poses_cv)
     if n_frames < 2 or len(pair_estimates) != n_frames - 1:
@@ -692,9 +694,6 @@ def score_camera_trajectory(
     est_spans = []
     parallax_vals = []
     n_h_unobservable = 0
-
-    est_centres = []
-    gt_centres_for_scale = []
 
     for idx, est in enumerate(pair_estimates):
         frame_t = idx + 1
@@ -748,9 +747,6 @@ def score_camera_trajectory(
                 tdir_reason = "t_unobservable"
         else:
             t_arr = np.asarray(t_vec, dtype=np.float64).reshape(3)
-            if float(np.linalg.norm(t_arr)) > 1e-12:
-                est_centres.append(t_arr)
-                gt_centres_for_scale.append(c_gt_rel)
             if float(np.linalg.norm(c_gt_rel)) <= 1e-12:
                 tdir_reason = "gt_zero_translation"
             else:
@@ -779,17 +775,10 @@ def score_camera_trajectory(
             }
         )
 
-    # Single global scale `s` fitted by 1-DoF least squares for ATE only.
-    fitted_scale = None
-    ate = None
-    if est_centres:
-        c_est_mat = np.vstack(est_centres)
-        c_gt_mat = np.vstack(gt_centres_for_scale)
-        denom = float(np.sum(c_est_mat * c_est_mat))
-        if denom > 1e-18:
-            fitted_scale = float(np.sum(c_est_mat * c_gt_mat) / denom)
-            diffs = fitted_scale * c_est_mat - c_gt_mat
-            ate = float(np.sqrt(np.mean(np.sum(diffs * diffs, axis=1))))
+    # Pairwise two-view essential recovery produces independent unit vectors `(0 -> t)`
+    # with no relative scale between pairs, so scale-fitted ATE is not computable in Tier A.
+    fitted_scale = ATE_NOT_COMPUTABLE
+    ate = ATE_NOT_COMPUTABLE
 
     # Consecutive-frame RPE (rotation, degrees) where consecutive estimates fired.
     rpe_rot_errs = []
@@ -1656,7 +1645,8 @@ def measure_masked_identity(
 
     return {
         "model": str(model_label),
-        "variant": f"{DINOV2_REPO_ID}@{DINOV2_REVISION}",
+        "variant": f"{active_embedder.weight_receipt['repo_id']}@{active_embedder.weight_receipt['revision']}" if getattr(active_embedder, "weight_receipt", None) else "injected_stand_in",
+        "weight_receipt": getattr(active_embedder, "weight_receipt", None),
         "input_size_px": DINOV2_INPUT_SIZE,
         "patch_size_px": DINOV2_PATCH_SIZE,
         "plate_rgb_srgb": [int(v) for v in plate_rgb],

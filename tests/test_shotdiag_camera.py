@@ -376,54 +376,46 @@ def test_c2_orbit_scored_against_static_gt_reports_true_angular_departure():
     assert wrong_cam["est_to_gt_rot_span_ratio"] is None
 
 
-def test_c3_scale_invariance_of_direction_errors_and_single_scale_ate():
-    """C3: Fails if translation scale leaks into direction error or if >1 scale parameter absorbs trajectory warp."""
+def test_c3_scale_invariance_of_direction_errors_and_ate_not_computable():
+    """C3: Fails if real estimator unit directions report a numeric `fitted_scale`/`ate` or if scene metric scale leaks into direction error."""
+    pts_w = _two_plane_points(seed=29, n_per_plane=48)
+    intr = SD.intrinsics_from_spec(50.0, 36.0, 832, 480)
+    k_mat = intr["K"]
     mats = _orbit_matrices(n_frames=5, elevation_deg=0.0, az_start_deg=-105.0, az_end_deg=-75.0)
     gt_poses = [SD.blender_to_opencv_pose(m) for m in mats]
-    r0, c0 = gt_poses[0]
 
     k_factor = 3.75
-    unit_pairs = []
-    scaled_pairs = []
-    warped_pairs = []
-    for idx, (rt, ct) in enumerate(gt_poses[1:], start=1):
-        r_rel = r0.T @ rt
-        c_rel = r0.T @ (ct - c0)
-        unit_pairs.append(
-            {
-                "fired": True,
-                "n_matches": 60,
-                "n_inliers": 60,
-                "model": "E",
-                "R_rel": r_rel,
-                "t_dir_in_f0": c_rel,
-                "tdir_reason": None,
-                "parallax_residual_px": 12.0,
-            }
-        )
-        scaled_pairs.append(
-            {
-                **unit_pairs[-1],
-                "t_dir_in_f0": k_factor * c_rel,
-            }
-        )
-        # Non-uniform per-frame scale warp: a single global scalar `s` cannot fit this to zero ATE.
-        warped_pairs.append(
-            {
-                **unit_pairs[-1],
-                "t_dir_in_f0": (1.0 if idx % 2 == 1 else 4.0) * c_rel,
-            }
-        )
+    pts_w_scaled = k_factor * pts_w
+    gt_poses_scaled = [(r, k_factor * c) for r, c in gt_poses]
 
-    res_unit = SD.score_camera_trajectory(gt_poses, unit_pairs)
-    res_scaled = SD.score_camera_trajectory(gt_poses, scaled_pairs)
-    res_warped = SD.score_camera_trajectory(gt_poses, warped_pairs)
+    p0_unit = _project_points_cv(pts_w, *gt_poses[0], k_mat)
+    p0_scaled = _project_points_cv(pts_w_scaled, *gt_poses_scaled[0], k_mat)
+    pairs_unit = []
+    pairs_scaled = []
+    for t in range(1, len(gt_poses)):
+        pt_unit = _project_points_cv(pts_w, *gt_poses[t], k_mat)
+        pt_scaled = _project_points_cv(pts_w_scaled, *gt_poses_scaled[t], k_mat)
+        est_u = SD.estimate_pair_pose(p0_unit, pt_unit, k_mat)
+        est_s = SD.estimate_pair_pose(p0_scaled, pt_scaled, k_mat)
+        assert est_u["fired"] is True and est_u["model"] == "E"
+        assert est_s["fired"] is True and est_s["model"] == "E"
+        assert abs(float(np.linalg.norm(est_u["t_dir_in_f0"])) - 1.0) < 1e-9
+        assert abs(float(np.linalg.norm(est_s["t_dir_in_f0"])) - 1.0) < 1e-9
+        pairs_unit.append(est_u)
+        pairs_scaled.append(est_s)
 
-    assert res_unit["tdir_err_deg"]["max"] < 1e-7
-    assert res_scaled["tdir_err_deg"]["max"] < 1e-7
-    assert abs(res_scaled["fitted_scale"] - (1.0 / k_factor)) < 1e-9
-    assert res_scaled["ate"] < 1e-9
-    assert res_warped["ate"] > 0.25
+    res_unit = SD.score_camera_trajectory(gt_poses, pairs_unit, intrinsics_info=intr)
+    res_scaled = SD.score_camera_trajectory(gt_poses_scaled, pairs_scaled, intrinsics_info=intr)
+
+    assert res_unit["rot_err_deg"]["max"] < 1e-2
+    assert res_unit["tdir_err_deg"]["max"] < 5e-2
+    assert abs(res_unit["tdir_err_deg"]["max"] - res_scaled["tdir_err_deg"]["max"]) < 1e-9
+
+    expected_not_computable = "NOT COMPUTABLE — pairwise unit directions carry no relative scale"
+    assert res_unit["fitted_scale"] == expected_not_computable
+    assert res_unit["ate"] == expected_not_computable
+    assert res_scaled["fitted_scale"] == expected_not_computable
+    assert res_scaled["ate"] == expected_not_computable
 
 
 def test_c4_blender_to_opencv_axis_convention_flip():

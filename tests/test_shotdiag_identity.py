@@ -12,6 +12,7 @@ import sys
 import numpy as np
 import pytest
 
+from armature_core import measure_weights as MW
 from armature_core import pngio
 from armature_core import shotdiag as SD
 from armature_core.errors import GateFailure
@@ -478,3 +479,53 @@ def test_weights_not_present_and_dinov2_loader_handoff_refusals(tmp_path, monkey
     with pytest.raises(ShotDiagError) as runtime_exc:
         SD.load_dinov2_vitb14_embedder(str(dummy_weights), weight_table=pinned_table)
     assert runtime_exc.value.evidence["clause"] == "dinov2_runtime_unavailable"
+
+
+def test_i7_identity_provenance_records_weight_receipt_and_labels_stand_in(tmp_path):
+    """I7 (N2): Fails if stand-in runs claim `dinov2-base` or if a gated embedder's `weight_receipt` is dropped."""
+    subj_ref = _make_rgba_character((228, 52, 38), (245, 205, 45))
+    decoy_ref = _make_rgba_character((28, 88, 226), (45, 212, 215))
+    frame, mask = _paint_frame_with_character(
+        (42, 98, 54), (28, 72, 38), (228, 52, 38), (245, 205, 45)
+    )
+
+    stand_in = SD.measure_masked_identity(
+        [frame], [mask], [subj_ref], [decoy_ref], embedder=_deterministic_embedder
+    )
+    assert stand_in["variant"] == "injected_stand_in"
+    assert stand_in["weight_receipt"] is None
+
+    ckpt_bytes = b"synthetic-dinov2-vitb14-safetensors-bytes"
+    ckpt_sha = hashlib.sha256(ckpt_bytes).hexdigest()
+    ckpt_file = tmp_path / "model.safetensors"
+    ckpt_file.write_bytes(ckpt_bytes)
+    table = (
+        {
+            "repo_id": SD.DINOV2_REPO_ID,
+            "revision": SD.DINOV2_REVISION,
+            "filename": "model.safetensors",
+            "sha256": ckpt_sha,
+            "verdict": "ALLOWED",
+            "licence": "Apache-2.0",
+            "fetched": "2026-11-11",
+            "source": "https://huggingface.co/api/models/facebook/dinov2-base",
+        },
+    )
+    receipt = MW.gate_measurement_weight(
+        str(ckpt_file),
+        repo_id=SD.DINOV2_REPO_ID,
+        revision=SD.DINOV2_REVISION,
+        table=table,
+        today="2026-11-15",
+    )
+
+    def _gated_embedder(rgb_224):
+        return _deterministic_embedder(rgb_224)
+
+    _gated_embedder.weight_receipt = receipt
+    gated = SD.measure_masked_identity(
+        [frame], [mask], [subj_ref], [decoy_ref], embedder=_gated_embedder
+    )
+    assert gated["variant"] == f"{SD.DINOV2_REPO_ID}@{SD.DINOV2_REVISION}"
+    assert gated["weight_receipt"] == receipt
+    assert gated["weight_receipt"]["sha256"] == ckpt_sha

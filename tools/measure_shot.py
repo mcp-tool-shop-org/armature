@@ -20,7 +20,7 @@ frames (the `VAEDecode` tap — never a re-encoded video) and writes one JSON re
   mask, fitting both Essential matrix (known `K`) and Homography with Torr GRIC selection,
   reporting translation as unobservable (`t_unobservable`) on rotation-only pairs, and
   aligning by frame-0 anchoring (zero fitted parameters for rotation and direction errors;
-  one global scale `s` fitted only for ATE). Tier B (`facebook/map-anything-apache`) is NOT
+  `fitted_scale` and `ate` set to `"NOT COMPUTABLE — pairwise unit directions carry no relative scale"`). Tier B (`facebook/map-anything-apache`) is NOT
   built here and requires a later grant.
 - **Masked identity:** DINOv2 ViT-B/14 (`facebook/dinov2-base` @ `f9e44c81`, Apache-2.0)
   behind a `"weights not present"` refusal (`weights_not_present`) and `MeasureWeightGate`

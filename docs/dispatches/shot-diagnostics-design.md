@@ -187,7 +187,7 @@ record; manifest carries no `camera_matrix` → `no_ground_truth_camera`.
 * clip summary over **fired frames only, with the fired count beside it** (`donor_gate`'s rule):
   median / p90 / max rotation error, the same for direction error, `gt_rot_span_deg`,
   `est_rot_span_deg` and their ratio (the "camera ignored" signature: a 30° orbit read as 2°),
-  RPE between consecutive frames, the one fitted scale factor and the scale-fitted ATE;
+  RPE between consecutive frames, ~~the one fitted scale factor and the scale-fitted ATE~~ `fitted_scale` and `ate` set to `"NOT COMPUTABLE — pairwise unit directions carry no relative scale"` (⚑ corrected 2026-11-11: two-view essential-matrix recovery emits unit directions with no inter-pair relative scale, so fitting one scalar against variable-chord GT centres reads non-zero ATE on a perfectly followed camera);
 * **parallax evidence for Static requests**, in pixels: the median residual of the homography
   model on background inliers. Zero for a camera that only rotates or holds; positive for one that
   translates. It is scale-free, which is exactly why it is there: a push-in has no metric size
@@ -210,7 +210,7 @@ exists to report. So:
    frame-0 camera frame. Nothing is fitted.
 4. **One parameter only, for ATE:** a single global scale `s` by least squares on the anchored
    camera centres. `s` is itself reported; a scale that is not one number across the clip shows up
-   as ATE, not as a silently better fit.
+   as ATE, not as a silently better fit. (⚑ Corrected 2026-11-11: applies only to a multi-view Tier B reconstruction with relative scale; Tier A pairwise unit directions carry no relative scale, so Tier A sets `fitted_scale` and `ate` to `"NOT COMPUTABLE — pairwise unit directions carry no relative scale"`.)
 5. **Convention conversion is explicit and tested:** Blender `matrix_world` (cam→world, −Z
    forward, +Y up) → OpenCV (cam→world, +Z forward, +Y down) by `diag(1, −1, −1)` on the camera
    axes. A missing flip reads as ~180°-class errors; a test pins it (§5, C4).
@@ -367,7 +367,7 @@ field and the repo commit `sha`, which pins the exact variant).
 | DUSt3R `naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt` @ `61c57447` | repo LICENSE: CC BY-NC-SA 4.0 (HF card declares none) | raw…/naver/dust3r/main/LICENSE | **NO — BANNED** | — |
 | MASt3R `naver/MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric` @ `06e7259f` | repo LICENSE: CC BY-NC-SA 4.0 (HF card declares none) | raw…/naver/mast3r/main/LICENSE | **NO — BANNED** | — |
 | CUT3R (any other named in the field) | repo LICENSE: CC BY-NC-SA 4.0 | raw…/CUT3R/CUT3R/main/LICENSE | **NO — BANNED** | — |
-| π³ `yyfz233/Pi3` @ `ae722e70` | `bsd-2-clause` (HF); repo LICENSE BSD | huggingface.co/api/models/yyfz233/Pi3 · raw…/yyfz/Pi3/main/LICENSE | **CONDITIONAL** (residual) | Clean on its face. Residual: its training-data composition was **not checked** today, and MapAnything's own README treats training data as what decides a weight's licence; the map already records a data licence reaching through weights (AMASS, `docs/license-map.md:167`). Not proposed; listed so nobody adopts it on the badge. |
+| π³ `yyfz233/Pi3` @ `ae722e70` (and `yyfz233/Pi3X` @ `bb1deea4`) | ~~`bsd-2-clause` (HF); repo LICENSE BSD~~ **CC BY-NC 4.0** (weights; code BSD-3-Clause) | huggingface.co/api/models/yyfz233/Pi3 · [yyfz/Pi3 README licence table @ `9fa3ddb3`](https://github.com/yyfz/Pi3/blob/9fa3ddb3f8d53041f8b2738df404f62223bbaa7b/README.md#L210-L215) | ~~**CONDITIONAL** (residual)~~ **NO — BANNED** | ⚑ **Corrected 2026-11-11:** previously read only the HF badge and code `LICENSE`; `yyfz/Pi3` `README.md:213` states `"Model Weights (Pi3 and Pi3X Weights) | CC BY-NC 4.0 | Strictly Non-Commercial"`. Both `yyfz233/Pi3` and `yyfz233/Pi3X` are BANNED in `MeasureWeightGate`. |
 | **DINOv2** `facebook/dinov2-small` @ `ed25f3a3`, `-base` @ `f9e44c81`, `-large` @ `47b73eef`, `-giant` @ `611a9d42`, `-with-registers-base` @ `a1d738cc` | `apache-2.0` (each HF card); repo LICENSE Apache-2.0 | huggingface.co/api/models/facebook/dinov2-* · raw…/facebookresearch/dinov2/main/LICENSE | **YES** | primary masked-identity embedder: **`dinov2-base`**, file `model.safetensors`. |
 | DINOv3 `facebook/dinov3-vitb16-pretrain-lvd1689m` | `other` / DINOv3 License (custom, gated manual) | raw…/facebookresearch/dinov3/main/LICENSE.md | **CONDITIONAL** | not needed; DINOv2 is Apache. |
 | DINO v1 (DreamSim's `dino_vitb16` backbone) | Apache-2.0 | raw…/facebookresearch/dino/main/LICENSE | **YES** | only if a DreamSim variant built on it is ever ruled in. |
@@ -389,11 +389,11 @@ clause, fetch date and verdict per the map's procedure (`docs/license-map.md:246
 * YES: OpenCV 5.x (+ the wheel's FFmpeg LGPL note); MapAnything-apache; DINOv2 (four sizes +
   registers, one row per variant); DINO v1 (only if DreamSim is ruled in).
 * NO — BANNED: MapAnything (default); VGGT-1B; VGGT-Omega; MonST3R; DUSt3R; MASt3R; CUT3R;
-  InsightFace models.
+  InsightFace models; π³ (`yyfz233/Pi3` @ `ae722e70`, `yyfz233/Pi3X` @ `bb1deea4` — ⚑ added here 2026-11-11, weights CC BY-NC 4.0 per `yyfz/Pi3` `README.md:213`).
 * UNVERIFIED → NO, into the UNVERIFIED table: VGGT-1B-Commercial (checkpoint licence behind a
   manual gate); DreamSim weights.
 * CONDITIONAL, surfaced to the Director: VGGT-1B-Commercial's family licence (if the gate is ever
-  accepted and the file's LICENSE read); π³ (training-data residual); DINOv3.
+  accepted and the file's LICENSE read); ~~π³ (training-data residual)~~ (⚑ corrected 2026-11-11: BANNED above); DINOv3.
 * Re-dated: SAM 2.1 and BiRefNet rows (advisory since 2026-11-08; re-read today, unchanged).
 
 **`tools/armature_core/route_gates.py`** — see §4.3 for why the existing table cannot carry most
@@ -453,7 +453,7 @@ same frames.
 |---|---|---|
 | C1 | correct path, noiseless correspondences → `rot_err_deg` ≈ 0 to float tolerance at every frame | the pose recovery, anchoring or composition order is wrong |
 | C2 | same estimate scored against a **static** GT for a 30° orbit → final-frame `rot_err_deg` = 30° ± fixture tolerance; `est/gt span` reads ~1 against the true path and is undefined-safe against static | the diagnostic reports "followed" for a camera that moved differently (the core failure it exists for) |
-| C3 | estimate translations multiplied by an arbitrary `k` → direction errors unchanged; fitted `s = 1/k`; ATE ≈ 0 | scale leaks into the scale-free readings, or more than one parameter is fitted |
+| C3 | ~~estimate translations multiplied by an arbitrary `k` → direction errors unchanged; fitted `s = 1/k`; ATE ≈ 0~~ real `estimate_pair_pose` unit directions on unscaled vs `k`-scaled scene/GT → direction errors unchanged; `fitted_scale` and `ate` equal `"NOT COMPUTABLE — pairwise unit directions carry no relative scale"` (⚑ corrected 2026-11-11: pairwise two-view unit directions carry no relative scale, so fitting a scalar against GT centres mis-scores a perfect orbit) | scale leaks into the scale-free readings, or a bogus ATE number is emitted from unit directions |
 | C4 | a GT `camera_matrix` fed in Blender convention vs mistakenly already-OpenCV → correct path reads ≈ 0 only with the flip; without it, ≫ 90° | the Blender→OpenCV axis flip is missing or doubled |
 | C5 | a global rotation offset applied to the whole estimated trajectory → rotation error unchanged (gauge removed by anchoring); a **per-frame drift** applied → error grows exactly by the drift | the alignment fits away real rotation error (Sim(3) absorption) |
 | C6 | pure pan (rotation-only path) → `model: H`, rotation recovered, `tdir_err_deg: null` with reason `t_unobservable` | a direction number is invented where translation is unobservable |
@@ -556,7 +556,7 @@ clone at `E:/AI/_worktrees/armature-shot-diagnostics`.
 | D3 | Part 2 identity scope | build the masked-identity framework (crops, floors, fired evidence, record, refusals) with an injected embedder and stand-in tests; write the DINOv2 adapter behind the load gate but **load nothing** until a grant run |
 | D4 | licence rows | add the §4.2 rows to the map and the §4.3 `MEASUREMENT_WEIGHTS` table + stem rows to `route_gates`; DreamSim weights and VGGT-1B-Commercial into UNVERIFIED |
 | D5 | per-frame camera records for path shots (finding 3) and the `render_performer` camera (finding 2) | out of this card unless ruled; the diagnostic refuses without GT |
-| D6 | CONDITIONALs for the Director | VGGT-1B-Commercial (gate + AUP + unilateral modification), π³ (training data), DINOv3 — none needed by this design |
+| D6 | CONDITIONALs for the Director | VGGT-1B-Commercial (gate + AUP + unilateral modification), ~~π³ (training data)~~ (⚑ corrected 2026-11-11: BANNED, weights CC BY-NC 4.0), DINOv3 — none needed by this design |
 
 ---
 
