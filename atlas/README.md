@@ -1,27 +1,17 @@
 # armature: how it works
 
-Mapped at 2026-09-30 from commit 7a70d6f by Atlas 1.24.0.
+Mapped at 2026-11-11 from commit fee4f74 by Atlas 1.26.0.
 
 ## What this is
 
 8 parts, mostly Python (320 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.
 
-## What changed since 2026-09-25 (f57d428)
+## What changed since 2026-09-30 (7a70d6f)
 
-- .github now imports tools.
-- ci now also runs tools/armature_core/cli.py.
-- ci now also checks tools/.
-- release now also runs tools/armature_core/cli.py.
-- And 2 more changes to doors.
-- MANIFEST.in is now also read by .github/workflows/ci.yml and .github/workflows/release.yml.
-- pyproject.toml is now also read by .github/workflows/ci.yml.
-- tests/ is now also read by tests/test_refusal_clauses.py.
-- And 4 more new writers and readers of places.
-- tests/test_amend_w12_core_gates.py now starts at `test_the_three_gate_p_clauses_refuse_an_infinite_diagonal_too`; it started at `test_the_condition_flipped_back_to_allowed_drops_out_of_the_receipt`.
-- In tests/test_amend_w12_core_solvers.py, `test_gate_conv_refuses_when_the_modules_tables_drift_from_the_recorded_reference` gained a step, `setattr`, before `setattr`.
-- In tests/test_amend_w12_core_solvers.py, `test_gate_conv_refuses_when_the_modules_tables_drift_from_the_recorded_reference` gained a step, `setattr`, before `setattr`.
-- And 9 more changes to the order of work.
-- 1 file changed content, across 1 part.
+- specs/* is now read by tests/test_amend_w14_core_gates.py and tests/test_paid_argv_smoke.py.
+- tests/* is now read by tests/test_packaging.py.
+- tools/* is now read by tests/blender_stub.py, tests/test_amend_w16_builders.py, tests/test_build_payload.py, tests/test_instruments_amend_w22.py, tests/test_packaging.py and tests/test_sheet_pairing.py.
+- 6 files changed content, across 4 parts.
 
 ## What comes in
 
@@ -98,14 +88,16 @@ People write .github/, docs/, the repository root, site/ and specs/; 116 writes 
 
 ## Where to start
 
-.github/workflows/ci.yml → tools/armature_core/cli.py → tools/armature_core/route_gates.py → tools/armature_core/parts.py
+.github/workflows/ci.yml → tools/armature_core/cli.py → tools/armature_core/route_gates.py → tools/armature_core/canon.py → tools/armature_core/canon_census.py → tools/armature_core/errors.py
 
 Read those in order to follow one pull request end to end.
+
+Beside the path, tools/armature_core/cli.py also calls tools/armature_core/parts.py.
 
 ## What this map cannot see
 
 - 43 imports could not be resolved: `tests/blender/test_check_pack.py` imports `conftest`, which is no module on its import path and no declared dependency; `tests/blender_stub.py` imports a path built at run time; `tests/conftest.py` imports a path built at run time; and 40 more.
-- 116 writes and 73 reads use paths built at run time and are not named here.
+- 116 writes and 75 reads use paths built at run time and are not named here.
 - 80 writes and 156 reads go to a path their caller passes, not to this repository.
 - 3 writes go to the directory the command is run in, not to this repository.
 - 3 commands are built at run time and not followed.

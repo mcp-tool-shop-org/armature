@@ -172,7 +172,7 @@
           "path": ".github/dependabot.yml"
         },
         {
-          "hash": "86bed4f3596bdda81fa13b0ee8f8a6d28570a9cc2fd2897fe717212ebcb2f424",
+          "hash": "dde302a3547e7fc176e20665aacd397e2add9d7c7a3ddaebef87b453ff26ed3d",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -180,7 +180,7 @@
           "path": ".github/workflows/pages.yml"
         },
         {
-          "hash": "37f9137bc2954c046bbbce2f66ef44673168c5bbd2d3fe1a8ecc9c8f6cd497e2",
+          "hash": "03f65324896280460b196b9d2d06c3d371f4fb70f0230757ad3d4d9eb4c85bb9",
           "path": ".github/workflows/release.yml"
         }
       ],
@@ -944,7 +944,7 @@
           "path": "SHIP_GATE.md"
         },
         {
-          "hash": "f62d47e66a26973d70ffdc6443ac15a4e2a3ebd34b553c3dc7439b21191a98c5",
+          "hash": "bfe928b05c3dcb88a8cbac9e019ec8a5613506942a0dcde5b65c267e103696ec",
           "path": "pyproject.toml"
         },
         {
@@ -975,11 +975,11 @@
           "path": "site/astro.config.mjs"
         },
         {
-          "hash": "e4b61e7a3ed3d44bcbed25ec5d658402cfbe6a7870da42f69ff84ca187fa7150",
+          "hash": "52b80480e851df3f3cb4db7b4e3f68c38fa037071456fad4f76ea2cfa1c16257",
           "path": "site/package-lock.json"
         },
         {
-          "hash": "0bb6b6c4b0e18800422ce781e5c7194d29a1cd8c8d892dcdf9fae5681f207cb5",
+          "hash": "c273e67b7653798234e7c60023cd21a0373c8f52073cb7ac7678ca990548f29b",
           "path": "site/package.json"
         },
         {
@@ -10224,7 +10224,7 @@
             "uses_refs",
             "workflow_files"
           ],
-          "hash": "9ff16119975f1844c3236ce48ccc4d169a4d753e21e7c4e6063ac1d54e0059a6",
+          "hash": "82b87899ded0bb49cf1ef02d060ef2b78f0e25043715af673ec706e3b51b4a4c",
           "importsFiles": [
             "tests/conftest.py",
             "tests/test_packaging.py"
@@ -27776,7 +27776,7 @@
       "unresolvedSites": 39
     },
     {
-      "dynamicReads": 73,
+      "dynamicReads": 75,
       "dynamicSpawns": 0,
       "dynamicSpawnsInTests": 0,
       "dynamicWrites": 116,
@@ -44953,9 +44953,9 @@
       "to": "tools"
     }
   ],
-  "engine": "1.24.0",
+  "engine": "1.26.0",
   "generatedFrom": {
-    "commit": "7a70d6fb97ef1cf5b33f8f03d18860611954e386",
+    "commit": "fee4f74bb1c6f10dcf5251491a94f758565b6c8a",
     "tracked": 558
   },
   "landings": [
@@ -47209,8 +47209,32 @@
     {
       "readers": [
         {
+          "by": "tests/test_amend_w14_core_gates.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_paid_argv_smoke.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        }
+      ],
+      "target": "specs/*",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
           "by": "tests/test_amend_w22_core_gates.py",
           "call": "glob.glob",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_amend_w22_core_gates.py",
+          "call": "open",
           "confidence": "ast",
           "fromTests": true
         }
@@ -47241,6 +47265,12 @@
         {
           "by": "tests/test_seeds_specs.py",
           "call": "glob.glob",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_seeds_specs.py",
+          "call": "open",
           "confidence": "ast",
           "fromTests": true
         }
@@ -47578,14 +47608,38 @@
     {
       "readers": [
         {
+          "by": "tests/test_packaging.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        }
+      ],
+      "target": "tests/*",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
           "by": "tests/test_amend_w26_suite.py",
           "call": "glob.glob",
           "confidence": "ast",
           "fromTests": true
         },
         {
+          "by": "tests/test_amend_w26_suite.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
           "by": "tests/test_refusal_clauses.py",
           "call": "glob.glob",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_refusal_clauses.py",
+          "call": "open",
           "confidence": "ast",
           "fromTests": true
         }
@@ -47854,6 +47908,12 @@
           "fromTests": true
         },
         {
+          "by": "tests/_census_nodes.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
           "by": "tests/test_amend_inventory.py",
           "call": "glob.glob",
           "confidence": "ast",
@@ -47872,8 +47932,20 @@
           "fromTests": true
         },
         {
+          "by": "tests/test_ok_payload_adoption.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
           "by": "tests/test_skip_lever_census.py",
           "call": "glob.glob",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_skip_lever_census.py",
+          "call": "open",
           "confidence": "ast",
           "fromTests": true
         }
@@ -48039,6 +48111,48 @@
     {
       "readers": [
         {
+          "by": "tests/blender_stub.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_amend_w16_builders.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_build_payload.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_instruments_amend_w22.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_packaging.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_sheet_pairing.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        }
+      ],
+      "target": "tools/*",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
           "by": "tests/_census_nodes.py",
           "call": "glob.glob",
           "confidence": "ast",
@@ -48051,8 +48165,20 @@
           "fromTests": true
         },
         {
+          "by": "tests/test_font_resolution.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
           "by": "tests/test_instruments_measure_amend_w12.py",
           "call": "glob.glob",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_instruments_measure_amend_w12.py",
+          "call": "open",
           "confidence": "ast",
           "fromTests": true
         },
@@ -48063,8 +48189,20 @@
           "fromTests": true
         },
         {
+          "by": "tests/test_make_crop_strip.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
           "by": "tests/test_make_thesis_sheet.py",
           "call": "glob.glob",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_make_thesis_sheet.py",
+          "call": "open",
           "confidence": "ast",
           "fromTests": true
         },
@@ -48077,6 +48215,12 @@
         {
           "by": "tests/test_sheet_pairing.py",
           "call": "glob.glob",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_sheet_pairing.py",
+          "call": "open",
           "confidence": "ast",
           "fromTests": true
         }

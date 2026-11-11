@@ -47,114 +47,51 @@
   "changes": {
     "fileCounts": {
       "added": 0,
-      "changed": 1,
+      "changed": 6,
       "moved": 0,
-      "parts": 1,
+      "parts": 4,
       "removed": 0
     },
     "items": [
       {
-        "kind": "import-added",
-        "sentence": ".github now imports tools.",
-        "subjects": [
-          ".github",
-          "tools"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "ci now also runs tools/armature_core/cli.py.",
-        "subjects": [
-          ".github/workflows/ci.yml",
-          "tools/armature_core/cli.py"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "ci now also checks tools/.",
-        "subjects": [
-          ".github/workflows/ci.yml",
-          "tools/"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "release now also runs tools/armature_core/cli.py.",
-        "subjects": [
-          ".github/workflows/release.yml",
-          "tools/armature_core/cli.py"
-        ]
-      },
-      {
-        "kind": "door",
-        "sentence": "And 2 more changes to doors.",
-        "subjects": []
-      },
-      {
         "kind": "landing",
-        "sentence": "MANIFEST.in is now also read by .github/workflows/ci.yml and .github/workflows/release.yml.",
+        "sentence": "specs/* is now read by tests/test_amend_w14_core_gates.py and tests/test_paid_argv_smoke.py.",
         "subjects": [
-          "MANIFEST.in",
-          ".github/workflows/ci.yml",
-          ".github/workflows/release.yml"
+          "specs/*",
+          "tests/test_amend_w14_core_gates.py",
+          "tests/test_paid_argv_smoke.py"
         ]
       },
       {
         "kind": "landing",
-        "sentence": "pyproject.toml is now also read by .github/workflows/ci.yml.",
+        "sentence": "tests/* is now read by tests/test_packaging.py.",
         "subjects": [
-          "pyproject.toml",
-          ".github/workflows/ci.yml"
+          "tests/*",
+          "tests/test_packaging.py"
         ]
       },
       {
         "kind": "landing",
-        "sentence": "tests/ is now also read by tests/test_refusal_clauses.py.",
+        "sentence": "tools/* is now read by tests/blender_stub.py, tests/test_amend_w16_builders.py, tests/test_build_payload.py, tests/test_instruments_amend_w22.py, tests/test_packaging.py and tests/test_sheet_pairing.py.",
         "subjects": [
-          "tests/",
-          "tests/test_refusal_clauses.py"
+          "tools/*",
+          "tests/blender_stub.py",
+          "tests/test_amend_w16_builders.py",
+          "tests/test_build_payload.py",
+          "tests/test_instruments_amend_w22.py",
+          "tests/test_packaging.py",
+          "tests/test_sheet_pairing.py"
         ]
-      },
-      {
-        "kind": "landing",
-        "sentence": "And 4 more new writers and readers of places.",
-        "subjects": []
-      },
-      {
-        "kind": "sequence",
-        "sentence": "tests/test_amend_w12_core_gates.py now starts at `test_the_three_gate_p_clauses_refuse_an_infinite_diagonal_too`; it started at `test_the_condition_flipped_back_to_allowed_drops_out_of_the_receipt`.",
-        "subjects": [
-          "tests/test_amend_w12_core_gates.py"
-        ]
-      },
-      {
-        "kind": "sequence",
-        "sentence": "In tests/test_amend_w12_core_solvers.py, `test_gate_conv_refuses_when_the_modules_tables_drift_from_the_recorded_reference` gained a step, `setattr`, before `setattr`.",
-        "subjects": [
-          "tests/test_amend_w12_core_solvers.py"
-        ]
-      },
-      {
-        "kind": "sequence",
-        "sentence": "In tests/test_amend_w12_core_solvers.py, `test_gate_conv_refuses_when_the_modules_tables_drift_from_the_recorded_reference` gained a step, `setattr`, before `setattr`.",
-        "subjects": [
-          "tests/test_amend_w12_core_solvers.py"
-        ]
-      },
-      {
-        "kind": "sequence",
-        "sentence": "And 9 more changes to the order of work.",
-        "subjects": []
       },
       {
         "kind": "counts",
-        "sentence": "1 file changed content, across 1 part.",
+        "sentence": "6 files changed content, across 4 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "f57d428d16010f1235b7aa03b9bb55d4e0599043",
-      "generatedAt": "2026-09-25T02:13:13.433Z"
+      "commit": "7a70d6fb97ef1cf5b33f8f03d18860611954e386",
+      "generatedAt": "2026-09-30T20:07:32.567Z"
     },
     "unchanged": false
   },
@@ -239,7 +176,7 @@
     "Window: 180 days; a pair counts from 10 shared commits, since 102 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "7a70d6fb97ef1cf5b33f8f03d18860611954e386",
+  "commit": "fee4f74bb1c6f10dcf5251491a94f758565b6c8a",
   "defaultBranch": "main",
   "derived": "8 parts, mostly Python (320 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.",
   "doors": [
@@ -425,12 +362,12 @@
       "to": "tools"
     }
   ],
-  "engine": "1.24.0",
+  "engine": "1.26.0",
   "generated": [],
-  "generatedAt": "2026-09-30T20:07:32.567Z",
+  "generatedAt": "2026-11-11T22:06:23.052Z",
   "limits": [
     "43 imports could not be resolved: `tests/blender/test_check_pack.py` imports `conftest`, which is no module on its import path and no declared dependency; `tests/blender_stub.py` imports a path built at run time; `tests/conftest.py` imports a path built at run time; and 40 more.",
-    "116 writes and 73 reads use paths built at run time and are not named here.",
+    "116 writes and 75 reads use paths built at run time and are not named here.",
     "80 writes and 156 reads go to a path their caller passes, not to this repository.",
     "3 writes go to the directory the command is run in, not to this repository.",
     "3 commands are built at run time and not followed."
@@ -667,12 +604,22 @@
       ]
     }
   ],
+  "startBeside": [
+    {
+      "files": [
+        "tools/armature_core/parts.py"
+      ],
+      "from": "tools/armature_core/cli.py"
+    }
+  ],
   "startDoor": ".github/workflows/ci.yml",
   "startHere": [
     ".github/workflows/ci.yml",
     "tools/armature_core/cli.py",
     "tools/armature_core/route_gates.py",
-    "tools/armature_core/parts.py"
+    "tools/armature_core/canon.py",
+    "tools/armature_core/canon_census.py",
+    "tools/armature_core/errors.py"
   ],
   "summary": null,
   "summaryFrom": null,
@@ -684,6 +631,7 @@
   "testedByScript": [
     "npm"
   ],
+  "testedCodeParts": 2,
   "unnamedWrites": 116,
   "unread": [],
   "unreadFiles": 0,
