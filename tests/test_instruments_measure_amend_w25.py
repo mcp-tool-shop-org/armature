@@ -1063,7 +1063,10 @@ def test_the_encoders_frame_content_refusals_name_the_frame(tmp_path):
         EC.read_frames(str(d), ["00000.png"])
     assert exc.value.evidence["clause"] == "frame_is_palette_indexed", exc.value.evidence
 
-    Image.fromarray(np.zeros((4, 4), np.uint16), mode="I;16").save(d / "00000.png")
+    # A 16-bit grayscale frame, made directly. `fromarray(uint16, mode="I;16")` asked for a
+    # mode change from the array's own "I", which Pillow 13 removed (python-pillow/Pillow
+    # #9751); dropping `mode=` gives an "I" image, which Pillow 13 no longer saves as PNG.
+    Image.new("I;16", (4, 4)).save(d / "00000.png")
     with pytest.raises(EC.EncodeFailure) as exc:
         EC.read_frames(str(d), ["00000.png"])
     assert exc.value.evidence["clause"] == "frame_dtype_is_not_uint8", exc.value.evidence
