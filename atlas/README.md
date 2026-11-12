@@ -1,17 +1,14 @@
 # armature: how it works
 
-Mapped at 2026-11-11 from commit fee4f74 by Atlas 1.26.0.
+Mapped at 2026-11-12 from commit 52f4011 by Atlas 1.26.0.
 
 ## What this is
 
 8 parts, mostly Python (320 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.
 
-## What changed since 2026-09-30 (7a70d6f)
+## What changed since 2026-11-11 (fee4f74)
 
-- specs/* is now read by tests/test_amend_w14_core_gates.py and tests/test_paid_argv_smoke.py.
-- tests/* is now read by tests/test_packaging.py.
-- tools/* is now read by tests/blender_stub.py, tests/test_amend_w16_builders.py, tests/test_build_payload.py, tests/test_instruments_amend_w22.py, tests/test_packaging.py and tests/test_sheet_pairing.py.
-- 6 files changed content, across 4 parts.
+Nothing structural changed since 2026-11-11; 3 files changed content.
 
 ## What comes in
 

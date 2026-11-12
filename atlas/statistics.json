@@ -113,7 +113,7 @@
       "confidence": "full",
       "highWater": 1,
       "name": "tests",
-      "qualifyingSourceCommits": 507,
+      "qualifyingSourceCommits": 508,
       "rebaseline": null
     },
     {
@@ -175,8 +175,8 @@
         "path": ".github/dependabot.yml"
       },
       {
-        "commits": 51,
-        "lines": 1268,
+        "commits": 52,
+        "lines": 1270,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -285,8 +285,8 @@
         "path": "SHIP_GATE.md"
       },
       {
-        "commits": 3,
-        "lines": 233,
+        "commits": 4,
+        "lines": 263,
         "path": "atlas/README.md"
       },
       {
@@ -295,18 +295,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 3,
-        "lines": 1259,
+        "commits": 4,
+        "lines": 1383,
         "path": "atlas/page.json"
       },
       {
-        "commits": 3,
-        "lines": 3554,
+        "commits": 4,
+        "lines": 3606,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 3,
-        "lines": 118116,
+        "commits": 4,
+        "lines": 118278,
         "path": "atlas/structure.json"
       },
       {
@@ -1080,8 +1080,8 @@
         "path": "site/astro.config.mjs"
       },
       {
-        "commits": 7,
-        "lines": 10641,
+        "commits": 9,
+        "lines": 11195,
         "path": "site/package-lock.json"
       },
       {
@@ -1930,8 +1930,8 @@
         "path": "tests/test_instruments_amend_w14.py"
       },
       {
-        "commits": 12,
-        "lines": 2628,
+        "commits": 14,
+        "lines": 2700,
         "path": "tests/test_instruments_amend_w16.py"
       },
       {
@@ -2025,8 +2025,8 @@
         "path": "tests/test_instruments_measure_amend_w22.py"
       },
       {
-        "commits": 10,
-        "lines": 2336,
+        "commits": 12,
+        "lines": 2346,
         "path": "tests/test_instruments_measure_amend_w25.py"
       },
       {
@@ -3030,9 +3030,9 @@
     "level": "full",
     "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
   },
-  "generatedAt": "2026-11-11T22:06:23.052Z",
+  "generatedAt": "2026-11-12T02:05:16.498Z",
   "generatedFrom": {
-    "commit": "fee4f74bb1c6f10dcf5251491a94f758565b6c8a"
+    "commit": "52f401166d954bd4c1e365e2635d93c35662fa1a"
   },
   "pairs": [
     {
@@ -3459,16 +3459,16 @@
     "floor": "strong",
     "floorHeld": false,
     "floorTrigger": null,
-    "headDate": "2026-10-20T16:26:42-04:00",
+    "headDate": "2026-11-11T21:04:26-05:00",
     "inScopeFiles": 563,
     "pinnedStart": null,
     "priorFloor": "strong",
-    "qualifyingCommits": 767,
+    "qualifyingCommits": 770,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 10,
-    "since": "2026-04-23T20:26:42.000Z",
+    "since": "2026-05-16T02:04:26.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

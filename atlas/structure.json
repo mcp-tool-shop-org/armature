@@ -975,7 +975,7 @@
           "path": "site/astro.config.mjs"
         },
         {
-          "hash": "52b80480e851df3f3cb4db7b4e3f68c38fa037071456fad4f76ea2cfa1c16257",
+          "hash": "6f6b69685e49592bbbb6a19ef11e139700c70d85b83144371332b19bec2c551e",
           "path": "site/package-lock.json"
         },
         {
@@ -18117,6 +18117,7 @@
             "retopo16",
             "rigchar",
             "rt16",
+            "set_images",
             "test_a_bare_message_refusal_from_a_tool_local_class_carries_a_null_receipt",
             "test_a_comment_naming_the_walk_does_not_satisfy_the_clause",
             "test_a_frame_count_that_cannot_carry_a_performance_is_refused_by_name",
@@ -18162,7 +18163,7 @@
             "test_the_stale_target_guard_does_not_test_before_for_truthiness",
             "test_the_subject_arg_refusal_is_in_the_family_so_the_halt_is_refused_not_failed"
           ],
-          "hash": "52a9fb0b05f8db5952905af6f9908173dacac8d16e082c1b92ea12199999bfc4",
+          "hash": "7157ab09f5ee48def62fb34c79bce92bcb848819f14aa950febe9ba2087c767c",
           "importsFiles": [
             "tests/blender_stub.py",
             "tests/test_sheet_sides.py",
@@ -21197,7 +21198,7 @@
             "test_the_two_control_classes_declare_their_gate_id",
             "test_the_two_sentence_shaped_clauses_are_words_now_and_the_sentence_survives"
           ],
-          "hash": "a499fa26a1806f2599c2e1e7e716adf601c070ff2206e59e20e5b37bf8c54393",
+          "hash": "050b54b98dc294ebc07d6c383d6c67b5be8d6d7b8a1235e755ff0046925f6910",
           "importOrder": [
             "tests/blender_stub.py",
             "tools/encode_control.py",
@@ -44955,7 +44956,7 @@
   ],
   "engine": "1.26.0",
   "generatedFrom": {
-    "commit": "fee4f74bb1c6f10dcf5251491a94f758565b6c8a",
+    "commit": "52f401166d954bd4c1e365e2635d93c35662fa1a",
     "tracked": 558
   },
   "landings": [
