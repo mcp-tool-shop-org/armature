@@ -6,6 +6,7 @@ its `MeasureWeightGate` handoff, and its missing-runtime refusal (`docs/dispatch
 """
 
 import hashlib
+import json
 
 import numpy as np
 import pytest
