@@ -208,7 +208,8 @@ def test_the_parser_population_is_every_tool_that_declares_an_argument():
     # retarget spelling on `lift_solve` (`a = require_retarget_flags(parse_args())`) is
     # visible again via `_passthrough_arg0_names`, so it does not leave.
     # WAVE 35: 69 -> 70. `build_routes_payload` joins.
-    assert len(CLI_TOOLS) == 70, len(CLI_TOOLS)
+    # Shot diagnostics: 70 -> 71. `measure_shot` joins.
+    assert len(CLI_TOOLS) == 71, len(CLI_TOOLS)
 
 
 def test_the_solver_no_longer_shadows_the_tool_of_the_same_name():
@@ -656,7 +657,7 @@ def test_the_success_fixture_gap_is_counted_and_may_only_shrink():
         f"13 was the count after wave 37's sixteen CPython instrument SUCCESS "
         f"fixtures and it may only fall: {NO_SUCCESS_FIXTURE}")
     assert len(PAID_SUCCESS) == 17, sorted(PAID_SUCCESS)
-    assert len(MEASURE_SUCCESS) == 7, sorted(MEASURE_SUCCESS)
+    assert len(MEASURE_SUCCESS) == 8, sorted(MEASURE_SUCCESS)
     assert len(EXTENDED_SHEETS) == 7, sorted(EXTENDED_SHEETS)
     assert len(BLENDER_SHEET_SUCCESS) == 4, sorted(BLENDER_SHEET_SUCCESS)
     assert len(ROUTES_SUCCESS) == 1, sorted(ROUTES_SUCCESS)
@@ -695,7 +696,8 @@ def test_the_blender_side_of_the_cli_population_is_the_one_that_cannot_be_driven
         assert blender_reach(module + ".py"), module
     # WAVE 34: 50 -> 52. The two boundary payload tools are CPython; blender side unchanged.
     # WAVE 35: 52 -> 53. build_routes_payload is CPython.
-    assert len(CPYTHON_CLI_TOOLS) == 53, len(CPYTHON_CLI_TOOLS)
+    # Shot diagnostics: 53 -> 54. measure_shot is CPython.
+    assert len(CPYTHON_CLI_TOOLS) == 54, len(CPYTHON_CLI_TOOLS)
 
 
 def _module_scope_imports_this_interpreter_cannot_resolve(module):

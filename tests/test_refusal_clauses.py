@@ -328,6 +328,7 @@ RECORDED_POPULATION = frozenset({
     #     them to confirm. If it does not land, this assertion names it by name.
     "ABClipError", "ResampleArgError", "SeedRegistrationError", "SpendCeiling",
     "ArcDidNotSurvive",
+    "MeasureWeightGate", "ShotDiagError",
     # WAVE 22 (instruments-measure) — MEASURED in the w22-instruments-measure worktree,
     # not carried. Two classes cross the two-site threshold as F-e40749e9's fix lands:
     #   `make_pick_sheet.PickSheetError` — recorded as deliberately single-site in wave 16
@@ -675,7 +676,8 @@ def test_the_policed_population_is_derived_from_the_tree_and_has_not_grown_silen
     # derived counts move 22 -> 21 and 21 -> 20 for the same one reason.
     # WAVE 35 pin-fix: 131 -> 133 — MakeSheetError + RoutesGate (measured).
     # WAVE 37 pin-fix: 133 -> 134 — ReliftSelfComparison (measured).
-    assert len(POLICED) == 134, sorted(POLICED)
+    # Shot diagnostics (2026-11-11): 134 -> 136 — MeasureWeightGate + ShotDiagError.
+    assert len(POLICED) == 136, sorted(POLICED)
     assert POLICED == set(RECORDED_POPULATION), {
         "appeared": sorted(POLICED - RECORDED_POPULATION),
         "vanished": sorted(RECORDED_POPULATION - POLICED),
@@ -1070,7 +1072,8 @@ def test_every_family_class_under_tools_is_policed_one_site_or_named_as_raised_b
     # WAVE 34 pin-fix: +3 family classes on the merged tree (CeilingBudget,
     # SubmitGate, UploadGate); SiteListError was already defined.
     # WAVE 35 pin-fix: 151 -> 152 — RoutesGate joins the family under tools/.
-    assert len(defined) == 152, len(defined)
+    # Shot diagnostics (2026-11-11): 152 -> 154 — MeasureWeightGate + ShotDiagError.
+    assert len(defined) == 154, len(defined)
 
     zero = {n for n in defined if not RAISE_SITES.get(n)}
     one = {n for n in defined if len(RAISE_SITES.get(n, ())) == 1}
@@ -1715,6 +1718,7 @@ RECORDED_CLAUSES = [
     'articulated_hand_bad_columns',
     'articulated_hand_points_required',
     'articulated_hand_wrong_point_count',
+    'aspect_ratio_mismatch',
     'asset_has_no_evaluated_geometry',
     'asset_has_no_render_visible_mesh',
     'asset_imported_no_mesh_objects',
@@ -1838,6 +1842,7 @@ RECORDED_CLAUSES = [
     'class_without_a_recorded_free_measurement',
     'clip_decoded_to_zero_frames',
     'clip_end_is_closer_than_the_subject',
+    'clip_has_no_camera_pair',
     'clip_has_no_consecutive_pair',
     'clip_would_be_written_outside_out',
     'cloud_history_get_failed',
@@ -1878,6 +1883,7 @@ RECORDED_CLAUSES = [
     'converted_widget_shifts_enum_indices',
     'converted_widget_shifts_recorded_indices',
     'corner_classified_as_subject',
+    'correspondence_length_mismatch',
     'cover',
     'cover_crop_produced_the_wrong_size',
     'coverage_has_no_frames_to_rule_on',
@@ -1902,6 +1908,7 @@ RECORDED_CLAUSES = [
     'decoded_bytes_are_not_whole_frames',
     'decoded_rate_disagrees_with_the_declaration',
     'decoded_rate_not_finite',
+    'decoy_matches_subject_reference',
     'degenerate_bounding_box',
     'degenerate_plate',
     'degenerate_target_frame',
@@ -1912,6 +1919,7 @@ RECORDED_CLAUSES = [
     'depth_window_shape',
     'destination_frame_count_below_two',
     'diagnostic_cannot_be_armed',
+    'dinov2_runtime_unavailable',
     'distinct_uploads_disagree_with_the_rendered_control',
     'donor_below_threshold',
     'downloader_exceeded_the_time_bound',
@@ -1933,6 +1941,7 @@ RECORDED_CLAUSES = [
     'embedded_image_count_differs',
     'empty_camera_path',
     'empty_expectation',
+    'empty_frames',
     'empty_gradient_band',
     'empty_graph',
     'empty_keypoint_population',
@@ -1996,6 +2005,7 @@ RECORDED_CLAUSES = [
     'frame_array_shape_is_unsupported',
     'frame_carries_an_alpha_channel',
     'frame_count_changed_through_the_bridge',
+    'frame_count_mismatch',
     'frame_counts_differ',
     'frame_dtype_is_not_uint8',
     'frame_exceeds_trained_horizon',
@@ -2019,6 +2029,7 @@ RECORDED_CLAUSES = [
     'frame_not_hw3',
     'frame_not_three_integers',
     'frame_outside_the_keyed_range',
+    'frame_shape_invalid',
     'frame_size_not_positive',
     'frame_sizes_differ',
     'frame_source_not_callable',
@@ -2095,6 +2106,7 @@ RECORDED_CLAUSES = [
     'identity_clause_absent',
     'identity_clause_phrase_absent',
     'identity_only',
+    'identity_without_camera_block',
     'import',
     'import_has_no_render_visible_mesh',
     'import_is_not_one_render_visible_mesh',
@@ -2110,6 +2122,9 @@ RECORDED_CLAUSES = [
     'inserted_node_id_already_exists',
     'insertions_are_not_the_named_ones',
     'interior_sample_past_the_span',
+    'invalid_camera_intrinsics',
+    'invalid_camera_matrix',
+    'invalid_dilation_fraction',
     'joint_is_not_an_object',
     'joint_names_unknown_surface',
     'keying_produced_no_action',
@@ -2147,12 +2162,15 @@ RECORDED_CLAUSES = [
     'meta_path_equals_graph_path',
     'min_frac_may_only_tighten',
     'missing_arm_input',
+    'missing_decoy_reference',
     'missing_file',
     'missing_or_empty',
     'missing_prompt',
     'missing_required',
     'missing_spec_key',
     'missing_subject',
+    'missing_subject_mask',
+    'missing_subject_reference',
     'missing_upload_key',
     'mitten_hand_wrong_point_count',
     'model_chain_loops',
@@ -2194,6 +2212,7 @@ RECORDED_CLAUSES = [
     'no_frame_carries_landmarks',
     'no_frames_to_gate',
     'no_frames_to_stream',
+    'no_ground_truth_camera',
     'no_head_vertices_above_the_head_base',
     'no_image_texture_node_to_bake_into',
     'no_json_chunk',
@@ -2364,11 +2383,13 @@ RECORDED_CLAUSES = [
     'record_route_facts_disagree',
     'record_unreadable',
     'recorded_convention_digest_drift',
+    'reference_alpha_empty',
     'reference_clip_has_no_frames',
     'reference_file_missing',
     'reference_file_not_a_png',
     'reference_fit_has_no_recorded_assertion',
     'reference_import_is_not_one_render_visible_mesh',
+    'reference_missing_alpha',
     'reference_not_a_file',
     'reference_requires_gate0',
     'reference_unreadable',
@@ -2380,6 +2401,7 @@ RECORDED_CLAUSES = [
     'render visibility',
     'render_and_keypoints_disagree_on_resolution',
     'render_engine_unknown',
+    'render_run_missing_manifest',
     'render_target_missing',
     'render_wrote_nothing',
     'repair_removed_too_much',
@@ -2624,6 +2646,13 @@ RECORDED_CLAUSES = [
     'visible_rows_not_a_band_inside_the_frame',
     'voxel_not_finite_and_positive',
     'wait_exceeded_the_time_bound',
+    'weight_banned',
+    'weight_conditional_unaccepted',
+    'weight_file_empty',
+    'weight_hash_unverified',
+    'weight_path_not_a_file',
+    'weight_unverified',
+    'weights_not_present',
     'why_not_supplied',
     'world_bounds_without_scene',
     'write',
