@@ -116,7 +116,7 @@ RULED_COMPONENTS = {
                    "the non-retrieval, and an unretrievable licence is treated as NO"),
     },
     "openpose": {"verdict": "BANNED", "licence": "CMU Academic / Non-Commercial",
-                 "fetched": "2026-08-10",
+                 "fetched": "2026-11-11",
                  "source": ("https://raw.githubusercontent.com/CMU-Perceptual-Computing-"
                             "Lab/openpose/master/LICENSE"),
                  "reason": "non-commercial preprocessor tier"},
@@ -126,6 +126,239 @@ RULED_COMPONENTS = {
                "reason": ("UNVERIFIED weights tier — treated as NO. The Apache row the "
                           "map carries is the CODE's; the WEIGHTS are a separate grant "
                           "and were never fetched")},
+    "depth_anything_v2_vitb": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Base/blob/a4e71a6c2ce5/README.md",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "depth_anything_v2_metric_hypersim_vitb.pth",
+            "depth_anything_v2_metric_vkitti_vitb.pth",
+            "depth-anything/depth-anything-v2-base",
+        ),
+    },
+    "depth_anything_v2_vitl": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Large/blob/cbbb86a30ce1/README.md",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "depth_anything_v2_metric_hypersim_vitl.pth",
+            "depth_anything_v2_metric_vkitti_vitl.pth",
+            "depth_anything_v2_metric_hypersim_vitl_fp32.safetensors",
+            "depth_anything_v2_metric_vkitti_vitl_fp32.safetensors",
+            "depth-anything/depth-anything-v2-large",
+        ),
+    },
+    "depth_anything_v2_vitg": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0 (weights not yet released)",
+        "fetched": "2026-11-11",
+        "source": "https://github.com/DepthAnything/Depth-Anything-V2/blob/a561b849ebae/README.md",
+        "reason": "non-commercial preprocessor tier",
+    },
+    "metric_video_depth_anything_vitl": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": ("https://huggingface.co/depth-anything/"
+                   "Metric-Video-Depth-Anything-Large/blob/607fcdbd454b/README.md"),
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "depth-anything/metric-video-depth-anything-large",
+        ),
+    },
+    "video_depth_anything_vitl": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/Video-Depth-Anything-Large/blob/7aafbcb5c6af/README.md",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "depth-anything/video-depth-anything-large",
+        ),
+    },
+    # `ComfyUI-DepthAnythingV3` (`MODEL_REPOS` in `nodes/depth_anything_v3/configs.py`,
+    # line 102) mapped `da3_large.safetensors` to `depth-anything/DA3-LARGE` (1.0,
+    # CC-BY-NC-4.0) at `9fb61e26fa09` before 2025-12-27 and to `depth-anything/DA3-LARGE-1.1`
+    # (Apache-2.0) since 2025-12-27 (`2bd9c34870a9`), without replacing an existing local
+    # file. `da3_large.safetensors` precedes `da3_large` and refuses as UNVERIFIED (treated
+    # as NO); `da3_large` sets `exact_only=True` so Apache `DA3-LARGE-1.1` repo forms pass.
+    "da3_large.safetensors": {
+        "verdict": "BANNED",
+        "licence": ("ambiguous local filename: CC-BY-NC-4.0 (DA3-LARGE 1.0) or "
+                    "Apache-2.0 (DA3-LARGE-1.1)"),
+        "fetched": "2026-11-11",
+        "source": (
+            "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+            "9fb61e26fa09/nodes/depth_anything_v3/configs.py + "
+            "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+            "2bd9c34870a9/nodes/depth_anything_v3/configs.py + "
+            "https://huggingface.co/depth-anything/DA3-LARGE/blob/"
+            "c54c26b16ec0/README.md + "
+            "https://huggingface.co/depth-anything/DA3-LARGE-1.1/blob/"
+            "0e109ae307c5/README.md"
+        ),
+        "reason": (
+            "UNVERIFIED (treated as NO): ComfyUI-DepthAnythingV3 "
+            "nodes/depth_anything_v3/configs.py (line 102) mapped da3_large.safetensors to "
+            "depth-anything/DA3-LARGE (1.0, CC-BY-NC-4.0) at 9fb61e26fa09 before 2025-12-27 "
+            "and to depth-anything/DA3-LARGE-1.1 (Apache-2.0) since 2025-12-27 "
+            "(2bd9c34870a9), and never replaces an existing local file"
+        ),
+        "files": (
+            "da3_large.safetensors",
+        ),
+    },
+    "da3_large": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/DA3-LARGE/blob/c54c26b16ec0/README.md",
+        "reason": "non-commercial preprocessor tier (1.0 only; DA3-LARGE-1.1 is Apache-2.0)",
+        "exact_only": True,
+        "files": (
+            "da3-large",
+            "da3_large_1.0.safetensors",
+            "da3-large/model.safetensors",
+            "depth-anything/da3-large",
+        ),
+    },
+    # Longer `1.1` keys precede their `1.0` siblings so `1.1` local/repo names match the `1.1`
+    # row first (`ComfyUI-DepthAnythingV3` `MODEL_REPOS` maps `da3_giant.safetensors` and
+    # `da3nested_giant_large.safetensors` to `-1.1`), while `1.0` repo paths and non-`1.1`
+    # local suffixes (`_fp16`, `_1.0`, etc.) hit the `1.0` row with its matching `source`.
+    "da3_giant_1.1": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/DA3-GIANT-1.1/blob/72ee9f89ce4e/README.md",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "da3_giant.safetensors",
+            "da3-giant-1.1",
+            "da3-giant-1.1/model.safetensors",
+            "depth-anything/da3-giant-1.1",
+        ),
+    },
+    "da3_giant": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": "https://huggingface.co/depth-anything/DA3-GIANT/blob/7cd62ae9315b/README.md",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "da3-giant",
+            "da3-giant/model.safetensors",
+            "depth-anything/da3-giant",
+        ),
+    },
+    "da3nested_giant_large_1.1": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": ("https://huggingface.co/depth-anything/"
+                   "DA3NESTED-GIANT-LARGE-1.1/blob/b2359bdf726f/README.md"),
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "da3nested_giant_large.safetensors",
+            "da3nested-giant-large-1.1",
+            "da3nested-giant-large-1.1/model.safetensors",
+            "depth-anything/da3nested-giant-large-1.1",
+        ),
+    },
+    "da3nested_giant_large": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-11",
+        "source": ("https://huggingface.co/depth-anything/"
+                   "DA3NESTED-GIANT-LARGE/blob/8615eefb62f2/README.md"),
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "da3nested-giant-large",
+            "da3nested-giant-large/model.safetensors",
+            "depth-anything/da3nested-giant-large",
+        ),
+    },
+    "insightface": {
+        "verdict": "BANNED",
+        "licence": "non-commercial research only",
+        "fetched": "2026-11-11",
+        "source": ("https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/README.md"
+                   " + https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/"
+                   "python-package/README.md"),
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "antelopev2",
+            "antelopev2.zip",
+            "buffalo_l",
+            "buffalo_l.zip",
+            "buffalo_m",
+            "buffalo_m.zip",
+            "buffalo_s",
+            "buffalo_s.zip",
+            "buffalo_sc",
+            "buffalo_sc.zip",
+            "raccoon_l",
+            "raccoon_l.zip",
+            "raccoon_s",
+            "raccoon_s.zip",
+            "cheetah_l",
+            "cheetah_l.zip",
+            "cheetah_s",
+            "cheetah_s.zip",
+            "inswapper_128.onnx",
+            "scrfd_person_2.5g.onnx",
+            "liveness.onnx",
+            "scrfd_500m.onnx",
+            "scrfd_1g.onnx",
+            "scrfd_2.5g.onnx",
+            "scrfd_10g.onnx",
+            "scrfd_34g.onnx",
+            "scrfd_500m_kps.onnx",
+            "scrfd_2.5g_kps.onnx",
+            "scrfd_10g_kps.onnx",
+            "det_10g.onnx",
+            "w600k_r50.onnx",
+            "genderage.onnx",
+            "2d106det.onnx",
+            "1k3d68.onnx",
+            "arcface_r100_v1",
+            "arcface_r100_v1.zip",
+            "arcface_mfn_v1",
+            "arcface_mfn_v1.zip",
+            "retinaface_r50_v1",
+            "retinaface_r50_v1.zip",
+            "retinaface_mnet025_v1",
+            "retinaface_mnet025_v1.zip",
+            "retinaface_mnet025_v2",
+            "retinaface_mnet025_v2.zip",
+            "genderage_v1",
+            "genderage_v1.zip",
+        ),
+    },
+    "smpl_": {
+        "verdict": "BANNED",
+        "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
+        "fetched": "2026-11-11",
+        "source": "https://smpl.is.tue.mpg.de/modellicense.html",
+        "reason": "non-commercial preprocessor tier",
+        "files": (
+            "basicmodel_neutral_lbs_10_207_0_v1.0.0.pkl",
+            "basicmodel_m_lbs_10_207_0_v1.0.0.pkl",
+            "basicmodel_f_lbs_10_207_0_v1.0.0.pkl",
+        ),
+    },
+    "smplx": {
+        "verdict": "BANNED",
+        "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
+        "fetched": "2026-11-11",
+        "source": "https://smpl-x.is.tue.mpg.de/modellicense.html",
+        "reason": "non-commercial preprocessor tier",
+        "files": ("smpl-x",),
+    },
 
     # ---- the E14 style-LoRA field, mirrored from the licence map's 2026-08-13 fetch pass.
     # Four of these are kills. They are entered BECAUSE they are dead: an absent row reads
@@ -222,6 +455,74 @@ RULED_COMPONENTS = {
         "licence": "source unlocated — NOT RETRIEVED",
         "reason": ("a licence that cannot be retrieved is treated as NO. Revivable only if "
                    "a source page is found and fetched"),
+    },
+
+    # ---- 2026-11-11 LTX-2.5 + Layout-to-Render IC-LoRA + ComfyUI-LTXVideo — Director
+    # ruling: CONDITIONAL, not accepted: on hold by the Director. Mirrored here as BANNED
+    # rather than CONDITIONAL because `CONDITIONAL` in this module represents an ACCEPTED
+    # conditional grant whose obligation is satisfied by passing a credit entry in
+    # `attribution=` (`uncredited_conditional_components`), whereas an unaccepted on-hold
+    # route must refuse unconditionally in `verify` (including if `allow=` is passed).
+    # `ltx-2.5-22b-ic-lora-layout-to-render` precedes `ltx-2.5` so the IC-LoRA matches its
+    # own row first.
+    "ltx-2.5-22b-ic-lora-layout-to-render": {
+        "verdict": "BANNED",
+        "licence": "LTX-2.x Community License Agreement (dated 2026-08-11, amended 2026-10-29)",
+        "fetched": "2026-11-11",
+        "source": (
+            "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+            "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"
+        ),
+        "reason": (
+            "CONDITIONAL, not accepted: on hold by the Director (entity incl. affiliates "
+            "< $10M annual revenue; AUP content limits incl. graphic violence; "
+            "machine-generated disclosure on placed outputs; no training non-LTX models on "
+            "outputs; do not strip provenance; AUP and licence re-read at each use)"
+        ),
+        "files": (
+            "ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors",
+            "lightricks/ltx-2.5-22b-ic-lora-layout-to-render",
+        ),
+    },
+    "ltx-2.5": {
+        "verdict": "BANNED",
+        "licence": "LTX-2.x Community License Agreement (dated 2026-08-11, amended 2026-10-29)",
+        "fetched": "2026-11-11",
+        "source": (
+            "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+            "https://huggingface.co/Lightricks/LTX-2.5"
+        ),
+        "reason": (
+            "CONDITIONAL, not accepted: on hold by the Director (entity incl. affiliates "
+            "< $10M annual revenue; AUP content limits incl. graphic violence; "
+            "machine-generated disclosure on placed outputs; no training non-LTX models on "
+            "outputs; do not strip provenance; AUP and licence re-read at each use)"
+        ),
+        "files": (
+            "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
+            "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
+            "lightricks/ltx-2.5",
+        ),
+    },
+    "comfyui-ltxvideo": {
+        "verdict": "BANNED",
+        "licence": "LTX-2 Community License Agreement (dated 2026-01-05)",
+        "fetched": "2026-11-11",
+        "source": (
+            "https://github.com/Lightricks/ComfyUI-LTXVideo/blob/bb70ecba6602/LICENSE + "
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf"
+        ),
+        "reason": (
+            "CONDITIONAL, not accepted: on hold by the Director under the older LTX-2 "
+            "Community License of 2026-01-05 (same < $10M group revenue threshold plus "
+            "double-fee liquidated damages, AUP content limits, disclosure, no non-LTX "
+            "model training, provenance retention, and re-read at each use)"
+        ),
+        "files": (
+            "lightricks/comfyui-ltxvideo",
+        ),
     },
 }
 
@@ -496,6 +797,80 @@ WEIGHT_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".ta
 RULED_COMPONENT_CLASSES = {
     "dwpose": ("dwpreprocessor", "dwposeestimator"),
     "openpose": ("openposepreprocessor", "openpose_preprocessor"),
+    # Preprocessor / face / motion-capture nodes that fetch or load banned weights on
+    # their own without carrying the row key in the class name or a weight filename in
+    # `widgets_values`. Nodes whose model tier (Small vs Base/Large/Giant) is selected
+    # by a widget (`DepthAnythingV2Preprocessor`, `DownloadAndLoadDepthAnythingV2Model`,
+    # `LoadVideoDepthAnythingModel`, `DownloadAndLoadDepthAnythingV3Model`,
+    # `DA3_DownloadModel`) are deliberately omitted here so the widget's weight name
+    # decides: Apache-2.0 variants (Small, DA3 Base/Mono/Metric/Large-1.1) pass while
+    # BANNED tiers refuse.
+    "insightface": (
+        "instantidfaceanalysis",
+        "ipadapterunifiedloaderfaceid",
+        "reactorfaceswap",
+        "reactorfaceswapopt",
+        "reactorbuildfacemodel",
+        "reactorfacesimilarity",
+    ),
+    "smpl_": (
+        "loadsmpl",
+        "savesmpl",
+        "smpltobvh",
+        "smpltofbx",
+        "smplretargettosmpl",
+        "smpltomixamo",
+        "smpltoglb",
+        "comparesmpltobvh",
+    ),
+    "smplx": (
+        "loadgvhmrmodels",
+        "gvhmrinference",
+    ),
+    # `Lightricks/ComfyUI-LTXVideo` custom-pack node classes (`__init__.py` at
+    # `220e1d45aa04`), governed by the LTX-2 Community License (2026-01-05) and on hold by
+    # the Director. GPL-3.0 ComfyUI core LTX classes (`EmptyLTXVLatentVideo`,
+    # `LTXVImgToVideo`, `LTXVAddGuide`, `GetICLoRAParameters`, `LTXVScheduler`, etc.) are
+    # deliberately excluded so OpenRAIL-M `LTX-Video 0.9.x` is not false-refused.
+    "comfyui-ltxvideo": (
+        "ltxaddvideoicloraguide",
+        "ltxicloraloadermodelonly",
+        "ltxvgemmaclipmodelloader",
+        "ltxvgemmaenhanceprompt",
+        "gemmaapitextencode",
+        "ltxvbasesampler",
+        "ltxvincontextsampler",
+        "ltxvextendsampler",
+        "ltxvnormalizingsampler",
+        "ltxvtiledsampler",
+        "ltxvtiledfusionsampler",
+        "ltxvgettilingsizes",
+        "ltxvloopingsampler",
+        "ltxvtiledvaedecode",
+        "ltxvmultipromptprovider",
+        "ltxvimgtovideoadvanced",
+        "ltxvimgtovideoconditiononly",
+        "ltxvlinearoverlaplatenttransition",
+        "ltxvadainlatent",
+        "ltxvapplystg",
+        "ltxq8patch",
+        "ltxvq8loramodelloader",
+        "ltxvselectlatents",
+        "ltxvsetvideolatentnoisemasks",
+        "ltxvsetaudioreftokens",
+        "ltxvloadconditioning",
+        "ltxvdrawtracks",
+        "ltxvsparsetrackeditor",
+        "ltxvdilatevideomask",
+        "ltxvinpaintpreprocess",
+        "ltxvlaplacianpyramidblend",
+        "ltxvhdrdecodepostprocess",
+        "ltxvloadexrsequence",
+        "ltxvvaeforcefloat32",
+        "ltxvaudioonlymodel",
+        "ltxvaudioonlyemptyvideolatent",
+        "ltxfloattoint",
+    ),
 }
 
 # =======================================================================================
@@ -1775,8 +2150,29 @@ def unmatched_attribution_entries(comp, attribution):
             if not any(_credits(e, key, c.get("file")) for c, key in keyed)]
 
 
+def _matches_exact_file(norm, basename, target):
+    """Does normalised `filename` match one exact-name or suffix-path entry from `files`?
+
+    Entries containing `/` match the normalised path or a `/`-bounded suffix of it (so
+    `da3-large/model.safetensors` catches `depth-anything/DA3-LARGE/model.safetensors`
+    while sparing `depth-anything/DA3-BASE/model.safetensors`,
+    `depth-anything/DA3MONO-LARGE/model.safetensors`, and bare `model.safetensors`).
+    Entries without `/` match `basename` exactly.
+    """
+    t = str(target).lower().replace("\\", "/").strip("/")
+    if not t:
+        return False
+    if "/" in t:
+        return norm == t or norm.endswith("/" + t)
+    return basename == t
+
+
 def rulings_for(filename):
     """EVERY `RULED_COMPONENTS` row this weight filename matches, strictest first.
+
+    A row matches when its key is a substring of `filename` (lower-cased, unless the row
+    sets `exact_only=True`) OR when `filename` matches an entry in the row's optional
+    `files` tuple (exact basename, or `/`-bounded path suffix when the entry carries `/`).
 
     ⚠ **`components()` used to take the FIRST match in dict-insertion order and record
     no other.** `families_of()` on the same page deliberately does the opposite and its
@@ -1792,8 +2188,12 @@ def rulings_for(filename):
     those names come from.
     """
     low = str(filename).lower()
+    norm = low.replace("\\", "/").strip("/")
+    basename = norm.rsplit("/", 1)[-1]
     hits = [dict(rec, matched_on=key) for key, rec in RULED_COMPONENTS.items()
-            if key in low]
+            if (not rec.get("exact_only") and key in low)
+            or any(_matches_exact_file(norm, basename, f)
+                   for f in (rec.get("files") or ()))]
     hits.sort(key=lambda r: -VERDICT_RANK.get(r["verdict"], 0))
     return hits
 

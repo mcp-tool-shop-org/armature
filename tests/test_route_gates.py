@@ -3,6 +3,7 @@
 Every fixture below is a graph that a name-level or top-level check would call clean.
 """
 
+import datetime
 import os
 import re
 
@@ -1827,14 +1828,6 @@ def _map_kills():
 #: kill fails the census below rather than joining this set silently. Recorded, not ruled
 #: — the advisor owns whether each earns a row.
 UNMIRRORED_MAP_KILLS = {
-    "Depth Anything V2 Large":
-        "a depth-estimator tier. armature renders depth from geometry (channels.py), so "
-        "no served filename or node class for it has ever entered a graph — which is the "
-        "same thing that was true of `dwpose` until a served template wired "
-        "`DWPreprocessor`",
-    "Depth Anything V3 (weights)":
-        "same tier, same reason, and the map's own note that the CODE is Apache while "
-        "the WEIGHTS are CC-BY-NC is exactly the split a filename row would carry",
     "AMASS":
         "a mocap DATASET, not a weight file or a node class: it cannot appear in a graph "
         "at all, and the map's ruling reaches this pipeline through the released weights "
@@ -1850,9 +1843,18 @@ def test_the_map_kill_population_is_the_one_measured_today():
     """SIZE and MEMBERSHIP of the derived population first, so a new kill row in the map
     fails loudly here instead of quietly widening the gap."""
     kills = [name for name, _ in _map_kills()]
-    assert len(kills) == 11, kills
+    assert len(kills) == 23, kills
     for expect in ("CausVid", "OpenPose (CMU)", "DWPose / ViTPose WEIGHTS",
-                   "Depth Anything V2 Large", "AMASS"):
+                   "Depth Anything V2 Base", "Depth Anything V2 Large",
+                   "Depth Anything V2 Giant",
+                   "Metric-Video-Depth-Anything Large",
+                   "Video-Depth-Anything Large",
+                   "da3_large.safetensors",
+                   "DA3 Large 1.0",
+                   "DA3 Giant 1.1", "DA3 Giant 1.0",
+                   "DA3 Nested Giant-Large 1.1", "DA3 Nested Giant-Large 1.0",
+                   "InsightFace pretrained models",
+                   "SMPL body model", "SMPL-X body model", "AMASS", "Tripo"):
         assert any(expect in k for k in kills), expect
 
 
@@ -1882,23 +1884,122 @@ def test_the_mirror_census_goes_red_when_a_row_is_retired(monkeypatch):
 
 def test_every_map_kill_is_mirrored_or_named_with_its_reason():
     """The mirror's load-bearing direction: a row the map KILLS must be one a script can
-    fail on, or be named here with why it cannot be. 7 of the 11 kills are mirrored
-    today; the four that are not are the ratchet above."""
+    fail on, or be named here with why it cannot be. 21 of the 23 kills are mirrored
+    today; the two that are not are the ratchet above."""
     unmirrored = _unmirrored_kills()
     named = [n for n in unmirrored
              if any(k in n for k in UNMIRRORED_MAP_KILLS)]
     assert sorted(named) == sorted(unmirrored), (
         "a licence-map kill has no RULED_COMPONENTS row and no recorded reason: "
         f"{sorted(set(unmirrored) - set(named))}")
-    assert len(unmirrored) == 4, unmirrored
+    assert len(unmirrored) == 2, unmirrored
 
 
-def test_every_mirror_row_names_something_the_map_names():
+_FILE_EXT_RE = re.compile(r"\.[a-z][a-z0-9]*$")
+
+
+def _hidden_files_entries(rows=None, map_text=None):
+    """`(key, target, where_missing)` for any repo identifier or bare weight basename
+    inside `row['files']` that is absent from `docs/license-map.md` (or, for repo
+    targets, absent from the row's own `source` URL)."""
+    rows = RG.RULED_COMPONENTS if rows is None else rows
+    if map_text is None:
+        map_text = open(LICENSE_MAP, encoding="utf-8").read().lower()
+    hidden = []
+    for key, row in rows.items():
+        src = (row.get("source") or "").lower()
+        repo_targets = set()
+        weight_basenames = set()
+        for entry in (row.get("files") or ()):
+            norm = str(entry).lower().replace("\\", "/").strip("/")
+            if not norm:
+                continue
+            if "/" in norm:
+                head, tail = norm.rsplit("/", 1)
+                repo_targets.add(head if _FILE_EXT_RE.search(tail) else norm)
+            elif "-" in norm and not _FILE_EXT_RE.search(norm):
+                repo_targets.add(norm)
+            elif norm.endswith(RG.WEIGHT_SUFFIXES):
+                weight_basenames.add(norm)
+        for target in sorted(repo_targets):
+            if target not in map_text:
+                hidden.append((key, target, "docs/license-map.md"))
+            if target not in src:
+                hidden.append((key, target, "source"))
+        for fname in sorted(weight_basenames):
+            if fname not in map_text:
+                hidden.append((key, fname, "docs/license-map.md"))
+    return hidden
+
+
+def test_every_mirror_row_names_something_the_map_names(monkeypatch):
     """The reverse direction: the table may not invent a ruling the record does not
-    carry. Every row key appears in the map's text (measured 2026-09-04, 11 of 11)."""
+    carry, and a row may not hide a separate banned repository inside `files` without
+    naming it in `docs/license-map.md` and in the row's own `source`."""
     text = open(LICENSE_MAP, encoding="utf-8").read().lower()
     missing = [k for k in RG.RULED_COMPONENTS if k not in text]
     assert missing == [], missing
+    assert _hidden_files_entries(RG.RULED_COMPONENTS, text) == []
+
+    # Red direction by mutation: folding an unmapped repo or weight file into an
+    # existing row's `files` tuple fails both the map check and the `source` check.
+    mutated = dict(RG.RULED_COMPONENTS)
+    mutated["da3_giant"] = dict(
+        RG.RULED_COMPONENTS["da3_giant"],
+        files=tuple(RG.RULED_COMPONENTS["da3_giant"]["files"]) + (
+            "depth-anything/unmapped-sibling-repo",
+            "unmapped_sibling_weight.safetensors",
+        ),
+    )
+    monkeypatch.setattr(RG, "RULED_COMPONENTS", mutated)
+    red = _hidden_files_entries(RG.RULED_COMPONENTS, text)
+    assert ("da3_giant", "depth-anything/unmapped-sibling-repo",
+            "docs/license-map.md") in red
+    assert ("da3_giant", "depth-anything/unmapped-sibling-repo", "source") in red
+    assert ("da3_giant", "unmapped_sibling_weight.safetensors",
+            "docs/license-map.md") in red
+
+
+def test_the_map_names_all_five_allowed_da3_repos_with_revisions():
+    """The allowed DA3 row in `docs/license-map.md` names all four original Apache-2.0
+    DA3 repos plus `DA3-LARGE-1.1` at their read revisions alongside their unambiguous
+    ComfyUI local weight names, drops `da3_large.safetensors` from the YES model list
+    with the 2025-12-27 (`2bd9c34870a9`) qualifier, and V2 Base/Large name their metric
+    checkpoints."""
+    da3_yes_rows = [
+        cells for header, cells in _license_map_rows()
+        if "commercial" in [h.lower() for h in header]
+        and "DA3" in cells[0]
+        and "YES" in cells[[h.lower() for h in header].index("commercial")]
+    ]
+    assert len(da3_yes_rows) == 1, da3_yes_rows
+    assert "da3_large.safetensors" not in da3_yes_rows[0][0]
+    assert ("since 2025-12-27 (`2bd9c34870a9`); `DA3-LARGE` 1.0 before"
+            in da3_yes_rows[0][4])
+    da3_row_text = " | ".join(da3_yes_rows[0])
+    for expected in (
+        "depth-anything/DA3-SMALL/blob/e08cab65ca0e/README.md",
+        "depth-anything/DA3-BASE/blob/f4a6c9b3c95e/README.md",
+        "depth-anything/DA3MONO-LARGE/blob/f465978e618d/README.md",
+        "depth-anything/DA3METRIC-LARGE/blob/4010e39f3634/README.md",
+        "depth-anything/DA3-LARGE-1.1/blob/0e109ae307c5/README.md",
+        "da3_small.safetensors",
+        "da3_base.safetensors",
+        "da3mono_large.safetensors",
+        "da3metric_large.safetensors",
+    ):
+        assert expected in da3_row_text, expected
+
+    doc = open(LICENSE_MAP, encoding="utf-8").read()
+    for metric_ckpt in (
+        "depth_anything_v2_metric_hypersim_vitb.pth",
+        "depth_anything_v2_metric_vkitti_vitb.pth",
+        "depth_anything_v2_metric_hypersim_vitl.pth",
+        "depth_anything_v2_metric_vkitti_vitl.pth",
+        "depth_anything_v2_metric_hypersim_vitl_fp32.safetensors",
+        "depth_anything_v2_metric_vkitti_vitl_fp32.safetensors",
+    ):
+        assert metric_ckpt in doc, metric_ckpt
 
 
 def test_a_base_weight_reads_not_in_this_table_and_that_is_recorded_not_silent():
@@ -1916,3 +2017,530 @@ def test_a_base_weight_reads_not_in_this_table_and_that_is_recorded_not_silent()
         assert comp[0]["ruling"]["reason"] == "check docs/license-map.md"
         # And it is not refused: `verify` halts on BANNED and EXCLUDED, not on UNKNOWN.
         assert [c["verdict"] for c in RG.components(g)] == ["NOT IN THIS TABLE"]
+
+
+# --- 2026-11-11 preprocessor licence rows (depth, video depth, DA3, InsightFace, SMPL) -
+
+
+EXPECTED_PREPROCESSOR_SOURCES = {
+    "depth_anything_v2_vitb": (
+        "https://huggingface.co/depth-anything/"
+        "Depth-Anything-V2-Base/blob/a4e71a6c2ce5/README.md"
+    ),
+    "depth_anything_v2_vitl": (
+        "https://huggingface.co/depth-anything/"
+        "Depth-Anything-V2-Large/blob/cbbb86a30ce1/README.md"
+    ),
+    "depth_anything_v2_vitg":
+        "https://github.com/DepthAnything/Depth-Anything-V2/blob/a561b849ebae/README.md",
+    "metric_video_depth_anything_vitl": (
+        "https://huggingface.co/depth-anything/"
+        "Metric-Video-Depth-Anything-Large/blob/607fcdbd454b/README.md"
+    ),
+    "video_depth_anything_vitl": (
+        "https://huggingface.co/depth-anything/"
+        "Video-Depth-Anything-Large/blob/7aafbcb5c6af/README.md"
+    ),
+    "da3_large.safetensors": (
+        "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+        "9fb61e26fa09/nodes/depth_anything_v3/configs.py + "
+        "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+        "2bd9c34870a9/nodes/depth_anything_v3/configs.py + "
+        "https://huggingface.co/depth-anything/DA3-LARGE/blob/"
+        "c54c26b16ec0/README.md + "
+        "https://huggingface.co/depth-anything/DA3-LARGE-1.1/blob/"
+        "0e109ae307c5/README.md"
+    ),
+    "da3_large":
+        "https://huggingface.co/depth-anything/DA3-LARGE/blob/c54c26b16ec0/README.md",
+    "da3_giant_1.1":
+        "https://huggingface.co/depth-anything/DA3-GIANT-1.1/blob/72ee9f89ce4e/README.md",
+    "da3_giant":
+        "https://huggingface.co/depth-anything/DA3-GIANT/blob/7cd62ae9315b/README.md",
+    "da3nested_giant_large_1.1": (
+        "https://huggingface.co/depth-anything/"
+        "DA3NESTED-GIANT-LARGE-1.1/blob/b2359bdf726f/README.md"
+    ),
+    "da3nested_giant_large": (
+        "https://huggingface.co/depth-anything/"
+        "DA3NESTED-GIANT-LARGE/blob/8615eefb62f2/README.md"
+    ),
+    "insightface": (
+        "https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/README.md"
+        " + https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/"
+        "python-package/README.md"
+    ),
+    "smpl_": "https://smpl.is.tue.mpg.de/modellicense.html",
+    "smplx": "https://smpl-x.is.tue.mpg.de/modellicense.html",
+}
+
+
+BANNED_PREPROCESSOR_FILES = (
+    ("depth_anything_v2_vitb", "depth_anything_v2_vitb.pth"),
+    ("depth_anything_v2_vitb", "depth_anything_v2_vitb_fp16.safetensors"),
+    ("depth_anything_v2_vitb", "depth_anything_v2_metric_hypersim_vitb.pth"),
+    ("depth_anything_v2_vitb", "depth_anything_v2_metric_vkitti_vitb.pth"),
+    ("depth_anything_v2_vitb", "depth-anything/Depth-Anything-V2-Base"),
+    ("depth_anything_v2_vitl", "depth_anything_v2_vitl.pth"),
+    ("depth_anything_v2_vitl", "depth_anything_v2_vitl_fp16.safetensors"),
+    ("depth_anything_v2_vitl", "depth_anything_v2_metric_hypersim_vitl.pth"),
+    ("depth_anything_v2_vitl", "depth_anything_v2_metric_vkitti_vitl_fp32.safetensors"),
+    ("depth_anything_v2_vitl", "depth-anything/Depth-Anything-V2-Large"),
+    ("depth_anything_v2_vitg", "depth_anything_v2_vitg.pth"),
+    ("depth_anything_v2_vitg", "depth_anything_v2_vitg_fp32.safetensors"),
+    ("depth_anything_v2_vitg", "Nap/depth_anything_v2_vitg"),
+    ("metric_video_depth_anything_vitl", "metric_video_depth_anything_vitl.pth"),
+    ("metric_video_depth_anything_vitl", "depth-anything/Metric-Video-Depth-Anything-Large"),
+    ("video_depth_anything_vitl", "video_depth_anything_vitl.pth"),
+    ("video_depth_anything_vitl", "depth-anything/Video-Depth-Anything-Large"),
+    ("da3_large.safetensors", "da3_large.safetensors"),
+    ("da3_large.safetensors", "depthanything3/da3_large.safetensors"),
+    ("da3_large", "da3-large"),
+    ("da3_large", "da3_large_1.0.safetensors"),
+    ("da3_large", "da3-large/model.safetensors"),
+    ("da3_large", "depth-anything/DA3-LARGE"),
+    ("da3_large", "depth-anything/DA3-LARGE/model.safetensors"),
+    ("da3_giant_1.1", "da3_giant.safetensors"),
+    ("da3_giant_1.1", "da3_giant_1.1.safetensors"),
+    ("da3_giant_1.1", "da3-giant-1.1"),
+    ("da3_giant_1.1", "depth-anything/DA3-GIANT-1.1"),
+    ("da3_giant_1.1", "depth-anything/DA3-GIANT-1.1/model.safetensors"),
+    ("da3_giant", "da3_giant_1.0.safetensors"),
+    ("da3_giant", "da3_giant_fp16.safetensors"),
+    ("da3_giant", "da3-giant"),
+    ("da3_giant", "depth-anything/DA3-GIANT"),
+    ("da3_giant", "depth-anything/DA3-GIANT/model.safetensors"),
+    ("da3nested_giant_large_1.1", "da3nested_giant_large.safetensors"),
+    ("da3nested_giant_large_1.1", "da3nested_giant_large_1.1.safetensors"),
+    ("da3nested_giant_large_1.1", "da3nested_giant_large_1.1_fp16.safetensors"),
+    ("da3nested_giant_large_1.1", "da3nested-giant-large-1.1"),
+    ("da3nested_giant_large_1.1", "depth-anything/DA3NESTED-GIANT-LARGE-1.1"),
+    ("da3nested_giant_large_1.1", "depth-anything/DA3NESTED-GIANT-LARGE-1.1/model.safetensors"),
+    ("da3nested_giant_large", "da3nested_giant_large_1.0.safetensors"),
+    ("da3nested_giant_large", "da3nested_giant_large_fp16.safetensors"),
+    ("da3nested_giant_large", "da3nested-giant-large"),
+    ("da3nested_giant_large", "depth-anything/DA3NESTED-GIANT-LARGE"),
+    ("da3nested_giant_large", "depth-anything/DA3NESTED-GIANT-LARGE/model.safetensors"),
+    ("insightface", "buffalo_l"),
+    ("insightface", "buffalo_l.zip"),
+    ("insightface", "antelopev2"),
+    ("insightface", "scrfd_person_2.5g.onnx"),
+    ("insightface", "scrfd_10g_kps.onnx"),
+    ("insightface", "inswapper_128.onnx"),
+    ("insightface", "det_10g.onnx"),
+    ("insightface", "w600k_r50.onnx"),
+    ("insightface", "raccoon_s.zip"),
+    ("insightface", "cheetah_l.zip"),
+    ("insightface", "insightface/models/custom.onnx"),
+    ("smpl_", "SMPL_NEUTRAL.pkl"),
+    ("smpl_", "SMPL_FEMALE.npz"),
+    ("smpl_", "basicModel_neutral_lbs_10_207_0_v1.0.0.pkl"),
+    ("smplx", "SMPLX_NEUTRAL.npz"),
+    ("smplx", "SMPLX_FEMALE.pkl"),
+    ("smplx", "smpl-x"),
+)
+
+
+@pytest.mark.parametrize("expected_key,filename", BANNED_PREPROCESSOR_FILES)
+def test_each_banned_preprocessor_row_refuses_in_verify(expected_key, filename):
+    """Every newly mirrored BANNED preprocessor row refuses a synthetic graph loading a
+    published filename or pack identifier from its tier and prints that exact repo's
+    revision-pinned `source` URL."""
+    hits = RG.rulings_for(filename)
+    assert hits and hits[0]["matched_on"] == expected_key, (filename, hits)
+    assert hits[0]["verdict"] == "BANNED"
+
+    g = graph(top=CLEAN_TOP + [loader(99, filename, cls="PreprocessorWeightLoader")])
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    msg = str(exc.value)
+    expected_source = EXPECTED_PREPROCESSOR_SOURCES[expected_key]
+    assert expected_source
+    assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+    assert "BANNED" in msg
+    assert "fetched 2026-11-11" in msg
+    assert expected_source in msg
+
+
+ALLOWED_PREPROCESSOR_FILES = (
+    "depth_anything_v2_vits.pth",
+    "depth_anything_v2_vits_fp16.safetensors",
+    "depth_anything_v2_vits_fp32.safetensors",
+    "depth_anything_v2_metric_hypersim_vits.pth",
+    "depth_anything_v2_metric_vkitti_vits.pth",
+    "depth-anything/Depth-Anything-V2-Small",
+    "video_depth_anything_vits.pth",
+    "video_depth_anything_vits.safetensors",
+    "metric_video_depth_anything_vits.pth",
+    "depth-anything/Video-Depth-Anything-Small",
+    "depth-anything/Metric-Video-Depth-Anything-Small",
+    "da3_base.safetensors",
+    "da3_small.safetensors",
+    "da3mono_large.safetensors",
+    "da3metric_large.safetensors",
+    "da3_large_1.1.safetensors",
+    "da3-base",
+    "da3-small",
+    "da3-large-1.1",
+    "da3-large-1.1/model.safetensors",
+    "depth-anything/DA3-BASE",
+    "depth-anything/DA3-SMALL",
+    "depth-anything/DA3MONO-LARGE",
+    "depth-anything/DA3METRIC-LARGE",
+    "depth-anything/DA3-LARGE-1.1",
+    "depth-anything/DA3-BASE/model.safetensors",
+    "depth-anything/DA3-SMALL/model.safetensors",
+    "depth-anything/DA3MONO-LARGE/model.safetensors",
+    "depth-anything/DA3METRIC-LARGE/model.safetensors",
+    "depth-anything/DA3-LARGE-1.1/model.safetensors",
+    "model.safetensors",
+    "sam_vit_b_01ec64.pth",
+    "GFPGANv1.4.onnx",
+)
+
+
+@pytest.mark.parametrize("filename", ALLOWED_PREPROCESSOR_FILES)
+def test_allowed_preprocessor_variants_are_not_refused_by_verify(filename):
+    """Apache-2.0 depth / video-depth / DA3 variants (Small, Base, `DA3MONO-LARGE`,
+    `DA3METRIC-LARGE`, and unambiguous `DA3-LARGE-1.1` repo/1.1 forms, plus bare
+    `model.safetensors`, SAM ViT-B, and non-InsightFace `GFPGANv1.4.onnx`) match none
+    of the BANNED rows and pass `verify`."""
+    assert RG.rulings_for(filename) == [], filename
+    g = graph(top=CLEAN_TOP + [loader(99, filename, cls="PreprocessorWeightLoader")])
+    ev = RG.verify(g)
+    node_99 = [c for c in ev["components"] if c["node_id"] == 99]
+    if filename.lower().endswith(RG.WEIGHT_SUFFIXES):
+        assert len(node_99) == 1
+        assert node_99[0]["file"] == filename
+        assert node_99[0]["verdict"] == "NOT IN THIS TABLE"
+        assert f"{filename!r} at top/99" in ev["unclassified"]
+    else:
+        assert node_99 == []
+
+
+def test_ambiguous_da3_large_local_filename_refuses_while_1_1_repo_forms_pass():
+    """`da3_large.safetensors` was mapped by `ComfyUI-DepthAnythingV3` to CC-BY-NC-4.0
+    `depth-anything/DA3-LARGE` before 2025-12-27 (`9fb61e26fa09`) and to Apache-2.0
+    `depth-anything/DA3-LARGE-1.1` since 2025-12-27 (`2bd9c34870a9`) without replacing
+    an existing local file; it refuses as UNVERIFIED (treated as NO), while explicit
+    `DA3-LARGE-1.1` repo forms continue to pass."""
+    hits = RG.rulings_for("da3_large.safetensors")
+    assert hits and hits[0]["matched_on"] == "da3_large.safetensors"
+    assert hits[0]["verdict"] == "BANNED"
+    for expected in (
+        "UNVERIFIED (treated as NO)",
+        "9fb61e26fa09",
+        "2bd9c34870a9",
+        "2025-12-27",
+        "depth-anything/DA3-LARGE",
+        "depth-anything/DA3-LARGE-1.1",
+    ):
+        assert expected in hits[0]["reason"], expected
+
+    ambiguous_g = graph(top=CLEAN_TOP + [
+        {"id": 99, "type": "DownloadAndLoadDepthAnythingV3Model",
+         "widgets_values": ["da3_large.safetensors", 512]},
+    ])
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(ambiguous_g)
+    msg = str(exc.value)
+    assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+    assert "UNVERIFIED (treated as NO)" in msg
+    assert "2025-12-27" in msg
+    assert EXPECTED_PREPROCESSOR_SOURCES["da3_large.safetensors"] in msg
+
+    unverified_rows = [
+        cells for header, cells in _license_map_rows()
+        if "commercial" in [h.lower() for h in header]
+        and "`da3_large.safetensors`" in cells[0]
+        and "UNVERIFIED (treated as NO)"
+        in cells[[h.lower() for h in header].index("commercial")]
+    ]
+    assert len(unverified_rows) == 1, unverified_rows
+
+    for repo_form in (
+        "depth-anything/DA3-LARGE-1.1",
+        "depth-anything/DA3-LARGE-1.1/model.safetensors",
+        "da3-large-1.1",
+        "da3-large-1.1/model.safetensors",
+        "da3_large_1.1.safetensors",
+    ):
+        assert RG.rulings_for(repo_form) == [], repo_form
+        clean_g = graph(top=CLEAN_TOP + [
+            loader(99, repo_form, cls="DownloadAndLoadDepthAnythingV3Model"),
+        ])
+        RG.verify(clean_g)
+
+
+BANNED_PREPROCESSOR_CLASS_ALIASES = (
+    ("insightface", "InstantIDFaceAnalysis"),
+    ("insightface", "IPAdapterUnifiedLoaderFaceID"),
+    ("insightface", "ReActorFaceSwap"),
+    ("insightface", "ReActorFaceSwapOpt"),
+    ("insightface", "ReActorBuildFaceModel"),
+    ("insightface", "ReActorFaceSimilarity"),
+    ("insightface", "IPAdapterInsightFaceLoader"),
+    ("insightface", "PulidInsightFaceLoader"),
+    ("insightface", "PulidFluxInsightFaceLoader"),
+    ("smpl_", "LoadSMPL"),
+    ("smpl_", "SaveSMPL"),
+    ("smpl_", "SMPLtoBVH"),
+    ("smpl_", "SMPLToFBX"),
+    ("smpl_", "SMPLRetargetToSMPL"),
+    ("smpl_", "SMPLToMixamo"),
+    ("smpl_", "SMPLToGLB"),
+    ("smpl_", "CompareSMPLtoBVH"),
+    ("smplx", "LoadGVHMRModels"),
+    ("smplx", "GVHMRInference"),
+)
+
+
+@pytest.mark.parametrize("expected_key,class_type", BANNED_PREPROCESSOR_CLASS_ALIASES)
+def test_each_new_preprocessor_class_alias_refuses_in_verify(expected_key, class_type):
+    """Node classes that fetch or run InsightFace, SMPL, or SMPL-X weights without a
+    weight filename in `widgets_values` are refused by class name."""
+    g = graph(top=CLEAN_TOP + [{"id": 99, "type": class_type, "widgets_values": ["CPU"]}])
+    rows = RG.ruled_node_classes(g)
+    assert [r["matched_on"] for r in rows] == [expected_key], (class_type, rows)
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+    assert class_type in str(exc.value)
+    assert EXPECTED_PREPROCESSOR_SOURCES[expected_key] in str(exc.value)
+
+
+WIDGET_SELECTED_DEPTH_CLASSES = (
+    ("DepthAnythingV2Preprocessor",
+     "depth_anything_v2_vits.pth", "depth_anything_v2_vitl.pth",
+     "depth_anything_v2_vitl"),
+    ("DownloadAndLoadDepthAnythingV2Model",
+     "depth_anything_v2_vits_fp16.safetensors", "depth_anything_v2_vitb_fp16.safetensors",
+     "depth_anything_v2_vitb"),
+    ("LoadVideoDepthAnythingModel",
+     "video_depth_anything_vits.pth", "video_depth_anything_vitl.pth",
+     "video_depth_anything_vitl"),
+    ("DownloadAndLoadDepthAnythingV3Model",
+     "depth-anything/DA3-LARGE-1.1/model.safetensors",
+     "da3nested_giant_large.safetensors",
+     "da3nested_giant_large_1.1"),
+    ("DownloadAndLoadDepthAnythingV3Model",
+     "da3_small.safetensors", "da3_large.safetensors",
+     "da3_large.safetensors"),
+    ("DA3_DownloadModel",
+     "da3_base.safetensors", "da3_giant.safetensors",
+     "da3_giant_1.1"),
+)
+
+
+@pytest.mark.parametrize("class_type,allowed_weight,banned_weight,expected_key",
+                         WIDGET_SELECTED_DEPTH_CLASSES)
+def test_widget_selected_depth_node_classes_pass_on_small_and_refuse_on_banned_tiers(
+        class_type, allowed_weight, banned_weight, expected_key):
+    """Node classes whose model scale is chosen by a widget are ruled by the widget's
+    weight name rather than banned by class: Apache-2.0 tiers pass while BANNED tiers
+    refuse with that repo's `source`."""
+    clean_g = graph(top=CLEAN_TOP + [
+        {"id": 99, "type": class_type, "widgets_values": [allowed_weight, 512]},
+    ])
+    assert RG.ruled_node_classes(clean_g) == []
+    ev = RG.verify(clean_g)
+    node_99 = [c for c in ev["components"] if c["node_id"] == 99]
+    assert len(node_99) == 1 and node_99[0]["file"] == allowed_weight
+    assert node_99[0]["verdict"] == "NOT IN THIS TABLE"
+    assert f"{allowed_weight!r} at top/99" in ev["unclassified"]
+
+    banned_g = graph(top=CLEAN_TOP + [
+        {"id": 99, "type": class_type, "widgets_values": [banned_weight, 512]},
+    ])
+    assert RG.ruled_node_classes(banned_g) == []
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(banned_g)
+    msg = str(exc.value)
+    assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+    banned_99 = [c for c in exc.value.evidence["components"] if c["node_id"] == 99]
+    assert len(banned_99) == 1 and banned_99[0]["matched_on"] == expected_key
+    assert EXPECTED_PREPROCESSOR_SOURCES[expected_key] in msg
+
+
+def test_gate_alias_table_covers_all_five_preprocessor_alias_rows(monkeypatch):
+    """Every `RULED_COMPONENT_CLASSES` key names an existing `RULED_COMPONENTS` row, and
+    dropping any of the newly added alias rows makes `gate_alias_table` raise."""
+    assert set(RG.RULED_COMPONENT_CLASSES) == {
+        "dwpose", "openpose", "insightface", "smpl_", "smplx", "comfyui-ltxvideo"
+    }
+    receipt = RG.gate_alias_table()
+    assert receipt["n_alias_keys"] == 6
+    assert receipt["n_rows"] == 28
+    assert receipt["verdict"] == "every alias key names a row: 6 of 28"
+
+    original_components = dict(RG.RULED_COMPONENTS)
+    for key in ("insightface", "smpl_", "smplx", "comfyui-ltxvideo"):
+        trimmed = {k: v for k, v in original_components.items() if k != key}
+        monkeypatch.setattr(RG, "RULED_COMPONENTS", trimmed)
+        assert RG.orphaned_component_class_aliases() == [key]
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.gate_alias_table()
+        assert exc.value.evidence["orphaned"] == [key]
+
+
+EXPECTED_LTX_HOLD_SOURCES = {
+    "ltx-2.5": (
+        "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+        "https://huggingface.co/Lightricks/LTX-2.5"
+    ),
+    "ltx-2.5-22b-ic-lora-layout-to-render": (
+        "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+        "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"
+    ),
+    "comfyui-ltxvideo": (
+        "https://github.com/Lightricks/ComfyUI-LTXVideo/blob/bb70ecba6602/LICENSE + "
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf"
+    ),
+}
+
+
+LTX_HOLD_COMPONENT_TARGETS = (
+    ("ltx-2.5", "ltx-2.5-22b-distilled-transformer-bf16.safetensors"),
+    ("ltx-2.5", "diffusion_models/ltx-2.5-22b-distilled-transformer-bf16.safetensors"),
+    ("ltx-2.5", "text_encoders/gemma4-12b-with-proj-ltx-2.5-bf16.safetensors"),
+    ("ltx-2.5", "vae/ltx-2.5-audio-vae-bf16.safetensors"),
+    ("ltx-2.5", "latent_upscale_models/ltx-2.5-latent-spatial-upscaler-x2-bf16-1.0.safetensors"),
+    ("ltx-2.5", "Lightricks/LTX-2.5"),
+    ("ltx-2.5-22b-ic-lora-layout-to-render",
+     "ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors"),
+    ("ltx-2.5-22b-ic-lora-layout-to-render",
+     "Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"),
+    ("comfyui-ltxvideo", "Lightricks/ComfyUI-LTXVideo"),
+)
+
+
+@pytest.mark.parametrize("expected_key,target", LTX_HOLD_COMPONENT_TARGETS)
+def test_ltx_hold_rows_refuse_in_verify_and_cannot_be_waived_or_credited(
+        expected_key, target):
+    """`Lightricks/LTX-2.5`, `Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render`, and
+    `ComfyUI-LTXVideo` are ruled `CONDITIONAL, not accepted: on hold by the Director` and
+    mirrored as `BANNED` so no graph can load them via `allow=` or `attribution=`."""
+    hits = RG.rulings_for(target)
+    assert hits and hits[0]["matched_on"] == expected_key, (target, hits)
+    assert hits[0]["verdict"] == "BANNED"
+    assert "CONDITIONAL, not accepted: on hold by the Director" in hits[0]["reason"]
+
+    g = graph(top=CLEAN_TOP + [loader(99, target, cls="LoraLoaderModelOnly")])
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    msg = str(exc.value)
+    assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+    assert "CONDITIONAL, not accepted: on hold by the Director" in msg
+    assert "fetched 2026-11-11" in msg
+    assert EXPECTED_LTX_HOLD_SOURCES[expected_key] in msg
+
+    with pytest.raises(RG.RouteGate) as allow_exc:
+        RG.verify(g, allow=(expected_key,))
+    assert allow_exc.value.evidence["clause"] == "conditional_allow_on_a_banned_row"
+
+    with pytest.raises(RG.RouteGate) as attr_exc:
+        RG.attribution_entry_for(expected_key)
+    assert attr_exc.value.evidence["clause"] == "attribution_for_unconditional_row"
+
+
+def test_comfyui_ltxvideo_custom_node_classes_refuse_while_core_ltxv_stays_unruled():
+    """`ComfyUI-LTXVideo` custom-pack node classes refuse under `comfyui-ltxvideo` while
+    GPL-3.0 ComfyUI core LTX classes (which also serve OpenRAIL-M `LTX-Video 0.9.x`) do
+    not match."""
+    for custom_cls in (
+        "LTXAddVideoICLoRAGuide",
+        "LTXAddVideoICLoRAGuideAdvanced",
+        "LTXICLoRALoaderModelOnly",
+        "LTXVGemmaCLIPModelLoader",
+        "LTXVBaseSampler",
+        "LTXVTiledFusionSampler",
+    ):
+        g = graph(top=CLEAN_TOP + [{"id": 99, "type": custom_cls, "widgets_values": [1]}])
+        rows = RG.ruled_node_classes(g)
+        assert [r["matched_on"] for r in rows] == ["comfyui-ltxvideo"], (custom_cls, rows)
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(g)
+        assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+        assert EXPECTED_LTX_HOLD_SOURCES["comfyui-ltxvideo"] in str(exc.value)
+
+    for core_cls in (
+        "EmptyLTXVLatentVideo",
+        "LTXVImgToVideo",
+        "LTXVAddGuide",
+        "GetICLoRAParameters",
+        "LTXVScheduler",
+    ):
+        assert RG.rulings_for_class(core_cls) == [], core_cls
+
+
+def test_license_map_records_ltx_hold_rows_sources_and_six_one_line_conditions():
+    """`docs/license-map.md` records `Lightricks/LTX-2.5`,
+    `Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render`, and `ComfyUI-LTXVideo` under
+    `CONDITIONAL, not accepted: on hold by the Director` with their licence dates,
+    section-1 source URLs, and six one-line condition bullets."""
+    hold_rows = [
+        cells for header, cells in _license_map_rows()
+        if "commercial" in [h.lower() for h in header]
+        and "CONDITIONAL, not accepted: on hold by the Director"
+        in cells[[h.lower() for h in header].index("commercial")]
+    ]
+    assert len(hold_rows) == 3, hold_rows
+    joined_rows = "\n".join(" | ".join(c) for c in hold_rows)
+    for expected in (
+        "Lightricks/LTX-2.5",
+        "Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render",
+        "ComfyUI-LTXVideo",
+        "dated 2026-08-11, amended 2026-10-29",
+        "dated 2026-01-05",
+        "fetched 2026-11-11",
+        "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x",
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf",
+        "https://github.com/Lightricks/ComfyUI-LTXVideo/blob/bb70ecba6602/LICENSE",
+        "https://static.lightricks.com/legal/Privacy%20Policy%20-%20LTX%20Platform.pdf",
+    ):
+        assert expected in joined_rows, expected
+
+    doc_lines = open(LICENSE_MAP, encoding="utf-8").read().splitlines()
+    idx = next(
+        i for i, line in enumerate(doc_lines)
+        if line.startswith("**Conditions on the unaccepted `CONDITIONAL` grant")
+    )
+    bullets = []
+    for line in doc_lines[idx + 1:]:
+        if not line.strip():
+            break
+        assert line.startswith("- "), line
+        bullets.append(line)
+    assert len(bullets) == 6, bullets
+
+
+def test_refreshed_openpose_row_is_in_date_on_2026_11_11_while_dwpose_stays_advisory(
+        monkeypatch):
+    """`openpose` was re-fetched on 2026-11-11 and reads in-date on that day; `dwpose`
+    weights remain unfetched at 2026-08-10 and continue to read advisory on 2026-11-11."""
+    monkeypatch.setattr(RG, "_today", lambda: datetime.date(2026, 11, 11))
+
+    op_g = graph(top=CLEAN_TOP + [
+        {"id": 99, "type": "OpenposePreprocessor", "widgets_values": ["enable"]},
+    ])
+    op_reading = RG.licence_fetch_reading(RG.components(op_g))
+    assert op_reading["oldest_fetched"] == "2026-11-11"
+    assert op_reading["advisory_after"] == "2027-02-09"
+    assert op_reading["advisory_rows"] == []
+    assert "ADVISORY" not in RG.licence_phrase_for(op_reading)
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(op_g)
+    assert "fetched 2026-11-11" in str(exc.value)
+    assert "ADVISORY" not in str(exc.value)
+
+    dw_g = graph(top=CLEAN_TOP + [
+        {"id": 99, "type": "DWPreprocessor", "widgets_values": [512]},
+    ])
+    assert RG.RULED_COMPONENTS["dwpose"]["fetched"] == "2026-08-10"
+    assert RG.RULED_COMPONENTS["dwpose"]["source"] is None
+    dw_reading = RG.licence_fetch_reading(RG.components(dw_g))
+    assert dw_reading["advisory_rows"] == ["dwpose"]
+    assert "ADVISORY" in RG.licence_phrase_for(dw_reading)
