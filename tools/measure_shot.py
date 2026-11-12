@@ -286,9 +286,8 @@ def main(argv=None):
     summary = _build_summary(cam_block, id_block)
 
     payload_text = json.dumps(record, indent=2, allow_nan=False) + "\n"
-    ok_payload = json.dumps(
-        {"out": os.path.abspath(a.out), "summary": summary}, allow_nan=False
-    )
+    ok_obj = {"out": os.path.abspath(a.out), "summary": summary}
+    json.dumps(ok_obj, allow_nan=False)
 
     out_dir = os.path.dirname(os.path.abspath(a.out))
     if out_dir:
@@ -296,7 +295,7 @@ def main(argv=None):
     with open(a.out, "w", encoding="utf-8") as fh:
         fh.write(payload_text)
 
-    print("MEASURE_SHOT_OK " + ok_payload)
+    print("MEASURE_SHOT_OK " + json.dumps(ok_obj, allow_nan=False))
     return 0
 
 
