@@ -567,22 +567,25 @@ def test_c8_character_mask_excludes_moving_performer_in_core_and_cli(tmp_path, c
         dense_character=True,
         sparse_background=False,
     )
-    # Place extra dense moving features on a large central character patch so unmasked RANSAC is corrupted.
-    rng_tex = _sift_rich_texture(128, 170, seed=99, n_blobs=260)
+    # Place a dominant textured character patch rotating + translating across the frame so
+    # unmasked RANSAC locks onto the character, while static background corners hold true camera pose.
+    rng_tex = _sift_rich_texture(200, 220, seed=99, n_blobs=320)
     patched_frames = []
     patched_masks = []
     for i, rgb in enumerate(frames):
-        f_copy = (rgb * 0.35 + 80).astype(np.uint8)
+        f_copy = np.full_like(rgb, 118)
         # Keep crisp static corner patches in background outside mask, plus huge moving central character.
-        f_copy[:44, :80] = rgb[:44, :80]
-        f_copy[:44, -80:] = rgb[:44, -80:]
-        f_copy[-44:, :80] = rgb[-44:, :80]
-        f_copy[-44:, -80:] = rgb[-44:, -80:]
-        x0 = 40 + i * 28
-        y0 = 36
-        f_copy[y0 : y0 + 120, x0 : x0 + 160] = rng_tex[:120, :160]
+        f_copy[:40, :64] = rgb[:40, :64]
+        f_copy[:40, -64:] = rgb[:40, -64:]
+        f_copy[-40:, :64] = rgb[-40:, :64]
+        f_copy[-40:, -64:] = rgb[-40:, -64:]
+        rot_m = cv2.getRotationMatrix2D((110.0, 100.0), float(i * 9.0), 1.0)
+        warped_char = cv2.warpAffine(rng_tex, rot_m, (220, 200), flags=cv2.INTER_LINEAR)
+        x0 = 32 + i * 28
+        y0 = 32
+        f_copy[y0 : y0 + 128, x0 : x0 + 168] = warped_char[36 : 36 + 128, 26 : 26 + 168]
         m = np.zeros(rgb.shape[:2], dtype=bool)
-        m[y0 : y0 + 120, x0 : x0 + 160] = True
+        m[y0 : y0 + 128, x0 : x0 + 168] = True
         patched_frames.append(f_copy)
         patched_masks.append(m)
 
@@ -665,7 +668,7 @@ def test_c9_end_to_end_image_sequence_separates_true_orbit_from_reversed_gt(tmp_
 
 def test_c10_static_request_detects_push_in_parallax_and_reads_zero_on_pure_hold(tmp_path, capsys):
     """C10: Fails if `--static` misses background parallax on an uncommanded push-in or reports parallax on a hold."""
-    push_mats = _push_in_matrices(n_frames=5, r_start=5.2, r_end=3.5)
+    push_mats = _push_in_matrices(n_frames=5, r_start=5.4, r_end=2.9)
     push_frames, push_masks, _ = _render_synthetic_sequence(push_mats, include_character=True)
 
     hold_mats = [push_mats[0].copy() for _ in range(5)]

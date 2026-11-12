@@ -4,10 +4,11 @@ Tests run with stdlib + synthetic byte files only; no model or weight is downloa
 (`docs/dispatches/shot-diagnostics-design.md` §4.3, §5).
 """
 
+import builtins
 import datetime
 import hashlib
+import importlib
 import os
-import sys
 
 import pytest
 
@@ -17,6 +18,26 @@ from armature_core import shotdiag as SD
 from armature_core.measure_weights import MeasureWeightGate
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def _forbid_heavy_ml_imports(monkeypatch):
+    """Fail immediately if `torch`, `safetensors`, or `transformers` is imported."""
+    blocked_roots = {"torch", "safetensors", "transformers"}
+    real_import = builtins.__import__
+    real_import_module = importlib.import_module
+
+    def _guarded_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name.split(".")[0] in blocked_roots:
+            raise AssertionError(f"heavy ML dependency {name!r} imported before MeasureWeightGate")
+        return real_import(name, globals, locals, fromlist, level)
+
+    def _guarded_import_module(name, package=None):
+        if name.split(".")[0] in blocked_roots:
+            raise AssertionError(f"heavy ML dependency {name!r} imported before MeasureWeightGate")
+        return real_import_module(name, package)
+
+    monkeypatch.setattr(builtins, "__import__", _guarded_import)
+    monkeypatch.setattr(importlib, "import_module", _guarded_import_module)
 
 
 def test_l1_model_safetensors_filename_collision_keys_on_bytes_not_filename(tmp_path):
@@ -134,8 +155,7 @@ def test_l3_gate_refuses_before_importing_any_ml_dependency_and_publishes_to_err
     assert errors.GATE_BY_ID["MEASURE_WEIGHT"] is MeasureWeightGate
     assert errors.MeasureWeightGate is MeasureWeightGate
 
-    for heavy in ("torch", "safetensors", "safetensors.torch", "transformers"):
-        monkeypatch.setitem(sys.modules, heavy, None)
+    _forbid_heavy_ml_imports(monkeypatch)
 
     # Missing file and empty file clauses on `gate_measurement_weight`.
     with pytest.raises(MeasureWeightGate) as exc:
@@ -194,8 +214,7 @@ def test_l3_gate_refuses_before_importing_any_ml_dependency_and_publishes_to_err
 
 def test_l4_loading_pi3_and_pi3x_refuses_as_banned(tmp_path, monkeypatch):
     """L4: Fails if `yyfz233/Pi3` or `yyfz233/Pi3X` (CC BY-NC 4.0 weights) is not refused as `weight_banned`."""
-    for heavy in ("torch", "safetensors", "safetensors.torch", "transformers"):
-        monkeypatch.setitem(sys.modules, heavy, None)
+    _forbid_heavy_ml_imports(monkeypatch)
 
     pi3_file = tmp_path / "model.safetensors"
     pi3_bytes = b"synthetic-pi3-safetensors-bytes"

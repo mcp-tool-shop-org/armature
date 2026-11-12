@@ -6,8 +6,6 @@ its `MeasureWeightGate` handoff, and its missing-runtime refusal (`docs/dispatch
 """
 
 import hashlib
-import json
-import sys
 
 import numpy as np
 import pytest
@@ -163,9 +161,9 @@ def test_i2_changing_subject_inside_identical_background_drops_masked_score():
     f_match, m0 = _paint_frame_with_character(
         (42, 98, 54), (28, 72, 38), (228, 52, 38), (245, 205, 45)
     )
-    # Drift the character toward muted amber-olive while keeping it above decoy/bg floors.
+    # Drift the character toward muted olive-ochre while keeping it above decoy/bg floors.
     f_drifted, m1 = _paint_frame_with_character(
-        (42, 98, 54), (28, 72, 38), (196, 145, 92), (178, 160, 118)
+        (42, 98, 54), (28, 72, 38), (170, 166, 86), (160, 168, 118)
     )
 
     ident = SD.measure_masked_identity(
@@ -313,7 +311,7 @@ def test_i5_catastrophically_low_identity_score_returns_normally_and_module_defi
         # 1=subj_ref, 2=decoy_ref, 3=plate, 4=bg, 5=subj_crop
         vecs = {
             1: [1.0, 0.0, 0.0],
-            2: [0.0, 1.0, 0.0],
+            2: [0.80, 0.0, -0.60],
             3: [-0.99, 0.141, 0.0],
             4: [-0.99, -0.141, 0.0],
             5: [-0.80, 0.0, 0.60],
@@ -475,7 +473,14 @@ def test_weights_not_present_and_dinov2_loader_handoff_refusals(tmp_path, monkey
             "source": "https://huggingface.co/api/models/facebook/dinov2-base",
         },
     )
-    monkeypatch.setitem(sys.modules, "torch", None)
+    real_import_module = SD.importlib.import_module
+
+    def _missing_torch_import(name, package=None):
+        if name.split(".")[0] in {"torch", "safetensors", "transformers"}:
+            raise ImportError(f"No module named {name!r}")
+        return real_import_module(name, package)
+
+    monkeypatch.setattr(SD.importlib, "import_module", _missing_torch_import)
     with pytest.raises(ShotDiagError) as runtime_exc:
         SD.load_dinov2_vitb14_embedder(str(dummy_weights), weight_table=pinned_table)
     assert runtime_exc.value.evidence["clause"] == "dinov2_runtime_unavailable"
