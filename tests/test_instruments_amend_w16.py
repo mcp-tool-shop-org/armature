@@ -391,7 +391,30 @@ def rt16():
     return load_tool("render_turnaround.py")
 
 
-def test_alpha_stats_hands_back_the_plane_it_already_loaded(rt16, monkeypatch, tmp_path):
+@pytest.fixture
+def set_images(rt16):
+    """Patch `bpy.data.images` for one test with `mock.patch.object`, not `monkeypatch`.
+
+    `rt16.bpy.data` is a MagicMock, so `images` lives among its mock children, not in its
+    `__dict__`. Since pytest 9.2.0 (pytest-dev/pytest#10644), `monkeypatch.setattr` undoes a
+    patch of an attribute that is not in the instance `__dict__` by deleting it. A MagicMock
+    then remembers `images` as deleted, and every later test in the module fails with
+    AttributeError. `mock.patch.object` restores a mock child correctly.
+    """
+    from unittest import mock
+    patches = []
+
+    def _set(value):
+        p = mock.patch.object(rt16.bpy.data, "images", value)
+        p.start()
+        patches.append(p)
+
+    yield _set
+    for p in reversed(patches):
+        p.stop()
+
+
+def test_alpha_stats_hands_back_the_plane_it_already_loaded(rt16, set_images, tmp_path):
     """RED on the operand: the (H, W, 4) buffer this function read and discarded.
 
     Reverted-red: yes — on the base tree `_alpha_stats` returns a bare dict, so the tuple
@@ -399,7 +422,7 @@ def test_alpha_stats_hands_back_the_plane_it_already_loaded(rt16, monkeypatch, t
     """
     h, w = 6, 4
     flat = _rgba_flat(h, w, 0.25)
-    monkeypatch.setattr(rt16.bpy.data, "images", _FakeImages({"v.png": flat}))
+    set_images(_FakeImages({"v.png": flat}))
     stats, plane = rt16._alpha_stats(str(tmp_path / "v.png"), w, h)
     assert plane.dtype == np.float32
     assert plane.shape == (h, w, 4)
@@ -411,7 +434,7 @@ def test_alpha_stats_hands_back_the_plane_it_already_loaded(rt16, monkeypatch, t
 
 
 def test_the_pixel_clause_refuses_two_byte_different_views_with_identical_pixels(
-        rt16, monkeypatch, tmp_path):
+        rt16, set_images, tmp_path):
     """THE OPERAND, end to end: two renders whose PNGs differ in bytes and agree
     pixel-for-pixel. The byte-hash clause cannot see this pair by construction.
 
@@ -421,8 +444,7 @@ def test_the_pixel_clause_refuses_two_byte_different_views_with_identical_pixels
     """
     h, w = 8, 8
     flat = _rgba_flat(h, w, 0.5)
-    monkeypatch.setattr(rt16.bpy.data, "images",
-                        _FakeImages({"a.png": flat, "b.png": flat.copy()}))
+    set_images(_FakeImages({"a.png": flat, "b.png": flat.copy()}))
     views = []
     for i, (name, digest) in enumerate((("a.png", "a" * 64), ("b.png", "b" * 64))):
         _stats, plane = rt16._alpha_stats(str(tmp_path / name), w, h)
@@ -439,7 +461,7 @@ def test_the_pixel_clause_refuses_two_byte_different_views_with_identical_pixels
     assert ev["distinct_sha256"] == 2, "the byte clause passed this set, as it must"
 
 
-def test_a_real_eight_view_set_reports_all_eight_compared_in_pixels(rt16, monkeypatch,
+def test_a_real_eight_view_set_reports_all_eight_compared_in_pixels(rt16, set_images,
                                                                     tmp_path):
     """The other half the finding asks for: the gate's verdict names the population it
     actually compared, and it is the whole set rather than none of it.
@@ -449,7 +471,7 @@ def test_a_real_eight_view_set_reports_all_eight_compared_in_pixels(rt16, monkey
     """
     h, w = 8, 8
     buffers = {f"v{i}.png": _rgba_flat(h, w, 0.1 * i) for i in range(8)}
-    monkeypatch.setattr(rt16.bpy.data, "images", _FakeImages(buffers))
+    set_images(_FakeImages(buffers))
     views = []
     for i in range(8):
         _stats, plane = rt16._alpha_stats(str(tmp_path / f"v{i}.png"), w, h)
