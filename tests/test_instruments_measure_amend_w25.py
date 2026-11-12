@@ -1065,7 +1065,7 @@ def test_the_encoders_frame_content_refusals_name_the_frame(tmp_path):
 
     # A 16-bit grayscale frame, made directly. `fromarray(uint16, mode="I;16")` asked for a
     # mode change from the array's own "I", which Pillow 13 removed (python-pillow/Pillow
-    # #9751); dropping `mode=` gives an "I" image, which Pillow 13 no longer saves as PNG.
+    # #9751).
     Image.new("I;16", (4, 4)).save(d / "00000.png")
     with pytest.raises(EC.EncodeFailure) as exc:
         EC.read_frames(str(d), ["00000.png"])
