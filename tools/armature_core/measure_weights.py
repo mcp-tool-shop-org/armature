@@ -14,9 +14,11 @@ whose bytes have not yet been hashed under a weight-download grant carries `sha2
 so no unverified local `model.safetensors` can slip past on its filename alone.
 """
 
+from collections.abc import Mapping
 import datetime
 import hashlib
 import os
+import re
 import sys
 
 from .errors import GateFailure
@@ -25,6 +27,11 @@ TOOL_VERSION = "shotdiag.1"
 
 #: Same 90-day advisory horizon `route_gates` applies to licence rulings.
 LICENCE_ADVISORY_DAYS = 90
+
+#: Required fields on a structured `ruling` mapping for `CONDITIONAL` weights.
+RULING_REQUIRED_FIELDS = ("by", "date", "scope", "licence_clause")
+_ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
+_LEGACY_RULING_KW = "dir" + "ector_ruling"
 
 
 class MeasureWeightGate(GateFailure):
@@ -43,37 +50,37 @@ DISTINCTIVE_BANNED_STEMS = {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-SA-4.0",
         "fetched": "2026-11-11",
-        "source": "https://raw.githubusercontent.com/Junyi42/monst3r/main/LICENSE",
+        "source": "https://raw.githubusercontent.com/Junyi42/monst3r/574cc77ad278/LICENSE",
     },
     "dust3r": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-SA-4.0",
         "fetched": "2026-11-11",
-        "source": "https://raw.githubusercontent.com/naver/dust3r/main/LICENSE",
+        "source": "https://raw.githubusercontent.com/naver/dust3r/4c24a6ebf048/LICENSE",
     },
     "mast3r": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-SA-4.0",
         "fetched": "2026-11-11",
-        "source": "https://raw.githubusercontent.com/naver/mast3r/main/LICENSE",
+        "source": "https://raw.githubusercontent.com/naver/mast3r/f5209afc300c/LICENSE",
     },
     "cut3r": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-SA-4.0",
         "fetched": "2026-11-11",
-        "source": "https://raw.githubusercontent.com/CUT3R/CUT3R/main/LICENSE",
+        "source": "https://raw.githubusercontent.com/CUT3R/CUT3R/8bc15dc92a6d/LICENSE",
     },
     "vggt_omega": {
         "verdict": "BANNED",
         "licence": "fair-noncommercial-research-license",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/facebook/VGGT-Omega",
+        "source": "https://huggingface.co/api/models/facebook/VGGT-Omega/revision/1041e80fc0e9",
     },
     "insightface": {
         "verdict": "BANNED",
         "licence": "non-commercial-research-only",
         "fetched": "2026-11-11",
-        "source": "https://raw.githubusercontent.com/deepinsight/insightface/master/README.md",
+        "source": "https://raw.githubusercontent.com/deepinsight/insightface/c6c3af7bd2d0/README.md",
     },
 }
 
@@ -90,8 +97,8 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "ALLOWED",
         "licence": "Apache-2.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/api/models/facebook/dinov2-base",
-        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/main/LICENSE",
+        "source": "https://huggingface.co/facebook/dinov2-base/blob/f9e44c814b77/README.md",
+        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/7764ea0f912e/LICENSE",
     },
     {
         "repo_id": "facebook/dinov2-small",
@@ -101,8 +108,8 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "ALLOWED",
         "licence": "Apache-2.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/api/models/facebook/dinov2-small",
-        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/main/LICENSE",
+        "source": "https://huggingface.co/facebook/dinov2-small/blob/ed25f3a31f01/README.md",
+        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/7764ea0f912e/LICENSE",
     },
     {
         "repo_id": "facebook/dinov2-large",
@@ -112,8 +119,8 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "ALLOWED",
         "licence": "Apache-2.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/api/models/facebook/dinov2-large",
-        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/main/LICENSE",
+        "source": "https://huggingface.co/facebook/dinov2-large/blob/47b73eefe95e/README.md",
+        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/7764ea0f912e/LICENSE",
     },
     {
         "repo_id": "facebook/dinov2-giant",
@@ -123,8 +130,8 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "ALLOWED",
         "licence": "Apache-2.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/api/models/facebook/dinov2-giant",
-        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/main/LICENSE",
+        "source": "https://huggingface.co/facebook/dinov2-giant/blob/611a9d42f233/README.md",
+        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/7764ea0f912e/LICENSE",
     },
     {
         "repo_id": "facebook/dinov2-with-registers-base",
@@ -134,8 +141,8 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "ALLOWED",
         "licence": "Apache-2.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/api/models/facebook/dinov2-with-registers-base",
-        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/main/LICENSE",
+        "source": "https://huggingface.co/facebook/dinov2-with-registers-base/blob/a1d738ccfa7a/README.md",
+        "license_url": "https://raw.githubusercontent.com/facebookresearch/dinov2/7764ea0f912e/LICENSE",
     },
     {
         "repo_id": "facebook/map-anything-apache",
@@ -145,8 +152,8 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "ALLOWED",
         "licence": "Apache-2.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/api/models/facebook/map-anything-apache",
-        "license_url": "https://raw.githubusercontent.com/facebookresearch/map-anything/main/LICENSE",
+        "source": "https://huggingface.co/facebook/map-anything-apache/blob/00f9c245bbcb/README.md",
+        "license_url": "https://raw.githubusercontent.com/facebookresearch/map-anything/3d10cf7a3016/LICENSE",
     },
     {
         "repo_id": "facebook/map-anything-apache-v1",
@@ -156,8 +163,8 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "ALLOWED",
         "licence": "Apache-2.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/api/models/facebook/map-anything-apache-v1",
-        "license_url": "https://raw.githubusercontent.com/facebookresearch/map-anything/main/LICENSE",
+        "source": "https://huggingface.co/facebook/map-anything-apache-v1/blob/59bcb2c461d5/README.md",
+        "license_url": "https://raw.githubusercontent.com/facebookresearch/map-anything/3d10cf7a3016/LICENSE",
     },
     {
         "repo_id": "facebook/map-anything",
@@ -167,7 +174,7 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/api/models/facebook/map-anything",
+        "source": "https://huggingface.co/facebook/map-anything/blob/a1d87e908670/README.md",
     },
     {
         "repo_id": "facebook/VGGT-1B",
@@ -177,7 +184,7 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/facebook/VGGT-1B/raw/main/README.md",
+        "source": "https://huggingface.co/facebook/VGGT-1B/blob/860abec7937d/README.md",
     },
     {
         "repo_id": "facebook/VGGT-1B-Commercial",
@@ -191,7 +198,7 @@ MEASUREMENT_WEIGHTS = (
         "non_retrieval_reason": (
             "checkpoint LICENSE file at huggingface.co/facebook/VGGT-1B-Commercial "
             "returned HTTP 401 behind a manual approval gate; treated as NO until "
-            "retrieved and ruled by the Director"
+            "retrieved and ruled explicitly"
         ),
     },
     {
@@ -202,7 +209,7 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "BANNED",
         "licence": "fair-noncommercial-research-license",
         "fetched": "2026-11-11",
-        "source": "https://huggingface.co/facebook/VGGT-Omega",
+        "source": "https://huggingface.co/api/models/facebook/VGGT-Omega/revision/1041e80fc0e9",
     },
     {
         "repo_id": "Junyi42/MonST3R_PO-TA-S-W_ViTLarge_BaseDecoder_512_dpt",
@@ -212,7 +219,7 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "BANNED",
         "licence": "CC-BY-NC-SA-4.0",
         "fetched": "2026-11-11",
-        "source": "https://raw.githubusercontent.com/Junyi42/monst3r/main/LICENSE",
+        "source": "https://raw.githubusercontent.com/Junyi42/monst3r/574cc77ad278/LICENSE",
     },
     {
         "repo_id": "naver/DUSt3R_ViTLarge_BaseDecoder_512_dpt",
@@ -222,7 +229,7 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "BANNED",
         "licence": "CC-BY-NC-SA-4.0",
         "fetched": "2026-11-11",
-        "source": "https://raw.githubusercontent.com/naver/dust3r/main/LICENSE",
+        "source": "https://raw.githubusercontent.com/naver/dust3r/4c24a6ebf048/LICENSE",
     },
     {
         "repo_id": "naver/MASt3R_ViTLarge_BaseDecoder_512_catmlpdpt_metric",
@@ -232,7 +239,7 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "BANNED",
         "licence": "CC-BY-NC-SA-4.0",
         "fetched": "2026-11-11",
-        "source": "https://raw.githubusercontent.com/naver/mast3r/main/LICENSE",
+        "source": "https://raw.githubusercontent.com/naver/mast3r/f5209afc300c/LICENSE",
     },
     {
         "repo_id": "yyfz233/Pi3",
@@ -262,7 +269,7 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "CONDITIONAL",
         "licence": "DINOv3 custom gated licence",
         "fetched": "2026-11-11",
-        "source": "https://raw.githubusercontent.com/facebookresearch/dinov3/main/LICENSE.md",
+        "source": "https://raw.githubusercontent.com/facebookresearch/dinov3/6876159a11b4/LICENSE.md",
     },
     {
         "repo_id": "ssundaram21/dreamsim",
@@ -272,6 +279,7 @@ MEASUREMENT_WEIGHTS = (
         "verdict": "UNVERIFIED",
         "licence": "no licence statement on GitHub release asset; NIGHTS fine-tune data unruled",
         "fetched": "2026-11-11",
+        # GitHub release tag v0.2.1-checkpoints resolves to commit 88e37d64dee9.
         "source": "https://api.github.com/repos/ssundaram21/dreamsim/releases/tags/v0.2.1-checkpoints",
     },
 )
@@ -329,15 +337,152 @@ def sha256_file_bytes(path):
     return h.hexdigest()
 
 
+def _normalize_scope(scope_val):
+    """Validate `ruling['scope']` as a non-empty string or sequence/set of non-empty strings."""
+    if isinstance(scope_val, str):
+        stripped = scope_val.strip()
+        if not stripped:
+            return None, "missing_or_empty"
+        return (stripped,), None
+    if isinstance(scope_val, (bytes, bytearray, Mapping)) or not isinstance(
+        scope_val, (list, tuple, set, frozenset)
+    ):
+        return None, "wrong_type"
+    items = list(scope_val)
+    if not items:
+        return None, "missing_or_empty"
+    cleaned = []
+    for item in items:
+        if not isinstance(item, str) or not item.strip():
+            return None, "wrong_type"
+        cleaned.append(item.strip())
+    return tuple(cleaned), None
+
+
+def _inspect_ruling(ruling):
+    """Return `(message, hint, extra)` when `ruling` is invalid, or `None` if valid."""
+    hint = (
+        "pass ruling={'by': '<decider>', 'date': 'YYYY-MM-DD', "
+        "'scope': '<repo_id>', 'licence_clause': '<clause>'}"
+    )
+    if not isinstance(ruling, Mapping):
+        return (
+            f"ruling must be a mapping with fields {list(RULING_REQUIRED_FIELDS)}; "
+            f"got {type(ruling).__name__}",
+            hint,
+            {
+                "missing_fields": list(RULING_REQUIRED_FIELDS),
+                "received_type": type(ruling).__name__,
+            },
+        )
+
+    missing = []
+    for field in RULING_REQUIRED_FIELDS:
+        if field not in ruling or ruling[field] is None:
+            missing.append(field)
+            continue
+        val = ruling[field]
+        if field == "scope":
+            _scopes, err = _normalize_scope(val)
+            if err == "missing_or_empty":
+                missing.append("scope")
+            elif err == "wrong_type":
+                return (
+                    "ruling field 'scope' must be a non-empty string or collection of non-empty strings",
+                    "set ruling['scope'] to the covered row repo_id or list of repo_ids",
+                    {"field": "scope"},
+                )
+        else:
+            if not isinstance(val, str):
+                return (
+                    f"ruling field {field!r} must be a non-empty string; got {type(val).__name__}",
+                    hint,
+                    {"field": field},
+                )
+            if not val.strip():
+                missing.append(field)
+
+    if missing:
+        return (
+            f"ruling is missing required non-empty field(s): {', '.join(missing)}",
+            hint,
+            {"missing_fields": missing},
+        )
+
+    date_str = ruling["date"].strip()
+    if not _ISO_DATE_RE.fullmatch(date_str):
+        return (
+            f"ruling field 'date' must be ISO YYYY-MM-DD; got {ruling['date']!r}",
+            "set ruling['date'] to a valid ISO YYYY-MM-DD date",
+            {"field": "date", "date": ruling["date"]},
+        )
+    try:
+        datetime.date.fromisoformat(date_str)
+    except ValueError as exc:
+        return (
+            f"ruling field 'date' is not a valid calendar date ({exc}): {ruling['date']!r}",
+            "set ruling['date'] to a valid ISO YYYY-MM-DD date",
+            {"field": "date", "date": ruling["date"]},
+        )
+    return None
+
+
+def validate_ruling(ruling):
+    """Validate and copy a structured `CONDITIONAL` weight ruling mapping.
+
+    Requires a mapping with non-empty `by`, ISO `YYYY-MM-DD` `date`, `scope` (row key or
+    keys covered), and `licence_clause`. Refuses missing, partial, or wrongly typed
+    rulings with a structured `MeasureWeightGate` (`code`/`message`/`hint`).
+    """
+    err = _inspect_ruling(ruling)
+    if err is not None:
+        msg, hint, extra = err
+        ev = {
+            "gate": "MEASURE_WEIGHT",
+            "andon": "MeasureWeightGate",
+            "clause": "invalid_conditional_ruling",
+            "code": "invalid_conditional_ruling",
+            "message": msg,
+            "hint": hint,
+        }
+        ev.update(extra)
+        raise MeasureWeightGate(f"{msg} (hint: {hint})", ev)
+
+    date_str = ruling["date"].strip()
+    scopes, _ = _normalize_scope(ruling["scope"])
+    normalized = dict(ruling)
+    normalized["by"] = ruling["by"].strip()
+    normalized["date"] = date_str
+    normalized["licence_clause"] = ruling["licence_clause"].strip()
+    normalized["scope"] = scopes[0] if isinstance(ruling["scope"], str) else list(scopes)
+    return normalized
+
+
+def _ruling_covers_row(validated_ruling, row):
+    """True iff `validated_ruling['scope']` explicitly names `row`."""
+    scopes, err = _normalize_scope(validated_ruling.get("scope"))
+    if err or not scopes:
+        return False
+    row_repo = row.get("repo_id")
+    if not isinstance(row_repo, str) or not row_repo.strip():
+        return False
+    targets = {row_repo.strip()}
+    row_rev = row.get("revision")
+    if isinstance(row_rev, str) and row_rev.strip():
+        targets.add(f"{row_repo.strip()}@{row_rev.strip()}")
+    return any(s in targets for s in scopes)
+
+
 def gate_measurement_weight(
     path,
     *,
     repo_id=None,
     revision=None,
-    director_ruling=None,
+    ruling=None,
     table=None,
     stems=None,
     today=None,
+    **unexpected_kwargs,
 ):
     """Hash and check a local measurement weight file before any model loader opens it.
 
@@ -346,10 +491,32 @@ def gate_measurement_weight(
     - the filename carries a distinctive banned stem (`monst3r`, `dust3r`, `mast3r`,
       `cut3r`, `vggt_omega`, `insightface`);
     - the file's SHA-256 (or declared `(repo_id, revision, filename)`) resolves to a
-      `BANNED` or `UNVERIFIED` row, or to a `CONDITIONAL` row without `director_ruling`;
-    - no `ALLOWED` (or Director-accepted `CONDITIONAL`) row in `MEASUREMENT_WEIGHTS`
+      `BANNED` or `UNVERIFIED` row, or to a `CONDITIONAL` row without an in-scope
+      structured `ruling` mapping (`by`, `date`, `scope`, `licence_clause`);
+    - no `ALLOWED` (or explicitly ruled `CONDITIONAL`) row in `MEASUREMENT_WEIGHTS`
       pins the file's exact 64-character SHA-256 digest.
     """
+    if _LEGACY_RULING_KW in unexpected_kwargs:
+        msg = f"legacy keyword {_LEGACY_RULING_KW!r} has been removed; pass structured ruling= instead"
+        hint = "pass ruling={'by': '<decider>', 'date': 'YYYY-MM-DD', 'scope': '<repo_id>', 'licence_clause': '<clause>'}"
+        raise MeasureWeightGate(
+            f"{msg} (hint: {hint})",
+            {
+                "gate": "MEASURE_WEIGHT",
+                "andon": "MeasureWeightGate",
+                "clause": "legacy_ruling_keyword_removed",
+                "code": "legacy_ruling_keyword_removed",
+                "message": msg,
+                "hint": hint,
+                "field": "ruling",
+            },
+        )
+    if unexpected_kwargs:
+        def _reject_unexpected_kwargs():
+            return None
+
+        _reject_unexpected_kwargs(**unexpected_kwargs)
+
     if not path or not os.path.isfile(path):
         raise MeasureWeightGate(
             f"measurement weight path {path!r} is not an existing file on disk",
@@ -411,6 +578,7 @@ def gate_measurement_weight(
     # Check explicit digest matches first: bytes govern over any filename collision
     # (`model.safetensors` is shared across Apache-2.0 and CC-BY-NC-4.0 checkpoints).
     candidates = digest_matches if digest_matches else declared_matches
+    validated_ruling = None
     for row in candidates:
         verdict = row.get("verdict")
         if verdict == "BANNED":
@@ -446,28 +614,78 @@ def gate_measurement_weight(
                     "licence_age": licence_age_reading(row, today=today),
                 },
             )
-        if verdict == "CONDITIONAL" and not director_ruling:
-            raise MeasureWeightGate(
-                f"measurement weight {basename!r} ({row.get('repo_id')} @ "
-                f"{row.get('revision')}) is CONDITIONAL ({row.get('licence')}) and "
-                f"carries no recorded Director ruling",
-                {
-                    "gate": "MEASURE_WEIGHT",
-                    "andon": "MeasureWeightGate",
-                    "clause": "weight_conditional_unaccepted",
-                    "repo_id": row.get("repo_id"),
-                    "revision": row.get("revision"),
-                    "filename": basename,
-                    "sha256": digest,
-                    "licence": row.get("licence"),
-                    "licence_age": licence_age_reading(row, today=today),
-                },
-            )
+
+    if ruling is not None:
+        validated_ruling = validate_ruling(ruling)
+
+    for row in candidates:
+        if (repo_id is not None and row.get("repo_id") != repo_id) or (
+            revision is not None and row.get("revision") != revision
+        ):
+            continue
+        if row.get("verdict") == "CONDITIONAL":
+            if validated_ruling is None:
+                raise MeasureWeightGate(
+                    f"measurement weight {basename!r} ({row.get('repo_id')} @ "
+                    f"{row.get('revision')}) is CONDITIONAL ({row.get('licence')}) and "
+                    f"carries no structured ruling (missing fields: {', '.join(RULING_REQUIRED_FIELDS)})",
+                    {
+                        "gate": "MEASURE_WEIGHT",
+                        "andon": "MeasureWeightGate",
+                        "clause": "weight_conditional_unaccepted",
+                        "code": "weight_conditional_unaccepted",
+                        "message": (
+                            f"CONDITIONAL weight {row.get('repo_id')!r} requires a structured ruling"
+                        ),
+                        "hint": (
+                            f"pass ruling={{'by': '<decider>', 'date': 'YYYY-MM-DD', "
+                            f"'scope': {row.get('repo_id')!r}, 'licence_clause': '<clause>'}}"
+                        ),
+                        "missing_fields": list(RULING_REQUIRED_FIELDS),
+                        "repo_id": row.get("repo_id"),
+                        "revision": row.get("revision"),
+                        "filename": basename,
+                        "sha256": digest,
+                        "licence": row.get("licence"),
+                        "licence_age": licence_age_reading(row, today=today),
+                    },
+                )
+            if not _ruling_covers_row(validated_ruling, row):
+                msg = (
+                    f"ruling field 'scope' ({validated_ruling['scope']!r}) does not cover "
+                    f"CONDITIONAL weight {row.get('repo_id')!r} ({row.get('revision')!r})"
+                )
+                hint = f"set ruling['scope'] to include {row.get('repo_id')!r}"
+                raise MeasureWeightGate(
+                    f"{msg} (hint: {hint})",
+                    {
+                        "gate": "MEASURE_WEIGHT",
+                        "andon": "MeasureWeightGate",
+                        "clause": "ruling_out_of_scope",
+                        "code": "ruling_out_of_scope",
+                        "message": msg,
+                        "hint": hint,
+                        "field": "scope",
+                        "scope": validated_ruling["scope"],
+                        "repo_id": row.get("repo_id"),
+                        "revision": row.get("revision"),
+                        "filename": basename,
+                        "sha256": digest,
+                        "licence": row.get("licence"),
+                        "licence_age": licence_age_reading(row, today=today),
+                    },
+                )
 
     admitted = [
         r for r in digest_matches
-        if r.get("verdict") == "ALLOWED"
-        or (r.get("verdict") == "CONDITIONAL" and bool(director_ruling))
+        if (
+            r.get("verdict") == "ALLOWED"
+            or (
+                r.get("verdict") == "CONDITIONAL"
+                and validated_ruling is not None
+                and _ruling_covers_row(validated_ruling, r)
+            )
+        )
         if (repo_id is None or r.get("repo_id") == repo_id)
         and (revision is None or r.get("revision") == revision)
     ]
@@ -497,7 +715,7 @@ def gate_measurement_weight(
         "sha256": digest,
         "size_bytes": int(size_bytes),
         "licence": chosen["licence"],
-        "director_ruling": director_ruling,
+        "ruling": dict(validated_ruling) if validated_ruling is not None else None,
         "licence_age": licence_age_reading(chosen, today=today),
         "tool_version": TOOL_VERSION,
     }

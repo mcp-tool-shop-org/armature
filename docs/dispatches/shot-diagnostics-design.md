@@ -422,8 +422,9 @@ So a filename-keyed row is either blind (BANNED file passes as `model.safetensor
 2. **A load gate inside the tool that loads** (`CLAUDE.md:142-147`): before any weight file is
    opened, the loader hashes it and looks it up; BANNED, UNVERIFIED or unknown raises a
    `GateFailure` subclass (`MeasureWeightGate`, gate id `MEASURE_WEIGHT`), CONDITIONAL raises unless
-   the record names the Director's ruling. The receipt carries the ruling's age via the existing
-   `licence_fetch_reading` shape (`route_gates.py:1528-1541`).
+   passed a structured `ruling` mapping (`by`, ISO `YYYY-MM-DD` `date`, `scope` naming the row,
+   and `licence_clause`), which is recorded in full on the receipt. The receipt carries the
+   ruling's age via the existing `licence_age_reading` shape.
 3. **BANNED rows in `RULED_COMPONENTS` only for distinctive stems** that appear in published
    filenames — `monst3r`, `dust3r`, `mast3r`, `cut3r`, `vggt_omega` — so a Comfy graph naming one
    halts, per the existing practice of entering dead rows so they halt instead of shrugging

@@ -851,3 +851,86 @@ def test_c3_c4_small_and_antipodal_angle_conditioning():
     axis /= np.linalg.norm(axis)
     r_near_180, _ = cv2.Rodrigues(axis * math.radians(180.0 - 1e-9))
     assert abs(SD.geodesic_angle_deg(r_near_180) - (180.0 - 1e-9)) < 1e-12
+
+
+def test_non_finite_direction_refuses_cleanly_without_json_crash():
+    """Item 2: NaN or inf in either direction vector or trajectory estimate raises
+    `ShotDiagError` (`non_finite_direction`) instead of returning NaN to `json.dumps`."""
+    unit = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+    for bad_scalar in (float("nan"), float("inf"), float("-inf")):
+        bad_vec = np.array([bad_scalar, 0.0, 1.0], dtype=np.float64)
+
+        with pytest.raises(ShotDiagError) as exc_a:
+            SD.direction_angle_deg(bad_vec, unit)
+        assert exc_a.value.evidence["clause"] == "non_finite_direction"
+        assert exc_a.value.evidence["non_finite_inputs"] == ["vec_a"]
+
+        with pytest.raises(ShotDiagError) as exc_b:
+            SD.direction_angle_deg(unit, bad_vec)
+        assert exc_b.value.evidence["clause"] == "non_finite_direction"
+        assert exc_b.value.evidence["non_finite_inputs"] == ["vec_b"]
+
+    mats = _orbit_matrices(n_frames=2)
+    gt_poses = [SD.blender_to_opencv_pose(m) for m in mats]
+    for bad_scalar in (float("nan"), float("inf"), float("-inf")):
+        bad_pair = [
+            {
+                "fired": True,
+                "n_matches": 16,
+                "n_inliers": 12,
+                "model": "E",
+                "gric_e": 10.0,
+                "gric_h": 20.0,
+                "R_rel": np.eye(3, dtype=np.float64),
+                "t_dir_in_f0": np.array([bad_scalar, 0.0, 1.0], dtype=np.float64),
+                "tdir_reason": None,
+                "parallax_residual_px": 1.0,
+            }
+        ]
+        with pytest.raises(ShotDiagError) as traj_exc:
+            SD.score_camera_trajectory(gt_poses, bad_pair)
+        assert traj_exc.value.evidence["clause"] == "non_finite_direction"
+
+    # Also refuses on static (zero GT translation) pairs when estimated direction is non-finite.
+    static_poses = [gt_poses[0], gt_poses[0]]
+    with pytest.raises(ShotDiagError) as static_exc:
+        SD.score_camera_trajectory(
+            static_poses,
+            [
+                {
+                    "fired": True,
+                    "n_matches": 16,
+                    "n_inliers": 12,
+                    "model": "E",
+                    "gric_e": 10.0,
+                    "gric_h": 20.0,
+                    "R_rel": np.eye(3, dtype=np.float64),
+                    "t_dir_in_f0": np.array([float("nan"), 0.0, 0.0], dtype=np.float64),
+                    "tdir_reason": None,
+                    "parallax_residual_px": 0.0,
+                }
+            ],
+        )
+    assert static_exc.value.evidence["clause"] == "non_finite_direction"
+
+    # Zero estimated vector on moving GT returns `tdir_err_deg: None` and serialises strictly.
+    cam_zero = SD.score_camera_trajectory(
+        gt_poses,
+        [
+            {
+                "fired": True,
+                "n_matches": 16,
+                "n_inliers": 12,
+                "model": "E",
+                "gric_e": 10.0,
+                "gric_h": 20.0,
+                "R_rel": np.eye(3, dtype=np.float64),
+                "t_dir_in_f0": np.zeros(3, dtype=np.float64),
+                "tdir_reason": None,
+                "parallax_residual_px": 1.0,
+            }
+        ],
+    )
+    assert cam_zero["per_pair"][0]["tdir_err_deg"] is None
+    assert cam_zero["per_pair"][0]["tdir_reason"] == "zero_translation_direction"
+    json.dumps(SD.build_shot_record(cam_zero), allow_nan=False)

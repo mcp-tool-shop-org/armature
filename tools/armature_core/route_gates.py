@@ -102,7 +102,7 @@ RULED_COMPONENTS = {
         "verdict": "EXCLUDED",
         "licence": "Apache-2.0 — commercially clean",
         "fetched": "2026-08-10",
-        "source": "https://huggingface.co/lightx2v/Wan2.2-Lightning",
+        "source": "https://huggingface.co/lightx2v/Wan2.2-Lightning/blob/18bccf8884ec/README.md",
         "reason": ("excluded on METHODOLOGY grounds by the licence map, not on licence "
                    "grounds: a 4-step / cfg-1 distilled trajectory is a different sampler "
                    "trajectory from the one every other arm is measured on"),
@@ -118,8 +118,8 @@ RULED_COMPONENTS = {
     },
     "openpose": {"verdict": "BANNED", "licence": "CMU Academic / Non-Commercial",
                  "fetched": "2026-11-11",
-                 "source": ("https://raw.githubusercontent.com/CMU-Perceptual-Computing-"
-                            "Lab/openpose/master/LICENSE"),
+                 "source": ("https://github.com/CMU-Perceptual-Computing-"
+                            "Lab/openpose/blob/5c5d96523ef9/LICENSE"),
                  "reason": "non-commercial preprocessor tier"},
     "dwpose": {"verdict": "BANNED", "licence": "weights not fetched",
                "fetched": "2026-08-10",
@@ -523,7 +523,10 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
         "fetched": "2026-11-11",
-        "source": "https://smpl.is.tue.mpg.de/modellicense.html",
+        "source": (
+            "https://web.archive.org/web/20260705171509/https://smpl.is.tue.mpg.de/"
+            "modellicense.html + https://smpl.is.tue.mpg.de/modellicense.html"
+        ),
         "reason": "non-commercial preprocessor tier",
         "files": (
             "basicmodel_neutral_lbs_10_207_0_v1.0.0.pkl",
@@ -538,7 +541,10 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
         "fetched": "2026-11-11",
-        "source": "https://smpl-x.is.tue.mpg.de/modellicense.html",
+        "source": (
+            "https://web.archive.org/web/20260712210612/https://smpl-x.is.tue.mpg.de/"
+            "modellicense.html + https://smpl-x.is.tue.mpg.de/modellicense.html"
+        ),
         "reason": "non-commercial preprocessor tier",
         "files": ("smpl-x",),
     },
@@ -617,7 +623,7 @@ RULED_COMPONENTS = {
     "instareal": {
         "verdict": "BANNED",
         "fetched": "2026-08-13",
-        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/raw/main/"
+        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/blob/87c84b15123c/"
                    "LICENSE.txt"),
         "licence": "Instara Fair Use License",
         "reason": ("prohibits use on any image/video generation service, platform or API; "
@@ -626,7 +632,7 @@ RULED_COMPONENTS = {
     "instagirl": {
         "verdict": "BANNED",
         "fetched": "2026-08-13",
-        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/raw/main/"
+        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/blob/87c84b15123c/"
                    "LICENSE.txt"),
         "licence": "Instara Fair Use License (same house as instareal)",
         "reason": "inherits the instareal row's verdict per the licence map",
@@ -654,8 +660,11 @@ RULED_COMPONENTS = {
         "fetched": "2026-11-11",
         "source": (
             "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+            "https://web.archive.org/web/20261104120820/"
             "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
-            "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+            "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render/"
+            "blob/bd765d5592f0/README.md"
         ),
         "reason": (
             "CONDITIONAL, not accepted: on hold pending a decision (entity incl. affiliates "
@@ -677,8 +686,10 @@ RULED_COMPONENTS = {
         "fetched": "2026-11-11",
         "source": (
             "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+            "https://web.archive.org/web/20261104120820/"
             "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
-            "https://huggingface.co/Lightricks/LTX-2.5"
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+            "https://huggingface.co/Lightricks/LTX-2.5/blob/49b093a39c19/README.md"
         ),
         "reason": (
             "CONDITIONAL, not accepted: on hold pending a decision (entity incl. affiliates "
@@ -701,6 +712,8 @@ RULED_COMPONENTS = {
         "fetched": "2026-11-11",
         "source": (
             "https://github.com/Lightricks/ComfyUI-LTXVideo/blob/bb70ecba6602/LICENSE + "
+            "https://web.archive.org/web/20261104120820/"
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
             "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf"
         ),
         "reason": (
@@ -2674,13 +2687,53 @@ def _is_family_cleared(norm, spec):
     return False
 
 
+_ANONYMOUS_WEIGHT_STEM_RE = re.compile(
+    r"(?:diffusion_)?(?:pytorch_)?model(?:[_-](?:fp16|fp32|bf16|fp8|\d+-of-\d+))*"
+)
+
+
+def _is_bare_family_type_token(value, spec):
+    """True iff `value` is a bare type-enum token (e.g. `ltxv` in `CLIPLoader`):
+    fullmatches `neutral_parent_patterns` and carries no weight suffix and no path separator."""
+    low = str(value).strip().lower()
+    if not low or "/" in low or "\\" in low or low.endswith(WEIGHT_SUFFIXES):
+        return False
+    return any(re.fullmatch(np, low) for np in (spec.get("neutral_parent_patterns") or ()))
+
+
+def _has_only_neutral_family_parents(filename, spec):
+    """True iff every in-family token in `filename` is a neutral parent segment and the
+    file stem itself carries no in-family token and is not a generic `model` stem."""
+    norm = str(filename).lower().replace("\\", "/").strip("/")
+    raw_segs = [s for s in norm.split("/") if s]
+    if len(raw_segs) < 2 or ".." in raw_segs or raw_segs[-2] == "blobs":
+        return False
+    pats = spec.get("patterns") or ()
+    neutral = spec.get("neutral_parent_patterns") or ()
+    in_fam = lambda seg: any(re.search(p, seg) for p in pats)
+    basename = raw_segs[-1]
+    stem = _strip_weight_suffix(basename)
+    if in_fam(basename) or in_fam(stem) or _ANONYMOUS_WEIGHT_STEM_RE.fullmatch(stem):
+        return False
+    fam_parents = [s for s in raw_segs[:-1] if in_fam(s)]
+    return bool(fam_parents) and all(
+        any(re.fullmatch(np, s) for np in neutral) for s in fam_parents
+    )
+
+
 def gated_families_of(filename):
     """Every `GATED_WEIGHT_FAMILIES` key that `filename` belongs to."""
     norm = str(filename).lower().replace("\\", "/").strip("/")
-    return tuple(
-        fam for fam, spec in GATED_WEIGHT_FAMILIES.items()
-        if any(re.search(p, norm) for p in spec.get("patterns", ()))
-    )
+    matched = []
+    for fam, spec in GATED_WEIGHT_FAMILIES.items():
+        if not any(re.search(p, norm) for p in spec.get("patterns", ())):
+            continue
+        if _is_bare_family_type_token(filename, spec):
+            continue
+        if _has_only_neutral_family_parents(filename, spec):
+            continue
+        matched.append(fam)
+    return tuple(matched)
 
 
 def unclassified_gated_families_of(filename):
@@ -2689,6 +2742,10 @@ def unclassified_gated_families_of(filename):
     matched = []
     for fam, spec in GATED_WEIGHT_FAMILIES.items():
         if not any(re.search(p, norm) for p in spec.get("patterns", ())):
+            continue
+        if _is_bare_family_type_token(filename, spec):
+            continue
+        if _has_only_neutral_family_parents(filename, spec):
             continue
         if _is_family_cleared(norm, spec):
             continue

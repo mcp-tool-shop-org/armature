@@ -2403,16 +2403,23 @@ def test_gate_alias_table_covers_all_five_preprocessor_alias_rows(monkeypatch):
 EXPECTED_LTX_HOLD_SOURCES = {
     "ltx-2.5": (
         "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+        "https://web.archive.org/web/20261104120820/"
         "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
-        "https://huggingface.co/Lightricks/LTX-2.5"
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+        "https://huggingface.co/Lightricks/LTX-2.5/blob/49b093a39c19/README.md"
     ),
     "ltx-2.5-22b-ic-lora-layout-to-render": (
         "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+        "https://web.archive.org/web/20261104120820/"
         "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
-        "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+        "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render/"
+        "blob/bd765d5592f0/README.md"
     ),
     "comfyui-ltxvideo": (
         "https://github.com/Lightricks/ComfyUI-LTXVideo/blob/bb70ecba6602/LICENSE + "
+        "https://web.archive.org/web/20261104120820/"
+        "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
         "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf"
     ),
 }
@@ -3047,5 +3054,120 @@ def test_fix2_mc_neutral_family_parent_folders_pass_while_variant_parents_refuse
                    cls="PreprocessorWeightLoader"),
         ]))
     assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+
+
+_UNPINNED_REPO_URL_RE = re.compile(
+    r"https?://(?:"
+    r"(?:github\.com|huggingface\.co)/[^\s\)\>\"\'\]\`]+/(?:blob|raw|resolve|tree)/(?:main|master|HEAD)/[^\s\)\>\"\'\]\`]*"
+    r"|raw\.githubusercontent\.com/[^/\s]+/[^/\s]+/(?:main|master|HEAD|onnx|\d+\.x)/[^\s\)\>\"\'\]\`]*"
+    r"|huggingface\.co/(?:api/models/)?(?!(?:api/models/[^/\s]+/[^/\s]+/revision/[0-9a-f]{7,64}))"
+    r"(?!spaces/|datasets/)[^/\s]+/[^/\s\)\>\"\'\]\`]+/?(?=$|[\s\)\>\"\'\]\`])"
+    r")"
+)
+
+
+def _unpinned_repo_links(texts):
+    """Return `(label, url)` for any unpinned GitHub or Hugging Face URL in `texts`."""
+    found = []
+    for label, text in texts:
+        for match in _UNPINNED_REPO_URL_RE.finditer(text):
+            found.append((label, match.group(0)))
+    return found
+
+
+def test_no_unpinned_github_or_huggingface_licence_links():
+    """Item 5: `docs/license-map.md`, `route_gates.RULED_COMPONENTS`, and
+    `measure_weights` carry no unpinned GitHub or Hugging Face branch/HEAD/repo-root links."""
+    from armature_core import measure_weights as MW
+
+    doc_text = open(LICENSE_MAP, encoding="utf-8").read()
+    # Check active licence link text; ignore historical prose examples inside backticks.
+    stripped_doc = re.sub(r"`[^`]+`", "", doc_text)
+    targets = [("docs/license-map.md", stripped_doc)]
+    for key, row in RG.RULED_COMPONENTS.items():
+        if row.get("source"):
+            targets.append((f"route_gates:{key}", row["source"]))
+    for row in MW.MEASUREMENT_WEIGHTS:
+        for field in ("source", "license_url"):
+            if row.get(field):
+                targets.append((f"measure_weights:{row.get('repo_id')}:{field}", row[field]))
+    for stem, row in MW.DISTINCTIVE_BANNED_STEMS.items():
+        if row.get("source"):
+            targets.append((f"measure_weights_stem:{stem}", row["source"]))
+
+    assert _unpinned_repo_links(targets) == []
+
+    # Mutation check: injecting /blob/main/, /raw/main/, or /resolve/main/ fails immediately.
+    for sample in (
+        "https://github.com/example/repo/blob/main/LICENSE",
+        "https://huggingface.co/example/model/raw/main/README.md",
+        "https://huggingface.co/example/model/resolve/main/LICENSE.txt",
+    ):
+        assert _unpinned_repo_links([("sample", sample)]) == [("sample", sample)]
+
+
+def test_bare_family_type_token_in_clip_loader_passes_while_weights_refuse():
+    """Item 6: a widget value that fullmatches `neutral_parent_patterns` with no weight
+    suffix and no path separator (`ltxv` in `CLIPLoader`) is a bare type token and passes,
+    while weight stems (`ltxv-13b-0.9.8-distilled`, `ltx-2-19b`, `da3_giant`) and all H-A/H-B/H-C
+    inputs still refuse."""
+    clip_node = {
+        "id": 99,
+        "type": "CLIPLoader",
+        "widgets_values": ["t5xxl_fp16.safetensors", "ltxv", "default"],
+    }
+    g = graph(top=CLEAN_TOP + [clip_node])
+    ev = RG.verify(g)
+    assert ev["receipt"] == "verify"
+    assert not any(c.get("node_id") == 99 and c.get("file") == "ltxv" for c in ev["components"])
+
+    for bad_gated in ("ltxv-13b-0.9.8-distilled", "ltx-2-19b", "ltxv.safetensors"):
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(graph(top=CLEAN_TOP + [loader(99, bad_gated, cls="UNETLoader")]))
+        assert exc.value.evidence["clause"] == "unclassified_in_gated_family", bad_gated
+
+    with pytest.raises(RG.RouteGate) as giant_exc:
+        RG.verify(graph(top=CLEAN_TOP + [loader(99, "da3_giant", cls="PreprocessorWeightLoader")]))
+    assert giant_exc.value.evidence["clause"] == "banned_or_excluded_component"
+
+
+def test_neutral_family_parent_folder_judges_non_family_stem_by_own_rows():
+    """Item 7: when every in-family token in a path is a neutral parent segment and the
+    file stem carries no in-family token (`loras/ltxv/smartphonesnapshot_v3.safetensors`),
+    the family check does not apply and the file is judged by its own rows, while in-family
+    weights (`loras/ltxv/ltx-2-19b-lora.safetensors`, `ltxv/ltx-2-19b-dev.safetensors`) and
+    anonymous `model` stems still refuse and the five fix-2 cleared paths still pass."""
+    ok_non_family = "loras/ltxv/smartphonesnapshot_v3.safetensors"
+    ev = RG.verify(graph(top=CLEAN_TOP + [
+        loader(99, ok_non_family, cls="LoraLoaderModelOnly"),
+    ]))
+    assert ev["receipt"] == "verify"
+    node_99 = [c for c in ev["components"] if c["node_id"] == 99]
+    assert len(node_99) == 1
+    assert node_99[0]["matched_on"] == "smartphonesnapshot"
+    assert node_99[0]["verdict"] == "ALLOWED"
+
+    for bad in (
+        "loras/ltxv/ltx-2-19b-lora.safetensors",
+        "ltxv/ltx-2-19b-dev.safetensors",
+        "da3/model.safetensors",
+        "ltxv/model.safetensors",
+        "Lightricks/LTX-Video/model.safetensors",
+        "Lightricks/LTX-Video/transformer/diffusion_pytorch_model.safetensors",
+    ):
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(graph(top=CLEAN_TOP + [loader(99, bad, cls="LoraLoaderModelOnly")]))
+        assert exc.value.evidence["clause"] == "unclassified_in_gated_family", bad
+
+    for cleared_ok in (
+        "depthanything3/da3_small.safetensors",
+        "depth_anything_v2/depth_anything_v2_vits.pth",
+        "video_depth_anything/video_depth_anything_vits.pth",
+        "ltxv/ltx-video-2b-v0.9.5.safetensors",
+        "depthanything3/DA3-BASE/model.safetensors",
+    ):
+        assert RG.verify(graph(top=CLEAN_TOP + [
+            loader(99, cleared_ok, cls="PreprocessorWeightLoader"),
+        ]))["receipt"] == "verify", cleared_ok
 
 
