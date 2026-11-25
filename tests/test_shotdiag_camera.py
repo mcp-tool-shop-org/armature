@@ -824,3 +824,30 @@ def test_c12_followed_field_is_no_threshold_string_and_carries_no_verdict_boolea
             assert not isinstance(val, bool), f"unexpected boolean camera field {key!r}"
     for key, val in rec.items():
         assert not isinstance(val, bool), f"unexpected boolean record field {key!r}"
+
+
+def test_c3_c4_small_and_antipodal_angle_conditioning():
+    """Angles near 0 deg and 180 deg remain conditioned at float64 precision instead of losing half the mantissa in acos."""
+    # Near-zero direction angle (1e-10 deg): acos collapses to 0.0 or jumps by sqrt(k)*8.54e-7 deg.
+    u = np.array([1.0, 0.0, 0.0], dtype=np.float64)
+    eps_rad = math.radians(1e-10)
+    v_small = np.array([math.cos(eps_rad), math.sin(eps_rad), 0.0], dtype=np.float64)
+    assert abs(SD.direction_angle_deg(u, v_small) - 1e-10) < 1e-13
+
+    # Exact float64 parallel-vector scaling where dot(a, b) / (|a||b|) rounds below 1.0 (e.g. 1 - 2^-53).
+    a_par = np.array([1.0, 1.0, 1.0], dtype=np.float64)
+    b_par = 3.75 * a_par
+    assert SD.direction_angle_deg(a_par, b_par) < 1e-12
+    assert SD.direction_angle_deg(np.zeros(3, dtype=np.float64), u) is None
+
+    # Near-180 deg geodesic angle with 5-ULP trace perturbation matching the C4 CI rounding case.
+    r_180_ulp5 = np.diag(
+        [1.0 - 6.0 * (2.0 ** -53), -(1.0 - 2.0 * (2.0 ** -53)), -(1.0 - 2.0 * (2.0 ** -53))]
+    )
+    assert abs(SD.geodesic_angle_deg(r_180_ulp5) - 180.0) < 1e-12
+
+    # True (180 - 1e-9) deg SO(3) rotation around an oblique axis: acos rounds to 180.0.
+    axis = np.array([1.0, -2.0, 3.0], dtype=np.float64)
+    axis /= np.linalg.norm(axis)
+    r_near_180, _ = cv2.Rodrigues(axis * math.radians(180.0 - 1e-9))
+    assert abs(SD.geodesic_angle_deg(r_near_180) - (180.0 - 1e-9)) < 1e-12

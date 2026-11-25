@@ -156,8 +156,13 @@ def blender_to_opencv_pose(matrix_world, *, convert_axes=True):
 def geodesic_angle_deg(r_mat):
     """Geodesic angle in degrees of a 3x3 rotation matrix on SO(3), in `[0, 180]`."""
     r = np.asarray(r_mat, dtype=np.float64)
-    cos_val = max(-1.0, min(1.0, (float(np.trace(r)) - 1.0) * 0.5))
-    return math.degrees(math.acos(cos_val))
+    sin_val = 0.5 * math.hypot(
+        float(r[2, 1] - r[1, 2]),
+        float(r[0, 2] - r[2, 0]),
+        float(r[1, 0] - r[0, 1]),
+    )
+    cos_val = (float(np.trace(r)) - 1.0) * 0.5
+    return math.degrees(math.atan2(sin_val, cos_val))
 
 
 def direction_angle_deg(vec_a, vec_b):
@@ -168,8 +173,11 @@ def direction_angle_deg(vec_a, vec_b):
     nb = float(np.linalg.norm(b))
     if na <= 1e-12 or nb <= 1e-12:
         return None
-    cos_val = max(-1.0, min(1.0, float(np.dot(a, b) / (na * nb))))
-    return math.degrees(math.acos(cos_val))
+    ua = a / na
+    ub = b / nb
+    return math.degrees(
+        2.0 * math.atan2(float(np.linalg.norm(ua - ub)), float(np.linalg.norm(ua + ub)))
+    )
 
 
 def intrinsics_from_spec(
