@@ -853,7 +853,7 @@ def test_c3_c4_small_and_antipodal_angle_conditioning():
     assert abs(SD.geodesic_angle_deg(r_near_180) - (180.0 - 1e-9)) < 1e-12
 
 
-def test_non_finite_direction_refuses_cleanly_without_json_crash():
+def test_non_finite_direction_refuses_cleanly_without_json_crash(monkeypatch):
     """Item 2: NaN or inf in either direction vector or trajectory estimate raises
     `ShotDiagError` (`non_finite_direction`) instead of returning NaN to `json.dumps`."""
     unit = np.array([1.0, 0.0, 0.0], dtype=np.float64)
@@ -934,3 +934,54 @@ def test_non_finite_direction_refuses_cleanly_without_json_crash():
     assert cam_zero["per_pair"][0]["tdir_err_deg"] is None
     assert cam_zero["per_pair"][0]["tdir_reason"] == "zero_translation_direction"
     json.dumps(SD.build_shot_record(cam_zero), allow_nan=False)
+
+    # Non-numeric / wrong-shape inputs to geodesic_angle_deg and direction_angle_deg refuse cleanly.
+    for bad_rot in ("not-a-matrix", np.eye(2), np.diag([1.0, float("nan"), 1.0])):
+        with pytest.raises(ShotDiagError) as rot_exc:
+            SD.geodesic_angle_deg(bad_rot)
+        assert rot_exc.value.evidence["clause"] == "invalid_camera_matrix"
+
+    for bad_vec in ("not-a-vector", np.array([1.0, 2.0])):
+        with pytest.raises(ShotDiagError) as vec_exc:
+            SD.direction_angle_deg(bad_vec, unit)
+        assert vec_exc.value.evidence["clause"] == "non_finite_direction"
+
+    # Non-finite GT poses (frame 0 and frame t) and non-array estimated t_dir refuse cleanly.
+    r_id = np.eye(3, dtype=np.float64)
+    bad_nan = np.array([float("nan"), 0.0, 0.0], dtype=np.float64)
+    for bad_gt in (
+        [(r_id, bad_nan), (r_id, np.zeros(3))],
+        [(r_id, np.zeros(3)), (r_id, bad_nan)],
+    ):
+        with pytest.raises(ShotDiagError) as gt_exc:
+            SD.score_camera_trajectory(
+                bad_gt,
+                [{"fired": True, "model": "E", "R_rel": r_id, "t_dir_in_f0": unit}],
+            )
+        assert gt_exc.value.evidence["clause"] == "non_finite_direction"
+
+    with pytest.raises(ShotDiagError) as bad_est_exc:
+        SD.score_camera_trajectory(
+            gt_poses,
+            [{"fired": True, "model": "E", "R_rel": r_id, "t_dir_in_f0": [1.0, 2.0]}],
+        )
+    assert bad_est_exc.value.evidence["clause"] == "non_finite_direction"
+
+    # estimate_pair_pose marks degenerate translation when cheirality t_vec is non-finite/zero.
+    def _fake_find_e(*_args, **_kwargs):
+        return np.eye(3, dtype=np.float64), np.ones((20, 1), dtype=np.uint8)
+
+    def _fake_recover(*_args, **_kwargs):
+        mask = np.ones((20, 1), dtype=np.uint8)
+        return 20, np.eye(3, dtype=np.float64), np.zeros((3, 1), dtype=np.float64), mask
+
+    monkeypatch.setattr(cv2, "findEssentialMat", _fake_find_e)
+    monkeypatch.setattr(cv2, "recoverPose", _fake_recover)
+    k = np.eye(3, dtype=np.float64)
+    k[0, 0] = k[1, 1] = 800.0
+    k[0, 2] = k[1, 2] = 256.0
+    pts = np.column_stack([np.linspace(50, 450, 20), np.linspace(60, 400, 20)])
+    pair_res = SD.estimate_pair_pose(pts, pts + 2.0, k)
+    if pair_res["fired"] and pair_res["model"] == "E":
+        assert pair_res["t_dir_in_f0"] is None
+        assert pair_res["tdir_reason"] == "degenerate_translation_direction"

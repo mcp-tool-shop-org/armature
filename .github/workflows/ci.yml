@@ -381,7 +381,7 @@ jobs:
           COVERAGE_FILE: ${{ runner.temp }}/.coverage
         run: |
           python -m coverage run --source=tools -m pytest tests -q
-          python -m coverage report --precision=2 --fail-under=1
+          python -m coverage report --precision=2 --fail-under=75
 
       # The ANDON tests assert that G1 still raises under `python -O` and
       # PYTHONOPTIMIZE=1. Running the suite a second time under -O is what

@@ -414,6 +414,39 @@ def test_structured_ruling_required_for_conditional_weights_and_legacy_keyword_r
         )
     assert exc.value.evidence["clause"] == "ruling_out_of_scope"
 
+    # 6. Collection `scope` (e.g. list), wrong types for fields/scope, and unknown kwargs fail cleanly.
+    list_ruling = dict(base_ruling, scope=["other/model", "example-org/cond-a"])
+    receipt_list = MW.gate_measurement_weight(
+        str(file_a),
+        repo_id="example-org/cond-a",
+        revision="rev-a",
+        ruling=list_ruling,
+        table=table,
+        today="2026-11-25",
+    )
+    assert receipt_list["ruling"]["scope"] == ["other/model", "example-org/cond-a"]
+
+    for bad_ruling in (
+        dict(base_ruling, scope=123),
+        dict(base_ruling, scope=[123]),
+        dict(base_ruling, by=123),
+    ):
+        with pytest.raises(MeasureWeightGate) as bad_exc:
+            MW.gate_measurement_weight(
+                str(file_a),
+                repo_id="example-org/cond-a",
+                revision="rev-a",
+                ruling=bad_ruling,
+                table=table,
+            )
+        assert bad_exc.value.evidence["clause"] == "invalid_conditional_ruling"
+
+    with pytest.raises(TypeError):
+        MW.gate_measurement_weight(str(file_a), unknown_flag=True)
+
+    assert MW._ruling_covers_row({"scope": []}, {"repo_id": "example-org/cond-a"}) is False
+    assert MW._ruling_covers_row(base_ruling, {"repo_id": None}) is False
+
 
 def test_m1_every_measurement_weight_row_carries_dated_fetch_and_mirrors_license_map():
     """M1: Fails if any `MEASUREMENT_WEIGHTS` row lacks an ISO `fetched` date, `source` / non-retrieval reason, or map entry."""

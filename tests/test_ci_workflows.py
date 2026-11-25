@@ -5857,5 +5857,5 @@ def test_python_tests_measures_coverage_with_ratchet_floor_on_one_matrix_leg() -
     script = _code_only(_run_script_of(cov_step))
     assert "coverage run --source=tools -m pytest tests -q" in script
     match = re.search(r"coverage report\b[^\n]*--fail-under=(\d+)", script)
-    assert match is not None and int(match.group(1)) >= 1
+    assert match is not None and int(match.group(1)) == 75
     assert "--fail-under" in script

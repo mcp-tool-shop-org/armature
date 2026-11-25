@@ -3116,6 +3116,7 @@ def test_bare_family_type_token_in_clip_loader_passes_while_weights_refuse():
         "type": "CLIPLoader",
         "widgets_values": ["t5xxl_fp16.safetensors", "ltxv", "default"],
     }
+    assert RG.gated_families_of("ltxv") == ()
     g = graph(top=CLEAN_TOP + [clip_node])
     ev = RG.verify(g)
     assert ev["receipt"] == "verify"
@@ -3138,6 +3139,7 @@ def test_neutral_family_parent_folder_judges_non_family_stem_by_own_rows():
     weights (`loras/ltxv/ltx-2-19b-lora.safetensors`, `ltxv/ltx-2-19b-dev.safetensors`) and
     anonymous `model` stems still refuse and the five fix-2 cleared paths still pass."""
     ok_non_family = "loras/ltxv/smartphonesnapshot_v3.safetensors"
+    assert RG.gated_families_of(ok_non_family) == ()
     ev = RG.verify(graph(top=CLEAN_TOP + [
         loader(99, ok_non_family, cls="LoraLoaderModelOnly"),
     ]))

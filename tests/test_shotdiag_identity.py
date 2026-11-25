@@ -663,3 +663,15 @@ def test_load_dinov2_state_dict_missing_or_unexpected_keys_refuses(tmp_path, mon
     emb = embedder(np.zeros((SD.DINOV2_INPUT_SIZE, SD.DINOV2_INPUT_SIZE, 3), dtype=np.uint8))
     assert emb["cls"].shape == (768,)
     assert emb["patches"].shape == (256, 768)
+
+    # Also verify tuple-returning load_state_dict fallback path.
+    orig_lsd = _FakeModel.load_state_dict
+    _FakeModel.load_state_dict = lambda _self, state, strict=False: (
+        sorted(expected_keys - set(state)),
+        sorted(set(state) - expected_keys),
+    )
+    try:
+        emb2 = SD.load_dinov2_vitb14_embedder(str(ckpt_file), weight_table=table)
+        assert emb2.weight_receipt["sha256"] == ckpt_sha
+    finally:
+        _FakeModel.load_state_dict = orig_lsd

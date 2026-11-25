@@ -35,7 +35,7 @@ installs.
     `lightx2v_` + in-family weight names (such as `lightx2v_da3_small.safetensors`) now refuse
     as `unclassified_in_gated_family` even under `allow=("lightx2v",)`.
   - `.github/workflows/ci.yml`: added `coverage` line measurement on the Python `3.13`
-    matrix leg with a `--fail-under` ratchet floor.
+    matrix leg with a `--fail-under=75` ratchet floor (calibrated against `75.83%` measured total line coverage).
 
 - **Licence-gate gap closure (`tools/armature_core/route_gates.py`, `docs/license-map.md`):**
   - Ban any `da3_large` / `da3-large` / `da3large` name (any case, separator, weight suffix,
