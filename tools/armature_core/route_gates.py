@@ -2701,22 +2701,36 @@ def _is_family_cleared(norm, spec):
 #: `TripleCLIPLoader` (`comfy_extras/nodes_sd3.py#L11-L28` @ `f40a4fbb2ac8`),
 #: `QuadrupleCLIPLoader` (`comfy_extras/nodes_hidream.py` @ `f40a4fbb2ac8`), and their GGUF
 #: counterparts declare only `clip_name*` inputs with NO `type` enum slot and are excluded.
-TYPE_ENUM_WIDGET_SLOTS = frozenset({
-    ("CLIPLoader", 1),
-    ("DualCLIPLoader", 2),
-    ("CLIPLoaderGGUF", 1),
-    ("DualCLIPLoaderGGUF", 2),
+CLIPLOADER_TYPE_ENUM = frozenset({
+    "stable_diffusion", "stable_cascade", "sd3", "stable_audio", "mochi", "ltxv", "pixart",
+    "cosmos", "lumina2", "wan", "hidream", "chroma", "ace", "omnigen2", "qwen_image",
+    "hunyuan_image", "flux2", "ovis", "longcat_image", "cogvideox", "lens", "pixeldit",
+    "ideogram4", "boogu", "krea2", "joyimage", "mage", "minimax", "yue2", "flux3",
+    "moss_image", "fibo2", "pan2",
 })
-_TYPE_ENUM_SLOT_BY_CLASS = dict(TYPE_ENUM_WIDGET_SLOTS)
+DUALCLIPLOADER_TYPE_ENUM = frozenset({
+    "sdxl", "sd3", "flux", "hunyuan_video", "hidream", "hunyuan_image", "hunyuan_video_15",
+    "kandinsky5", "kandinsky5_image", "ltxv", "newbie", "ace",
+})
+TYPE_ENUM_WIDGET_SLOTS = {
+    ("CLIPLoader", 1): CLIPLOADER_TYPE_ENUM,
+    ("DualCLIPLoader", 2): DUALCLIPLOADER_TYPE_ENUM,
+    ("CLIPLoaderGGUF", 1): CLIPLOADER_TYPE_ENUM,
+    ("DualCLIPLoaderGGUF", 2): DUALCLIPLOADER_TYPE_ENUM,
+}
+_TYPE_ENUM_SLOT_BY_CLASS = {cls: idx for (cls, idx) in TYPE_ENUM_WIDGET_SLOTS}
 
 
 def _is_bare_family_type_token(value, spec, *, node_class=None, widget_index=None):
     """True iff `(node_class, widget_index)` is an allow-listed ComfyUI `type`-enum slot and
-    `value` fullmatches `neutral_parent_patterns` with no weight suffix and no path separator."""
-    if (node_class, widget_index) not in TYPE_ENUM_WIDGET_SLOTS:
+    `value` (after `strip().lower()`) is an exact member of that slot's pinned enum."""
+    allowed_members = TYPE_ENUM_WIDGET_SLOTS.get((node_class, widget_index))
+    if allowed_members is None:
         return False
     low = str(value).strip().lower()
     if not low or "/" in low or "\\" in low or low.endswith(WEIGHT_SUFFIXES):
+        return False
+    if low not in allowed_members:
         return False
     return any(re.fullmatch(np, low) for np in (spec.get("neutral_parent_patterns") or ()))
 
@@ -2816,12 +2830,18 @@ def _node_widget_entries(node, where):
             yield None, extra_val
         return
 
-    shifted = any(
-        isinstance(slot, dict)
-        and isinstance(slot.get("widget"), dict)
-        and slot["widget"].get("name") not in (None, "device")
-        for slot in (node.get("inputs") or [])
-    )
+    shifted = False
+    for slot in node.get("inputs") or []:
+        if not isinstance(slot, dict) or not isinstance(slot.get("widget"), dict):
+            continue
+        if slot.get("link") is None:
+            continue
+        wname = slot["widget"].get("name")
+        if not isinstance(wname, str):
+            wname = slot.get("name")
+        if wname != "device":
+            shifted = True
+            break
     for idx, val in enumerate(node.get("widgets_values") or []):
         yield (None if shifted else idx), val
 

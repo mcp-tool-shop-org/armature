@@ -360,13 +360,54 @@ def _normalize_scope(scope_val):
     return tuple(cleaned), None
 
 
-def _resolve_utc_today(today):
-    """Resolve `today` (ISO string / date / None -> current UTC date)."""
+def _inspect_today(today):
+    """Validate optional `today` against current UTC date, returning `(date_obj, err_tuple)`."""
+    utc_today = datetime.datetime.now(datetime.timezone.utc).date()
+    hint = (
+        f"omit today= or pass an ISO YYYY-MM-DD date within "
+        f"{RULING_MIN_DATE.isoformat()}..{utc_today.isoformat()}"
+    )
     if today is None:
-        return datetime.datetime.now(datetime.timezone.utc).date()
-    if isinstance(today, datetime.date) and not isinstance(today, datetime.datetime):
-        return today
-    return datetime.date.fromisoformat(str(today).strip())
+        return utc_today, None
+    if isinstance(today, bool) or isinstance(today, datetime.datetime) or not isinstance(
+        today, (str, datetime.date)
+    ):
+        return None, (
+            f"today must be an ISO YYYY-MM-DD string or datetime.date; got {type(today).__name__}",
+            hint,
+            {"field": "today", "received_type": type(today).__name__},
+        )
+    if isinstance(today, datetime.date):
+        parsed_today = today
+    else:
+        today_str = today.strip()
+        if not _ISO_DATE_RE.fullmatch(today_str):
+            return None, (
+                f"today must be ISO YYYY-MM-DD; got {today!r}",
+                hint,
+                {"field": "today", "today": str(today)},
+            )
+        try:
+            parsed_today = datetime.date.fromisoformat(today_str)
+        except ValueError as exc:
+            return None, (
+                f"today is not a valid calendar date ({exc}): {today!r}",
+                hint,
+                {"field": "today", "today": str(today)},
+            )
+    if parsed_today < RULING_MIN_DATE or parsed_today > utc_today:
+        return None, (
+            f"today ({parsed_today.isoformat()!r}) must be within "
+            f"{RULING_MIN_DATE.isoformat()}..{utc_today.isoformat()}",
+            hint,
+            {
+                "field": "today",
+                "today": parsed_today.isoformat(),
+                "min_date": RULING_MIN_DATE.isoformat(),
+                "utc_today": utc_today.isoformat(),
+            },
+        )
+    return parsed_today, None
 
 
 def _inspect_ruling(snapshot, *, max_date):
@@ -471,14 +512,22 @@ def validate_ruling(ruling, *, today=None):
 
     # Read each required key from the caller mapping at most once before validation.
     snapshot = {}
+    read_err = None
     for key in RULING_REQUIRED_FIELDS:
         try:
             snapshot[key] = ruling[key]
         except KeyError:
             pass
+        except Exception as exc:
+            read_err = (
+                f"reading ruling field {key!r} failed ({type(exc).__name__}: {exc})",
+                hint,
+                {"field": key, "error_type": type(exc).__name__},
+            )
+            break
 
-    max_date = _resolve_utc_today(today)
-    err = _inspect_ruling(snapshot, max_date=max_date)
+    max_date, today_err = _inspect_today(today)
+    err = today_err or read_err or _inspect_ruling(snapshot, max_date=max_date)
     if err is not None:
         msg, hint, extra = err
         ev = {
@@ -578,6 +627,21 @@ def gate_measurement_weight(
             },
         )
 
+    resolved_today, today_err = _inspect_today(today)
+    if today_err is not None:
+        msg, hint, extra = today_err
+        ev = {
+            "gate": "MEASURE_WEIGHT",
+            "andon": "MeasureWeightGate",
+            "clause": "invalid_conditional_ruling",
+            "code": "invalid_conditional_ruling",
+            "message": msg,
+            "hint": hint,
+        }
+        ev.update(extra)
+        raise MeasureWeightGate(f"{msg} (hint: {hint})", ev)
+    today_iso = resolved_today.isoformat()
+
     if not path or not os.path.isfile(path):
         raise MeasureWeightGate(
             f"measurement weight path {path!r} is not an existing file on disk",
@@ -618,7 +682,7 @@ def gate_measurement_weight(
                 "filename": basename,
                 "sha256": digest,
                 "licence": stem_row.get("licence"),
-                "licence_age": licence_age_reading(stem_row, today=today),
+                "licence_age": licence_age_reading(stem_row, today=today_iso),
             },
         )
 
@@ -655,7 +719,7 @@ def gate_measurement_weight(
                     "filename": basename,
                     "sha256": digest,
                     "licence": row.get("licence"),
-                    "licence_age": licence_age_reading(row, today=today),
+                    "licence_age": licence_age_reading(row, today=today_iso),
                 },
             )
         if verdict == "UNVERIFIED":
@@ -672,12 +736,12 @@ def gate_measurement_weight(
                     "filename": basename,
                     "sha256": digest,
                     "licence": row.get("licence"),
-                    "licence_age": licence_age_reading(row, today=today),
+                    "licence_age": licence_age_reading(row, today=today_iso),
                 },
             )
 
     if ruling is not None:
-        validated_ruling = validate_ruling(ruling, today=today)
+        validated_ruling = validate_ruling(ruling, today=resolved_today)
 
     for row in candidates:
         if (repo_id is not None and row.get("repo_id") != repo_id) or (
@@ -777,7 +841,7 @@ def gate_measurement_weight(
         "size_bytes": int(size_bytes),
         "licence": chosen["licence"],
         "ruling": dict(validated_ruling) if validated_ruling is not None else None,
-        "licence_age": licence_age_reading(chosen, today=today),
+        "licence_age": licence_age_reading(chosen, today=today_iso),
         "tool_version": TOOL_VERSION,
     }
 

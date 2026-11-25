@@ -583,6 +583,48 @@ def test_ruling_l3_date_before_2000_or_after_utc_today_refuses(tmp_path):
     )
     assert receipt["ruling"]["date"] == "2000-01-01"
 
+    # Caller-supplied `today` later than real UTC date or malformed refuses with MeasureWeightGate.
+    for bad_today in (
+        "9999-12-31",
+        tomorrow,
+        "garbage",
+        "2026-13-40",
+        datetime.datetime(2026, 11, 25, 10, 0),
+        True,
+    ):
+        with pytest.raises(MeasureWeightGate) as today_exc:
+            MW.gate_measurement_weight(
+                str(w),
+                repo_id="example-org/cond-a",
+                revision="rev-a",
+                ruling={
+                    "by": "release-signoff",
+                    "date": "2999-01-01" if bad_today == "9999-12-31" else "2026-11-25",
+                    "scope": "example-org/cond-a",
+                    "licence_clause": "Custom-A §2.1",
+                },
+                table=table,
+                today=bad_today,
+            )
+        assert today_exc.value.evidence["clause"] == "invalid_conditional_ruling", bad_today
+        assert today_exc.value.evidence["field"] == "today", bad_today
+
+    # Also refuses directly on `validate_ruling` if caller mapping raises inside `__getitem__`.
+    class _ExplodingMapping(Mapping):
+        def __getitem__(self, key):
+            raise RuntimeError(f"boom on {key}")
+
+        def __iter__(self):
+            return iter(MW.RULING_REQUIRED_FIELDS)
+
+        def __len__(self):
+            return len(MW.RULING_REQUIRED_FIELDS)
+
+    with pytest.raises(MeasureWeightGate) as map_exc:
+        MW.validate_ruling(_ExplodingMapping())
+    assert map_exc.value.evidence["clause"] == "invalid_conditional_ruling"
+    assert map_exc.value.evidence["error_type"] == "RuntimeError"
+
 
 def test_ruling_l4_unexpected_keyword_raises_structured_measure_weight_gate(tmp_path):
     """L4: unexpected keyword argument raises structured MeasureWeightGate."""

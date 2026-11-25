@@ -28,8 +28,8 @@ forms), never searched across the whole path, and applies when the weight carrie
 variant tokens while any in-family parent folder is either cleared or a bare neutral family/repo
 container with no variant token. Two narrow non-weight / out-of-family rules sit beside it:
 a widget value inside an allow-listed ComfyUI `type`-enum slot (`CLIPLoader` index 1,
-`DualCLIPLoader` index 2, or their GGUF twins) that fullmatches a family's bare neutral pattern
-with no weight suffix and no path separator (for example `"ltxv"`) is a bare type token and does
+`DualCLIPLoader` index 2, or their GGUF twins) that is an exact member of that slot's pinned
+`type` enum (for example `"ltxv"` after `strip().lower()`) is a bare type token and does
 not count toward a gated family; and when every in-family segment in a path is a bare neutral
 parent folder (`loras/ltxv/smartphonesnapshot_v3.safetensors`) while the file stem carries no
 in-family token and the file's own basename matches an `ALLOWED` or `CONDITIONAL` row in

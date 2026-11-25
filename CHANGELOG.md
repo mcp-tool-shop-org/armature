@@ -15,7 +15,7 @@ installs.
 
 - **Structured `CONDITIONAL` rulings, shot diagnostics lows, route-gate false-refusal fixes, pinned licence links, and CI coverage:**
   - `tools/armature_core/measure_weights.py`, `tools/armature_core/shotdiag.py`: replaced the
-    removed truthy `director_ruling` predecessor keyword parameter with structured
+    old truthy ruling keyword with structured
     `ruling={"by", "date", "scope", "licence_clause"}` validation (single-read 4-key snapshot,
     `date` bounded to `2000-01-01..UTC today`, only those 4 string-normalised fields recorded in
     the receipt, and explicit `scope` row coverage), refused missing/partial/out-of-scope/legacy/unexpected

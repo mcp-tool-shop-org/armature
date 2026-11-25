@@ -3161,16 +3161,52 @@ def test_bare_family_type_token_in_clip_loader_passes_while_weights_refuse():
         RG.verify(graph(top=CLEAN_TOP + [triple_bad]))
     assert tri_exc.value.evidence["clause"] == "unclassified_in_gated_family"
 
-    # Save-format converted clip_name shifts widgets_values -> fail-closed.
-    shifted_clip = {
+    # Saved ComfyUI frontend graphs carry widget sockets with `"link": null` (unlinked -> still pass),
+    # whereas a non-null link on an earlier widget (`clip_name`) shifts positional slots and refuses.
+    saved_unlinked_clip = {
         "id": 99,
         "type": "CLIPLoader",
-        "inputs": [{"name": "clip_name", "type": "COMBO", "widget": {"name": "clip_name"}}],
-        "widgets_values": ["t5xxl_fp16.safetensors", "ltxv"],
+        "inputs": [
+            {"name": "clip_name", "type": "COMBO", "widget": {"name": "clip_name"}, "link": None},
+            {"name": "type", "type": "COMBO", "widget": {"name": "type"}, "link": None},
+        ],
+        "widgets_values": ["t5xxl_fp16.safetensors", "ltxv", "default"],
+    }
+    assert RG.verify(graph(top=CLEAN_TOP + [saved_unlinked_clip]))["receipt"] == "verify"
+
+    saved_linked_clip = {
+        "id": 99,
+        "type": "CLIPLoader",
+        "inputs": [
+            {"name": "clip_name", "type": "COMBO", "widget": {"name": "clip_name"}, "link": 42},
+            {"name": "type", "type": "COMBO", "widget": {"name": "type"}, "link": None},
+        ],
+        "widgets_values": ["t5xxl_fp16.safetensors", "ltxv", "default"],
     }
     with pytest.raises(RG.RouteGate) as shift_exc:
-        RG.verify(graph(top=CLEAN_TOP + [shifted_clip]))
+        RG.verify(graph(top=CLEAN_TOP + [saved_linked_clip]))
     assert shift_exc.value.evidence["clause"] == "unclassified_in_gated_family"
+
+    # Case & padding variations of the exact enum member `ltxv` still pass in slot 1.
+    for valid_enum in ("ltxv", "LTXV", "ltxv "):
+        ok_clip = {"id": 99, "type": "CLIPLoader", "widgets_values": ["t5xxl_fp16.safetensors", valid_enum, "default"]}
+        assert RG.verify(graph(top=CLEAN_TOP + [ok_clip]))["receipt"] == "verify", valid_enum
+
+    # Non-enum family tokens in CLIPLoader slot 1 or API `type` refuse as `unclassified_in_gated_family`.
+    for bad_enum in ("ltx-video", "ltx", "da3"):
+        bad_clip = {"id": 99, "type": "CLIPLoader", "widgets_values": ["t5xxl_fp16.safetensors", bad_enum, "default"]}
+        with pytest.raises(RG.RouteGate) as enum_exc:
+            RG.verify(graph(top=CLEAN_TOP + [bad_clip]))
+        assert enum_exc.value.evidence["clause"] == "unclassified_in_gated_family", bad_enum
+
+    api_bad_enum = dict(api_ok)
+    api_bad_enum["4"] = {
+        "class_type": "CLIPLoader",
+        "inputs": {"clip_name": "t5xxl_fp16.safetensors", "type": "LTX-Video"},
+    }
+    with pytest.raises(RG.RouteGate) as api_enum_exc:
+        RG.verify(api_bad_enum, frame=(832, 480, 81))
+    assert api_enum_exc.value.evidence["clause"] == "unclassified_in_gated_family"
 
     for bad_gated in ("ltxv-13b-0.9.8-distilled", "ltx-2-19b", "ltxv.safetensors"):
         with pytest.raises(RG.RouteGate) as exc:
@@ -3196,7 +3232,7 @@ def test_bare_family_type_token_in_clip_loader_passes_while_weights_refuse():
     ],
 )
 def test_h1_bare_family_tokens_outside_known_type_enum_slots_refuse(cls, widgets):
-    """H1: directory-name loaders and non-enum widget positions keep their gated family
+    """H1: folder-name loaders and non-enum widget positions keep their gated family
     and refuse with `unclassified_in_gated_family`."""
     node = {"id": 99, "type": cls, "widgets_values": list(widgets)}
     g = graph(top=CLEAN_TOP + [node])
