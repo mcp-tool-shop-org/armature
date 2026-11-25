@@ -336,10 +336,12 @@ SURFACE = [
     ("sitelist", "the registered site list, as data"),
     ("clipstats", "clip statistics"),
     ("clipcompare", "clip comparison"),
+    ("measure_weights", "licence load gate for local measurement weights — Gate MEASURE_WEIGHT"),
+    ("shotdiag", "shot diagnostics: Tier A camera error and masked identity"),
     ("glb", "GLB reading helpers — gates: ATLAS, RELIFT"),
     ("pngio", "a dependency-free PNG writer"),
     ("errors", "the exception types the gates raise — gates: G1, G2, G4, G5, G6, R, B, S, "
-               "N, P, D, CANON, ROUTE, PAIR, DONOR"),
+               "N, P, D, CANON, ROUTE, PAIR, DONOR, MEASURE_WEIGHT"),
     ("blender_scene", "the only module that imports bpy — needs Blender's interpreter — "
                       "gates: COMPOSITOR, FRAME"),
 ]

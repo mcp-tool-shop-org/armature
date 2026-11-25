@@ -1281,7 +1281,7 @@ TESTS_STALE_ANCHORS_RECORDED = {
     ('test_amend_w16_core_solvers', 'measure_lift.py', 481),
     # WAVE 32: make_startframe_sheet TrueType routing made this cited line live
     # again; row deleted in the same commit (this table's own rule).
-    ('test_gates', 'sheet_compose.py', 57),
+    # shotdiag import in sheet_compose made the test_gates row live again; deleted per table rule.
     ('test_lift_solve', 'measure_lift.py', 481),
     # WAVE 34 pin-fix: lift_solve.py:307 and author_walk.py:13 resolve again — rows
     # deleted below per this table's own rule. Three new blanks join (numbers survive

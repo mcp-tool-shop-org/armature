@@ -401,7 +401,8 @@ RECORDED_ANDON_CLASSES = [
     # family and their named andons split off as `GateFailure` subclasses (core-solvers, seam 1):
     # 32 -> 35, re-derived on the merged tree.
     "framing.PinnedCameraGate", "glb.GateAtlasUntouched", "glb.ReliftMismatch",
-    "landmarks.FacingGate", "lift_solve.SolveGate", "parts.GatePartsAccounting",
+    "landmarks.FacingGate", "lift_solve.SolveGate", "measure_weights.MeasureWeightGate",
+    "parts.GatePartsAccounting",
     "parts.GatePartsDeterminism", "parts.GateRigidArrival", "resample.ResampleGate",
     "route_gates.PairGate", "route_gates.RouteGate", "startframe.AlphaGate",
     "startframe.BackdropGate", "startframe.StartFrameGate", "turnaround.TurnaroundAlphaGate",
@@ -1277,9 +1278,11 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # `family_raise_count()` — never a sum of branches. path/track camera refusals,
     # channel-convention vocabulary, and the rest of the wave-37 execute delta land
     # in this denominator.
-    assert total == 506, (
-        f"{total} family raises in armature_core; this pin asserts 506, MEASURED on the wave-37 merged "
-        f"tree. This is the denominator every ratio below is quoted against — re-measure it "
+    # Shot diagnostics (feat/shot-diagnostics, 2026-11-11): 506 -> 558 (+7 MeasureWeightGate in
+    # measure_weights.py, +45 ShotDiagError in shotdiag.py).
+    assert total == 558, (
+        f"{total} family raises in armature_core; this pin asserts 558, MEASURED on feat/shot-diagnostics. "
+        f"This is the denominator every ratio below is quoted against — re-measure it "
         f"deliberately")
 
 
@@ -2173,14 +2176,14 @@ def test_the_recorded_family_measurement_is_the_one_the_helpers_return():
     # WAVE-35 MERGE pin-fix: MEASURED on merged main @ d932ebc with the helpers above.
     # +1 name / +1 definition / +1 module outside core; core-only counts unchanged.
     assert measured == {
-        "names": 152,
-        "definitions": 159,
-        "modules": 89,
+        "names": 154,
+        "definitions": 161,
+        "modules": 91,
         "defined_more_than_once": {
             "ConventionError": 2, "DetectionGate": 2, "PayloadError": 5, "RenderGate": 2,
         },
-        "core_only_definitions": 61,
-        "core_only_modules": 21,
+        "core_only_definitions": 63,
+        "core_only_modules": 23,
     }, measured
     # WAVE-35 MERGE pin-fix: MEASURED on the merged tree (definitions minus core-only).
     assert measured["definitions"] - measured["core_only_definitions"] == 98

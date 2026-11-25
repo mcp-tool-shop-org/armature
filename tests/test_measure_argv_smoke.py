@@ -145,6 +145,14 @@ def _lift_argv(tmp, monkeypatch):
     return M, argv, str(out), "MEASURE_LIFT_OK"
 
 
+def _shot_argv(tmp):
+    import measure_shot as M
+    frames = _pngs(str(tmp / "shot_frames"), n=3, size=(32, 32), seed=7)
+    out = tmp / "shot.json"
+    return M, [f"--frames={frames}", "--static", f"--out={out}", "--label=S"], \
+        str(out), "MEASURE_SHOT_OK"
+
+
 def _smooth_argv(tmp):
     import measure_smoothness as M
     from test_measure_smoothness import _pair, _write
@@ -171,6 +179,7 @@ MEASURE = {
     "measure_clip": _clip_argv,
     "measure_floor": _floor_argv,
     "measure_lift": _lift_argv,
+    "measure_shot": _shot_argv,
     "measure_smoothness": _smooth_argv,
     "measure_tracking": _tracking_argv,
 }
@@ -179,9 +188,10 @@ NEEDS_MONKEYPATCH = {"measure_cascade_clip", "measure_lift"}
 
 
 def test_the_measure_success_population_is_the_seven_the_finding_names():
+    # Shot diagnostics: measure_shot joins MEASURE (7 -> 8).
     assert sorted(MEASURE) == [
         "measure_arm", "measure_cascade_clip", "measure_clip", "measure_floor",
-        "measure_lift", "measure_smoothness", "measure_tracking"]
+        "measure_lift", "measure_shot", "measure_smoothness", "measure_tracking"]
 
 
 def _artifact_exists(artifact):

@@ -335,6 +335,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # first gate raise — `gate_census_table`'s `_refuse`, six clauses through one site.
         # RE-DERIVED with `==` in this worktree against `e8263a3`; BRANCH-LOCAL.
         "canon_census": 1,
+        "measure_weights": 7,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
     # route_gates 34 -> 35 in the same wave; merged = 155 + 3 + 1 = 159, MEASURED on the merged tree.
@@ -375,7 +376,8 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # re-measures on the merged tree and never sums the branches.
     # WAVE 34 pin-fix: 219 -> 222 (gates +1, cli +2 GateCanon via function-local import).
     # WAVE 35 pin-fix: 222 -> 228 (donor_gate +2, lift_solve +3, turnaround +1).
-    assert sum(with_gates.values()) == 228
+    # Shot diagnostics (feat/shot-diagnostics, 2026-11-11): 228 -> 235 (+7 MeasureWeightGate in measure_weights).
+    assert sum(with_gates.values()) == 235
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

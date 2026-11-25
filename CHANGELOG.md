@@ -13,6 +13,24 @@ installs.
 
 ## [Unreleased]
 
+- **Shot diagnostics (`shotdiag`, `measure_shot`, `measure_weights`):**
+  - Tier A two-view camera error (`armature_core.shotdiag`, `tools/measure_shot.py`): OpenCV
+    SIFT on background features outside the dilated Blender character mask, Essential matrix
+    (known `K` via `framing.half_fovs`) plus Homography with Torr GRIC model selection,
+    `t_unobservable` reporting on rotation-only pairs, pixel parallax residual on `--static`
+    requests, and frame-0 anchored scoring with `followed: "NO THRESHOLD — CALIBRATION NOT YET RUN"`.
+    Tier B (`facebook/map-anything-apache`) is documented as later, needing a grant.
+  - Masked subject identity (`armature_core.shotdiag`): DINOv2 ViT-B/14
+    (`facebook/dinov2-base` @ `f9e44c81`, Apache-2.0) CLS and in-mask `14x14` patch-token
+    cosine on neutral-plate crops with occupancy and background/decoy/plate floor separation,
+    behind a `"weights not present"` refusal (`weights_not_present`) and `MeasureWeightGate`
+    (`MEASURE_WEIGHT` in `armature_core.measure_weights`). Defines no `GateFailure` in
+    `shotdiag`; camera precedes identity in JSON records and `sheet_compose.diagnostic_lines`,
+    and an identity block without a camera block refuses (`identity_without_camera_block`).
+  - Licence map (`docs/license-map.md`): added the `Measurement tier — shot diagnostics`
+    section (`2026-11-11`) for DINOv2, OpenCV 5.x, MapAnything-Apache (Tier B, not built),
+    and the `MEASUREMENT_WEIGHTS` exclusions.
+
 ## [0.5.0] — 2026-09-07
 
 **Stage D + feature pass on top of the health run.** Not 1.0.0: `filled` is still open (no Director-accepted shot used in a real project). SHIP_GATE keeps the v0.x target.

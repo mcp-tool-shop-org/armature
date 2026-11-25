@@ -867,7 +867,8 @@ RECORDED_PARSER_POPULATION = [
     "make_review_clip", "make_rig_sheet", "make_shotset_sheet", "make_skeleton_sheet",
     "make_startframe_sheet", "make_test_armature", "make_thesis_sheet",
     "make_zoom_sheet", "measure_arm", "measure_cascade_clip", "measure_clip",
-    "measure_floor", "measure_lift", "measure_smoothness", "measure_tracking",
+    "measure_floor", "measure_lift", "measure_shot", "measure_smoothness",
+    "measure_tracking",
     "pack_pose_pack", "preview_glb", "preview_walk", "project_pose_keypoints",
     "render_performer", "render_pose_sticks", "render_start_frame", "render_turnaround",
     "resample_motion", "rig_bake", "rig_repair", "rig_retopo",
@@ -882,7 +883,8 @@ def test_the_parser_population_is_every_tool_with_a_command_line():
     }
     # WAVE 34: 67 -> 69. submit + uploads join; lift_solve stays via passthrough binding.
     # WAVE 35: 69 -> 70. build_routes_payload joins.
-    assert len(pop) == 70, pop
+    # Shot diagnostics: 70 -> 71. measure_shot joins.
+    assert len(pop) == 71, pop
     # The population is asserted against the thing it is ABOUT, not against its own history:
     # every `tools/*.py` that calls `add_argument(` has a command line, whatever idiom it
     # reaches its namespace through.

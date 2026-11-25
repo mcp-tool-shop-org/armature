@@ -1287,7 +1287,8 @@ RECORDED_CPYTHON_WITH_HANDLER = [
     "make_pick_sheet.py", "make_plate.py", "make_review_clip.py", "make_sheet.py",
     "make_shotset_sheet.py", "make_startframe_sheet.py", "make_thesis_sheet.py",
     "make_zoom_sheet.py", "measure_arm.py", "measure_cascade_clip.py",
-    "measure_clip.py", "measure_floor.py", "measure_lift.py", "measure_smoothness.py",
+    "measure_clip.py", "measure_floor.py", "measure_lift.py", "measure_shot.py",
+    "measure_smoothness.py",
     "measure_tracking.py", "pack_pose_pack.py", "project_pose_keypoints.py",
     "render_pose_sticks.py", "resample_motion.py", "rig_sheet_compose.py",
     "sheet_compose.py",
@@ -1473,7 +1474,8 @@ def test_the_one_handlers_adopters_are_derived_and_carry_the_six_key_record():
         "make_review_clip.py", "make_sheet.py", "make_shotset_sheet.py",
         "make_startframe_sheet.py", "make_thesis_sheet.py", "make_zoom_sheet.py",
         "measure_arm.py", "measure_cascade_clip.py", "measure_clip.py",
-        "measure_floor.py", "measure_smoothness.py", "measure_tracking.py",
+        "measure_floor.py", "measure_shot.py", "measure_smoothness.py",
+        "measure_tracking.py",
         "pack_pose_pack.py", "render_pose_sticks.py", "resample_motion.py",
         "rig_sheet_compose.py", "sheet_compose.py",
     ], adopters
@@ -1525,7 +1527,8 @@ def test_the_cpython_derivation_reads_the_prefix_and_the_entry_off_the_block():
                                "measure_tracking.py"], sorted(by_stem)
     # WAVE 34: 47 -> 49. submit + uploads adopt run_tool_main without quoting <STEM>_HALT.
     # WAVE 35: 49 -> 50. build_routes_payload joins the same way.
-    assert len(CPYTHON_WITH_HANDLER) - len(by_stem) == 50, len(CPYTHON_WITH_HANDLER)
+    # Shot diagnostics: 50 -> 51. measure_shot joins the same way.
+    assert len(CPYTHON_WITH_HANDLER) - len(by_stem) == 51, len(CPYTHON_WITH_HANDLER)
     # The entry is not always `main`, and it is seven tools now rather than one.
     assert sorted(f for f in CPYTHON_WITH_HANDLER
                   if halt_handler(f)["entry"] != "main") == [

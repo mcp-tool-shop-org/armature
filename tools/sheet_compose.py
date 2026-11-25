@@ -54,6 +54,12 @@ from PIL import Image, ImageDraw, ImageFont
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from armature_core.errors import ArmatureError  # noqa: E402
+from armature_core.shotdiag import (  # noqa: E402
+    FOLLOWED_NO_THRESHOLD,
+    FLOOR_NOTE,
+    IDENTITY_EYE_NOTE,
+    ShotDiagError,
+)
 
 class SheetPopulationError(ArmatureError):
     """A panel cannot show what it was asked to show, and would not have said so.
@@ -94,6 +100,119 @@ def _round_or_none(v, nd=4):
         return "NOT RECORDED"
 
 
+def _shot_diagnostic_lines(rec, shot_tag):
+    """Format `measure_shot` camera (first) and masked identity (after) report lines."""
+    cam = rec.get("camera")
+    ident = rec.get("identity")
+    if ident is not None and not isinstance(cam, dict):
+        raise ShotDiagError(
+            "cannot render sheet diagnostic lines carrying an identity block without "
+            "a camera block; camera diagnostics always precede identity",
+            {
+                "gate": None,
+                "andon": "ShotDiagError",
+                "clause": "identity_without_camera_block",
+            },
+        )
+    if not isinstance(cam, dict):
+        return []
+
+    out = []
+    n_pairs = int(cam.get("n_pairs", 0))
+    n_fired = int(cam.get("n_fired", 0))
+    gt_span = _round_or_none(cam.get("gt_rot_span_deg"), 2)
+    followed = cam.get("followed") or FOLLOWED_NO_THRESHOLD
+
+    if n_fired <= 0:
+        out.append(
+            f"{shot_tag}.camera      fired 0/{n_pairs} pairs  NOT FIRED  (GT span {gt_span}°)"
+        )
+        out.append(f"{shot_tag}.camera      followed: {followed}")
+    else:
+        rot_stats = cam.get("rot_err_deg") or {}
+        rot_med = _round_or_none(rot_stats.get("median"), 2)
+        rot_p90 = _round_or_none(rot_stats.get("p90"), 2)
+        ratio = cam.get("est_to_gt_rot_span_ratio")
+        ratio_part = (
+            f"  est/GT span {round(float(ratio), 3)}" if ratio is not None else ""
+        )
+        out.append(
+            f"{shot_tag}.camera      fired {n_fired}/{n_pairs} pairs  "
+            f"rot err med {rot_med}° / p90 {rot_p90}°  (GT span {gt_span}°){ratio_part}"
+        )
+
+        if cam.get("gt_source") == "static":
+            par_stats = cam.get("static_parallax_px") or {}
+            par_med = _round_or_none(par_stats.get("median"), 2)
+            out.append(
+                f"{shot_tag}.camera      static parallax med {par_med} px  followed: {followed}"
+            )
+        else:
+            n_obs = int(cam.get("n_tdir_observable", 0))
+            n_unobs = int(cam.get("n_rotation_only_t_unobservable", 0))
+            unobs_part = (
+                f" ({n_unobs} rotation-only, t unobservable)" if n_unobs > 0 else ""
+            )
+            if n_obs > 0:
+                t_med = _round_or_none((cam.get("tdir_err_deg") or {}).get("median"), 2)
+                out.append(
+                    f"{shot_tag}.camera      t-dir err med {t_med}° on "
+                    f"{n_obs}/{n_pairs}{unobs_part}  followed: {followed}"
+                )
+            else:
+                out.append(
+                    f"{shot_tag}.camera      t-dir unobservable on "
+                    f"0/{n_pairs}{unobs_part}  followed: {followed}"
+                )
+
+    floor = cam.get("instrument_floor")
+    if isinstance(floor, dict):
+        fl_pairs = int(floor.get("n_pairs", n_pairs))
+        fl_fired = int(floor.get("n_fired", 0))
+        fl_note = floor.get("note") or FLOOR_NOTE
+        if fl_fired > 0:
+            fl_med = _round_or_none((floor.get("rot_err_deg") or {}).get("median"), 2)
+            out.append(
+                f"{shot_tag}.camera      floor (render through estimator) "
+                f"rot err med {fl_med}°  {fl_note}"
+            )
+        else:
+            out.append(
+                f"{shot_tag}.camera      floor (render through estimator) "
+                f"NOT FIRED  {fl_note}"
+            )
+
+    if isinstance(ident, dict):
+        id_frames = int(ident.get("n_frames", 0))
+        id_fired = int(ident.get("n_fired", 0))
+        model_name = ident.get("model") or "DINOv2-B/14"
+        score_stats = ident.get("score") or {}
+        if id_fired > 0 and score_stats.get("median") is not None:
+            med_part = f"med {round(float(score_stats['median']), 3)}"
+        else:
+            med_part = "NOT FIRED"
+        fm = ident.get("floor_maxima") or {}
+        decoy_part = (
+            f"decoy max {round(float(fm['decoy']), 3)}"
+            if fm.get("decoy") is not None
+            else "decoy n/a"
+        )
+        bg_part = (
+            f"bg max {round(float(fm['background']), 3)}"
+            if fm.get("background") is not None
+            else "bg n/a"
+        )
+        out.append(
+            f"{shot_tag}.identity    masked {model_name}  "
+            f"fired {id_fired}/{id_frames} frames  {med_part}  [{decoy_part} · {bg_part}]"
+        )
+        out.append(
+            f"{shot_tag}.identity    {ident.get('reading') or IDENTITY_EYE_NOTE}"
+        )
+
+    return out
+
+
 def diagnostic_lines(*records, labels=None):
     """Headline diagnostic lines from measure_* JSON records (F-79c25d9e).
 
@@ -101,6 +220,7 @@ def diagnostic_lines(*records, labels=None):
     floor / tracking / smoothness / lift / clipstats under provenance. Every number is
     labelled diagnostic; these lines gate nothing.
     """
+    shot_lines = []
     lines = []
     labels = labels or []
     for i, rec in enumerate(records):
@@ -113,6 +233,18 @@ def diagnostic_lines(*records, labels=None):
             with open(rec, encoding="utf-8") as fh:
                 rec = json.load(fh)
         if not isinstance(rec, dict):
+            continue
+        if (
+            rec.get("tool") == "measure_shot"
+            or isinstance(rec.get("camera"), dict)
+            or isinstance(rec.get("identity"), dict)
+        ):
+            shot_tag = (
+                labels[i]
+                if i < len(labels)
+                else rec.get("label") or rec.get("tool") or "shot"
+            )
+            shot_lines.extend(_shot_diagnostic_lines(rec, shot_tag))
             continue
         tag = labels[i] if i < len(labels) else rec.get("tool") or rec.get("quantity") or "diag"
         # measure_clip
@@ -157,8 +289,9 @@ def diagnostic_lines(*records, labels=None):
         for k in ("frames", "d(frame) med", "d(luma) med", "corr to f0", "horizon", "r="):
             if k in rec and not any(k in ln for ln in lines):
                 lines.append(f"{tag}.{k:<10} {rec[k]}")
-    if lines:
-        return ["", "MEASURED (diagnostics; they gate nothing)", *lines]
+    combined = [*shot_lines, *lines]
+    if combined:
+        return ["", "MEASURED (diagnostics; they gate nothing)", *combined]
     return []
 
 
