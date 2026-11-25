@@ -28,7 +28,19 @@ installs.
   - Aligned `smpl_` pattern matching with `docs/license-map.md` (`basicModel_*` / `SMPL_*`),
     extended LTX row matching to underscore and no-hyphen spellings, gave `da3_giant.safetensors`
     its own row citing both 1.0 and 1.1 `ComfyUI-DepthAnythingV3` mappings, and replaced
-    Director role labels in `docs/license-map.md` with plain wording.
+    role labels in `docs/license-map.md` with plain wording.
+  - Hardened gated-family and `DA3-LARGE` matching against bypasses:
+    - Anchored `cleared_patterns` per path segment (basename stem or Hugging Face repo segment)
+      so a cleared token in a parent folder or merged filename clears the path only when
+      every in-family token and segment is a cleared variant.
+    - Required `1.1` in `DA3-LARGE` paths to stand as the version segment directly after the
+      model name inside the same path segment rather than anywhere in the path.
+    - Executed the gated-family check whenever no `BANNED` or `EXCLUDED` row matched, so
+      matching an `ALLOWED` or `CONDITIONAL` row does not skip in-family refusal.
+    - Added `det_500m`, `det_2.5g`, `det_10g`, `1k3d68`, `2d106det`, and `genderage` stems to
+      the `insightface` family patterns.
+    - Pinned `LTX-Video 2B v0.9.5` in `docs/license-map.md` to commit `8984fa25007f` and
+      narrowed the `ltx` cleared pattern to `ltx-video-2b-v0.9.5`.
 
 - **Shot diagnostics (`shotdiag`, `measure_shot`, `measure_weights`):**
   - Tier A two-view camera error (`armature_core.shotdiag`, `tools/measure_shot.py`): OpenCV

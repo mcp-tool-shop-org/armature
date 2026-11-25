@@ -2829,3 +2829,151 @@ def test_plain_wording_replaces_director_labels_in_license_map():
     doc = open(LICENSE_MAP, encoding="utf-8").read()
     assert "director" not in doc.lower()
 
+
+def test_fix1_ha_cleared_token_does_not_clear_path_or_merged_name():
+    """H-A: a cleared token in a parent folder or merged filename never clears a name
+    unless every in-family token and segment is a cleared variant."""
+    for bad in (
+        "depth/DA3-BASE/DA3-GIANT-fp16.safetensors",
+        "DA3-GIANT_vs_DA3-SMALL.safetensors",
+        "depth_anything_v2_vits_to_vitg.pth",
+        "video_depth_anything_vits_to_vitl.pth",
+        "ltx-2-19b_ltxv-0.9.safetensors",
+        "ltx-2-19b_ltx-video-2b-v0.9.5.safetensors",
+        "da3_medium/da3_small.safetensors",
+        "depth/DA3-BASE/sub/other.safetensors",
+        "models--depth-anything--DA3-BASE/extra/DA3-GIANT.safetensors",
+        "models--depth-anything--DA3-BASE/snapshots/0e109ae307c5/DA3-GIANT.safetensors",
+    ):
+        assert RG.rulings_for(bad) == [], bad
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(graph(top=CLEAN_TOP + [loader(99, bad, cls="PreprocessorWeightLoader")]))
+        assert exc.value.evidence["clause"] == "unclassified_in_gated_family", bad
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(graph(top=CLEAN_TOP + [
+            loader(99, "da3_giant/da3_small.safetensors", cls="PreprocessorWeightLoader"),
+        ]))
+    assert exc.value.evidence["clause"] == "banned_or_excluded_component"
+
+    for cleared in (
+        "checkpoints/da3_small.safetensors",
+        "models--depth-anything--DA3-BASE/snapshots/e08cab65ca0e/model.safetensors",
+        "models--depth-anything--DA3-BASE/snapshots/e08cab65ca0e/da3_base.safetensors",
+    ):
+        ev = RG.verify(graph(top=CLEAN_TOP + [loader(99, cleared, cls="PreprocessorWeightLoader")]))
+        assert ev["receipt"] == "verify", cleared
+
+
+def test_fix1_hb_da3_large_1_1_requires_same_segment_version_suffix():
+    """H-B: `1.1` exempts `DA3-LARGE` only when it stands as the version segment directly
+    after the model name inside the same path segment."""
+    for bad in (
+        "depth/DA3-LARGE/rev1.1/model.safetensors",
+        r"depth\DA3-LARGE\v1.1\model.safetensors",
+        "da3_large_fp16_comfy1.1.safetensors",
+        "ComfyUI_v1.1/models/DA3-LARGE.safetensors",
+    ):
+        hits = RG.rulings_for(bad)
+        assert hits and hits[0]["matched_on"] == "da3_large", (bad, hits)
+        assert hits[0]["verdict"] == "BANNED", (bad, hits)
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(graph(top=CLEAN_TOP + [
+                loader(99, bad, cls="DownloadAndLoadDepthAnythingV3Model"),
+            ]))
+        assert exc.value.evidence["clause"] == "banned_or_excluded_component", bad
+
+    for ok in (
+        "depth-anything/DA3-LARGE-1.1",
+        "depth-anything/DA3-LARGE-1.1/model.safetensors",
+        "da3_large_1.1.safetensors",
+        "models--depth-anything--DA3-LARGE-1.1",
+        "models--depth-anything--DA3-LARGE-1.1/snapshots/0e109ae307c5",
+        "models--depth-anything--DA3-LARGE-1.1/snapshots/0e109ae307c5/model.safetensors",
+    ):
+        assert RG.rulings_for(ok) == [], ok
+        ev = RG.verify(graph(top=CLEAN_TOP + [
+            loader(99, ok, cls="DownloadAndLoadDepthAnythingV3Model"),
+        ]))
+        assert ev["receipt"] == "verify", ok
+
+
+def test_fix1_hc_non_banned_row_hit_does_not_skip_gated_family_refusal():
+    """H-C: matching an ALLOWED or CONDITIONAL row does not bypass the gated-family refusal
+    when another token in the name falls inside `GATED_WEIGHT_FAMILIES`."""
+    for bad, kw in (
+        ("smartphonesnapshot_da3-giant-fp16.safetensors", {}),
+        ("smartphonesnapshot_ltx-2-19b-dev.safetensors", {}),
+        (
+            "technically_color_da3-giant-fp16.safetensors",
+            {"attribution": [RG.attribution_entry_for("technically_color")]},
+        ),
+    ):
+        g = graph(top=CLEAN_TOP + [loader(99, bad, cls="LoraLoaderModelOnly")])
+        comps = [c for c in RG.components(g) if c.get("node_id") == 99]
+        assert comps and comps[0]["verdict"] == "NOT IN THIS TABLE", comps
+        assert comps[0]["ruling"]["matches"], comps
+        assert comps[0]["gated_families"] == ["da3" if "da3" in bad else "ltx"], comps
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(g, **kw)
+        assert exc.value.evidence["clause"] == "unclassified_in_gated_family", bad
+
+    ev = RG.verify(graph(top=CLEAN_TOP + [
+        loader(99, "smartphonesnapshot.safetensors", cls="LoraLoaderModelOnly"),
+    ]))
+    assert ev["receipt"] == "verify"
+
+
+def test_fix1_ma_det_500m_onnx_refuses_in_insightface_family():
+    """M-A: `det_500m.onnx` (and sibling InsightFace detector names) refuse in `insightface`."""
+    for bad in ("det_500m.onnx", "det_500m_fp16.onnx", "det_2.5g.onnx"):
+        assert "insightface" in RG.gated_families_of(bad), bad
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(graph(top=CLEAN_TOP + [loader(99, bad, cls="FaceAnalysisNode")]))
+        assert exc.value.evidence["clause"] == "unclassified_in_gated_family", bad
+        assert "insightface" in exc.value.evidence["unclassified_in_gated_family"][0][
+            "gated_families"
+        ], bad
+
+
+def test_fix1_mb_ltx_0_9_clearance_narrows_to_pinned_2b_v0_9_5():
+    """M-B: LTX 0.9 clearance is pinned only for `ltx-video-2b-v0.9.5`; other 0.9.x and 13B
+    variants refuse as `unclassified_in_gated_family`."""
+    doc = open(LICENSE_MAP, encoding="utf-8").read()
+    assert (
+        "https://huggingface.co/Lightricks/LTX-Video/blob/8984fa25007f/"
+        "ltx-video-2b-v0.9.5.license.txt"
+    ) in doc
+    assert "raw/main/ltx-video-2b-v0.9.5.license.txt" not in doc
+
+    for bad in (
+        "ltxv-13b-0.9.7-dev.safetensors",
+        "ltxv-13b-0.9.8-distilled.safetensors",
+        "ltxv-2b-0.9.6-dev-04-25.safetensors",
+        "ltx-video-2b-v0.9.1.safetensors",
+        "ltx-video-2b-v0.9.safetensors",
+    ):
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(graph(top=CLEAN_TOP + [loader(99, bad, cls="UNETLoader")]))
+        assert exc.value.evidence["clause"] == "unclassified_in_gated_family", bad
+
+    ev = RG.verify(graph(top=CLEAN_TOP + [
+        loader(99, "ltx-video-2b-v0.9.5.safetensors", cls="UNETLoader"),
+    ]))
+    assert ev["receipt"] == "verify"
+
+
+def test_fix1_wording_and_doc_record_matching_rules_without_role_labels():
+    """Items 6 & 7: `docs/license-map.md` documents the basename/segment, every-token, and
+    version-segment rules, and `CHANGELOG.md` `[Unreleased]` has no role labels."""
+    doc = open(LICENSE_MAP, encoding="utf-8").read().lower()
+    assert "basename stem" in doc
+    assert "every in-family token" in doc
+    assert "version segment directly after the model name" in doc
+
+    changelog = open(os.path.join(REPO, "CHANGELOG.md"), encoding="utf-8").read()
+    unreleased = changelog.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0].lower()
+    for term in ("director", "publisher", "r&d"):
+        assert term not in unreleased, term
+
+
