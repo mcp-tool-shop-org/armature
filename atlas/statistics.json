@@ -113,7 +113,7 @@
       "confidence": "full",
       "highWater": 1,
       "name": "tests",
-      "qualifyingSourceCommits": 506,
+      "qualifyingSourceCommits": 508,
       "rebaseline": null
     },
     {
@@ -175,8 +175,8 @@
         "path": ".github/dependabot.yml"
       },
       {
-        "commits": 48,
-        "lines": 1260,
+        "commits": 52,
+        "lines": 1270,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -190,8 +190,8 @@
         "path": ".github/workflows/publish.yml"
       },
       {
-        "commits": 38,
-        "lines": 1858,
+        "commits": 40,
+        "lines": 1866,
         "path": ".github/workflows/release.yml"
       },
       {
@@ -285,8 +285,8 @@
         "path": "SHIP_GATE.md"
       },
       {
-        "commits": 1,
-        "lines": 89,
+        "commits": 4,
+        "lines": 263,
         "path": "atlas/README.md"
       },
       {
@@ -295,18 +295,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 1,
-        "lines": 369,
+        "commits": 4,
+        "lines": 1383,
         "path": "atlas/page.json"
       },
       {
-        "commits": 1,
-        "lines": 3466,
+        "commits": 4,
+        "lines": 3606,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 1,
-        "lines": 19372,
+        "commits": 4,
+        "lines": 118278,
         "path": "atlas/structure.json"
       },
       {
@@ -1065,8 +1065,8 @@
         "path": "npm/package.json"
       },
       {
-        "commits": 27,
-        "lines": 610,
+        "commits": 28,
+        "lines": 616,
         "path": "pyproject.toml"
       },
       {
@@ -1080,13 +1080,13 @@
         "path": "site/astro.config.mjs"
       },
       {
-        "commits": 2,
-        "lines": 8131,
+        "commits": 9,
+        "lines": 11195,
         "path": "site/package-lock.json"
       },
       {
-        "commits": 1,
-        "lines": 18,
+        "commits": 3,
+        "lines": 23,
         "path": "site/package.json"
       },
       {
@@ -1750,8 +1750,8 @@
         "path": "tests/test_check_relift.py"
       },
       {
-        "commits": 91,
-        "lines": 12622,
+        "commits": 92,
+        "lines": 12624,
         "path": "tests/test_ci_workflows.py"
       },
       {
@@ -1930,8 +1930,8 @@
         "path": "tests/test_instruments_amend_w14.py"
       },
       {
-        "commits": 12,
-        "lines": 2628,
+        "commits": 14,
+        "lines": 2700,
         "path": "tests/test_instruments_amend_w16.py"
       },
       {
@@ -2025,8 +2025,8 @@
         "path": "tests/test_instruments_measure_amend_w22.py"
       },
       {
-        "commits": 10,
-        "lines": 2336,
+        "commits": 12,
+        "lines": 2346,
         "path": "tests/test_instruments_measure_amend_w25.py"
       },
       {
@@ -3030,9 +3030,9 @@
     "level": "full",
     "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
   },
-  "generatedAt": "2026-09-30T20:07:32.567Z",
+  "generatedAt": "2026-11-12T02:05:16.498Z",
   "generatedFrom": {
-    "commit": "7a70d6fb97ef1cf5b33f8f03d18860611954e386"
+    "commit": "52f401166d954bd4c1e365e2635d93c35662fa1a"
   },
   "pairs": [
     {
@@ -3459,16 +3459,16 @@
     "floor": "strong",
     "floorHeld": false,
     "floorTrigger": null,
-    "headDate": "2026-09-24T20:13:54-07:00",
+    "headDate": "2026-11-11T21:04:26-05:00",
     "inScopeFiles": 563,
     "pinnedStart": null,
     "priorFloor": "strong",
-    "qualifyingCommits": 760,
+    "qualifyingCommits": 770,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 10,
-    "since": "2026-03-29T03:13:54.000Z",
+    "since": "2026-05-16T02:04:26.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",
