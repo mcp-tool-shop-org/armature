@@ -22,12 +22,13 @@ credit is spent, and each is a question a served template can silently answer wr
   than remembered per session.
 
 Nothing here spends anything, and nothing here is a matter of taste. It reports what the
-graph contains; the rulings about what may run are the Director's and the advisor's.
+graph contains; the rulings about what may run are the user's and the advisor's.
 """
 
 import datetime
 import hashlib
 import json
+import re
 
 from .canon import GRAPH_WRAPPER_KEYS
 from .errors import GateFailure
@@ -159,6 +160,79 @@ RULED_COMPONENTS = {
         "source": "https://github.com/DepthAnything/Depth-Anything-V2/blob/a561b849ebae/README.md",
         "reason": "non-commercial preprocessor tier",
     },
+    "depth-anything-v2-base-hf": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-25",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Base-hf/blob/b1958afc87fb/README.md",
+        "reason": "non-commercial preprocessor tier (Transformers port of Depth-Anything-V2-Base)",
+        "files": (
+            "depth-anything/depth-anything-v2-base-hf",
+        ),
+        "patterns": (
+            r"depth[_-]?anything[_-]?v2[_-]?base[_-]?hf",
+        ),
+    },
+    "depth-anything-v2-large-hf": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-25",
+        "source": "https://huggingface.co/depth-anything/Depth-Anything-V2-Large-hf/blob/7581137eff8d/README.md",
+        "reason": "non-commercial preprocessor tier (Transformers port of Depth-Anything-V2-Large)",
+        "files": (
+            "depth-anything/depth-anything-v2-large-hf",
+        ),
+        "patterns": (
+            r"depth[_-]?anything[_-]?v2[_-]?large[_-]?hf",
+        ),
+    },
+    "depth-anything-v2-metric-indoor-large-hf": {
+        "verdict": "BANNED",
+        "licence": ("UNVERIFIED card (no license field; fine-tunes CC-BY-NC-4.0 "
+                    "Depth-Anything-V2-Large-hf)"),
+        "fetched": "2026-11-25",
+        "source": (
+            "https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Indoor-Large-hf/"
+            "blob/d2fc6a93601a/README.md + "
+            "https://huggingface.co/depth-anything/Depth-Anything-V2-Large-hf/"
+            "blob/7581137eff8d/README.md"
+        ),
+        "reason": (
+            "UNVERIFIED (treated as NO): model card declares no license field and states "
+            "it fine-tunes CC-BY-NC-4.0 depth-anything/Depth-Anything-V2-Large-hf"
+        ),
+        "files": (
+            "depth-anything/depth-anything-v2-metric-indoor-large-hf",
+        ),
+        "patterns": (
+            r"depth[_-]?anything[_-]?v2[_-]?metric[_-]?indoor[_-]?large[_-]?hf",
+        ),
+    },
+    "depth-anything-v2-metric-outdoor-large-hf": {
+        "verdict": "BANNED",
+        "licence": ("UNVERIFIED / contradictory port metadata (card YAML tags apache-2.0 "
+                    "while fine-tuning CC-BY-NC-4.0 Depth-Anything-V2-Large-hf)"),
+        "fetched": "2026-11-25",
+        "source": (
+            "https://huggingface.co/depth-anything/Depth-Anything-V2-Metric-Outdoor-Large-hf/"
+            "blob/4eab4cf1983c/README.md + "
+            "https://huggingface.co/depth-anything/Depth-Anything-V2-Large-hf/"
+            "blob/7581137eff8d/README.md + "
+            "https://github.com/DepthAnything/Depth-Anything-V2/"
+            "blob/a561b849ebae/README.md"
+        ),
+        "reason": (
+            "UNVERIFIED (treated as NO): card YAML tags apache-2.0 while the card body "
+            "states it fine-tunes CC-BY-NC-4.0 depth-anything/Depth-Anything-V2-Large-hf "
+            "and upstream Depth-Anything-V2 rules all Large models CC-BY-NC-4.0"
+        ),
+        "files": (
+            "depth-anything/depth-anything-v2-metric-outdoor-large-hf",
+        ),
+        "patterns": (
+            r"depth[_-]?anything[_-]?v2[_-]?metric[_-]?outdoor[_-]?large[_-]?hf",
+        ),
+    },
     "metric_video_depth_anything_vitl": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
@@ -225,11 +299,45 @@ RULED_COMPONENTS = {
             "da3-large/model.safetensors",
             "depth-anything/da3-large",
         ),
+        "patterns": (
+            r"(?<![a-z0-9])da3[_-]?large",
+        ),
+        "exclude_patterns": (
+            r"(?<![0-9])1\.1(?![0-9])",
+        ),
+    },
+    # `da3_giant.safetensors` was mapped by `ComfyUI-DepthAnythingV3` (`configs.py:103`) to
+    # `depth-anything/DA3-GIANT` (1.0, CC-BY-NC-4.0) at `9fb61e26fa09` before 2025-12-27 and
+    # to `depth-anything/DA3-GIANT-1.1` (CC-BY-NC-4.0) since 2025-12-27 (`2bd9c34870a9`)
+    # without replacing an existing local file; cite both 1.0 and 1.1 sources.
+    "da3_giant.safetensors": {
+        "verdict": "BANNED",
+        "licence": "CC-BY-NC-4.0",
+        "fetched": "2026-11-25",
+        "source": (
+            "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+            "9fb61e26fa09/nodes/depth_anything_v3/configs.py + "
+            "https://github.com/PozzettiAndrea/ComfyUI-DepthAnythingV3/blob/"
+            "2bd9c34870a9/nodes/depth_anything_v3/configs.py + "
+            "https://huggingface.co/depth-anything/DA3-GIANT/blob/"
+            "7cd62ae9315b/README.md + "
+            "https://huggingface.co/depth-anything/DA3-GIANT-1.1/blob/"
+            "72ee9f89ce4e/README.md"
+        ),
+        "reason": (
+            "non-commercial preprocessor tier: ComfyUI-DepthAnythingV3 "
+            "nodes/depth_anything_v3/configs.py (line 103) mapped da3_giant.safetensors "
+            "to depth-anything/DA3-GIANT (1.0, CC-BY-NC-4.0) at 9fb61e26fa09 before "
+            "2025-12-27 and to depth-anything/DA3-GIANT-1.1 (CC-BY-NC-4.0) since "
+            "2025-12-27 (2bd9c34870a9), without replacing an existing local file"
+        ),
+        "files": (
+            "da3_giant.safetensors",
+        ),
     },
     # Longer `1.1` keys precede their `1.0` siblings so `1.1` local/repo names match the `1.1`
-    # row first (`ComfyUI-DepthAnythingV3` `MODEL_REPOS` maps `da3_giant.safetensors` and
-    # `da3nested_giant_large.safetensors` to `-1.1`), while `1.0` repo paths and non-`1.1`
-    # local suffixes (`_fp16`, `_1.0`, etc.) hit the `1.0` row with its matching `source`.
+    # row first (`ComfyUI-DepthAnythingV3` `MODEL_REPOS` maps `da3nested_giant_large.safetensors`
+    # to `-1.1`), while `1.0` repo paths and non-`1.1` local suffixes hit the `1.0` row.
     "da3_giant_1.1": {
         "verdict": "BANNED",
         "licence": "CC-BY-NC-4.0",
@@ -237,7 +345,6 @@ RULED_COMPONENTS = {
         "source": "https://huggingface.co/depth-anything/DA3-GIANT-1.1/blob/72ee9f89ce4e/README.md",
         "reason": "non-commercial preprocessor tier",
         "files": (
-            "da3_giant.safetensors",
             "da3-giant-1.1",
             "da3-giant-1.1/model.safetensors",
             "depth-anything/da3-giant-1.1",
@@ -281,6 +388,65 @@ RULED_COMPONENTS = {
             "da3nested-giant-large/model.safetensors",
             "depth-anything/da3nested-giant-large",
         ),
+    },
+    "inswapper_128_fp16": {
+        "verdict": "BANNED",
+        "licence": "non-commercial research only",
+        "fetched": "2026-11-25",
+        "source": (
+            "https://github.com/facefusion/facefusion/blob/decc6c9d8f8e/facefusion/"
+            "processors/modules/face_swapper/core.py + "
+            "https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/README.md + "
+            "https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/"
+            "examples/in_swapper/README.md"
+        ),
+        "reason": "non-commercial preprocessor tier (FP16 InsightFace inswapper_128 face-swap model)",
+        "files": ("inswapper_128_fp16.onnx",),
+    },
+    "glintr100": {
+        "verdict": "BANNED",
+        "licence": "non-commercial research only",
+        "fetched": "2026-11-25",
+        "source": (
+            "https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/model_zoo/README.md"
+            " + https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/"
+            "python-package/docs/model_zoo.md"
+        ),
+        "reason": (
+            "non-commercial preprocessor tier (InsightFace antelopev2 ResNet100@Glint360K "
+            "recognition model)"
+        ),
+        "files": ("glintr100.onnx",),
+    },
+    "scrfd_10g_bnkps": {
+        "verdict": "BANNED",
+        "licence": "non-commercial research only",
+        "fetched": "2026-11-25",
+        "source": (
+            "https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/model_zoo/README.md"
+            " + https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/"
+            "python-package/docs/model_zoo.md"
+        ),
+        "reason": (
+            "non-commercial preprocessor tier (InsightFace antelopev2 SCRFD-10GF "
+            "keypoint detector)"
+        ),
+        "files": ("scrfd_10g_bnkps.onnx",),
+    },
+    "w600k_mbf": {
+        "verdict": "BANNED",
+        "licence": "non-commercial research only",
+        "fetched": "2026-11-25",
+        "source": (
+            "https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/model_zoo/README.md"
+            " + https://github.com/deepinsight/insightface/blob/c6c3af7bd2d0/"
+            "python-package/docs/model_zoo.md"
+        ),
+        "reason": (
+            "non-commercial preprocessor tier (InsightFace buffalo_s / buffalo_sc "
+            "MBF@WebFace600K recognition model)"
+        ),
+        "files": ("w600k_mbf.onnx",),
     },
     "insightface": {
         "verdict": "BANNED",
@@ -339,6 +505,23 @@ RULED_COMPONENTS = {
             "genderage_v1.zip",
         ),
     },
+    "smpl_v1.1.0": {
+        "verdict": "BANNED",
+        "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
+        "fetched": "2026-11-25",
+        "source": (
+            "https://web.archive.org/web/20220108025238/https://smpl.is.tue.mpg.de/"
+            "modellicense.html + https://smpl.is.tue.mpg.de/modellicense.html + "
+            "https://github.com/vchoutas/smplx/blob/1265df7ba545/LICENSE"
+        ),
+        "reason": "non-commercial preprocessor tier (SMPL v1.1.0 neutral/male/female LBS body models)",
+        "exact_only": True,
+        "files": (
+            "basicmodel_neutral_lbs_10_207_0_v1.1.0.pkl",
+            "basicmodel_m_lbs_10_207_0_v1.1.0.pkl",
+            "basicmodel_f_lbs_10_207_0_v1.1.0.pkl",
+        ),
+    },
     "smpl_": {
         "verdict": "BANNED",
         "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
@@ -349,6 +532,9 @@ RULED_COMPONENTS = {
             "basicmodel_neutral_lbs_10_207_0_v1.0.0.pkl",
             "basicmodel_m_lbs_10_207_0_v1.0.0.pkl",
             "basicmodel_f_lbs_10_207_0_v1.0.0.pkl",
+        ),
+        "patterns": (
+            r"basicmodel_",
         ),
     },
     "smplx": {
@@ -457,8 +643,8 @@ RULED_COMPONENTS = {
                    "a source page is found and fetched"),
     },
 
-    # ---- 2026-11-11 LTX-2.5 + Layout-to-Render IC-LoRA + ComfyUI-LTXVideo — Director
-    # ruling: CONDITIONAL, not accepted: on hold by the Director. Mirrored here as BANNED
+    # ---- 2026-11-11 LTX-2.5 + Layout-to-Render IC-LoRA + ComfyUI-LTXVideo — decided
+    # 2026-11-11: CONDITIONAL, not accepted: on hold pending a decision. Mirrored as BANNED
     # rather than CONDITIONAL because `CONDITIONAL` in this module represents an ACCEPTED
     # conditional grant whose obligation is satisfied by passing a credit entry in
     # `attribution=` (`uncredited_conditional_components`), whereas an unaccepted on-hold
@@ -475,7 +661,7 @@ RULED_COMPONENTS = {
             "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"
         ),
         "reason": (
-            "CONDITIONAL, not accepted: on hold by the Director (entity incl. affiliates "
+            "CONDITIONAL, not accepted: on hold pending a decision (entity incl. affiliates "
             "< $10M annual revenue; AUP content limits incl. graphic violence; "
             "machine-generated disclosure on placed outputs; no training non-LTX models on "
             "outputs; do not strip provenance; AUP and licence re-read at each use)"
@@ -483,6 +669,9 @@ RULED_COMPONENTS = {
         "files": (
             "ltx-2.5-22b-ic-lora-layout-to-render-1.0.safetensors",
             "lightricks/ltx-2.5-22b-ic-lora-layout-to-render",
+        ),
+        "patterns": (
+            r"(?<![a-z0-9])ltx[_-]?2[._]5[_-]22b[_-]ic[_-]lora[_-]layout[_-]to[_-]render",
         ),
     },
     "ltx-2.5": {
@@ -495,7 +684,7 @@ RULED_COMPONENTS = {
             "https://huggingface.co/Lightricks/LTX-2.5"
         ),
         "reason": (
-            "CONDITIONAL, not accepted: on hold by the Director (entity incl. affiliates "
+            "CONDITIONAL, not accepted: on hold pending a decision (entity incl. affiliates "
             "< $10M annual revenue; AUP content limits incl. graphic violence; "
             "machine-generated disclosure on placed outputs; no training non-LTX models on "
             "outputs; do not strip provenance; AUP and licence re-read at each use)"
@@ -504,6 +693,9 @@ RULED_COMPONENTS = {
             "ltx-2.5-22b-distilled-transformer-bf16.safetensors",
             "gemma4-12b-with-proj-ltx-2.5-bf16.safetensors",
             "lightricks/ltx-2.5",
+        ),
+        "patterns": (
+            r"(?<![a-z0-9])ltx[_-]?2[._]5(?![0-9])",
         ),
     },
     "comfyui-ltxvideo": {
@@ -515,13 +707,89 @@ RULED_COMPONENTS = {
             "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf"
         ),
         "reason": (
-            "CONDITIONAL, not accepted: on hold by the Director under the older LTX-2 "
+            "CONDITIONAL, not accepted: on hold pending a decision under the older LTX-2 "
             "Community License of 2026-01-05 (same < $10M group revenue threshold plus "
             "double-fee liquidated damages, AUP content limits, disclosure, no non-LTX "
             "model training, provenance retention, and re-read at each use)"
         ),
         "files": (
             "lightricks/comfyui-ltxvideo",
+        ),
+        "patterns": (
+            r"(?<![a-z0-9])comfyui[_-]?ltx[_-]?video",
+        ),
+    },
+}
+
+#: The weight families covered by the licence map, defined explicitly in one place beside
+#: `RULED_COMPONENTS`. Any name that falls in one of these families and matches NO row in
+#: `RULED_COMPONENTS` (and is not one of the map-cleared commercially usable variants below)
+#: is refused in `verify()` as `unclassified in a gated family`. Names outside every family
+#: keep their existing `NOT IN THIS TABLE` reporting behaviour.
+GATED_WEIGHT_FAMILIES = {
+    "da3": {
+        "label": "DA3",
+        "patterns": (
+            r"(?<![a-z0-9])da3(?![0-9a-f]{7})",
+            r"depth[_-]?anything[_-]?v?3",
+        ),
+        # Map-cleared Apache-2.0 DA3 variants (docs/license-map.md: DA3-SMALL, DA3-BASE,
+        # DA3MONO-LARGE, DA3METRIC-LARGE, and explicit DA3-LARGE 1.1).
+        "cleared_patterns": (
+            r"(?<![a-z0-9])da3[_-]?(?:small|base)(?![a-z0-9])",
+            r"(?<![a-z0-9])da3(?:mono|metric)[_-]?large(?![a-z0-9])",
+            r"(?<![a-z0-9])da3[_-]?large(?=.*(?<![0-9])1\.1(?![0-9]))",
+        ),
+    },
+    "depth_anything_v2": {
+        "label": "Depth-Anything V2",
+        "patterns": (
+            r"(?<!video_)(?<!video-)depth[_-]?anything[_-]?v2",
+        ),
+        # Map-cleared Apache-2.0 Small checkpoints (docs/license-map.md:
+        # depth_anything_v2_vits*, metric_hypersim_vits*, metric_vkitti_vits*,
+        # depth-anything/Depth-Anything-V2-Small — excluding unruled -hf ports).
+        "cleared_patterns": (
+            r"depth_anything_v2_(?:metric_(?:hypersim|vkitti)_)?vits(?![a-z0-9])",
+            r"depth-anything-v2-small(?!-hf)(?:$|/)",
+        ),
+    },
+    "video_depth_anything": {
+        "label": "Video-Depth-Anything",
+        "patterns": (
+            r"video[_-]?depth[_-]?anything",
+        ),
+        # Map-cleared Apache-2.0 Small checkpoints (docs/license-map.md:
+        # video_depth_anything_vits*, metric_video_depth_anything_vits*,
+        # Video-Depth-Anything-Small, Metric-Video-Depth-Anything-Small).
+        "cleared_patterns": (
+            r"(?:metric_)?video_depth_anything_vits(?![a-z0-9])",
+            r"(?:metric-)?video-depth-anything-small(?:$|/)",
+        ),
+    },
+    "insightface": {
+        "label": "InsightFace / inswapper / antelope",
+        "patterns": (
+            r"(?<![a-z0-9])(?:insightface|inswapper|antelope|scrfd|glintr|"
+            r"buffalo_[lmsc]|raccoon_[ls]|cheetah_[ls]|arcface|retinaface|w600k)",
+        ),
+        "cleared_patterns": (),
+    },
+    "smpl": {
+        "label": "SMPL / SMPL-X",
+        "patterns": (
+            r"(?<![a-z0-9])(?:smpl|basicmodel)",
+        ),
+        "cleared_patterns": (),
+    },
+    "ltx": {
+        "label": "LTX",
+        "patterns": (
+            r"(?<![a-z0-9])ltx",
+        ),
+        # Map-cleared OpenRAIL-M LTX-Video 0.9.x weights (docs/license-map.md).
+        "cleared_patterns": (
+            r"(?<![a-z0-9])ltx(?:-video|v)?[_-](?:2b|13b)?[_-]?v?0\.9(?![0-9])",
         ),
     },
 }
@@ -762,7 +1030,9 @@ CAMERA_NODES = {
 #: walk's was the one that failed OPEN. `test_amend_w25_core_gates.py` pins that
 #: `components()`' weight population is a SUPERSET of `model_weights`', so the two can no
 #: longer diverge in the direction that matters.
-WEIGHT_SUFFIXES = (".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".task")
+WEIGHT_SUFFIXES = (
+    ".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".task", ".pkl", ".onnx",
+)
 
 #: Extra node-CLASS-NAME substrings that identify a `RULED_COMPONENTS` row, beyond the
 #: row key itself. Lower-cased substring test, exactly as `rulings_for` matches a file.
@@ -828,10 +1098,11 @@ RULED_COMPONENT_CLASSES = {
         "gvhmrinference",
     ),
     # `Lightricks/ComfyUI-LTXVideo` custom-pack node classes (`__init__.py` at
-    # `220e1d45aa04`), governed by the LTX-2 Community License (2026-01-05) and on hold by
-    # the Director. GPL-3.0 ComfyUI core LTX classes (`EmptyLTXVLatentVideo`,
-    # `LTXVImgToVideo`, `LTXVAddGuide`, `GetICLoRAParameters`, `LTXVScheduler`, etc.) are
-    # deliberately excluded so OpenRAIL-M `LTX-Video 0.9.x` is not false-refused.
+    # `220e1d45aa04`), governed by the LTX-2 Community License (2026-01-05) and on hold
+    # pending a decision (decided 2026-11-11). GPL-3.0 ComfyUI core LTX classes
+    # (`EmptyLTXVLatentVideo`, `LTXVImgToVideo`, `LTXVAddGuide`, `GetICLoRAParameters`,
+    # `LTXVScheduler`, etc.) are deliberately excluded so OpenRAIL-M `LTX-Video 0.9.x`
+    # is not false-refused.
     "comfyui-ltxvideo": (
         "ltxaddvideoicloraguide",
         "ltxicloraloadermodelonly",
@@ -2167,12 +2438,27 @@ def _matches_exact_file(norm, basename, target):
     return basename == t
 
 
+def _matches_row(key, rec, low, norm, basename):
+    """Does weight name `low` / `norm` / `basename` match `RULED_COMPONENTS` row `key`?"""
+    if not rec.get("exact_only") and key in low:
+        return True
+    if any(_matches_exact_file(norm, basename, f) for f in (rec.get("files") or ())):
+        return True
+    pats = rec.get("patterns") or ()
+    if pats and any(re.search(p, low) for p in pats):
+        excl = rec.get("exclude_patterns") or ()
+        if not any(re.search(ep, low) for ep in excl):
+            return True
+    return False
+
+
 def rulings_for(filename):
     """EVERY `RULED_COMPONENTS` row this weight filename matches, strictest first.
 
     A row matches when its key is a substring of `filename` (lower-cased, unless the row
-    sets `exact_only=True`) OR when `filename` matches an entry in the row's optional
-    `files` tuple (exact basename, or `/`-bounded path suffix when the entry carries `/`).
+    sets `exact_only=True`), when `filename` matches an entry in the row's optional
+    `files` tuple (exact basename, or `/`-bounded path suffix when the entry carries `/`),
+    or when an optional `patterns` regex matches and no `exclude_patterns` regex matches.
 
     ⚠ **`components()` used to take the FIRST match in dict-insertion order and record
     no other.** `families_of()` on the same page deliberately does the opposite and its
@@ -2191,9 +2477,7 @@ def rulings_for(filename):
     norm = low.replace("\\", "/").strip("/")
     basename = norm.rsplit("/", 1)[-1]
     hits = [dict(rec, matched_on=key) for key, rec in RULED_COMPONENTS.items()
-            if (not rec.get("exact_only") and key in low)
-            or any(_matches_exact_file(norm, basename, f)
-                   for f in (rec.get("files") or ()))]
+            if _matches_row(key, rec, low, norm, basename)]
     hits.sort(key=lambda r: -VERDICT_RANK.get(r["verdict"], 0))
     return hits
 
@@ -2320,18 +2604,44 @@ def _is_name_shaped(value):
             and not any(ch.isspace() for ch in value))
 
 
+def gated_families_of(filename):
+    """Every `GATED_WEIGHT_FAMILIES` key that `filename` belongs to."""
+    low = str(filename).lower().replace("\\", "/")
+    return tuple(
+        fam for fam, spec in GATED_WEIGHT_FAMILIES.items()
+        if any(re.search(p, low) for p in spec.get("patterns", ()))
+    )
+
+
+def unclassified_gated_families_of(filename):
+    """Gated family keys that claim `filename` without a map-cleared exception."""
+    low = str(filename).lower().replace("\\", "/")
+    matched = []
+    for fam, spec in GATED_WEIGHT_FAMILIES.items():
+        if not any(re.search(p, low) for p in spec.get("patterns", ())):
+            continue
+        if any(re.search(cp, low) for cp in spec.get("cleared_patterns", ())):
+            continue
+        matched.append(fam)
+    return tuple(matched)
+
+
 def _component_hits(value):
-    """`(hits, looks_like_a_weight_file)` for one widget value — the table asked FIRST.
+    """`(hits, looks_like_a_weight_file, gated_families)` for one widget value.
 
     See `WEIGHT_SUFFIXES` for the measurement this inversion closes. `hits` is
-    `rulings_for(value)` for any name-shaped string; the suffix test is only the predicate
-    for counting an UNRULED string as an unclassified component.
+    `rulings_for(value)` for any name-shaped string; `gated_families` identifies any
+    covered family in `GATED_WEIGHT_FAMILIES` when no table row or map-cleared variant
+    matched. The suffix test is only the predicate for counting an UNRULED out-of-family
+    string as an unclassified component.
     """
     if not isinstance(value, str):
-        return [], False
+        return [], False, ()
     looks_like_weight = value.lower().endswith(WEIGHT_SUFFIXES)
-    hits = rulings_for(value) if (looks_like_weight or _is_name_shaped(value)) else []
-    return hits, looks_like_weight
+    name_shaped = looks_like_weight or _is_name_shaped(value)
+    hits = rulings_for(value) if name_shaped else []
+    gated = () if hits or not name_shaped else unclassified_gated_families_of(value)
+    return hits, looks_like_weight, gated
 
 
 def components(graph):
@@ -2350,26 +2660,40 @@ def components(graph):
     see `WEIGHT_SUFFIXES` for the measurement (`causvid_x.bin`, BANNED, returned a green
     `verify` and was named nowhere in the receipt). A row carries `suffix_recorded`, which
     is False for a ruled name wearing an unrecorded extension; `verify` refuses those by
-    name (`ruled_name_with_unknown_suffix`) after the licence kill, so a BANNED row stays
-    the headline and an ALLOWED one still cannot enter on an extension nobody recorded.
+    name (`ruled_name_with_unknown_suffix`) after the licence kill and gated-family
+    check, so a BANNED row stays the headline and an ALLOWED one still cannot enter on
+    an extension nobody recorded.
     """
     graph = normalise_graph(graph)
     out = []
     for where, n in _iter_nodes(graph):
         for v in (n.get("widgets_values") or []):
-            hits, looks_like_weight = _component_hits(v)
-            if not hits and not looks_like_weight:
+            hits, looks_like_weight, gated = _component_hits(v)
+            if not hits and not looks_like_weight and not gated:
                 continue
-            ruling = dict(hits[0]) if hits else {"verdict": "NOT IN THIS TABLE",
-                                                 "reason": "check docs/license-map.md"}
+            if hits:
+                ruling = dict(hits[0])
+            elif gated:
+                labels = ", ".join(GATED_WEIGHT_FAMILIES[f]["label"] for f in gated)
+                ruling = {
+                    "verdict": "NOT IN THIS TABLE",
+                    "reason": (f"unclassified in a gated family ({labels}); "
+                               "check docs/license-map.md"),
+                }
+            else:
+                ruling = {"verdict": "NOT IN THIS TABLE",
+                          "reason": "check docs/license-map.md"}
             ruling["matches"] = [{"matched_on": h["matched_on"], "verdict": h["verdict"],
                                   "licence": h.get("licence")} for h in hits]
-            out.append({"kind": "weight", "file": v, "node_id": n.get("id"),
-                        "class": n.get("type"), "where": where,
-                        "suffix_recorded": looks_like_weight,
-                        "verdict": ruling["verdict"], "licence": ruling.get("licence"),
-                        "reason": ruling.get("reason"),
-                        "matched_on": ruling.get("matched_on"), "ruling": ruling})
+            rec = {"kind": "weight", "file": v, "node_id": n.get("id"),
+                   "class": n.get("type"), "where": where,
+                   "suffix_recorded": looks_like_weight,
+                   "verdict": ruling["verdict"], "licence": ruling.get("licence"),
+                   "reason": ruling.get("reason"),
+                   "matched_on": ruling.get("matched_on"), "ruling": ruling}
+            if gated:
+                rec["gated_families"] = list(gated)
+            out.append(rec)
     out.extend(ruled_node_classes(graph))
     return out
 
@@ -3510,10 +3834,12 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     distinct `.safetensors` names the seven `build_*_payload` tools submit the table
     classifies ONE. Gate L's own clause on the same line already carries the shape
     ("{checkable} of {n} latent(s) checkable"); the licence clause now carries it too, and
-    the unclassified components are named in `ev["unclassified"]`. What is NOT changed
-    here: an unclassified component is still not refused — the wave-10 pin that UNKNOWN is
-    reported rather than raised stands, and which map row governs which served filename is
-    a spec's decision. The receipt now says the question was asked.
+    the unclassified components are named in `ev["unclassified"]`. An unmatched name
+    that falls in a covered weight family (`GATED_WEIGHT_FAMILIES`) and is not one of its
+    map-cleared variants is refused (`clause: unclassified_in_gated_family`, reason
+    `unclassified in a gated family`), while names outside every gated family remain
+    reported in `ev["unclassified"]` without refusal. The receipt now says the question
+    was asked.
 
     `hosted_tier` names a tier from `HOSTED_TIER_RULES` whose graph carries **no pixel
     dimension at all** — `wan2.7-r2v` takes a resolution enum, a ratio enum and an integer
@@ -3698,6 +4024,28 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
             ". The licence map's ruling is that presence is presence — a bypassed node "
             "still counts, and these are not even bypassed. Delete the node named above; "
             + licence_phrase_for(ev["licence_fetch"]),
+            ev)
+
+    # · ANDON — an unmatched weight/model name inside a covered family (`GATED_WEIGHT_FAMILIES`)
+    # is refused rather than waived through as `NOT IN THIS TABLE` ("unclassified in a gated
+    # family"), placed AFTER the BANNED/EXCLUDED kill so explicit kills stay the headline.
+    gated_unclassified = [c for c in comp
+                          if not c["ruling"].get("matched_on") and c.get("gated_families")]
+    if gated_unclassified:
+        ev["clause"] = "unclassified_in_gated_family"
+        ev["unclassified_in_gated_family"] = [
+            {"label": _component_label(c), "file": c.get("file"),
+             "gated_families": list(c["gated_families"])}
+            for c in gated_unclassified
+        ]
+        raise RouteGate(
+            "the graph loads " + ", ".join(
+                f"{_component_label(c)} (unclassified in a gated family: "
+                + ", ".join(GATED_WEIGHT_FAMILIES[f]["label"]
+                            for f in c["gated_families"]) + ")"
+                for c in gated_unclassified) +
+            ". An unmatched weight name in a gated family is refused; cite its licence "
+            "at a pinned revision in docs/license-map.md before running",
             ev)
 
     # · ANDON — the direction `WEIGHT_SUFFIXES` leaves unbounded, placed AFTER the licence

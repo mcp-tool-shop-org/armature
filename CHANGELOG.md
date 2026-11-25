@@ -13,6 +13,23 @@ installs.
 
 ## [Unreleased]
 
+- **Licence-gate gap closure (`tools/armature_core/route_gates.py`, `docs/license-map.md`):**
+  - Ban any `da3_large` / `da3-large` / `da3large` name (any case, separator, weight suffix,
+    or HF cache path) unless `1.1` is explicitly present, keeping `DA3-LARGE-1.1` forms passing.
+  - Added explicit `GATED_WEIGHT_FAMILIES` (`da3`, `depth_anything_v2`, `video_depth_anything`,
+    `insightface`, `smpl`, `ltx`); unmatched names inside a gated family now refuse in
+    `verify()` as `unclassified in a gated family` (`clause: unclassified_in_gated_family`),
+    while out-of-family names keep `NOT IN THIS TABLE` reporting.
+  - Added `.pkl` and `.onnx` to `WEIGHT_SUFFIXES` and mirrored `smpl_v1.1.0` plus
+    InsightFace weights `inswapper_128_fp16`, `glintr100`, `scrfd_10g_bnkps`, and `w600k_mbf`
+    from pinned licence documents.
+  - Ruled the four `Depth-Anything-V2-*-hf` Transformers ports (`-Base-hf`, `-Large-hf`,
+    `-Metric-Indoor-Large-hf`, `-Metric-Outdoor-Large-hf`) from their pinned model cards.
+  - Aligned `smpl_` pattern matching with `docs/license-map.md` (`basicModel_*` / `SMPL_*`),
+    extended LTX row matching to underscore and no-hyphen spellings, gave `da3_giant.safetensors`
+    its own row citing both 1.0 and 1.1 `ComfyUI-DepthAnythingV3` mappings, and replaced
+    Director role labels in `docs/license-map.md` with plain wording.
+
 - **Shot diagnostics (`shotdiag`, `measure_shot`, `measure_weights`):**
   - Tier A two-view camera error (`armature_core.shotdiag`, `tools/measure_shot.py`): OpenCV
     SIFT on background features outside the dilated Blender character mask, Essential matrix
