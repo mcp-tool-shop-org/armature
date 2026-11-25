@@ -1372,7 +1372,7 @@ def _assembly_success(tmp_path):
     # (8 — S03 executed the flat chain at 8 slots and it died at 81; the boundary is unlocated),
     # and Gate L requires a `4n+1` length for the wan family, so the LARGEST legal flat clip under
     # the bound is 5 frames — that is this tool's whole happy path today (recorded for the
-    # Director). The 81-frame shape lives in the cascade fixture.
+    # maintainer). The 81-frame shape lives in the cascade fixture.
     up = tmp_path / "uploads.json"
     up.write_text(json.dumps({f"{i:05d}.png": f"{(4 - i):064x}.png" for i in range(5)}),
                   encoding="utf-8")

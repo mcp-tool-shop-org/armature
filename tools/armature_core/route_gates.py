@@ -95,7 +95,7 @@ LICENCE_ADVISORY_DAYS = 90
 #: (`causvid` "not independently retrieved", `dwpose` weights "not fetched",
 #: `vintage_film_grain` "source unlocated"). `fetched` on those three is the date the map
 #: recorded the NON-retrieval, which is what an UNVERIFIED verdict is dated by.
-#: **Whether a lapsed ruling also refuses is the Director's call, not this gate's** — the
+#: **Whether a lapsed ruling also refuses is the maintainer's call, not this gate's** — the
 #: gate says so in the sentence and in the receipt.
 RULED_COMPONENTS = {
     "lightx2v": {
@@ -567,8 +567,8 @@ RULED_COMPONENTS = {
         # nothing in the record that a human reviewing the spend could read the obligation
         # off. CLAUDE.md's licence gate names the vocabulary
         # `COMMERCIAL: YES / NO / CONDITIONAL(<condition>)` and rules that a CONDITIONAL is
-        # a Director decision surfaced contrastively; the condition was accepted as the map
-        # already records it (coordinator ruling, delegated by the Director 2026-09-04) and
+        # a maintainer decision surfaced contrastively; the condition was accepted as the map
+        # already records it (coordinator ruling, delegated by the maintainer on 2026-09-04) and
         # becomes load-bearing HERE rather than in prose.
         #
         # `condition` is structured because a receipt has to be able to say what was owed
@@ -2211,8 +2211,8 @@ def licence_fetch_reading(comp, today=None):
     four things: the oldest applied fetch date, the date that row goes advisory, the rows
     already past `LICENCE_ADVISORY_DAYS`, and the applied rows carrying no date at all.
 
-    It REPORTS and never raises. Whether a lapsed ruling refuses is the Director's call
-    (CLAUDE.md: CONDITIONAL and re-fetch decisions are his), and a gate that invented that
+    It REPORTS and never raises. Whether a lapsed ruling refuses is the maintainer's call
+    (CLAUDE.md: CONDITIONAL and re-fetch decisions belong to the maintainer), and a gate that invented that
     refusal for itself would be this repo's own "a global constant governs a local
     feature". What the gate owes is that no receipt and no refusal can be read without the
     age of the ruling it applied.
@@ -4181,7 +4181,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # states the law this reads — "Entries older than 90 days are advisory until
     # re-fetched" — and until 2026-09-05 no receipt and no refusal at the spend boundary
     # could say how old the ruling it applied was. It reports; it does not raise. Whether
-    # a lapsed ruling also refuses is the Director's call, not this gate's.
+    # a lapsed ruling also refuses is the maintainer's call, not this gate's.
     ev["licence_fetch"] = licence_fetch_reading(comp)
 
     # `allow` may wave a METHODOLOGY ruling. It may not wave a LICENCE one. The filter

@@ -705,7 +705,7 @@ def _module_scope_imports_this_interpreter_cannot_resolve(module):
 
     The second exemption from the `--help` smoke, derived the same way as the Blender one:
     keyed on the reason, never on a name. `tools/armature_index.py` imports `record_index`
-    at module scope — a sibling working copy at `E:\\AI\\record-index`, not a dependency of
+    at module scope — a sibling working copy at `<repo>/../record-index`, not a dependency of
     this venv (`tests/test_record_index_binding.py` states the same fact and skips on the
     same condition). With it on `PYTHONPATH` the tool is driven like every other; without
     it, `--help` dies in the import and the skip says which module was missing.

@@ -322,7 +322,7 @@ def _evaluated_world_vertices(objects, census=None):
     was measured over. The array return is UNCHANGED for every existing caller — the count
     is what was missing, not the geometry.
 
-    Whether a partial drop should also REFUSE is the Director's call and is not decided
+    Whether a partial drop should also REFUSE is the maintainer's call and is not decided
     here; the count is not optional either way.
     """
     depsgraph = bpy.context.evaluated_depsgraph_get()

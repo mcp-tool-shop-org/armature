@@ -1349,7 +1349,7 @@ def test_the_docstring_is_corrected_in_place_with_the_measurement():
 
 
 # ===========================================================================
-# F-27f76c43 — the two records this repo writes for the artefact a Director opens could not
+# F-27f76c43 — the two records this repo writes for the artefact a reviewer opens could not
 #              say whose frames they held, and the comment above them claimed more than the
 #              gate beneath it proves.
 #
@@ -1399,7 +1399,7 @@ def test_the_assembler_record_names_its_subject(mod, tmp_path):
 
 @pytest.mark.parametrize("mod", ["build_assembly_payload", "build_cascade_payload"])
 def test_an_omitted_subject_is_an_explicit_null_with_its_reason(mod, tmp_path):
-    """The coordinator's 2026-09-04 ruling under the Director's delegation: `subject: null`
+    """The coordinator's 2026-09-04 ruling under the maintainer's delegation: `subject: null`
     WITH the reason, never an absent key."""
     module = __import__(mod)
     argv, out = _assembler_argv(tmp_path, mod)

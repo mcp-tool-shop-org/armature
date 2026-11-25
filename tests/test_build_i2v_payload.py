@@ -323,7 +323,7 @@ def test_every_trajectory_value_is_actually_in_the_file_it_cites():
     """E09's citation check, pointed at E11's numbers.
 
     A source string in a record is a claim about a file. This reads the file. The failure
-    it catches is the one that fired in E09 — a seat describing a banked source from
+    it catches is the one that fired in E09 — a session describing a banked source from
     memory — and the reason it matters here is that these six numbers are the entire
     difference between running the documented trajectory and running an invented one.
     """
@@ -487,7 +487,7 @@ def test_the_asserted_fit_is_now_checkable_against_the_file(tmp_path):
 
 
 def test_the_record_says_whether_the_authored_input_carried_ALPHA(tmp_path):
-    """The Director's 2026-08-12 ruling, made machine-readable: an authored input carries
+    """The maintainer's 2026-08-12 decision, made machine-readable: an authored input carries
     alpha and the RGB composite a route submits is a recorded choice. The colour type comes
     from the file's own IHDR, so a flattened re-author is visible in the record."""
     ev = B.resolve_start_frame(str(_authored_start_frame(tmp_path)))

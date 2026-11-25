@@ -28,7 +28,7 @@ this tool loaded against their decode, so anything that happened *while loading*
 to it — the corruption is on both sides of the comparison. Three such things are refused here
 instead, in `frame_population` and `read_frames`: a PNG the frame numbering does not name
 (the stick renderer's `strip_every{N}.png` contact sheet sorts last and becomes the final
-frame of the control), an alpha channel with no named plate (the Director's 2026-08-12 law —
+frame of the control), an alpha channel with no named plate (the maintainer's 2026-08-12 law —
 the RGB composite a route submits is a deliberate, recorded choice), and a non-uint8 dtype
 (the old cast wrapped 16-bit levels mod 256). The receipt records the modes, the dtype, and
 the alpha disposition, because the frame hash it carries is of the already-coerced array.
@@ -98,7 +98,7 @@ from armature_core.errors import ArmatureError  # noqa: E402
 
 FFMPEG = os.environ.get(
     "ARMATURE_FFMPEG",
-    r"E:\AI-Models\trellis2-env\Lib\site-packages\imageio_ffmpeg\binaries\ffmpeg-win-x86_64-v7.1.exe",
+    __import__("shutil").which("ffmpeg") or "",
 )
 
 # Candidate bridges, in the order the spec prefers them. `container` matters as much as
@@ -315,7 +315,7 @@ def read_frames(frames_dir, invert=False, expect=None, alpha_over=None, progress
     gate. The sibling `invert_frames._read_u8_gray` already refuses exactly these two
     inputs; this path did not, and now does.
 
-    Alpha is the Director's law of 2026-08-12: the RGB composite a route submits is a
+    Alpha is the maintainer's law of 2026-08-12: the RGB composite a route submits is a
     **deliberate, recorded choice**. So an alpha channel raises unless `alpha_over`
     names the plate it is composited over, and `source` states what happened either
     way for the receipt to carry.
@@ -421,7 +421,7 @@ def gate_ffmpeg_binary():
     """ANDON — the encoder this tool is about to run exists, named by path and by source.
 
     F-e0f1f520, wave 22. `FFMPEG` is selected at import from `ARMATURE_FFMPEG` with a
-    hard-coded fallback under `E:/AI-Models`. Measured on `e8263a3` with that variable
+    hard-coded fallback under a local model-env path. Measured on `e8263a3` with that variable
     pointed at a path that does not exist: exit 1 and a bare
     `FileNotFoundError: [WinError 2] The system cannot find the file specified` — naming
     neither the variable, nor the path, nor ffmpeg.

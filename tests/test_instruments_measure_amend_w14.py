@@ -1,6 +1,6 @@
 """Wave 14, instruments-measure — the twelve approved findings, each as a property.
 
-Appended by the instruments-measure amend seat in ONE new module, following the wave-12
+Appended by the instruments-measure amend session in ONE new module, following the wave-12
 precedent (`tests/test_instruments_measure_amend_w12.py`), so the tests domain's own files
 are not rewritten under it while both branches are in flight.
 

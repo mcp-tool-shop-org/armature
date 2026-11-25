@@ -227,7 +227,7 @@ def test_the_exemptions_sit_inside_the_population_and_their_clauses_still_hold()
 @pytest.mark.parametrize("filename", _tools_that_obtain_meshes())
 def test_every_tool_that_measures_imported_meshes_filters_by_render_visibility(filename):
     """The property, asserted as a CALL. `'render_visible_meshes' in src` is satisfied by
-    the comment that explains the call, which is precisely the sentence a seat writes just
+    the comment that explains the call, which is precisely the sentence a session writes just
     before deleting the line under it."""
     if filename in MEASURES_NOTHING_FROM_THE_MESH_LIST:
         pytest.skip(f"{filename}: {MEASURES_NOTHING_FROM_THE_MESH_LIST[filename]}")

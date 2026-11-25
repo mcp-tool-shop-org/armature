@@ -10,7 +10,7 @@ that walks 1.27 of his own heights makes the union nearly three bodies wide, so 
 pulls back until he is a doll. E03 already had to pin target and radius numerically for a
 different reason; this makes the pinning derivable instead of typed.
 
-**And a composition is a choice, so it is stated as one.** The two things the Director's
+**And a composition is a choice, so it is stated as one.** The two things the maintainer's
 shot needs — he reads as a mid-shot, and he arrives at the right third — cannot both be
 dialled independently: the walk distance is fixed, so once the radius sets his size it has
 also set how far across the frame he travels. Size wins and the traverse follows. That

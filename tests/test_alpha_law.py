@@ -1,6 +1,6 @@
 """The authored-RGBA law, over every tool that produces an image a route SUBMITS.
 
-The Director's ruling, 2026-08-12: every reference or start-frame render of the character
+The maintainer's decision (2026-08-12): every reference or start-frame render of the character
 is authored RGBA with a real alpha channel, and **the RGB composite each route actually
 submits is a deliberate, recorded choice** — because video VAEs are RGB and raw transparency
 cannot reach the model. A grey previz void is never again an accidental part of a submitted

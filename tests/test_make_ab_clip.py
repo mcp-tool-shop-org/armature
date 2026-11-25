@@ -81,7 +81,7 @@ def test_the_last_composite_frame_is_held_for_a_real_duration():
 # POSITIONS produced by `event_timeline(len(pa), ...)` — indices into `range(n_a)` — not the
 # frame numbers in the file names `frame_paths` sorted. Measured 2026-09-04: two arms whose
 # files are `00005.png, 00006.png, 00007.png` give timeline indices (0,0), (1,1), (2,2), so
-# the clip the Director watches was captioned `f0 f1 f2` over frames 5, 6 and 7 — and the
+# the clip the maintainer watches was captioned `f0 f1 f2` over frames 5, 6 and 7 — and the
 # `_manifest.json` recorded only `frames: 3` and `fps`, so nothing in the record recovered
 # the mapping. A note taken off the clip ("the hand melts around f12") then names a frame
 # that is not the file, and the still pulled for the sheet is the wrong one.

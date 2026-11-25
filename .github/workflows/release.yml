@@ -11,11 +11,11 @@
 #
 # ONE-TIME SETUP, on the registries themselves — until both are done this workflow will
 # fail at the publish step by design rather than fall back to a token:
-#   PyPI  → pending publisher for project `armature-studio`:
+#   PyPI  → pending Trusted Publisher for project `armature-studio`:
 #           owner mcp-tool-shop-org · repo armature · workflow release.yml   [DONE 2026-08-15]
 #   npm   → trusted publisher for `@mcptoolshop/armature-studio`: same three values.
 #
-# The publisher's project name and workflow FILENAME are both matched byte-for-byte at
+# The Trusted Publisher's project name and workflow FILENAME are both matched byte-for-byte at
 # authentication time. That is why this file is `release.yml` and not `publish.yml`, and
 # why the packages were renamed before the first publish rather than after it.
 #
@@ -31,7 +31,7 @@ on:
     types: [published]
   # THE REHEARSAL — first-class, documented, Actions-reachable; not a live public release.
   #
-  # HISTORY (kept so the next seat does not rediscover it). Measured 2026-09-04: every tag
+  # HISTORY (kept so a later session does not rediscover it). Measured 2026-09-04: every tag
   # then on the remote (swarm-save-1788481819, v0.1.0..v0.3.0) carried ZERO files under
   # `.github/actions/`, and `v0.3.0`'s release.yml declared `workflow_dispatch:` with no
   # `inputs.rehearse`, no `refs/tags/` gate, and unconditional publishes. Naming any of
@@ -227,7 +227,7 @@ jobs:
         #              github.com/mcp-tool-shop-org/armature -- and says nothing about the
         #              repository's VISIBILITY. It names no error, no failure mode and no
         #              degradation for `npm publish --provenance` from a private repository.
-        #              So the claim the seat before this one marked ASSUMED ("provenance is
+        #              So the claim an earlier session marked ASSUMED ("provenance is
         #              generated only from a public source repo, so `--provenance` fails at
         #              the publish rather than degrading") is neither confirmed nor refuted
         #              by the document that was named as the way to settle it.

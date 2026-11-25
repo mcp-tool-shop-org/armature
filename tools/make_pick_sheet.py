@@ -5,7 +5,7 @@ r"""make_pick_sheet — Gate PLATE's instrument: candidate plates, side by side,
            --target=1024x576 --visible-rows=0,182 --out=<sheet.png> [--scale=0.6]
 
 Gate PLATE is a human gate: which picture of a world this generation is conditioned on is
-the Director's call, and it blocks all spend until he makes it. This tool builds the thing
+the maintainer's call, and it blocks all spend until decided. This tool builds the thing
 he makes it from.
 
 **Every label is derived from the frames themselves.** Nothing here is typed in and nothing
@@ -18,7 +18,7 @@ default.
 from one generation is rarely the frame of the next, so a cover fit crops it (see
 `armature_core.startframe.cover_fit`); and only the part of the target frame the authored
 master leaves transparent will show the plate at all. Both are marked on every tile and
-printed in rows, in the candidate's OWN pixel coordinates, because a Director choosing
+printed in rows, in the candidate's OWN pixel coordinates, because a reviewer choosing
 between six pictures should not have to do the arithmetic to know which parts of them
 survive.
 
@@ -155,8 +155,8 @@ def frame_paths(frames_dir):
 def source_rows_of(target_rows, geom):
     """Map a row band in the TARGET frame back to rows of the source candidate.
 
-    The band the Director is choosing content for is defined on the frame the model will be
-    handed; the picture in front of him is the candidate at its own size. Without this map
+    The band the maintainer chooses content for is defined on the frame the model will be
+    handed; the candidate in front of the viewer is at its own size. Without this map
     the two are different coordinate systems and the marked band would be off by the crop.
     """
     y0, y1 = target_rows
@@ -278,7 +278,7 @@ def provenance_lines(rec):
         "",
         "DIAGNOSTICS. They locate candidates; they do not",
         "rank them and they decide nothing. Gate PLATE is",
-        "the Director's eye.",
+        "the maintainer's eye.",
     ]
 
 

@@ -96,7 +96,7 @@ def scale_of(frames):
     the input dtype or the value range. `frame_deltas`' own docstring quotes E08's
     2.55 / 3.95 / 6.16 and E10's 4.91 / 15.95 / 69.85 "so a third clip is comparable to
     them", which is exactly the comparison a missing scale breaks: the number reaches the
-    Director as the tile "d(frame) med" (`make_startframe_sheet.main`) with no unit on it
+    maintainer as the tile "d(frame) med" (`make_startframe_sheet.main`) with no unit on it
     and none in the record, so a float-decoded run and a byte-decoded run differ by 255x
     while both look like healthy small numbers next to a banked 3.95.
 
@@ -391,7 +391,7 @@ def distinct_frames(frames):
     (F-c4cf355d on `turnaround.gate_set_distinct`: an orbit helper advancing by a rounding
     error writes eight files with eight DIFFERENT digests over one picture).
 
-    The panel the Director reads quotes it verbatim — `make_e13_sheet.py::main` prints
+    The panel the maintainer reads quotes it verbatim — `make_e13_sheet.py::main` prints
     "<n> frames, <d> distinct" and `make_startframe_sheet.py::main` the same, both filled by
     `measure_clip.py` — so the sheet now carries a number the arm can move.
 
@@ -402,7 +402,7 @@ def distinct_frames(frames):
     froze reads `n_pixel_distinct: 1` whether or not its bytes agree.
 
     **It gates nothing**, per this module's own doctrine — these are diagnostics, and the
-    Director's eye is the judge. `gate_set_distinct` is the gate-shaped sibling and it
+    maintainer's eye is the judge. `gate_set_distinct` is the gate-shaped sibling and it
     lives in `turnaround` because that is where the andon belongs.
 
     Returned keys: `n_frames`, `n_distinct` (bytes), `n_pixel_distinct`,

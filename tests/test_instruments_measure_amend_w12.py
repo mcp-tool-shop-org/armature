@@ -1,6 +1,6 @@
 """Wave 12, instruments-measure — the nine approved findings, each as a property.
 
-Every test here is appended by the instruments-measure amend seat, in ONE block, so the
+Every test here is appended by the instruments-measure amend session, in ONE block, so the
 tests domain's own files are not rewritten under it (wave-12 coordinator brief: `tests/**`
 is a bridge domain; a sibling's fixes are pinned in appended blocks).
 
@@ -504,13 +504,13 @@ def test_a_missing_required_flag_is_a_typed_refusal_naming_the_flag(mod_name, ar
 
 @pytest.mark.parametrize("mod_name", ["make_sheet", "analyze_p3"])
 def test_a_token_that_lost_its_leading_dashes_is_named(mod_name):
-    """`analyze_p3.main(['run=E:/x'])` registered the key `n` (from `token[2:]`) and then
+    """`analyze_p3.main(['run=missing/x'])` registered the key `n` (from `token[2:]`) and then
     died with `KeyError: 'run'`, naming neither the flag it wanted nor the token it got.
     `stage_render._parse_argv` is the counter-example: `expected --key=value, got ...`."""
     mod = __import__(mod_name)
     with pytest.raises(ArmatureError) as exc:
-        mod.main(["run=E:/x", "--out=y"])
-    assert "run=E:/x" in str(exc.value), str(exc.value)
+        mod.main(["run=missing/x", "--out=y"])
+    assert "run=missing/x" in str(exc.value), str(exc.value)
 
 
 def test_no_instrument_indexes_a_hand_rolled_argv_dict_without_a_named_refusal():
@@ -823,7 +823,7 @@ def test_every_flag_a_parser_declares_is_read_somewhere_in_that_module():
     `tests/test_sheet_argv_smoke.py` walks flags READ and not DECLARED (the
     `--sheet-plate` regression). A flag DECLARED and not READ is invisible to it, and is
     the same defect pointing the other way: measured 2026-09-04,
-    `make_thesis_sheet.main([... '--meta=E:/no/such/meta.json'])` returned 0, printed
+    `make_thesis_sheet.main([... '--meta=no/such/meta.json'])` returned 0, printed
     `THESIS_SHEET`, left the sheet on disk, and accepted a path that does not exist in
     silence — while its two siblings draw the run's provenance off exactly that flag.
     """

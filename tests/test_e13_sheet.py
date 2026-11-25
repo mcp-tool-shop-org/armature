@@ -16,7 +16,7 @@ import make_e13_sheet as S
 
 PAYLOAD = {
     "experiment": "E13", "arm": "A1", "tier": "wan2.7-r2v", "seed": 2026081351,
-    "seed_registration": "E:/AI/armature-E13/specs/E13-seeds.json",
+    "seed_registration": "specs/E13-seeds.json",
     "prompt_sha256": "a" * 64,
     "payload": {"model.resolution": "720P", "model.ratio": "16:9", "model.duration": 5,
                 "watermark": False, "model.negative_prompt": "blurry, low quality"},

@@ -81,7 +81,7 @@ def main(argv=None):
     # DECLARED **and READ**. Measured 2026-09-04: `--meta` was parsed here and grep for
     # `meta` across the whole module returned this one line -- the value reached nothing,
     # and a path that does not exist was accepted in silence
-    # (`--meta=E:/no/such/meta.json` returned 0, printed THESIS_SHEET and left the sheet on
+    # (`--meta=no/such/meta.json` returned 0, printed THESIS_SHEET and left the sheet on
     # disk). Its two siblings read the same flag and draw the run's provenance from it
     # (`make_gate0_sheet.py:395`, `make_startframe_sheet.py:228`). A flag DECLARED and not
     # READ is the mirror of the `--sheet-plate` regression `tests/test_sheet_argv_smoke.py`

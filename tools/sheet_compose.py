@@ -38,7 +38,7 @@ rather than silent.
 **Which faces, and their licences.** The requested face first (a system font already on
 the machine; using one is not redistributing it), then `LiberationSans` (SIL OFL 1.1) and
 `NotoSans` (SIL OFL 1.1). DejaVu is deliberately NOT in that list: it is present on most
-Linux boxes, but its licence document could not be fetched from the seat that wrote this,
+Linux boxes, but its licence document could not be fetched from the environment that wrote this,
 and this repo treats a licence it cannot retrieve as NO. It is named in the refusal instead
 of quietly substituted. No font binary is committed here — that would need a licence-map row
 of its own, and big binaries stay out of git.
@@ -72,7 +72,7 @@ class SheetPopulationError(ArmatureError):
     a bare `IndexError` naming nothing.
 
     `make_identity_sheet` was given this refusal in wave 3, because dropping one silently
-    shows the Director fewer angles than were asked for on the panel where identity is
+    shows the maintainer fewer angles than were asked for on the panel where identity is
     judged. Four siblings kept the `continue`; `require_frames` is that one refusal, in
     one place, for all of them.
     """
@@ -81,7 +81,7 @@ class SheetPopulationError(ArmatureError):
 #: The RGB plate a sheet composites an RGBA tile over before drawing it.
 #:
 #: Black, which is what all five composing sheets used — hard-coded, in five copies, and
-#: recorded nowhere. The Director's authored-RGBA ruling is that "the RGB composite each
+#: recorded nowhere. The maintainer's authored-RGBA decision is that "the RGB composite each
 #: route actually submits is a deliberate, recorded choice", and `composite_reference`
 #: records exactly that for the submitted plates (`plate_rgb_srgb` + `plate_why`), with
 #: `SURVEY_PLATE = (154, 154, 157)` as the value his eye passed on the S03 kit. So a
@@ -346,7 +346,7 @@ def frames_by_number(names, *, where, what="frame(s)", exc=SheetPopulationError,
     only when nothing numbered survives. This one RAISES on a stray. Both behaviours are
     deliberate and neither is the other's bug:
 
-    * here, the stray would be pasted into a sheet and shown to the Director as a frame of
+    * here, the stray would be pasted into a sheet and shown to the maintainer as a frame of
       this run, under a caption naming a frame number it does not have;
     * there, the population is a frames directory this repo's own tools write contact
       strips into (`render_pose_sticks` writes `strip_every<N>.png` beside its frames), so

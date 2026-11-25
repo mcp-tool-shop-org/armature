@@ -34,8 +34,8 @@ from armature_core import framing, shotspec  # noqa: E402
 #: The camera sits at `az` around a performer who faces -Y, so `-sin(az)` is how far
 #: round toward his front it is and `-cos(az)` is how much of his walk reads as screen
 #: travel. 205 deg is 65 deg off his front — near profile — and the preview showed exactly
-#: that: a silhouette. Identity is the thing the Director judges by eye and no metric
-#: approximates, and a profile denies him the evidence. 225 deg is a true three-quarter
+#: that: a silhouette. Identity is the thing the maintainer judges by eye and no metric
+#: approximates, and a profile denies that evidence. 225 deg is a true three-quarter
 #: front (45 deg off) and costs 22% of the lateral travel (x0.707 against x0.906), which
 #: partly returns as a free push-in because he now walks toward the lens as well as across
 #: it. The superseded composition and its render are kept beside this one.

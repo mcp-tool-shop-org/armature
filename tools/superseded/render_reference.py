@@ -10,12 +10,12 @@ the only thing in the whole payload that carries the character.
 
 Framed like the E33 twins on purpose (`twin_r3_v0.png`, 352x1024, measured): full body,
 portrait, centred, plain pale backdrop, soft studio light, the unglazed-terracotta register
-the Director ruled canon. Rendering at 2x the twins' pixel size and nothing else different,
+the maintainer ruled canon. Rendering at 2x the twins' pixel size and nothing else different,
 so "same register" is a property of the recipe rather than a claim in a report.
 
 ⚠ **RECORDED RISK, not a defect this tool introduces.** E07's quality ledger carries *the
 atlas holes* — the E33 brush pass never ran, so the hand-interior texels are dilation fill
-and the Director's "tiny triangle artifacts" are in every render since the twins. This
+and the maintainer's "tiny triangle artifacts" are in every render since the twins. This
 render is taken from that atlas and therefore carries them. The alternate reference, if the
 probe shows them poisoning identity or surface, is `twin_r3_v0.png` itself — and switching
 is the **advisor's call after the probe**, never this tool's and never silent.
@@ -266,7 +266,7 @@ def main():
     scene.render.image_settings.color_mode = "RGB"
     scene.eevee.taa_render_samples = 128
     # Standard, not Filmic/AgX: the atlas IS the identity and a tone curve would restate
-    # the Director's terracotta ruling in a register he did not approve.
+    # the maintainer's terracotta decision in a register not approved.
     scene.view_settings.view_transform = "Standard"
 
     corners = [(lo[0], lo[1], lo[2]), (hi[0], lo[1], lo[2]), (lo[0], hi[1], lo[2]),
@@ -348,7 +348,7 @@ def main():
                    "resolution": [w, h]},
         # the engine ACTUALLY set (F-0bf74152), from `select_engine`'s return.
         "engine": engine,
-        "framed_like": {"plate": "E:/AI/training/facet_E33/twins/twin_r3_v0.png",
+        "framed_like": {"plate": "../training/facet_E33/twins/twin_r3_v0.png",
                         "plate_size": list(TWIN_SIZE), "scale": a.scale},
         "camera": {"azimuth_deg": AZIMUTH_DEG, "elevation_deg": ELEVATION_DEG,
                    "lens_mm": LENS_MM, "sensor_mm": SENSOR_MM,

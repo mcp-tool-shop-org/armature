@@ -48,7 +48,7 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 #: be drawn by a different engine with nothing in either record able to say so.
 ENGINE_CANDIDATES = ("BLENDER_EEVEE_NEXT", "BLENDER_EEVEE")
 
-#: Director-facing clay/character stills share ONE linear plate with the sheet tools
+#: Maintainer-facing clay/character stills share ONE linear plate with the sheet tools
 #: (F-cade389c). Home is `make_parts_sheet.CLAY_STUDIO_LINEAR`; imported, never copied.
 from make_parts_sheet import CLAY_STUDIO_LINEAR  # noqa: E402
 

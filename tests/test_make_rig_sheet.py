@@ -22,7 +22,7 @@ removal at lines 78-80 ran BEFORE this second import, so it does not cover what 
 reference import adds, and the discriminator used there (vertex groups plus an ARMATURE
 modifier) does not apply to an unrigged reference mesh. `ref` then supplied
 `ref.data.polygons` for the "before — original mesh, N tris, source atlas" label and was
-rendered as that panel: the Director's texture-fidelity comparison could show an Icosphere
+rendered as that panel: the maintainer's texture-fidelity comparison could show an Icosphere
 beside the retopologised character, labelled with a triangle count read off the Icosphere,
 and the sheet would read as catastrophic texture loss where the route is fine.
 """
@@ -150,7 +150,7 @@ def test_a_reference_import_that_added_no_mesh_raises(sheet, monkeypatch):
 
 def test_the_before_label_is_read_off_the_object_the_gate_returned():
     """The triangle count in the 'before' label comes from `ref.data.polygons`; if `ref`
-    could be a decoy, so could the number printed beside the Director's comparison."""
+    could be a decoy, so could the number printed beside the maintainer's comparison."""
     src = read_source("make_rig_sheet.py")
     assert "import_reference(" in src
     tree = ast.parse(src)

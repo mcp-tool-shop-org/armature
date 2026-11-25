@@ -66,7 +66,7 @@ defect.
 ## The discipline this comes from
 
 armature is an experiment repository whose product is its record: a spec before the work, a
-report after, a ruling last, and the Director's eye as the verdict of record. Metrics are
+report after, a ruling last, and the maintainer's eye as the verdict of record. Metrics are
 diagnostics and gate nothing on their own. Every generation records its model, payload, seed
 and control hashes, because a recipe that does not reproduce its output is not a recipe. No
 non-commercially-licensed model, weight or dependency enters the pipeline — anywhere,

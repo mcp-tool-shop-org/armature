@@ -17,7 +17,7 @@ works; the pixel half is unbound.
 
 WHAT THIS DOES NOT DO. It does not decide whether the figure on screen is
 the same character. Coverage numbers ride evidence and gate nothing.
-Pixel-blocking bind is fenced until the Director rules the contract-atom
+Pixel-blocking bind is fenced until the maintainer decides the contract-atom
 vs identity distinction.
 
 FAIL-CLOSED. require_canon is the spend helper. Silence is dead: no
@@ -579,7 +579,7 @@ def licensed_phrases(doc):
     UNRATIFIED 'glowing red halo' surface returned `cover(doc, 'black plate glowing red
     halo')` -> COVERED, residue []; deleting only the unratified surface made the same
     prompt raise "reverse cover failed: unlicensed residue ['glowing', 'red', 'halo']".
-    Text the Director has not ratified passed the reverse direction because an
+    Text the maintainer has not ratified passed the reverse direction because an
     unratified row in the same file named it — and refusing text the statement does not
     license is that direction's whole job.
 

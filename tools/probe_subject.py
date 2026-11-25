@@ -16,7 +16,7 @@ Icosphere, and selecting by type sweeps it in. On a ~0.5-radius character that d
 proportions for a figure-plus-phantom-ball and read as authoritative while doing it.
 
 No verdict is emitted. There is no `is_character` field and no threshold, because
-whether the figure is the right character is canon and the Director's to judge.
+whether the figure is the right character is canon and the maintainer's to judge.
 
 --------------------------------------------------------------------------------
 Compensator (NAMED_COMPENSATORS)

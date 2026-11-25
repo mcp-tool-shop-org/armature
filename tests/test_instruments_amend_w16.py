@@ -663,7 +663,7 @@ def test_the_liveness_floor_is_a_fraction_of_the_subject_and_not_a_metre(mps16):
 
 
 def test_the_liveness_record_reads_as_a_fraction_and_names_its_floor(mps16):
-    """The record the Director reads: a ratio and the subject's own size, not a metre."""
+    """The record the maintainer reads: a ratio and the subject's own size, not a metre."""
     rec, diagonal, lo, hi = mps16.arc_liveness(
         0.0, "max_displacement", _cube(2.0), "make_parts_sheet")
     assert rec["clause"] == "arc_did_not_survive"

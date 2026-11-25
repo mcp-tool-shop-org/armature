@@ -115,7 +115,7 @@ classifiers = [
 # sentence. They are the OLDEST VERSIONS THE MAINTAINERS ARE WILLING TO SUPPORT — not
 # versions that were exercised. The line here used to read "the floors are the versions this
 # rig and CI have actually run, not the oldest that would resolve", and re-measured with
-# `importlib.metadata` on the repo venv (E:\AI\armature\.venv, Python 3.14.5) that is false
+# `importlib.metadata` on the repo venv (<repo>/.venv, Python 3.14.5) that is false
 # for every row: numpy 2.5.2 against a `>=1.24` floor, pillow 12.3.0 against `>=10.0`,
 # matplotlib 3.11.1 against `>=3.7`. CI pins matplotlib==3.11.2 and
 # opencv-python-headless==5.0.0.93 (ci.yml, release.yml), so three of the four floors name

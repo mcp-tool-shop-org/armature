@@ -63,7 +63,7 @@ EMBEDDED_SURFACES = {
         "subject": "BLACKGUARD",
         "kind": "humanoid",
         "note": (
-            "E01/E02 armored warrior. Occupants from the Director identity-sheet "
+            "E01/E02 armored warrior. Occupants from the maintainer identity-sheet "
             "ruling (horned helm, tattered cape, segmented pauldrons)."
         ),
         "surfaces": [
@@ -100,15 +100,15 @@ CENSUS = {
         "surfaces": None,
         "reason": (
             "the live staged figure; identity exists; no ratified surfaces "
-            "file. A Director ratifies occupants, this seat does not."
+            "file. The maintainer ratifies occupants, this session does not."
         ),
     },
     "BLACKGUARD": {
-        # Package-data path under armature_core/canon/ (DEFAULT_ROOT). Director
+        # Package-data path under armature_core/canon/ (DEFAULT_ROOT). maintainer
         # identity-sheet occupants: horned helm, tattered cape, segmented pauldrons.
         "surfaces": "blackguard.surfaces.json",
         "reason": (
-            "E01/E02 armored warrior. Surfaces ratified from the Director's "
+            "E01/E02 armored warrior. Surfaces ratified from the maintainer's "
             "identity-sheet ruling; --no-canon on this subject is the checkbox refuse."
         ),
     },

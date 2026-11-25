@@ -113,7 +113,7 @@
       "confidence": "full",
       "highWater": 1,
       "name": "tests",
-      "qualifyingSourceCommits": 508,
+      "qualifyingSourceCommits": 512,
       "rebaseline": null
     },
     {
@@ -132,7 +132,7 @@
       "confidence": "full",
       "highWater": 1,
       "name": "tools",
-      "qualifyingSourceCommits": 368,
+      "qualifyingSourceCommits": 372,
       "rebaseline": null
     }
   ],
@@ -175,8 +175,8 @@
         "path": ".github/dependabot.yml"
       },
       {
-        "commits": 52,
-        "lines": 1270,
+        "commits": 53,
+        "lines": 1281,
         "path": ".github/workflows/ci.yml"
       },
       {
@@ -190,8 +190,8 @@
         "path": ".github/workflows/publish.yml"
       },
       {
-        "commits": 40,
-        "lines": 1866,
+        "commits": 41,
+        "lines": 1868,
         "path": ".github/workflows/release.yml"
       },
       {
@@ -200,8 +200,8 @@
         "path": ".gitignore"
       },
       {
-        "commits": 13,
-        "lines": 535,
+        "commits": 16,
+        "lines": 611,
         "path": "CHANGELOG.md"
       },
       {
@@ -286,7 +286,7 @@
       },
       {
         "commits": 4,
-        "lines": 263,
+        "lines": 260,
         "path": "atlas/README.md"
       },
       {
@@ -296,17 +296,17 @@
       },
       {
         "commits": 4,
-        "lines": 1383,
+        "lines": 1385,
         "path": "atlas/page.json"
       },
       {
         "commits": 4,
-        "lines": 3606,
+        "lines": 3614,
         "path": "atlas/statistics.json"
       },
       {
         "commits": 4,
-        "lines": 118278,
+        "lines": 118283,
         "path": "atlas/structure.json"
       },
       {
@@ -563,6 +563,11 @@
         "commits": 3,
         "lines": 285,
         "path": "docs/dispatches/attribution-repair.md"
+      },
+      {
+        "commits": 2,
+        "lines": 579,
+        "path": "docs/dispatches/shot-diagnostics-design.md"
       },
       {
         "commits": 1,
@@ -980,8 +985,8 @@
         "path": "docs/index/conventions.json"
       },
       {
-        "commits": 31,
-        "lines": 365,
+        "commits": 35,
+        "lines": 635,
         "path": "docs/license-map.md"
       },
       {
@@ -1015,8 +1020,8 @@
         "path": "docs/research-grounding.md"
       },
       {
-        "commits": 2,
-        "lines": 95,
+        "commits": 3,
+        "lines": 96,
         "path": "docs/tools.md"
       },
       {
@@ -1065,8 +1070,8 @@
         "path": "npm/package.json"
       },
       {
-        "commits": 28,
-        "lines": 616,
+        "commits": 29,
+        "lines": 617,
         "path": "pyproject.toml"
       },
       {
@@ -1080,8 +1085,8 @@
         "path": "site/astro.config.mjs"
       },
       {
-        "commits": 9,
-        "lines": 11195,
+        "commits": 8,
+        "lines": 10918,
         "path": "site/package-lock.json"
       },
       {
@@ -1510,8 +1515,8 @@
         "path": "tests/test_amend_w16_core_gates.py"
       },
       {
-        "commits": 42,
-        "lines": 3444,
+        "commits": 43,
+        "lines": 3446,
         "path": "tests/test_amend_w16_core_solvers.py"
       },
       {
@@ -1565,8 +1570,8 @@
         "path": "tests/test_amend_w25_builders.py"
       },
       {
-        "commits": 2,
-        "lines": 1302,
+        "commits": 3,
+        "lines": 1323,
         "path": "tests/test_amend_w25_core_gates.py"
       },
       {
@@ -1575,8 +1580,8 @@
         "path": "tests/test_amend_w25_core_solvers.py"
       },
       {
-        "commits": 4,
-        "lines": 704,
+        "commits": 5,
+        "lines": 707,
         "path": "tests/test_amend_w26_suite.py"
       },
       {
@@ -1660,8 +1665,8 @@
         "path": "tests/test_amend_w6_andons.py"
       },
       {
-        "commits": 25,
-        "lines": 1020,
+        "commits": 26,
+        "lines": 1026,
         "path": "tests/test_amend_w8_core_gates.py"
       },
       {
@@ -1750,8 +1755,8 @@
         "path": "tests/test_check_relift.py"
       },
       {
-        "commits": 92,
-        "lines": 12624,
+        "commits": 93,
+        "lines": 12639,
         "path": "tests/test_ci_workflows.py"
       },
       {
@@ -1785,8 +1790,8 @@
         "path": "tests/test_composite_reference.py"
       },
       {
-        "commits": 44,
-        "lines": 1566,
+        "commits": 47,
+        "lines": 1580,
         "path": "tests/test_core_solver_evidence.py"
       },
       {
@@ -1890,8 +1895,8 @@
         "path": "tests/test_gate_survives_optimize.py"
       },
       {
-        "commits": 81,
-        "lines": 5925,
+        "commits": 84,
+        "lines": 5956,
         "path": "tests/test_gates.py"
       },
       {
@@ -1905,13 +1910,13 @@
         "path": "tests/test_instrument_argv_smoke.py"
       },
       {
-        "commits": 32,
-        "lines": 3534,
+        "commits": 33,
+        "lines": 3543,
         "path": "tests/test_instrument_exits.py"
       },
       {
-        "commits": 52,
-        "lines": 4806,
+        "commits": 53,
+        "lines": 4809,
         "path": "tests/test_instrument_write_ordering.py"
       },
       {
@@ -1930,8 +1935,8 @@
         "path": "tests/test_instruments_amend_w14.py"
       },
       {
-        "commits": 14,
-        "lines": 2700,
+        "commits": 13,
+        "lines": 2664,
         "path": "tests/test_instruments_amend_w16.py"
       },
       {
@@ -2026,7 +2031,7 @@
       },
       {
         "commits": 12,
-        "lines": 2346,
+        "lines": 2347,
         "path": "tests/test_instruments_measure_amend_w25.py"
       },
       {
@@ -2155,8 +2160,8 @@
         "path": "tests/test_make_zoom_sheet.py"
       },
       {
-        "commits": 3,
-        "lines": 436,
+        "commits": 4,
+        "lines": 448,
         "path": "tests/test_measure_argv_smoke.py"
       },
       {
@@ -2193,6 +2198,11 @@
         "commits": 9,
         "lines": 1273,
         "path": "tests/test_measure_tracking.py"
+      },
+      {
+        "commits": 2,
+        "lines": 681,
+        "path": "tests/test_measure_weight_gate.py"
       },
       {
         "commits": 4,
@@ -2280,8 +2290,8 @@
         "path": "tests/test_record_index_binding.py"
       },
       {
-        "commits": 110,
-        "lines": 7965,
+        "commits": 113,
+        "lines": 8009,
         "path": "tests/test_refusal_clauses.py"
       },
       {
@@ -2320,8 +2330,8 @@
         "path": "tests/test_rig_sheet_compose.py"
       },
       {
-        "commits": 34,
-        "lines": 3908,
+        "commits": 37,
+        "lines": 5364,
         "path": "tests/test_route_gates.py"
       },
       {
@@ -2335,8 +2345,8 @@
         "path": "tests/test_seeds_specs.py"
       },
       {
-        "commits": 18,
-        "lines": 2099,
+        "commits": 19,
+        "lines": 2107,
         "path": "tests/test_sheet_argv_smoke.py"
       },
       {
@@ -2345,14 +2355,24 @@
         "path": "tests/test_sheet_compose.py"
       },
       {
-        "commits": 23,
-        "lines": 2916,
+        "commits": 24,
+        "lines": 2922,
         "path": "tests/test_sheet_pairing.py"
       },
       {
         "commits": 9,
         "lines": 530,
         "path": "tests/test_sheet_sides.py"
+      },
+      {
+        "commits": 2,
+        "lines": 1018,
+        "path": "tests/test_shotdiag_camera.py"
+      },
+      {
+        "commits": 2,
+        "lines": 677,
+        "path": "tests/test_shotdiag_identity.py"
       },
       {
         "commits": 16,
@@ -2460,8 +2480,8 @@
         "path": "tools/armature_core/channels.py"
       },
       {
-        "commits": 18,
-        "lines": 1746,
+        "commits": 19,
+        "lines": 1750,
         "path": "tools/armature_core/cli.py"
       },
       {
@@ -2480,8 +2500,8 @@
         "path": "tools/armature_core/donor_gate.py"
       },
       {
-        "commits": 19,
-        "lines": 806,
+        "commits": 20,
+        "lines": 807,
         "path": "tools/armature_core/errors.py"
       },
       {
@@ -2515,6 +2535,11 @@
         "path": "tools/armature_core/lift_solve.py"
       },
       {
+        "commits": 2,
+        "lines": 969,
+        "path": "tools/armature_core/measure_weights.py"
+      },
+      {
         "commits": 7,
         "lines": 686,
         "path": "tools/armature_core/openpose.py"
@@ -2545,9 +2570,14 @@
         "path": "tools/armature_core/rig_gates.py"
       },
       {
-        "commits": 58,
-        "lines": 8591,
+        "commits": 61,
+        "lines": 9672,
         "path": "tools/armature_core/route_gates.py"
+      },
+      {
+        "commits": 2,
+        "lines": 2126,
+        "path": "tools/armature_core/shotdiag.py"
       },
       {
         "commits": 24,
@@ -2865,6 +2895,11 @@
         "path": "tools/measure_lift.py"
       },
       {
+        "commits": 1,
+        "lines": 305,
+        "path": "tools/measure_shot.py"
+      },
+      {
         "commits": 16,
         "lines": 866,
         "path": "tools/measure_smoothness.py"
@@ -2960,8 +2995,8 @@
         "path": "tools/rig_sheet_compose.py"
       },
       {
-        "commits": 24,
-        "lines": 1039,
+        "commits": 25,
+        "lines": 1176,
         "path": "tools/sheet_compose.py"
       },
       {
@@ -3030,9 +3065,9 @@
     "level": "full",
     "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
   },
-  "generatedAt": "2026-11-12T02:05:16.498Z",
+  "generatedAt": "2026-11-25T23:58:11.791Z",
   "generatedFrom": {
-    "commit": "52f401166d954bd4c1e365e2635d93c35662fa1a"
+    "commit": "c5ad0102b94e39e7820aaacc067d4aa352144e6f"
   },
   "pairs": [
     {
@@ -3459,16 +3494,16 @@
     "floor": "strong",
     "floorHeld": false,
     "floorTrigger": null,
-    "headDate": "2026-11-11T21:04:26-05:00",
-    "inScopeFiles": 563,
+    "headDate": "2026-11-25T18:11:05-05:00",
+    "inScopeFiles": 571,
     "pinnedStart": null,
     "priorFloor": "strong",
-    "qualifyingCommits": 770,
+    "qualifyingCommits": 774,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 10,
-    "since": "2026-05-16T02:04:26.000Z",
+    "since": "2026-05-29T23:11:05.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

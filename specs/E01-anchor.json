@@ -3,9 +3,9 @@
   "name": "E01-anchor",
   "generator": "wan-vace",
   "asset": {
-    "path": "E:\\AI\\training\\facet_next\\E14_strokes\\run\\final\\longsword_hero.glb",
+    "path": "../training/facet_next/E14_strokes/run/final/longsword_hero.glb",
     "sha256": "ab62bb4bd753f2cef4db74d0f6c1128566e032e5d811f97b1b1abc5ad8e5cd90",
-    "note": "read-only; E:\\AI\\training is not in git and has no revert"
+    "note": "read-only; the sibling training tree is not in git and has no revert"
   },
   "resolution": {
     "width": 512,

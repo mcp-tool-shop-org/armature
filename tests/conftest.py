@@ -5,7 +5,7 @@ binding available:
 
     PYTHONPATH=<repo>;<repo>/tools .venv/Scripts/python.exe -m pytest -q
 
-(`ARMATURE_RECORD_INDEX` or the default sibling `E:/AI/record-index` is prepended by this
+(`ARMATURE_RECORD_INDEX` or the default sibling `<repo>/../record-index` is prepended by this
 conftest when present — hand-extending PYTHONPATH is no longer required for the binding.)
 
 Use the repo venv interpreter by path (never a bare `python` on PATH — that is the system
@@ -29,7 +29,7 @@ Suite selection (wave 34, F-19d81931; wave 37, F-4b60724b) — registered in
 - `--suite-speed=fast` — census/pure unit tests (excludes blender + paid); short local loop
 - `--suite-speed=full` — entire suite (default when the option is omitted)
 
-pytest-xdist (parallel workers) is OUT-OF-DOMAIN for this seat — ci-packaging owns the
+pytest-xdist (parallel workers) is OUT-OF-DOMAIN for this task — ci-packaging owns the
 dependency install; this harness only owns the mark/partition scheme.
 
 Operator levers (defaults are this rig's paths; set them on any other machine):
@@ -38,7 +38,7 @@ Operator levers (defaults are this rig's paths; set them on any other machine):
   `C:\\Program Files\\Blender Foundation\\Blender 5.2\\blender.exe`
 - `ARMATURE_GIT` — git executable; default `git` (resolved on PATH)
 - `ARMATURE_FONT_DIR` — optional extra font directory for sheet/label tests
-- `ARMATURE_RECORD_INDEX` — sibling `record-index` checkout; default `E:/AI/record-index`
+- `ARMATURE_RECORD_INDEX` — sibling `record-index` checkout; default `<repo>/../record-index`
   when that directory exists (prepended to `sys.path` before collection)
 
 Skip families, one sentence each:
@@ -637,7 +637,7 @@ def assert_gate(exc, gate_id, **expected_evidence):
 
     `armature_core.errors.GateFailure.__init__` is `self.evidence = evidence or {}`, so a
     gate raised with no evidence at all is a well-formed, silent object: the report the
-    Director reads names an andon with nothing behind it, and a test asserting on the
+    maintainer reads names an andon with nothing behind it, and a test asserting on the
     message string stays green through it. Across `tests/` there are hundreds of
     `pytest.raises` sites on gate types and only a handful assert on `.evidence`; this is
     the shared shape that makes emptiness fail loudly.
@@ -778,7 +778,7 @@ def sheet_font(name, size):
 # WAVE 34, F-19d81931. The suite had no `-m paid` / `-m "not blender"` / `-m sheet`
 # capability: marks were only parametrize/skipif/usefixtures/xfail, and conftest carried
 # no pytest_configure / addoption / collection_modifyitems. Marker registration strings in
-# pyproject.toml are OUT-OF-DOMAIN for this seat (ci-packaging); registration here is what
+# pyproject.toml are OUT-OF-DOMAIN for this task (ci-packaging); registration here is what
 # makes the vocabulary usable without that half.
 
 

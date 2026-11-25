@@ -3,13 +3,13 @@
   "stage": "B2",
   "amendment": "A3",
   "registered_utc": "2026-08-12",
-  "registered_by": "executor seat, on E09-run, before the first submission of any A3 graph",
+  "registered_by": "executor session, on E09-run, before the first submission of any A3 graph",
   "gate": "S",
   "seeds": [
     2026081201,
     2026081202
   ],
-  "how_these_were_chosen": "The resumption date as a plain integer with the generation index appended — 2026-08-12 run 01 and run 02. Same rule as specs/E09-seeds.json: the property that matters is that the number is fixed BEFORE any result is seen, and a date-derived seed is checkable against this file's own git timestamp. No seed here was drawn from a prior run, from any served template, or from anything this seat had already looked at.",
+  "how_these_were_chosen": "The resumption date as a plain integer with the generation index appended — 2026-08-12 run 01 and run 02. Same rule as specs/E09-seeds.json: the property that matters is that the number is fixed BEFORE any result is seen, and a date-derived seed is checkable against this file's own git timestamp. No seed here was drawn from a prior run, from any served template, or from anything this session had already looked at.",
   "allocation": {
     "2026081201": "the diagnostic-donor generation A3.1 authorises",
     "2026081202": "the reserve — A3 bounds this resumption at 2 generations total"

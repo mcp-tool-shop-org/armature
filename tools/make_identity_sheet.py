@@ -10,7 +10,7 @@ filename stems. **A shared stem is not evidence.** E01's whole lesson was that a
 burned by that twice. Whether the man in the plates is the man in the mesh is canon —
 no metric approximates it, so this tool computes nothing and decides nothing. It lays
 the two next to each other at comparable angles and stops, because the judgement is the
-Director's.
+maintainer's.
 
 The mesh row uses the **normal** channel rather than depth or mask: normals read as
 form to an eye (brow, jaw, shoulder, belt line), where depth reads as a smooth ramp and
@@ -52,7 +52,7 @@ class IdentitySheetError(SheetPopulationError):
     `if fi >= len(names): continue` dropped every requested index past the end of the
     directory and there was no guard on an empty row, so a 2-frame run asked for
     frames 0, 8, 16 and 24 produced a one-tile sheet, printed IDENTITY_SHEET and exited
-    0. The panel the Director is asked "is this the same man?" on must not quietly show
+    0. The panel the maintainer is asked "is this the same man?" on must not quietly show
     fewer angles than were requested.
     """
 
@@ -74,7 +74,7 @@ def _numbered_population(cdir, channel):
 
     The refusal five siblings already carry, in the shape this sheet needs. It raises
     rather than filtering because the file it would drop — or draw — is shown to the
-    Director as a frame of this run.
+    maintainer as a frame of this run.
     """
     pngs = sorted(n for n in os.listdir(cdir) if n.lower().endswith(".png"))
     # The refusal is now `sheet_compose.frames_by_number` -- ONE implementation for the six
@@ -118,7 +118,7 @@ def rows_for(run_dir, plates, frames, tile_h=360, channel="normal",
     #      (`encode_control.frame_population`, `invert_frames.frame_population`,
     #      `measure_floor.frame_population`, `measure_arm._load_frames`,
     #      `gate_b_frames.frame_paths`) — a stray is NAMED, never filtered in silence,
-    #      because the tile it produces is shown to the Director as a frame of this run.
+    #      because the tile it produces is shown to the maintainer as a frame of this run.
     names, by_number = _numbered_population(cdir, channel)
     # ---- and every requested frame NUMBER must exist. Keyed by the number in the file
     #      name, not by a position in a listing: on a run numbered from 1 the positional
@@ -136,7 +136,7 @@ def rows_for(run_dir, plates, frames, tile_h=360, channel="normal",
         # Azimuth is OPT-IN, as of wave 8. It used to be computed unconditionally as
         # 360*fi/len(names) and printed on every tile, with "orbit" in the row title —
         # E02's turnaround baked into the tool, on the panel whose own row title asks the
-        # Director "is this the same man?". Measured 2026-09-04 on a 16-frame VIDEO clip
+        # maintainer "is this the same man?". Measured 2026-09-04 on a 16-frame VIDEO clip
         # (time, not a camera orbit) with --frames=0,4,8,12: the tiles came back labelled
         # `f000 az 0d`, `f004 az 90d`, `f008 az 180d`, `f012 az 270d` under a row headed
         # "16-frame orbit" — four camera angles that never happened, in a caption a reader

@@ -1386,7 +1386,7 @@ def test_the_snapshot_helpers_have_exactly_one_home():
     render_start_frame 6/7/7, render_turnaround 2/2/2 -- and make_binding_sheet 1/0/0,
     make_parts_sheet 1/0/0, make_skeleton_sheet 1/0/0. The three SHEET tools each have a
     render write site and took no pre-render snapshot at all, on the artefact the
-    Director approves the skeleton at. They adopt the same home; the count moves, the
+    maintainer approves the skeleton at. They adopt the same home; the count moves, the
     property does not.
     """
     defs = [f for f in OWNED

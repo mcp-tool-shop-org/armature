@@ -311,7 +311,7 @@ if ($NoPackage) {
             # THE LEG JUDGES WHAT THIS RUN BUILT, AND NOTHING ELSE. `python -m build` does
             # not clear `dist/`, and neither did this leg: its only `Remove-Item` calls were
             # the two scratch rooms and the npm tarball. Measured on the main checkout
-            # 2026-09-04, `E:\AI\armature\dist` held `armature_studio-0.2.1-py3-none-any.whl`
+            # 2026-09-04, `<repo>/dist` held `armature_studio-0.2.1-py3-none-any.whl`
             # and `armature_studio-0.2.1.tar.gz` (mtime 2026-08-15) beside the 0.3.0 pair, so
             # `twine check dist\*` issued its verdict over FOUR files, two of them a version
             # published three weeks earlier -- a stale or half-written archive there turns the

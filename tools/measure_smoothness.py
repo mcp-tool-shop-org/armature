@@ -4,13 +4,13 @@
     python tools\\measure_smoothness.py --a=<keypoints.json> --b=<keypoints.json>
            --out=<record.json> [--label-a=E08 --label-b=E10]
 
-E10's attribution instrument. The Director's eye named E08's motion choppy; the lever
+E10's attribution instrument. The maintainer's eye named E08's motion choppy; the lever
 under test is driving density, and this is the measurement that makes the attribution
 causal rather than a vibe — if the painted result changes, this says whether the signal
 the model was shown changed, and by how much.
 
 **A DIAGNOSTIC. It gates nothing and decides nothing.** Metrics are diagnostics; the
-Director's eye is the judge.
+maintainer's eye is the judge.
 
 --------------------------------------------------------------------------------
 Two units, because one of them would be a lie by omission

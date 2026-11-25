@@ -1,6 +1,6 @@
 """The committed record index, checked without the library that builds it.
 
-WHY STDLIB ONLY. `record_index` is a sibling working copy at `E:\\AI\\record-index`,
+WHY STDLIB ONLY. `record_index` is a sibling working copy at `<repo>/../record-index`,
 not a dependency of this venv, and neither `verify.ps1` nor any CI workflow runs the
 index at all. So on 2026-08-18 the index had drifted six days behind the record and
 nothing anywhere said so: `armature_index.py verify` failed with six dangling artifact
@@ -14,7 +14,7 @@ five artifact rows anchored to `HANDOFF.md` and one to `README.md`, both rewritt
 after the index was built. The rows were not corrupt - they were correct about a
 corpus that had moved. Three of them named facet's files (`tools/mask_geometry.py`,
 `tests/test_t64_plate_geometry.py`, `armature.glb`), harvested out of a handoff
-paragraph that said in as many words they were untracked in `E:\\AI\\facet`.
+paragraph that said in as many words they were untracked in `<repo>/../facet`.
 
 WHAT IS GATED HERE AND WHAT IS DELIBERATELY NOT. `test_no_row_cites_text_that_is_gone`
 is leg 3, ridden into the suite so the condition cannot reach main unnoticed. Full

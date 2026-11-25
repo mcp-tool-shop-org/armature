@@ -2,13 +2,13 @@
   "experiment": "E10",
   "stage": "densified driving — the same dance, 81 samples over the identical duration",
   "registered_utc": "2026-08-12",
-  "registered_by": "executor seat, on E10-density, before the first submission of any E10 graph",
+  "registered_by": "executor session, on E10-density, before the first submission of any E10 graph",
   "gate": "S",
   "seeds": [
     2026081221,
     2026081222
   ],
-  "how_these_were_chosen": "The date as a plain integer with a run index appended, continuing the rule specs/E09-seeds.json, specs/E09-A3-seeds.json and specs/E08-seeds.json use: 2026-08-12, runs 21 and 22. The property that matters is that both numbers are fixed BEFORE any result is seen, and a date-derived seed is checkable against this file's own git timestamp. Neither seed was drawn from a prior run, from any served template, or from anything this seat had already looked at.",
+  "how_these_were_chosen": "The date as a plain integer with a run index appended, continuing the rule specs/E09-seeds.json, specs/E09-A3-seeds.json and specs/E08-seeds.json use: 2026-08-12, runs 21 and 22. The property that matters is that both numbers are fixed BEFORE any result is seen, and a date-derived seed is checkable against this file's own git timestamp. Neither seed was drawn from a prior run, from any served template, or from anything this session had already looked at.",
   "allocation": {
     "2026081221": "the probe — the one generation this spec authorises up front",
     "2026081222": "reserve, spendable only on a named cause the probe surfaces"

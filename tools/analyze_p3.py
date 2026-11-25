@@ -32,7 +32,7 @@ class AnalyzeP3Error(ArmatureError):
     """This analysis cannot be run as asked. One typed refusal for this tool.
 
     `args["run"]` answered a missing flag with a bare `KeyError: 'run'`, and a token that
-    had lost its leading `--` (`run=E:/x`) registered the key `n` — `token[2:]` — before
+    had lost its leading `--` (`run=missing/x`) registered the key `n` — `token[2:]` — before
     dying with the same one-word KeyError, naming neither the flag it wanted nor the token
     it got.
 

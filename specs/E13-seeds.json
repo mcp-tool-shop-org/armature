@@ -2,7 +2,7 @@
   "experiment": "E13",
   "stage": "the composed route, re-armed — A1 (four authored stills) and A2 (the cascade-constructed VIDEO) on wan2.7-r2v, per the RE-ARM amendment of 2026-08-13",
   "registered_utc": "2026-08-13",
-  "registered_by": "executor seat, on E13-run, BEFORE the first submission of any wan2.7-r2v graph and committed ahead of it",
+  "registered_by": "executor session, on E13-run, BEFORE the first submission of any wan2.7-r2v graph and committed ahead of it",
   "gate": "S",
   "seeds": [
     2026081351,

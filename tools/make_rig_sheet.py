@@ -82,7 +82,7 @@ def parse_args():
                         "`sheet_compose.py <out>/panels.json` composes the sheet. "
                         "Compensator: delete it; owner: the executor session")
     p.add_argument("--title", default="E07 arm (d) — retopologised, baked, bone-heat bound",
-                   help="the sheet's heading, as the Director reads it (default names "
+                   help="the sheet's heading, as the maintainer reads it (default names "
                         "E07 arm (d))")
     p.add_argument("--after-label", default=None,
                    help="what the AFTER column actually is. Derived from the mesh when "
@@ -158,7 +158,7 @@ def import_reference(path, scene, skinned):
     an unrigged reference mesh.
 
     `ref.data.polygons` then supplies the triangle count in the "before -- original mesh,
-    N tris, source atlas" label, and `ref` is rendered as that panel: the Director's
+    N tris, source atlas" label, and `ref` is rendered as that panel: the maintainer's
     texture-fidelity row could show an Icosphere beside the retopologised character under a
     count read off the Icosphere, and the sheet would read as catastrophic texture loss
     where the route is fine.

@@ -81,7 +81,7 @@ class ShadowError(ArmatureError):
 def composite_colour(text):
     """`"r,g,b"` linear floats -> a 3-tuple. THE ALPHA LAW's other half; no default.
 
-    The Director's ruling, 2026-08-12: authored image inputs carry alpha, never a baked
+    The maintainer's decision (2026-08-12): authored image inputs carry alpha, never a baked
     void, and the RGB each route submits is a **deliberate, recorded choice**. A default
     value here would defeat exactly that — the grey studio that bled through three waves of
     start frames was never chosen by anyone, which is why nobody could find the choice to
@@ -216,7 +216,7 @@ def cover_fit(src_w, src_h, width, height, anchor_x=0.5, anchor_y=0.5):
 
     **Why cover and not contain, which is what this repo's other fitter does.**
     `fit_reference.letterbox` deliberately pads: its subject is an identity reference, the
-    Director ruled that the whole figure must reach the model, and flat margin was the
+    maintainer ruled that the whole figure must reach the model, and flat margin was the
     accepted price. A backdrop is the opposite case. Padding a backdrop puts bands of
     invented colour into the conditioning image, and this repo already has that disease on
     file twice — the grey letterbox pads on E08's reference are the standing suspect for its
@@ -614,7 +614,7 @@ def gate_whole(extent, width, height, margin_px):
 
     **It binds on both directions of the same edge.** Too large is the failure this exists
     for (a cropped character conditioning the whole clip); too *small* is not caught here
-    and is not silent — the figure's height fraction is reported and the Director sees the
+    and is not silent — the figure's height fraction is reported and the maintainer sees the
     frame. The andon is placed where nothing else looks.
 
     **A non-finite extent is refused before either direction is asked** (wave 10, rule 4;

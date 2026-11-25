@@ -98,6 +98,22 @@ on:
       # the negation and turns the suite red, and until this line ran nothing.
       - "docs/research-grounding.md"
       - "docs/assets/**"
+      - ".github/dependabot.yml"
+      - "CHANGELOG.md"
+      - "CLAUDE.md"
+      - "README.es.md"
+      - "README.fr.md"
+      - "README.hi.md"
+      - "README.it.md"
+      - "README.ja.md"
+      - "README.pt-BR.md"
+      - "README.zh.md"
+      - "SCORECARD.md"
+      - "SECURITY.md"
+      - "SHIP_GATE.md"
+      - "docs/ROADMAP.md"
+      - "docs/publishing.md"
+      - "docs/tools.md"
   pull_request:
     paths:
       - "site/**"
@@ -171,6 +187,22 @@ on:
       # the negation and turns the suite red, and until this line ran nothing.
       - "docs/research-grounding.md"
       - "docs/assets/**"
+      - ".github/dependabot.yml"
+      - "CHANGELOG.md"
+      - "CLAUDE.md"
+      - "README.es.md"
+      - "README.fr.md"
+      - "README.hi.md"
+      - "README.it.md"
+      - "README.ja.md"
+      - "README.pt-BR.md"
+      - "README.zh.md"
+      - "SCORECARD.md"
+      - "SECURITY.md"
+      - "SHIP_GATE.md"
+      - "docs/ROADMAP.md"
+      - "docs/publishing.md"
+      - "docs/tools.md"
   workflow_dispatch:
 
 concurrency:
@@ -501,7 +533,7 @@ jobs:
       # walks every `run:` script under `.github/` through `_code_only` and holds the sources
       # that EXECUTE `npm test` to `NPM_TEST_SOURCES_TODAY = ["ci.yml"]`, so deleting this
       # step, or adding one back to release.yml, turns the suite red and brings a reader here.
-      # What is NOT asserted, stated so the next seat does not assume it: there is no census
+      # What is NOT asserted, stated so a later session does not assume it: there is no census
       # parsing coverage comments in general. That form was attempted and withdrawn -- every
       # regex shape flagged this very paragraph, which names `npm test`, `run: npm test`,
       # ci.yml and release.yml in ordinary prose. The pin is a claim about the code; the

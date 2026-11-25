@@ -7,7 +7,7 @@
            --a-fps=16 --b-fps=16 --meta=<payload.json> --out=<gate0.webp>
            [--reference=<plate.png|frames dir>]
 
-The Director judges motion at true tempo. Two arms that ran at different frame counts over
+The maintainer judges motion at true tempo. Two arms that ran at different frame counts over
 the same performance cannot be laid side by side by pairing frame k with frame k — that
 plays one of them at the wrong speed — and pairing by nearest time **resamples** one arm,
 which changes the very texture the comparison exists to read. Both moves quietly corrupt
@@ -143,7 +143,7 @@ def frame_numbers(paths):
     The banner burned into every composite frame read `f{x}` / `f{y}`, where x and y are
     POSITIONS produced by `event_timeline` — indices into `range(n)` — not the numbers in
     the file names. Measured 2026-09-04: two arms whose files are `00005.png, 00006.png,
-    00007.png` give timeline indices (0,0), (1,1), (2,2), so the clip the Director watches
+    00007.png` give timeline indices (0,0), (1,1), (2,2), so the clip the maintainer watches
     was captioned `f0 f1 f2` over frames 5, 6 and 7, and the manifest recorded only
     `frames: 3` and `fps` — nothing in the record recovered the mapping. A note taken off
     the clip ("the hand melts around f12") then names a frame that is not the file, and the
@@ -171,7 +171,7 @@ def gate_contiguous_numbering(numbers, arm, fps):
     the clip while the banner correctly read `f00003`. This module's docstring ("Every frame
     of both arms is shown, once, for exactly its own duration") and the manifest's own
     `composite.rule` ("NEITHER arm is resampled or retimed") were both false on that input,
-    and the Director reads the resulting desynchronisation as a difference between the arms:
+    and the maintainer reads the resulting desynchronisation as a difference between the arms:
     the exact corruption the tool was written to prevent.
 
     **An OFFSET is not the defect and is not refused.** Wave 14 measured real arms numbered
@@ -377,7 +377,7 @@ def load_gate0_reference(path, n_frames):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="two clips side by side in one file, each played at its OWN true "
-                    "tempo, for the Director to judge in motion. --mode=gate0 is the "
+                    "tempo, for the maintainer to judge in motion. --mode=gate0 is the "
                     "control|output|reference motion Gate 0 panel with a provenance "
                     "banner (F-f174c9e2 / F-1cc5cd22)",
         epilog=HALT_EPILOG)

@@ -1,4 +1,4 @@
-"""make_binding_sheet — arm (a) beside arm (b), for the Director's eye to pick the binding.
+"""make_binding_sheet — arm (a) beside arm (b), for the maintainer's eye to pick the binding.
 
     blender -b --factory-startup -P tools\\make_binding_sheet.py -- --a=<glb> --a-label=... --b=<glb> --b-label=... --out=<dir>
     <venv-python> tools\\sheet_compose.py <dir>\\panels.json
@@ -110,7 +110,7 @@ def parse_args():
                    help="arm (a): the first bound GLB, drawn on the TOP row; read only")
     p.add_argument("--a-label", default="(a)",
                    help="the caption under the top row (default \"(a)\") -- it is what the "
-                        "Director reads to know which binding he is looking at")
+                        "maintainer reads to inspect which binding is shown")
     p.add_argument("--b", required=True,
                    help="arm (b): the second bound GLB, drawn on the BOTTOM row at the "
                         "SAME cameras as (a); read only")
@@ -213,7 +213,7 @@ def shoot(scene, path):
     #
     # The comment below states the premise itself -- the existence and size clauses are
     # properties a PREVIOUS run's file at the same path satisfies -- and no clause
-    # measured the target before the write, on the artefact the Director approves the
+    # measured the target before the write, on the artefact the maintainer approves the
     # skeleton at. Consequence stays bounded as the ground row framed it: no realistic
     # FINISHED-without-write was constructed on this rig. The home is ADOPTED, not
     # respelled.
@@ -240,7 +240,7 @@ def shoot(scene, path):
     # function discarded it, and no code path in this tool ever opened a rendered file
     # again -- so `panels.json` was a manifest of paths that may not exist, printed
     # under a success sentinel, and a stale file left at the path by an earlier run put
-    # the previous run's panel into the sheet the Director is asked to approve. The
+    # the previous run's panel into the sheet the maintainer is asked to approve. The
     # shape is `preview_walk.py:196-206`'s, carried here rather than reinvented.
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         raise BindingSheetGate(
@@ -377,7 +377,7 @@ def main():
         "engine": engine,
         "out": out,
         "filename": "E07-binding-comparison.png",
-        "title": "E07 — the two bindings, for the Director's eye",
+        "title": "E07 — the two bindings, for the maintainer's eye",
         "subtitle": (f"(a) {args.a_label}   ·   (b) {args.b_label}   ·   the arc is E03's: "
                      f"the character's {a['articulated_side']['side_word']} arm, "
                      f"0°→90° about +Y, {last} keys at 16 fps   ·   "

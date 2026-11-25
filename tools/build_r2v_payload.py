@@ -172,7 +172,7 @@ def gate_arm_input(arm, value):
 #: disclosure key either. Meanwhile the E14 sibling had been given exactly that surface a
 #: wave earlier (F-92f67091) for a SMALLER obligation — one credits line on one LoRA.
 #:
-#: CLAUDE.md's per-route disclosure ruling (the Director, 2026-08-12) was born on THIS route:
+#: CLAUDE.md's per-route disclosure ruling (the maintainer, 2026-08-12) was born on THIS route:
 #: a route that sends assets through a third-party tier documents its data-use posture, its
 #: AI-content disclosure duty and its watermark policy, grounded in the licence map's fetched
 #: documents. The obligations below are the map's words, not this builder's.
@@ -192,7 +192,7 @@ TIER_DISCLOSURE = {
         "document": "Wan Terms of Service",
         "url": "https://wan.video/policy/termsofService",
         "updated": "2026-08-06",
-        "fetched": "2026-08-12 (the Director's local export; fetchers get a JS shell)",
+        "fetched": "2026-08-12 (the maintainer's local export; fetchers get a JS shell)",
         "sha256": "26d81f01...cb4cd6",
         "recorded_in": ("docs/license-map.md, row 'Wan 2.6/2.7 partner tier'; "
                         "docs/experiments/E13-composed-route-probe.md"),
@@ -200,8 +200,8 @@ TIER_DISCLOSURE = {
     "output_ownership": ("the provider assigns to the submitter all right, title and "
                          "interest it has in Outputs (Wan ToS SIII.4), and Comfy's own row "
                          "fills our side of the chain"),
-    "ruling": ("CONDITIONAL ACCEPTED by the Director, 2026-08-12 — proceed via Comfy. The "
-               "condition he attached is DISCLOSURE, which is why these lines exist and why "
+    "ruling": ("CONDITIONAL ACCEPTED by the maintainer, 2026-08-12 — proceed via Comfy. The "
+               "attached condition is DISCLOSURE, which is why these lines exist and why "
                "they are printed rather than filed"),
     "residual": ("WHICH paper governs Comfy-mediated partner calls is NOT established: the "
                  "Wan ToS governs services accessible via wan.video and its own SII.1(c) "

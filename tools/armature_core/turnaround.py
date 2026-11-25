@@ -13,7 +13,7 @@ path can tell a genuine RGBA render from a baked void with a fourth channel full
 the files open, the dimensions are right, the figure is in every one of them, and a contact
 sheet of eight baked views looks exactly like a contact sheet of eight authored ones. That
 is not hypothetical: the set this module exists to replace
-(`E:\\AI\\training\\facet_E33\\turn_final\\`) is eight RGBA PNGs whose alpha extrema are
+(`<repo>/../training/facet_E33/turn_final/`) is eight RGBA PNGs whose alpha extrema are
 (255, 255) on all eight, with a flat grey void baked into the RGB. It was consumed as a
 reference set and nothing anywhere reported a defect.
 
@@ -21,7 +21,7 @@ reference set and nothing anywhere reported a defect.
 each is silent in the other's presence:
 
 * `alpha_min == 255` — no pixel is transparent. This is the baked-void defect exactly, and
-  it is what the Director's ruling of 2026-08-12 forbids.
+  it is what the maintainer's decision of 2026-08-12 forbids.
 * `alpha_max < 255` — no pixel is opaque. A render nobody is in, or one whose subject
   material went transparent, is well-formed, correctly sized, non-empty as a file, and
   carries a beautifully varied alpha channel. A gate written only against the first clause
@@ -486,7 +486,7 @@ def gate_view_alpha(view_index, alpha_min, alpha_max, transparent_fraction, path
 
     Raises on either saturated extreme; reports the measured numbers either way, because
     "it carries alpha" and "it carries alpha on four pixels" are different facts about a
-    reference view, and the second one is a warning for the Director's eye rather than a
+    reference view, and the second one is a warning for the maintainer's eye rather than a
     verdict this gate should invent.
 
     **A non-finite fraction is refused before either extreme is asked** (F-bf3dfb4e, wave
@@ -640,7 +640,7 @@ def _pixel_pairs(view_records):
     # above ranged over neighbours. 64 views is 2016 mean-absolute-difference comparisons,
     # which is cheap; the ADJACENT population above is kept and counted separately because
     # wave 16 established that a verdict names only clauses that ran against a population
-    # that could fail them, and the adjacent minimum is the magnitude the Director's eye
+    # that could fail them, and the adjacent minimum is the magnitude the maintainer's eye
     # reads.
     anywhere, n_pairs_all = [], 0
     for i in range(len(planes)):
@@ -699,7 +699,7 @@ def gate_set_distinct(view_records, expected):
     every pixel agrees are the same picture whatever their PNG bytes say, and this repo
     does not invent a threshold for "different enough" where no calibrated one exists —
     the measured `min_adjacent_pixel_distance` rides the evidence and the verdict so the
-    Director's eye reads a magnitude rather than the word "distinct".
+    maintainer's eye reads a magnitude rather than the word "distinct".
 
     **And where the clause cannot run, the verdict says so.** A caller that hands digest-
     only records gets `n_views_carrying_pixels: 0` and a verdict that states the pixel

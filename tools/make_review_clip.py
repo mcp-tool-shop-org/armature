@@ -9,7 +9,7 @@ melted hand in every frame, so this emits both from the SAME lossless source:
 
 * **the review clip** — an animated WEBP written LOSSLESS, at 8 fps against a 16 fps
   source, which is the 0.5x the spec asks for. Lossless because the whole point of tapping
-  PNGs off the decode is that nothing downstream re-compresses what the Director judges.
+  PNGs off the decode is that nothing downstream re-compresses what the maintainer judges.
 * **the stills** — native-resolution crops where structure is hardest. Hands are located
   from the detector's own wrist landmarks when a detection record is given, and from the
   frame centre when it is not; the crop box is written into the sidecar either way, because
@@ -65,7 +65,7 @@ FRAME_SUBDIR_NAMES = ("lossless", "frames")
 
 #: What the record says when no run token could be derived. The repo's rule: a value the
 #: inputs do not carry prints as missing, never as a plausible default -- and the review
-#: clip's FILENAME is a label the Director opens.
+#: clip's FILENAME is a label the maintainer opens.
 NO_RUN_TOKEN = "NOT DERIVED"
 
 #: MediaPipe POSE_LANDMARKS indices for hard-structure stills (F-cdd95afb).
@@ -243,7 +243,7 @@ def clip_name(fps, source_fps, run=None):
 
     The name was the literal `review_0.5x_8fps.webp` whatever the flags said, which was
     true only while every source ran at 16 fps. On a 20 fps source the same file is 0.40x
-    at 8 fps and the filename asserted otherwise — a label on an artifact the Director
+    at 8 fps and the filename asserted otherwise — a label on an artifact the maintainer
     opens is evidence, and it may not be a placeholder. Corrected E10, 2026-08-12.
 
     WAVE 16 (F-78f49c7c): the run token is prefixed when one is KNOWN, so a review clip
@@ -298,7 +298,7 @@ def main(argv=None):
     #      the review directory, so a refused run left an empty directory a later reader
     #      takes for an attempt that produced nothing. `--source-fps=0` dies one line later,
     #      in `a.fps / float(a.source_fps)` and in `clip_name` -- which is the FILENAME the
-    #      Director opens. A negative rate is worse than either: `int(round(1000.0 / -8))`
+    #      maintainer opens. A negative rate is worse than either: `int(round(1000.0 / -8))`
     #      is a negative frame delay written into a WebP.
     for _flag, _value in (("--fps", a.fps), ("--source-fps", a.source_fps)):
         if _value <= 0:

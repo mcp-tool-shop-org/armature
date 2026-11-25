@@ -7,7 +7,7 @@
 **Why this exists, measured 2026-08-12.** `WanAnimateToVideo` does not letterbox its
 `reference_image`; it calls `comfy.utils.common_upscale(..., "area", "center")`, which
 crops the longer axis symmetrically and then resizes. Read from the core source, and the
-consequence for E08's reference is arithmetic: the Director-approved twin is 352x1024
+consequence for E08's reference is arithmetic: the maintainer-approved twin is 352x1024
 (aspect 0.344) and the frame is 832x480 (aspect 1.733), so the node keeps
 
     y = round((1024 - 1024 * (0.344 / 1.733)) / 2) = 410
@@ -17,7 +17,7 @@ the hips and thighs. No head, no face, no hands. An identity reference with no f
 not an identity reference, and nothing in the chain errors: the node resizes cleanly, the
 graph validates, the run completes.
 
-**The Director ruled letterbox** (2026-08-12), so the whole figure reaches the model and the
+**The maintainer ruled letterbox** (2026-08-12), so the whole figure reaches the model and the
 cost is flat margin rather than a missing head.
 
 **This is a DERIVED image and the record says so.** The source hash and the derived hash both
@@ -128,7 +128,7 @@ def parse_args(argv=None):
                          "on width/height (F-c3572bf5)")
     ap.add_argument("--mode", default="letterbox", choices=("letterbox",),
                     help="how the source is fitted. Only 'letterbox' exists, and that is "
-                         "the Director's 2026-08-12 ruling: the node's own centre-crop "
+                         "the maintainer's 2026-08-12 decision: the node's own centre-crop "
                          "handed the model 19.9 percent of the figure and no face")
     ap.add_argument("--pad", default="auto",
                     help="'auto' samples the source's own border; or R,G,B (argparse eats "
@@ -315,7 +315,7 @@ def main(argv=None):
                                 "cropped, every source pixel survives")),
         "what_the_node_would_have_done_instead": node_crop_that_this_avoids(
             w, h, a.width, a.height),
-        "ruling": ("the Director ruled letterbox on 2026-08-12, after the center-crop's "
+        "ruling": ("the maintainer chose letterbox framing on 2026-08-12, after the center-crop's "
                    "consequence was measured and shown: the whole figure reaches the model "
                    "and the cost is flat margin rather than a missing head"),
     }

@@ -123,7 +123,7 @@ def test_a_nonpositive_radius_raises(tmp_path, radius):
 
 def test_the_real_e09_previz_record_loads_if_it_is_on_this_rig():
     """The actual artifact this feature was built for. Skips off-rig rather than pretending."""
-    p = (r"E:\AI\armature-E09\outputs\E09\b2-a3-render-lifted\render_provenance.json")
+    p = os.environ.get("ARMATURE_E09_PROVENANCE", "outputs/E09/b2-a3-render-lifted/render_provenance.json")
     if not os.path.isfile(p):
         pytest.skip("the E09 previz worktree is not on this machine")
     target, radius = framing.load_pinned_camera(p, EXPECT)

@@ -8,7 +8,7 @@
         --prompt-id=... --out=outputs/E13/sheets/E13-A1-seed1.png
 
 facet ran four arms and two gates before it built a sheet like this, and when the sheet
-finally existed the Director read the whole thesis off one panel. So it is built **before
+finally existed the maintainer read the whole thesis off one panel. So it is built **before
 any number is quoted**, and it carries its own provenance rather than depending on a caption.
 
 Three bands, in the order the shot was made:
@@ -22,7 +22,7 @@ Three bands, in the order the shot was made:
                own records, with `NOT RECORDED` where a record does not carry it
 
 **Sheets locate; full size decides.** Tiles here are scaled to a common width so the bands
-line up; the full-resolution frames stay on disk and are what the Director's eye reads.
+line up; the full-resolution frames stay on disk and are what the maintainer's eye reads.
 
 Compensator (NAMED_COMPENSATORS): writes one PNG under `outputs/`. Compensator: delete it;
 owner: the executor session. Inputs are read-only.
@@ -216,7 +216,7 @@ def _sample_indices(text):
     if not idx:
         raise E13SheetError(
             f"--sample={text!r} names no frames; the OUTPUT band would be empty on the "
-            f"sheet the Director rules the arm from",
+            f"sheet the maintainer decides the arm from",
             {"gate": None, "andon": "E13SheetError",
              "clause": "sample_names_no_frames", "flag": "--sample", "supplied": text})
     negative = [i for i in idx if i < 0]
@@ -301,7 +301,7 @@ def main(argv=None):
     #
     #      Wave 16 guarded the REFERENCES listing above (`--ref-frames` empty ->
     #      `E13SheetError`) and moved `os.makedirs` below the andons, and left the OUTPUT
-    #      band — the panels the Director actually judges — indexing an unchecked listing
+    #      band — the panels the maintainer actually judges — indexing an unchecked listing
     #      one screen down. `--sample` defaults to `0,37,75,112,149`. Measured on `e8263a3`
     #      on a 3-frame extraction whose `frames.json` records `n_frames: 3`, run with the
     #      default `--sample`: `FileNotFoundError: [Errno 2] No such file or directory:
@@ -319,7 +319,7 @@ def main(argv=None):
         raise E13SheetError(
             f"--sample asks for frame(s) {missing} and the extraction at "
             f"{os.path.abspath(a.frames)} holds {fr['n_frames']} "
-            f"(0..{fr['n_frames'] - 1}); the OUTPUT band is the panel the Director rules "
+            f"(0..{fr['n_frames'] - 1}); the OUTPUT band is the panel the maintainer decides "
             f"the arm from, and it cannot show a frame that was never extracted",
             {"gate": None, "andon": "E13SheetError",
              "clause": "sample_frame_not_in_the_extraction",
@@ -343,7 +343,7 @@ def main(argv=None):
                *diag_extra])
 
     title = (f"E13 {a.arm} seed {a.seed} — references | output | provenance   "
-             f"(diagnostics only; the Director's eye is the verdict)")
+             f"(diagnostics only; the maintainer's eye is the verdict)")
     sheet = build(a.arm, ref_images, ref_labels, frame_paths, frame_labels, prov, title)
     # ---- the output directory is created only once every in-tool andon above has fired.
     #      It used to sit at the top of `main`, above the `--ref-frames` listing that could

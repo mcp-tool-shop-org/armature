@@ -31,7 +31,7 @@ and banked under `outputs/E09/route2/` with its sha256:**
    "Jul 28, 2025: Wan2.2 has been integrated into ComfyUI ([CN](...) | [EN](...)). Enjoy!"
    Wan's own repo carries NO ComfyUI numbers and designates that page for them. So the
    documented ComfyUI trajectory is the one that page serves — by the model authors' own
-   pointer, not by this seat's choice of a convenient source.
+   pointer, not by this session's choice of a convenient source.
 2. `https://docs.comfy.org/tutorials/video/wan/wan2_2` — states no numbers in prose; it
    serves the workflow JSON and tells the reader to load it.
 3. That JSON, in `Comfy-Org/workflow_templates` (MIT), at two PINNED commits:
@@ -41,7 +41,7 @@ and banked under `outputs/E09/route2/` with its sha256:**
        template (non-lightning workflow) (#205)".
    The two agree on every SAMPLING value used here, and the agreement is recorded rather
    than one being picked. They do NOT agree on the negative prompt — measured, not
-   assumed, by a check that failed on this seat's first claim: `dcc00d29d79d` appends
+   assumed, by a check that failed on this session's first claim: `dcc00d29d79d` appends
    two tokens to Wan's own string (`NEGATIVE_DRIFT` below). This graph uses Wan's.
    WARNING: the file at `main` agrees with neither — it now carries only the lightx2v
    4-step variant, which Gate ROUTE excludes, so a later re-fetch of `main` is not a
@@ -245,7 +245,7 @@ PROFILE_DELTA = [
 #: Copied from the fetched file, not from the served template — the two agree because both
 #: descend from this source, which is a coincidence worth naming rather than leaning on.
 #: CORRECTED 2026-08-12, by the check that was written to catch exactly this. The claim
-#: this seat first wrote — "byte-identical at both pinned commits" — is FALSE, and the test
+#: this session first wrote — "byte-identical at both pinned commits" — is FALSE, and the test
 #: `test_the_reference_negative_prompt...` failed on it before any credit was spent. What
 #: is measured: `5d6089c4250f` reproduces Wan's `shared_config.sample_neg_prompt`
 #: byte-for-byte; `dcc00d29d79d` APPENDS two tokens to it (see NEGATIVE_DRIFT below). The
@@ -686,7 +686,7 @@ def main(argv=None):
             "licence_note_for_the_advisor": (
                 "the templates repo is MIT. It is cited as DOCUMENTATION for numeric "
                 "settings, not loaded as a dependency and not copied as code, so this "
-                "seat does not add a licence-map row for it — the advisor rules on "
+                "session does not add a licence-map row for it — the advisor rules on "
                 "whether the map should carry one anyway")},
         "reference_values": split["values"],
         "wan_native_values_for_comparison": REFERENCE,

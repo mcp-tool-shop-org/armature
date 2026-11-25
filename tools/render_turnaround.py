@@ -8,7 +8,7 @@ is the shape that survives.
 
 S03 Task A's instrument. A turnaround is the reference kit a route is *handed* when it has
 to bind identity, so this tool's whole product is eight pictures of one character that a
-route can actually consume — which means **authored RGBA, per the Director's ruling of
+route can actually consume — which means **authored RGBA, per the maintainer's ruling of
 2026-08-12**, and not the thing that ruling was made against.
 
 **What it is not.** It is not `stage_render` (control channels — depth/normal/mask/edge —
@@ -113,7 +113,7 @@ can see. It does NOT see a flipped row order, at any aspect: the solve centres t
 and a centred box maps to itself under a vertical flip to within a pixel. Nothing derived
 from the box can see that, so the row order is settled by the orientation calibration and
 by `_measure_alpha_plane`'s own test rather than by a per-view number. No calibrated
-tolerance for the delta exists on this rig, so it is reported and the Director's eye reads
+tolerance for the delta exists on this rig, so it is reported and the maintainer's eye reads
 it.
 
 --------------------------------------------------------------------------------
@@ -136,7 +136,7 @@ Compensator (NAMED_COMPENSATORS)
 
 The only world-touching act is writing PNGs and a manifest under `outputs/`. Compensator:
 delete the directory; owner: the executor session. Inputs are opened read-only —
-`E:\\AI\\training` and `E:\\AI\\facet` are not in git, have no revert, and are never
+`<repo>/../training` and `<repo>/../facet` are not in git, have no revert, and are never
 written to.
 """
 
@@ -765,7 +765,7 @@ def _predicted_vs_measured(extent, bbox):
     No calibrated threshold for acceptable disagreement exists on this rig. Anti-aliasing
     widens the rendered edge, the 0.5 alpha threshold pulls it back, and a shaded thin limb
     can fall under it entirely — three effects of unmeasured relative size.
-    So the numbers are reported and the Director's eye reads them; inventing a tolerance
+    So the numbers are reported and the maintainer's eye reads them; inventing a tolerance
     here would be a pass condition this tool could move.
     """
     if bbox is None:
@@ -1179,7 +1179,7 @@ def main():
     scene.collection.objects.link(cam)
     scene.camera = cam
 
-    # THE ALPHA LAW (CLAUDE.md, the Director's ruling 2026-08-12). `film_transparent`
+    # THE ALPHA LAW (CLAUDE.md, the maintainer's ruling 2026-08-12). `film_transparent`
     # makes the WORLD background alpha 0 while the subject's own geometry stays opaque,
     # so what becomes transparent is exactly the void the law is about and nothing else.
     # There is no composite here on purpose: this tool's deliverable IS the RGBA master,

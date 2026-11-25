@@ -46,24 +46,67 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 0,
-      "changed": 3,
+      "added": 8,
+      "changed": 184,
       "moved": 0,
-      "parts": 2,
+      "parts": 7,
       "removed": 0
     },
     "items": [
       {
+        "kind": "door",
+        "sentence": "ci's pull request trigger now also names `.github/dependabot.yml`, `CHANGELOG.md`, `CLAUDE.md`, `README.es.md`, `README.fr.md`, `README.hi.md`, `README.it.md`, `README.ja.md`, `README.pt-BR.md`, `README.zh.md`, `SCORECARD.md`, `SECURITY.md`, `SHIP_GATE.md`, `docs/ROADMAP.md`, `docs/publishing.md` and `docs/tools.md`.",
+        "subjects": [
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "ci's push trigger now also names `.github/dependabot.yml`, `CHANGELOG.md`, `CLAUDE.md`, `README.es.md`, `README.fr.md`, `README.hi.md`, `README.it.md`, `README.ja.md`, `README.pt-BR.md`, `README.zh.md`, `SCORECARD.md`, `SECURITY.md`, `SHIP_GATE.md`, `docs/ROADMAP.md`, `docs/publishing.md` and `docs/tools.md`.",
+        "subjects": [
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "CHANGELOG.md is now read by tests/test_public_hygiene.py.",
+        "subjects": [
+          "CHANGELOG.md",
+          "tests/test_public_hygiene.py"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "CLAUDE.md is now also read by tests/test_public_hygiene.py.",
+        "subjects": [
+          "CLAUDE.md",
+          "tests/test_public_hygiene.py"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "HANDOFF.md is now also read by tests/test_public_hygiene.py.",
+        "subjects": [
+          "HANDOFF.md",
+          "tests/test_public_hygiene.py"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "And 6 more new writers and readers of places.",
+        "subjects": []
+      },
+      {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-11-11; 3 files changed content.",
+        "sentence": "8 files added and 184 changed content, across 7 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "fee4f74bb1c6f10dcf5251491a94f758565b6c8a",
-      "generatedAt": "2026-11-11T22:06:23.052Z"
+      "commit": "52f401166d954bd4c1e365e2635d93c35662fa1a",
+      "generatedAt": "2026-11-12T02:05:16.498Z"
     },
-    "unchanged": true
+    "unchanged": false
   },
   "changesTogether": [
     {
@@ -146,9 +189,9 @@
     "Window: 180 days; a pair counts from 10 shared commits, since 102 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "52f401166d954bd4c1e365e2635d93c35662fa1a",
+  "commit": "c5ad0102b94e39e7820aaacc067d4aa352144e6f",
   "defaultBranch": "main",
-  "derived": "8 parts, mostly Python (320 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.",
+  "derived": "8 parts, mostly Python (327 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.",
   "doors": [
     {
       "checks": [
@@ -175,12 +218,12 @@
         {
           "boundary": "tests",
           "depth": 0,
-          "files": 203
+          "files": 207
         },
         {
           "boundary": "tools",
           "depth": 0,
-          "files": 114
+          "files": 117
         }
       ],
       "runs": [
@@ -195,8 +238,8 @@
       "sends": [],
       "stages": [],
       "triggers": [
-        "on a pull request touching 21 paths",
-        "on a push touching 21 paths",
+        "on a pull request touching 37 paths",
+        "on a push touching 37 paths",
         "or by hand"
       ]
     },
@@ -215,12 +258,12 @@
         {
           "boundary": "tests",
           "depth": 0,
-          "files": 203
+          "files": 207
         },
         {
           "boundary": "tools",
           "depth": 0,
-          "files": 114
+          "files": 117
         }
       ],
       "runs": [
@@ -334,11 +377,11 @@
   ],
   "engine": "1.26.0",
   "generated": [],
-  "generatedAt": "2026-11-12T02:05:16.498Z",
+  "generatedAt": "2026-11-25T23:58:11.791Z",
   "limits": [
     "43 imports could not be resolved: `tests/blender/test_check_pack.py` imports `conftest`, which is no module on its import path and no declared dependency; `tests/blender_stub.py` imports a path built at run time; `tests/conftest.py` imports a path built at run time; and 40 more.",
-    "116 writes and 75 reads use paths built at run time and are not named here.",
-    "80 writes and 156 reads go to a path their caller passes, not to this repository.",
+    "118 writes and 75 reads use paths built at run time and are not named here.",
+    "80 writes and 162 reads go to a path their caller passes, not to this repository.",
     "3 writes go to the directory the command is run in, not to this repository.",
     "3 commands are built at run time and not followed."
   ],
@@ -593,16 +636,16 @@
   ],
   "summary": null,
   "summaryFrom": null,
-  "testFiles": 223,
+  "testFiles": 227,
   "testedBy": {
     "npm": 1,
-    "tools": 191
+    "tools": 195
   },
   "testedByScript": [
     "npm"
   ],
   "testedCodeParts": 2,
-  "unnamedWrites": 116,
+  "unnamedWrites": 118,
   "unread": [],
   "unreadFiles": 0,
   "unreadNote": [],

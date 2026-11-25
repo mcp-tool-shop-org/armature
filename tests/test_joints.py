@@ -238,7 +238,7 @@ def test_two_identical_offsets_still_read_as_the_instrument():
 
 # ------------------------------------------- the sheet that reports the snap result (w6)
 #
-# F-1bfab6de. The skeleton-approval sheet — the artifact the Director gates the whole
+# F-1bfab6de. The skeleton-approval sheet — the artifact the maintainer gates the whole
 # experiment at — carried ONE hard-coded subtitle string making two claims the run never
 # checked:
 #
@@ -286,7 +286,7 @@ def test_the_subtitle_states_how_many_pivots_actually_moved():
 
 def test_an_unmatched_joint_is_labelled_on_its_own_panel():
     """Before and After are the same picture for an unmatched joint. The panel has to say
-    so, or the Director reads the failure as 'this pivot was already correct'."""
+    so, or the maintainer reads the failure as 'this pivot was already correct'."""
     sheet = _sheet()
     _, table = joints.snap_sites_to_balls(_derived(BASE), [_ball((0.149, 0.006, 0.098))])
     assert table["elbow_L"]["matched"] is True

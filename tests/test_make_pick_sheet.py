@@ -3,7 +3,7 @@
 The sheet decides nothing, so the thing worth testing is not its layout — it is whether
 every number printed on it is derived from the frames it was pointed at. A pick sheet that
 printed a stale literal, or that mapped the visible band into the wrong coordinate system,
-would put the Director's eye on the wrong part of the picture and no downstream check would
+would put the maintainer's eye on the wrong part of the picture and no downstream check would
 ever notice: the sheet renders, the JSON validates, the plate gets picked.
 """
 
@@ -87,7 +87,7 @@ def test_the_visible_band_maps_into_the_candidates_own_pixels():
     wave 1's 832x480 into E12's 1024x576, with w3's transparent region rows 0..182.
 
     Getting this wrong is silent — the band still draws, just over the wrong part of the
-    picture, and the Director judges bar content that will not survive.
+    picture, and the maintainer judges bar content that will not survive.
     """
     from armature_core import startframe as SF
 

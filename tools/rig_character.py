@@ -25,7 +25,7 @@ finished — never behind a shell `&&`, never through an `assert`, with no skip 
 
 **Deformation under pose is NOT a gate.** Per-structure displacement statistics are written
 to the manifest as diagnostics. Whether the deform is acceptable — whether he still looks
-like *him* when his arm comes up — is the Director's judgement on the sheet, at his zoom, and
+like *him* when his arm comes up — is the maintainer's judgement on the sheet, at full zoom, and
 no number here approximates it.
 
 --------------------------------------------------------------------------------
@@ -148,7 +148,7 @@ class GateSubjectDegenerate(GateFailure):
     twice, `gate_p` is left None when nothing is bound, and `gate_n_names` runs after Gate D
     and compares names only — so Gate D is the FIRST gate that sees geometry, and nothing
     between `blender_scene.import_glb` and it examines a coordinate. The artifact that
-    reaches the Director is `<name>_skeleton.glb` beside a manifest recording
+    reaches the maintainer is `<name>_skeleton.glb` beside a manifest recording
     `bbox.diagonal: NaN` and `gates.D_determinism: PASS`.
 
     The refusal belongs at the SOURCE rather than at the gate: `measure_joint_balls` divides
@@ -783,7 +783,7 @@ def build_stage_manifest(*, glb, out_dir, repaired_from=None, stages=None,
             f"--glb=<repaired.glb> --out={out_dir} --mode=full --binding=hand "
             f"--hand-mode=articulated --pipeline=repair-bind"
         )
-        note = ("Director-ruled live arm: rig_repair then rig_character (F-ce65f941). "
+        note = ("Maintainer-ruled live arm: rig_repair then rig_character (F-ce65f941). "
                 "diagnose_bone_heat names the same next_tool when heat is empty.")
     return {
         "tool": "rig_character",
@@ -1265,7 +1265,7 @@ def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_mult
         #     influences per vertex against a weight sum of 7.7.
         #
         # The advisor's ruling named "ARMATURE_ENVELOPE (measured 100% coverage)", which is
-        # the DEFAULT configuration as the mechanism sweep ran it. This seat substituted
+        # the DEFAULT configuration as the mechanism sweep ran it. This session substituted
         # measured radii on the global-constant law without flagging it first; both are run
         # and reported rather than one being quietly chosen.
         if envelope_radii == "measured":
@@ -1297,7 +1297,7 @@ def apply_binding(mesh_obj, arm_obj, mode, source, radii, envelope_distance_mult
             "smoothing_applied": False,
             "smoothing_note": ("No vertex-group smoothing was run. Envelope weights are "
                                "already a distance falloff, and whether an additional blur "
-                               "improves the read is a judgement this seat does not make."),
+                               "improves the read is a judgement this session does not make."),
         }
     elif mode == "rigid":
         _parent_to(mesh_obj, arm_obj, "ARMATURE_NAME")
@@ -1410,7 +1410,7 @@ def build_pass(glb_path, name, bands, label, bind, envelope_radii="measured",
 
     With `bind=False` the mesh is never parented to the armature: the skeleton is placed and
     exported, and nothing is attached to it. That is the **skeleton-approval** mode the
-    Director gated the experiment at — nothing moves forward until he approves the
+    maintainer gated the experiment at — nothing moves forward until he approves the
     skeleton. Gate P's liveness clause deliberately does not run there, because there is no
     binding for it to be about; a liveness reading on an unbound mesh would be a check
     reporting on a thing that does not exist yet.
@@ -1890,8 +1890,8 @@ def unbound_determinism_record(gate_d, fp_a, fp_b, expect_weights=None):
 def run_skeleton(args, out_dir, source_sha, started):
     """Skeleton-approval mode. Places the pivots, gates the names, exports, and stops.
 
-    **Nothing is bound.** The Director gated the experiment here — nothing moves forward
-    until he approves the skeleton — so the binding arms do not run and Gate P's liveness
+    **Nothing is bound.** The maintainer gated the experiment here — nothing moves forward
+    until the maintainer approves the skeleton — so the binding arms do not run and Gate P's liveness
     clause is NOT YET RUN by design, not by omission.
     """
     hm = args.get("hand_mode") or "mitten"
@@ -1910,7 +1910,7 @@ def run_skeleton(args, out_dir, source_sha, started):
         "the built armature, before export")
 
     # F-244b2ad5: both `build_pass` calls above refuse an ambiguous or non-finite subject
-    # and neither needs a directory; this is the route whose only artefact the Director
+    # and neither needs a directory; this is the route whose only artefact the maintainer
     # approves the skeleton on. Created here, below the last refusal.
     os.makedirs(out_dir, exist_ok=True)
 
@@ -1988,7 +1988,7 @@ def run_skeleton(args, out_dir, source_sha, started):
             "reason": "no binding exists; deformation statistics require weights",
         },
         "timings": ctx["timings"],
-        "note": ("Skeleton-approval mode. The Director approves the skeleton before any "
+        "note": ("Skeleton-approval mode. The maintainer approves the skeleton before any "
                  "binding arm runs; no metric here approximates that judgement."),
     }
     path = os.path.join(out_dir, "skeleton_manifest.json")
@@ -2163,7 +2163,7 @@ def main():
         "timings": ctx["timings"],
         "note": ("Deformation statistics are DIAGNOSTICS and gate nothing. Whether the "
                  "deform is acceptable, and whether the figure is still the same "
-                 "character, are the Director's on the sheet at his zoom. No number here "
+                 "character, belong to the maintainer on the sheet at full zoom. No number here "
                  "approximates either."),
     }
     path = os.path.join(out_dir, f"rig_manifest_{tag}.json")

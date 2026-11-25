@@ -329,7 +329,7 @@ def test_every_cpython_instrument_main_runs_end_to_end_from_argv(name, tmp_path,
         pytest.importorskip(
             "record_index",
             reason="set ARMATURE_RECORD_INDEX to your record-index checkout "
-                   "(default E:/AI/record-index when present)")
+                   "(default <repo>/../record-index when present)")
     factory = INSTRUMENTS[name]
     if name in NEEDS_MONKEYPATCH:
         mod, argv, artifact, sentinel = factory(tmp_path, monkeypatch)

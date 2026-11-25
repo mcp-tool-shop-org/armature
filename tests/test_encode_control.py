@@ -94,7 +94,7 @@ def test_a_directory_with_no_numbered_frames_raises(tmp_path):
 
 
 def test_an_rgba_frame_directory_raises_rather_than_dropping_the_channel(tmp_path):
-    """The Director's alpha law: the RGB composite a route submits is a deliberate,
+    """The maintainer's alpha law: the RGB composite a route submits is a deliberate,
     recorded choice. Dropping the 4th channel makes it an accidental one."""
     d = tmp_path / "f"
     d.mkdir()

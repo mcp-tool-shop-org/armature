@@ -5,7 +5,7 @@ subject carries its own markers.** E07's first skeleton put the elbow at 0.44 al
 measured centreline because a figure standing with straight limbs presents no *bend* to read a
 joint from. That reasoning was right about silhouettes and wrong about this subject: he is a
 clay artist's mannequin and he is **covered in sculpted ball-joints**. The balls are the ground
-truth, and they were sitting in the mesh the whole time. The Director caught it by eye at 1:1 —
+truth, and they were sitting in the mesh the whole time. The maintainer caught it by eye at 1:1 —
 "This looks like it's not lined up properly" — and the measurement put the elbows **27–30 % of
 the upper arm's own length** away from their balls.
 
@@ -20,7 +20,7 @@ around a least-squares sphere fit. The face carries small spherical pieces too, 
 must also be the right *size* for the limb it is claimed for — a fraction of that limb's own
 measured cross-section radius, never a length in metres.
 
-Nothing here is a gate. It produces an offset table; the Director rules on the sheet.
+Nothing here is a gate. It produces an offset table; the maintainer decides on the sheet.
 """
 
 import numpy as np
@@ -236,7 +236,7 @@ def verdict(table):
     move" law — the value is the same when the evidence supports the instrument
     hypothesis and when it supports nothing at all — and it lands on exactly the
     thin-evidence subject (one qualifying shell) where the reader would be sent to check the
-    overlay projector rather than to look at the pivots the Director caught by eye. Below
+    overlay projector rather than to look at the pivots the maintainer caught by eye. Below
     two matched balls the numbers are still reported and the RULING is withheld, the same
     shape as the `not matched` branch.
     """

@@ -589,7 +589,7 @@ def test_the_stride_is_a_cost_bound_and_not_a_tuned_threshold():
 
 
 def test_the_freeze_instrument_gates_nothing():
-    """This module's own doctrine — these are diagnostics and the Director's eye is the
+    """This module's own doctrine — these are diagnostics and the maintainer's eye is the
     judge — asserted rather than narrated. `turnaround.gate_set_distinct` is the
     gate-shaped sibling and it lives there because that is where the andon belongs."""
     src = inspect.getsource(clipstats.distinct_frames)

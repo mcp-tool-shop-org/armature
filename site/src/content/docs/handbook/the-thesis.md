@@ -28,7 +28,7 @@ in five closed experiments:
   geometry rather than tone.
 
 **The two questions that were open then have since been answered at product level.** The rigged
-character mesh exists — E07 rebuilt the rig and the Director approved the skeleton by eye — and
+character mesh exists — E07 rebuilt the rig and the maintainer approved the skeleton by eye — and
 identity has held through paint at the judging eye three times: driven from the rig (E08),
 unanchored with no reference and no driving signal at all (E11 wave 1), and through the camera
 tier, where a handed world also holds to the last frame on two seeds (E12). What remains open is
@@ -36,7 +36,7 @@ route-shaped, not thesis-shaped — and E13 answered it on 2026-08-13, its whole
 (dispatch, a zero-spend halt on two structural premise failures, a repair arc that rebuilt
 the reference kit with true alpha, re-arm, four generations) inside one date: **identity
 survives a hosted, human-trained tier fed nothing but authored references**, both arms,
-both seeds, at the Director's eye — and the reference's own ground steers the model-decided
+both seeds, at the maintainer's eye — and the reference's own ground steers the model-decided
 world. Full detail in `docs/experiments/`; every claim above is traceable to a numbered
 ruling.
 
@@ -208,4 +208,4 @@ al. 2026, [arXiv:2604.21689](https://arxiv.org/abs/2604.21689)), corroborated by
 
 So ArcFace-family metrics **cannot gate identity on stylized game art**, and a diagnostic that
 returns a number on a face its detector never found is noise wearing a unit. Identity and quality
-diagnostics ride reports as diagnostics and gate nothing. The Director's eye is the judge.
+diagnostics ride reports as diagnostics and gate nothing. The maintainer's eye is the judge.

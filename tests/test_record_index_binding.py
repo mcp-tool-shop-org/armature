@@ -1,16 +1,16 @@
 """`tools/armature_index.py` - the two verbs this repo's binding implements itself.
 
 SEPARATE FILE, AND THAT IS THE POINT. These need `record_index`, which is a sibling
-working copy at `E:\\AI\\record-index` and not a dependency of this venv, so the
+working copy at `<repo>/../record-index` and not a dependency of this venv, so the
 module-level skip below takes the whole file when it is absent. The checks that must
 never skip - the committed index and its certificate - live in `test_record_index.py`
 and read those two files with the standard library alone.
 
 Run this half with ARMATURE_RECORD_INDEX set (or the default sibling present):
 
-    ARMATURE_RECORD_INDEX=E:/AI/record-index .venv/Scripts/python.exe -m pytest tests/test_record_index_binding.py
+    ARMATURE_RECORD_INDEX=<repo>/../record-index .venv/Scripts/python.exe -m pytest tests/test_record_index_binding.py
 
-conftest prepends that lever (or `E:/AI/record-index` when it exists) before collection.
+conftest prepends that lever (or `<repo>/../record-index` when it exists) before collection.
 """
 
 import hashlib
@@ -26,7 +26,7 @@ pytest.importorskip(
     "record_index",
     reason="record_index is a sibling working copy, not a dependency of this venv; "
            "set ARMATURE_RECORD_INDEX to your record-index checkout "
-           "(default E:/AI/record-index when present) to cover the binding")
+           "(default <repo>/../record-index when present) to cover the binding")
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 

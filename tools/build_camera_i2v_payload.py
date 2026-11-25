@@ -98,7 +98,7 @@ demotes to set-dressing. "Dominates" is measured, not asserted — `PROMPT_DOMIN
 the words in each clause and the build halts if the set-dressing is not clearly outweighed.
 The identity clause is carried VERBATIM from the same source wave 1 read it from
 (`build_animate_payload.identity_clause`), because identity is what the experiment is
-watching and rewriting its description would confound the one read the Director rules on.
+watching and rewriting its description would confound the one read the maintainer decides on.
 
 Compensator (NAMED_COMPENSATORS): writes JSON under `outputs/`. Compensator: delete the
 directory. It submits nothing and spends nothing.
@@ -157,7 +157,7 @@ CLIP_NAME, VAE_NAME = W1.CLIP_NAME, W1.VAE_NAME
 #:
 #: **Length** is 81: the card's own trained frame count, and 4·20+1 so Gate L's 4n+1 form
 #: holds. Waves 1 and 2 ran 65 — legal, but below this model's trained horizon for no reason
-#: that survives the model swap. (The Director's standing more-fps ruling agrees, though it
+#: that survives the model swap. (The maintainer's standing more-fps decision agrees, though it
 #: is not the reason: the reason is the card.)
 #:
 #: **Resolution** is derived against the tiers rather than carried over. The tiers are area
@@ -215,7 +215,7 @@ CAMERA_INTRINSICS = {"fx": 0.5, "fy": 0.5, "cx": 0.5, "cy": 0.5}
 #: THE PROMPT SURGERY
 #:
 #: Wave 1's non-identity text was one word of performance ("dancing") inside twenty-eight
-#: words of bar. The Director's diagnosis of the resulting motion was that the bar language
+#: words of bar. The maintainer's diagnosis of the resulting motion was that the bar language
 #: pulled the performance toward it. So the two clauses swap weight.
 #:
 #: Written to the guidance banked in `PROMPT_GUIDANCE` below: natural language, no weight
@@ -255,7 +255,7 @@ CAMERA_SENTENCE_DROPPED = "The camera is static."
 #: mannequin's hands are modelled as mittens in the source GLB; a prompt cannot add fingers
 #: to geometry that has none, and the geometry fix stays on the F-series ledger.
 NEGATIVE_EXTENSION = [
-    ("爪状的手", "claw-shaped hands — names the defect the Director's eye landed on"),
+    ("爪状的手", "claw-shaped hands — names the defect the maintainer's eye landed on"),
     ("钩状的手指", "hook-shaped fingers — the curl that reads as a claw"),
 ]
 
@@ -469,10 +469,10 @@ def build_prompt():
     log = {
         "carried_verbatim": {"identity_clause": ident,
                              "source": E08.TWIN_PROMPT_JSON,
-                             "why": ("identity is what the Director rules on; rewriting the "
+                             "why": ("identity is what the maintainer decides on; rewriting the "
                                      "subject's description would confound that read")},
         "added": {"performance_clause": PERFORMANCE_CLAUSE,
-                  "why": ("the Director's diagnosis of wave 1: the bar language pulled the "
+                  "why": ("the maintainer's diagnosis of wave 1: the bar language pulled the "
                           "performance toward it. This clause leads the non-identity text "
                           "and outweighs the set dressing")},
         "demoted": {"from": E08.SCENE_CLAUSE, "to": SET_DRESSING_CLAUSE,
@@ -541,7 +541,7 @@ DELIBERATE_BREAKS = {
         "wave_1": "832x480 RGB, world background baked opaque",
         "wave_3": ("1024x576, authored RGBA, submitted composite over a named colour "
                    "recorded in the render provenance"),
-        "why": ("the alpha law (CLAUDE.md, the Director's ruling 2026-08-12) plus the "
+        "why": ("the alpha law (CLAUDE.md, the maintainer's ruling 2026-08-12) plus the "
                 "resolution change — the frame has to be re-rendered either way"),
         "authority": "E11 w2 ruling R5(4)"},
 }
@@ -589,7 +589,7 @@ def png_header(path):
     for the same reason (`armature_core.pngio` is a writer with no reader for exactly that
     trade).
 
-    **Why a builder measures this at all** (the Director's alpha ruling, 2026-08-12):
+    **Why a builder measures this at all** (the maintainer's alpha ruling, 2026-08-12):
     every reference or start-frame render of the character is authored RGBA with a real
     alpha channel, and the RGB composite each route submits is a deliberate, recorded
     choice. Until wave 10 this route's record asserted `fit: "native - authored at
@@ -630,7 +630,7 @@ def resolve_start_frame(path, declared_sha256):
     `ledger_against_wave1` only to be stored as
     `ev["start_frame"]["wave_3_local_sha256"]`. It appeared in no comparison and in no
     `problems.append` condition, so the hash of the re-authored start frame — the single
-    load-bearing control input of an i2v route, and the artifact the Director's alpha
+    load-bearing control input of an i2v route, and the artifact the maintainer's alpha
     ruling governs — was an optional operator-typed string that rode the record unverified
     and read as `null` when omitted. CLAUDE.md requires every generation to record its
     control-input hashes, and a value nothing checks is worse than an absent one.
@@ -1133,7 +1133,7 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
                  f"ran 832x480 and DELIBERATE_BREAKS['resolution'] is the ruling that "
                  f"moved it"),
             why=("the start frame is re-authored for this wave: the resolution changed and "
-                 "the alpha law (the Director's ruling 2026-08-12) governs the artifact, so "
+                 "the alpha law (the maintainer's ruling 2026-08-12) governs the artifact, so "
                  "nothing here is wave 1's upload")),
         "unconnected_inputs": {
             "clip_vision_output": "unconnected, as in wave 1",

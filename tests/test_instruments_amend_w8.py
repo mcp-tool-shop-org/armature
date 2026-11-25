@@ -465,7 +465,7 @@ def test_every_blender_side_tool_records_the_blender_it_ran_on():
     with neither `blender_provenance()` nor `bpy.app.version_string` anywhere, and the
     census could not see any of them. Those panels are not layout-only: `make_rig_sheet`
     prints `max_vertex_motion` onto the sheet, `make_parts_sheet` prints
-    `max_displacement`, and `make_skeleton_sheet` is the artifact the Director gates the
+    `max_displacement`, and `make_skeleton_sheet` is the artifact the maintainer gates the
     experiment at.
 
     The population here is every Blender-side tool, derived by the `import bpy` walk: all

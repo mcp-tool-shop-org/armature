@@ -1,6 +1,6 @@
 """The dailies composer sizes itself to its text as well as to its panels.
 
-Sheets are how numbers reach the Director, and Gate LOOK is a human gate whose entire
+Sheets are how numbers reach the maintainer, and Gate LOOK is a human gate whose entire
 output is one image. A sheet sized to its panels alone crops every title and label that
 overruns them — and it crops from the right, which is where the measurements sit. It still
 saves, still opens, and looks entirely finished; the only symptom is that the evidence is

@@ -72,7 +72,7 @@ SUB = (90, 90, 100)
 
 def main(argv=None):
     ap = argparse.ArgumentParser(
-        description="the cast survey the Director compares subjects on: one row per "
+        description="the cast survey the maintainer compares subjects on: one row per "
                     "subject, four preview_glb panels and a stats label",
         epilog=HALT_EPILOG)
     ap.add_argument("--dir", required=True,

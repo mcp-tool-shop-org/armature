@@ -445,7 +445,7 @@ def start_image_record(start_frame, server_name, width, height, fit, why=None, *
     one field over: computed by `png_header`, written into every record, and read by
     nothing (measured by grep over `tools/`, `docs/` and `verify.ps1`, 2026-09-04). A flat
     RGB grey plate authored at the generation's exact size — the E11 baked-grey-void shape
-    the Director's 2026-08-12 ruling exists to stop — was accepted with `alpha: False`
+    the maintainer's 2026-08-12 decision exists to stop — was accepted with `alpha: False`
     recorded and nothing printed. `declares_alpha` is the route's own statement of which
     half of that ruling this file is: the authored RGBA master (`True`) or the recorded RGB
     composite (`False`). The file must be what the route says it is, in both directions,
@@ -491,7 +491,7 @@ def start_image_record(start_frame, server_name, width, height, fit, why=None, *
              "generation_frame": [width, height],
              "path": start_frame.get("path"), "sha256": start_frame.get("sha256")})
     # ---- ANDON, wave 16 (F-71ffdbfb). `measured["alpha"]` - the field that makes the
-    # Director's 2026-08-12 alpha ruling machine-readable - was computed, written into
+    # maintainer's 2026-08-12 alpha decision machine-readable - was computed, written into
     # every i2v payload record, and READ BY NOTHING: the identical shape wave 14 corrected
     # one field over in this same dict. Measured by grep over the tree 2026-09-04, the
     # `alpha` produced by `png_header` occurred at its own line and at no other site under
@@ -532,7 +532,7 @@ def start_image_record(start_frame, server_name, width, height, fit, why=None, *
             f"transparency cannot reach the model, so a submitted composite that still "
             f"carries the channel is not the artifact the record names; and a master that "
             f"arrives flattened is the grey previz void arriving by accident, which is the "
-            f"defect the Director's 2026-08-12 ruling exists to stop. Composite the master "
+            f"defect the maintainer's 2026-08-12 decision exists to stop. Composite the master "
             f"over its named plate before uploading, or state what this file is",
             {"gate": "PAYLOAD", "andon": "start_frame",
              "clause": "alpha_disagrees_with_the_file", "flag": "--start-frame",
@@ -549,7 +549,7 @@ def start_image_record(start_frame, server_name, width, height, fit, why=None, *
         "sha256_source": start_frame["source"],
         "declared_sha256": start_frame.get("declared_sha256"),
         # ---- and what it actually IS, read from the file's own header, so the `fit` line
-        # is checkable instead of asserted. The alpha field is the Director's 2026-08-12
+        # is checkable instead of asserted. The alpha field is the maintainer's 2026-08-12
         # ruling made machine-readable: an authored input carries alpha, and the RGB
         # composite the route submits is a recorded choice, never an accident.
         "measured": measured,
@@ -735,7 +735,7 @@ def build(uploads, seed, negative, positive, registry, experiment=EXPERIMENT,
             start_frame, start_name, WIDTH, HEIGHT,
             fit=f"native — authored at {WIDTH}x{HEIGHT}",
             # What this route SUBMITS, declared rather than discovered (wave 16,
-            # F-71ffdbfb). The Director's 2026-08-12 ruling: the master is authored RGBA
+            # F-71ffdbfb). The maintainer's 2026-08-12 decision: the master is authored RGBA
             # and the RGB composite the route uploads is a deliberate, recorded choice.
             # `--start-frame` names the uploaded file, so this route declares the
             # composite; a file that still carries the channel is refused above, because

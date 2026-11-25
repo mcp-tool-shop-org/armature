@@ -1,7 +1,7 @@
 {
   "experiment": "E13",
   "pinned_utc": "2026-08-13",
-  "pinned_by": "executor seat, on E13-run, BEFORE the first submission and committed ahead of it",
+  "pinned_by": "executor session, on E13-run, BEFORE the first submission and committed ahead of it",
   "tier": "wan2.7-r2v",
   "prompt": "character1 walks forward a few steps, stops, shifts weight onto one leg, turns the head to look back over one shoulder, then slowly raises one arm and lowers it. Full body in frame from head to feet, unhurried deliberate movement, clear articulation at the joints.",
   "negative_prompt": "blurry, low quality, extra limbs, text overlay",

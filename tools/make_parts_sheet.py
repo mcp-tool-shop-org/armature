@@ -4,7 +4,7 @@
     <venv-python> tools\\sheet_compose.py <dir>\\panels.json
 
 `rest | frame 17 | frame 33 | 1:1 insets on the joints UNDER ARTICULATION`. The joint seam
-read is what the Director rules on, so the insets are framed on the **posed bone position at
+read is what the maintainer decides on, so the insets are framed on the **posed bone position at
 the last frame** — where the collar overlap is doing its work — rather than on the rest pose
 where every seam is closed by definition.
 
@@ -53,12 +53,12 @@ INSET = 620
 INSET_HEIGHT_FRACTION = 0.20
 ARC_FRAMES = (17, rig_character.PROBE_FRAMES)
 
-#: Director-facing clay/character stills — sheets + `preview_glb` (F-cade389c).
+#: Maintainer-facing clay/character stills — sheets + `preview_glb` (F-cade389c).
 #: ONE named plate; control/performer routes keep the darker `WORLD_LINEAR` in
 #: `render_turnaround`. Importers: `make_binding_sheet`, `make_skeleton_sheet`,
 #: `preview_glb` (and `make_rig_sheet` via `light_the_scene` here).
 CLAY_STUDIO_LINEAR = (0.30, 0.30, 0.32)
-#: The joints the Director rules on, in the order he reads them. `(panel label, joint)` --
+#: The joints the maintainer decides on, in reading order. `(panel label, joint)` --
 #: the SIDE is appended at run time from `articulated_side`, never pinned here.
 INSET_JOINTS = (("shoulder", "shoulder"), ("elbow", "elbow"),
                 ("wrist", "wrist"), ("hip", "hip"))
@@ -212,10 +212,10 @@ def arc_liveness(measured, name, at_rest, where):
     global constant must not govern a local feature. On a subject authored at a small unit
     scale a real arc below 1e-6 m read as "this route does not move" and the sheet was
     refused; on a large-unit subject, float32 round-trip noise above 1e-6 m read as a
-    surviving arc -- both on the sheets the Director approves the binding on. The floor is
+    surviving arc -- both on the sheets the maintainer approves the binding on. The floor is
     `ARC_FLOOR_FRACTION` of the subject's OWN bbox diagonal at all three sites now, and the
     diagonal, the fraction, the floor and the ratio all ride the record, so the number the
-    Director reads is a fraction rather than a metre.
+    maintainer reads is a fraction rather than a metre.
     """
     ev = {"clause": "arc_did_not_survive", "where": where, "measurement": name,
           "rest_frame": 1, "posed_frame": rig_character.PROBE_FRAMES}
@@ -286,7 +286,7 @@ def parse_args():
                         "`sheet_compose.py <out>/panels.json` composes the sheet. "
                         "Compensator: delete it; owner: the executor session")
     p.add_argument("--title", default="E07 arm (c) — the rigid-parts armature",
-                   help="the sheet's heading, as the Director reads it (default names "
+                   help="the sheet's heading, as the maintainer reads it (default names "
                         "E07 arm (c)); the SUBTITLE beneath it is measured, not typed")
     p.add_argument("--compose", dest="compose", action="store_true", default=True,
                    help="after panels.json is valid, spawn sheet_compose (default; F-938485d6)")
@@ -419,7 +419,7 @@ def shoot(scene, path):
     #
     # The comment below states the premise itself -- the existence and size clauses are
     # properties a PREVIOUS run's file at the same path satisfies -- and no clause
-    # measured the target before the write, on the artefact the Director approves the
+    # measured the target before the write, on the artefact the maintainer approves the
     # skeleton at. Consequence stays bounded as the ground row framed it: no realistic
     # FINISHED-without-write was constructed on this rig. The home is ADOPTED, not
     # respelled.
@@ -446,7 +446,7 @@ def shoot(scene, path):
     # function discarded it, and no code path in this tool ever opened a rendered file
     # again -- so `panels.json` was a manifest of paths that may not exist, printed
     # under a success sentinel, and a stale file left at the path by an earlier run put
-    # the previous run's panel into the sheet the Director is asked to approve. The
+    # the previous run's panel into the sheet the maintainer is asked to approve. The
     # shape is `preview_walk.py:196-206`'s, carried here rather than reinvented.
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         raise PartsSheetGate(
@@ -500,7 +500,7 @@ def _wv(ob):
 
 
 def sheet_subtitle(visible, arc, side_word, last):
-    """The caption under the panels the Director rules on, MEASURED rather than typed.
+    """The caption under the panels the maintainer decides on, MEASURED rather than typed.
 
     WAVE 28, F-e7d3303e. The literal this replaces read "17 rigid parts, bone-parented, no
     deformation anywhere", and the run checked neither half:

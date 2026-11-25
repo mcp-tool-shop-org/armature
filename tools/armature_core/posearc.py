@@ -97,7 +97,7 @@ POSE_ARCS = {
         ),
     },
     # Lower-body arcs (F-71579a7f). Wave-35 covered upper arcs only; knee bend and a
-    # seated hip hinge are the calibration fixtures procedural wire subjects still needed.
+    # sitting hip hinge are the calibration fixtures procedural wire subjects still needed.
     "knee_r_bend": {
         "pivot": "knee_r",
         "axis": "X",
@@ -125,7 +125,7 @@ POSE_ARCS = {
         ),
         "readout_deg": 60.0,
         "description": (
-            "the right hip hinges toward a seated posture about +X; the whole lower limb "
+            "the right hip hinges toward a sessioned posture about +X; the whole lower limb "
             "moves as a rigid group from the hip so sit/stand fixtures need no hand edit"
         ),
     },
@@ -246,7 +246,7 @@ def arc_readout(arc, count, start_deg, end_deg):
 
     The readout used instead is the frame at which the arm passes the arc's **registered
     readout angle** (`POSE_ARCS[...]["readout_deg"]`, 45° for `arm_r_raise`): monotonic,
-    crossed exactly once, unambiguous by eye at the Director's zoom, and authored rather
+    crossed exactly once, unambiguous by eye at full zoom, and authored rather
     than measured. `leaves_start_frame` and `reaches_end_frame` are reported beside it so
     the whole profile is legible and the spec's original intent is still answerable from
     the record.

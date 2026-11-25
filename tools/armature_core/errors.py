@@ -303,7 +303,7 @@ class GateCanon(GateFailure):
     submit. This gate fires inside that write. Identity diagnostics still gate
     nothing: the check is whether a named statement exists and whether the
     submission's text covers it in both directions. Whether the figure on
-    screen is the same character remains the Director's.
+    screen is the same character remains the maintainer's.
     """
 
     gate = "CANON"

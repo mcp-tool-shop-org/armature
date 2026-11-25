@@ -89,7 +89,7 @@ def probe(path, out_dir=None):
     refusal and holds no frames.
 
     **The encoder is GATED before it is run** (F-a19ebe73, wave 25). `FFMPEG` is selected at
-    import from `ARMATURE_FFMPEG` with a hard-coded `E:/AI-Models` fallback, and this module
+    import from `ARMATURE_FFMPEG` with a hard-coded a local model-env path fallback, and this module
     imported the constant and ran it without arming the gate that was written for exactly
     that. Measured on `580af47` with the repo venv and `ARMATURE_FFMPEG` pointed at a path
     that does not exist: `tools/encode_control.py` exited 2 with an `ENCODE_CONTROL_HALT`

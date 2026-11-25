@@ -8,7 +8,7 @@ name was believed through an entire dispatch. Measured afterwards, the asset is
 So the E02 premise table carries "the subject is a character" as a line the executor
 must *measure*, and this is the measurement. It is deliberately arithmetic on the
 bounding box and nothing more: no thresholds, no verdict, no `is_character` boolean.
-Whether a figure is the right character is canon and the Director's to judge; what a
+Whether a figure is the right character is canon and the maintainer's to judge; what a
 mesh's proportions are is a number, and only the number belongs here.
 
 `aspect_longest_over_shortest` is the discriminator, and it is specifically **longest

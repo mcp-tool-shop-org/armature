@@ -747,7 +747,7 @@ def gate_base_licence(graph, path=None):
 def credit_obligation(arm):
     """This arm's credit obligation, READ FROM the licence table's own row.
 
-    The coordinator's ruling (2026-09-04, delegated by the Director) accepts the CivitAI
+    The coordinator's ruling (2026-09-04, delegated by the maintainer) accepts the CivitAI
     grant's credit condition on `wan22-14b-t2v-technically_color.safetensors` and makes it
     load-bearing in code: `route_gates.RULED_COMPONENTS`' row carries a structured
     `condition`, and the submitting record's credit line comes FROM that row, never from a
@@ -805,9 +805,9 @@ def conditional_attribution(graph):
 def disclosure(arm, attribution, route_ev):
     """The per-route disclosure block: what a user of THIS arm's footage is exposed to.
 
-    CLAUDE.md's per-route disclosure ruling (the Director, 2026-08-12) requires a route that
+    CLAUDE.md's per-route disclosure ruling (the maintainer, 2026-08-12) requires a route that
     sends assets through a third-party tier to document what its user is exposed to, and its
-    licence rule states that a CONDITIONAL grant is a Director decision surfaced
+    licence rule states that a CONDITIONAL grant is a maintainer decision surfaced
     contrastively, never silently accepted. Wave 14, F-92f67091: this arm's obligation lived
     in `credit_obligation` inside the JSON and reached no operator-facing surface at all, so
     the one grant in the licence map that is conditional on a credits line could be incurred
@@ -966,7 +966,7 @@ def main(argv=None):
         "experiment": EXPERIMENT, "arm": args.arm, "tool_version": TOOL_VERSION,
         "lora": ARMS[args.arm]["lora"],
         "credit_obligation": credit_obligation(args.arm),
-        # The per-route disclosure the Director's 2026-08-12 ruling requires, beside the
+        # The per-route disclosure the maintainer's 2026-08-12 decision requires, beside the
         # obligation it discloses (wave 14, F-92f67091).
         "disclosure": disclosure_block,
         # The credit line as the submitting record must carry it, built from the licence
@@ -975,7 +975,7 @@ def main(argv=None):
         "strength_model": STRENGTH,
         "seed": args.seed,
         "baseline": {"path": os.path.abspath(args.base), "sha256": sha256_file(args.base),
-                     "is": "E12 wave 3, seed 2026081233 — the Director's ruled-strongest "
+                     "is": "E12 wave 3, seed 2026081233 — the maintainer-selected strongest "
                            "result, reused as the comparison reference; NOT regenerated"},
         "insertion_convention": {
             "where": "between UNETLoader and ModelSamplingSD3",

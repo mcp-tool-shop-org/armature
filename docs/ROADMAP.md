@@ -1,6 +1,6 @@
 # armature — the build roadmap
 
-**Status:** authored 2026-08-10 by the advisor seat, before any code. Phases A–C are firm;
+**Status:** authored 2026-08-10 by the advisor session, before any code. Phases A–C are firm;
 D onward are **provisional by construction** — each is shaped by what the phase before it
 measures. A provisional phase may be re-cut; it may not be *skipped* silently, and a phase
 that gets re-cut records why in this file.
@@ -38,9 +38,9 @@ Two bars, in order. The studio's `built | filled` rule governs, and the second i
 
 1. **built** — the tool ships: repo public under `mcp-tool-shop-org`, shipcheck hard gates A–D
    pass, full treatment applied, published, CI green.
-2. **filled** — **the Director has accepted a shot armature produced and used it in a real
+2. **filled** — **the maintainer has accepted a shot armature produced and used it in a real
    project.** *(Corrected 2026-08-11: this read "a real game project" — the shrinkage the
-   Director corrected twice. Film, cutscene, or any footage counts the same; the game is one
+   maintainer corrected twice. Film, cutscene, or any footage counts the same; the game is one
    consumer.)* A test count is not this bar. A demo reel is not this bar. Until a shot is
    accepted and used, armature is `built`, and this file says so.
 
@@ -48,26 +48,26 @@ Two bars, in order. The studio's `built | filled` rule governs, and the second i
 
 ## The arc
 
-Each row is one session. **Seat** is who runs it. A session ends when its deliverable exists
+Each row is one session. **Role** is who runs it. A session ends when its deliverable exists
 and its gates have been reported — not when it feels finished.
 
-| # | Seat | Session | Produces | Ends when |
+| # | Role | Session | Produces | Ends when |
 |---|---|---|---|---|
 | **A0** | advisor | Foundation | repo footing, `CLAUDE.md`, this roadmap, `docs/license-map.md` v1, E01 spec + paste block | E01 is startable without another round trip |
 | **E01** | executor | The exporter | `tools/stage_render.py` + shot-spec format + tests + anchor | the anchor reproduces and every gate has a verdict |
 | **R01** | advisor | Ruling on E01 | ruling doc; roadmap corrections | the record is folded and E02's spec is on screen |
-| **E02** | executor | First contact | provider noise floor + first control probe + the Gate-0 sheet | the sheet is on the Director's screen |
-| **R02** | advisor | Ruling on E02 | ruling; **the go/no-go on the whole thesis** | the Director has judged the sheet |
+| **E02** | executor | First contact | provider noise floor + first control probe + the Gate-0 sheet | the sheet is on the maintainer's screen |
+| **R02** | advisor | Ruling on E02 | ruling; **the go/no-go on the whole thesis** | the maintainer has judged the sheet |
 | **E03** | executor | Control modality | depth vs pose vs edge vs combined, one variable per arm | all arms measured, sheet built |
 | **E04** | executor | Control strength | the strength/stiffness curve on the surviving modality | the curve exists with both failure ends observed |
-| **E05** | executor | Identity — reference stack | 1 view vs N views vs full turnaround | sheets at the Director's zoom |
+| **E05** | executor | Identity — reference stack | 1 view vs N views vs full turnaround | sheets at the maintainer's zoom |
 | **E06** | executor | Identity — LoRA vs zero-shot | *conditional on E05* | — |
-| **E07** | executor | Continuity across cuts | one character, several shots, assembled | the Director judges the cut, not the clips |
+| **E07** | executor | Continuity across cuts | one character, several shots, assembled | the maintainer judges the cut, not the clips |
 | **E08** | executor | Shot length and extension drift | where coherence ends, measured not assumed | — |
 | **P01** | executor | The tool surface | CLI (+ MCP if earned), tests, docs, `docs/license-map.md` current | shipcheck audit passes |
 | **S01** | executor | Public surfaces *(runs alongside the arc, not gated on it)* | landing page + 5 handbook pages, Astro/Starlight, built locally | the page states day zero honestly and builds |
 | **P02** | advisor+executor | Ship | shipcheck → full treatment → publish | CI green on the org repo |
-| **F01** | Director | Fill | a shot in a real game project | the Director says so |
+| **F01** | maintainer | Fill | a shot in a real game project | the maintainer says so |
 
 Phases D–F (E03–E08) will be re-cut as evidence lands. **E02 is the hinge**: if a CG-rendered
 control sequence does not hold a character in a real video model, the honest outcome is to say
@@ -108,7 +108,7 @@ experiment. Frame dimensions and counts must be generator-legal. Tests ride the 
    Gate 0 is the **control | output | reference | provenance** sheet, built *before* any metric
    is quoted.
 
-R02 is where the Director rules on the thesis itself.
+R02 is where the maintainer rules on the thesis itself.
 
 ### Phase D — Control (E03, E04)
 
@@ -123,7 +123,7 @@ How many reference views, arranged how — the studio's turnaround output is the
 and this is where its value is measured. E06 (per-character LoRA) runs only if E05 leaves a gap
 worth the training cost.
 
-**Standing rule:** identity is judged by the Director. Diagnostics may inform; they may not
+**Standing rule:** identity is judged by the maintainer. Diagnostics may inform; they may not
 gate.
 
 ### Phase F — Continuity (E07, E08)
@@ -139,13 +139,13 @@ The tool surface, then shipcheck, then the full treatment, then a real shot in a
 
 ## Drift tripwires
 
-Named in advance so they can be caught by name. Any session may call one; the Director rules.
+Named in advance so they can be caught by name. Any session may call one; the maintainer rules.
 
 1. **Building the tool before proving the thesis.** Product polish before E02 rules is drift.
 2. **Chasing the newest model.** A new model is an *arm in a future experiment*, never a reason
    to restart. The arc outlives any model version.
 3. **A metric quietly becoming the judge.** The first time a number is cited to accept an
-   artifact the Director has not seen, the tripwire has fired.
+   artifact the maintainer has not seen, the tripwire has fired.
 4. **Scope leaking toward an editor.** See the scope fence. Assembly is not our job.
 5. **"Just for a test" non-commercial models.** The license gate has no test exemption. A
    conclusion drawn on a banned model is a conclusion that must be discarded.
@@ -185,7 +185,7 @@ been varied. The measurements bought are real and stand (see the audit §3); the
 is the audit's subject: every instrument bounded validity and nothing bounded value.
 
 **What governs from here:** the scope block at the top of [CLAUDE.md](../CLAUDE.md) — armature
-is image-to-video with a GLB instead of an image, in the Director's words — and the
+is image-to-video with a GLB instead of an image, in the maintainer's words — and the
 **Trajectory row** every credit-spending spec must carry. The E-series continues, aimed at the
 full pipeline. The line as of this writing: **F01/E33** (the first performer, built fresh
 through facet's route, the tool's own clay-armature figure) → **E07** (the named-bone rig — the

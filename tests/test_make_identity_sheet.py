@@ -1,4 +1,4 @@
-"""The panel the Director is asked "is this the same man?" on.
+"""The panel the maintainer is asked "is this the same man?" on.
 
 `if fi >= len(names): continue` dropped every requested frame index past the end of the
 channel directory, and unlike `make_startframe_sheet.build` there was no `if not tiles`
@@ -106,7 +106,7 @@ def test_a_channel_directory_that_is_not_there_is_named(tmp_path):
 #
 # `az = 360.0 * fi / len(names)` and the row title `f"{len(names)}-frame orbit"` baked E02's
 # turnaround into every caption unconditionally — no flag, no opt-out — on the panel whose
-# own row title asks the Director "is this the same man?". Both siblings had this removed in
+# own row title asks the maintainer "is this the same man?". Both siblings had this removed in
 # wave 6 and say so in their own source: `make_gate0_sheet.frame_caption` ("the tool used to
 # compute an azimuth from the frame count, which was E02's orbit baked in — on a run that
 # does not orbit it printed angles that never happened") now defaults to the bare index, and

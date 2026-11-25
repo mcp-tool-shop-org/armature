@@ -22,7 +22,7 @@ The input table, and why three sockets are deliberately empty
                   order, pixel-identical at 0/16/32/48/64. The
                   conditioning node then VAE-encodes the batch and sets `pose_video_latent`
                   on BOTH positive and negative conditioning (source read 2026-08-12).
-`reference_image` the Director-approved twin. **The node center-crops it to width x height**
+`reference_image` the maintainer-approved twin. **The node center-crops it to width x height**
                   via `common_upscale(..., "area", "center")` — see `--reference-fit`.
 `background_video` UNCONNECTED. With it absent the node builds the background plane as
                   `torch.ones(...) * 0.5`, a uniform mid-grey, and the concat mask stays all
@@ -131,8 +131,8 @@ SETTINGS_SOURCE = {
               "(two_expert_split.shift = 8.0); no Animate-specific document was retrieved"),
 }
 
-#: The identity clause, from facet E33's Director-approved twin entry.
-TWIN_PROMPT_JSON = r"E:\AI\facet\docs\experiments\E33-twin-prompts-r3.json"
+#: The identity clause, from facet E33's maintainer-approved twin entry.
+TWIN_PROMPT_JSON = os.environ.get("ARMATURE_TWIN_PROMPT_JSON") or os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "facet", "docs", "experiments", "E33-twin-prompts-r3.json"))
 
 #: Phrases removed from the identity clause for THIS shot, each with its reason. The clause
 #: was written for a studio plate and carries its backdrop and lighting inside it; carried
@@ -294,7 +294,7 @@ def parse_args(argv=None):
 def read_negative(path):
     """Wan's own `sample_neg_prompt`, read from the banked source. Never retyped.
 
-    E09's citation check fired on this very string when a seat described it from memory, so
+    E09's citation check fired on this very string when a session described it from memory, so
     it is parsed out of the file and the file's hash rides the record.
     """
     with open(path, encoding="utf-8") as fh:

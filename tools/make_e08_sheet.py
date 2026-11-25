@@ -4,7 +4,7 @@ r"""make_e08_sheet — the Gate 0 sheet: previz | control | output | reference |
     python tools\make_e08_sheet.py --previz=<dir> --out=outputs/E08/sheets/E08-gate0.png
 
 facet ran four arms and two gates before it built a sheet like this, and when the sheet
-finally existed the Director read the whole thesis off one panel. So it is built BEFORE any
+finally existed the maintainer read the whole thesis off one panel. So it is built BEFORE any
 number is quoted, and it carries its own provenance rather than depending on a caption.
 
 Five columns per sampled frame, left to right in the order the shot was made:
@@ -24,7 +24,7 @@ convention and origin, the whole reference description, and the meter were strin
 literals. Measured 2026-09-03 — a synthetic record with `length: 50` (not 4n+1) and no
 reference at all still produced a panel asserting Gate L legal and naming a letterbox that
 never happened. That is the repo's named *placeholder shaped like evidence*, on the surface
-the Director reads a verdict off. `provenance_lines` now derives every line through the
+the maintainer reads a verdict off. `provenance_lines` now derives every line through the
 `_get`/`NOT RECORDED` convention `make_startframe_sheet` already implements, and the
 function is separable from cv2 so a test can read what the panel says.
 

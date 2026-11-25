@@ -71,8 +71,8 @@ commands are given where a reader would want to re-run them.
 - **`docs/index/armature.db`** — a SQLite+FTS5 index *derived* from this repo's own
   markdown, with its sidecar certificate. It holds no input that did not come from files
   already in this repo, and `tools/armature_index.py` regenerates it from scratch.
-- **Read-only sibling trees.** Canonical assets are consumed from `E:\AI\facet\…` and
-  `E:\AI\training\…` and are never written to.
+- **Read-only sibling trees.** Canonical assets are consumed from `<repo>/../facet/` and
+  `<repo>/../training/` and are never written to.
 
 ### Data NOT touched
 
@@ -122,9 +122,9 @@ stages.
   confinement — a tool writes wherever its arguments say. Treat these as research
   instruments you are running deliberately, not as a hardened CLI. Point them at scratch
   trees.
-- **Absolute local paths are baked into many tools and docs** (`E:\AI\…` — 82 occurrences
-  across 36 tracked files). They are not secrets, but they do disclose one machine's
-  directory layout, and they mean most tools will not run unmodified on another rig.
+- **Sibling asset paths appear in dated experiment specs** (82 historical occurrences across
+  36 tracked files on initial audit). They are not secrets, and operational surfaces use
+  repo-relative paths or environment variables instead.
 - **Unexpected failures surface as Python tracebacks.** Deliberate refusals do not: every
   gate raises a typed `ArmatureError` subclass carrying the measurement that fired it
   (`tools/armature_core/errors.py`), and **none of them is an `assert`** — an `assert` is

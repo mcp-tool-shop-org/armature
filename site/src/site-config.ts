@@ -74,7 +74,7 @@ export const config: DefaultSiteConfig = {
       id: 'where-this-is',
       title: 'Where this is',
       subtitle:
-        'armature was founded on 2026-08-10. The thesis it exists to test — does a CG-rendered control sequence hold a character through a video model — is now measured at product level across thirteen closed experiments, judged by the Director’s eye, and a negative result remains a full success here. The counters below are dated; README.md in the repo carries the live ones.',
+        'armature was founded on 2026-08-10. The thesis it exists to test — does a CG-rendered control sequence hold a character through a video model — is now measured at product level across thirteen closed experiments, judged by the maintainer’s eye, and a negative result remains a full success here. The counters below are dated; README.md in the repo carries the live ones.',
       columns: ['Counter', 'As of 2026-09-06'],
       rows: [
         [
@@ -139,10 +139,10 @@ export const config: DefaultSiteConfig = {
       id: 'how-this-repo-works',
       title: 'How this repo works',
       subtitle:
-        'Three seats, and the separation is the point: the session that designs an experiment does not grade its results, and the session that runs it does not decide their meaning. Every non-trivial change runs as a numbered experiment — spec written before the work, report written after, advisor ruling last. Metrics are diagnostics; the Director’s eye is the judge.',
-      columns: ['Seat', 'Does', 'Must not'],
+        'Three roles, and the separation is the point: the session that designs an experiment does not grade its results, and the session that runs it does not decide their meaning. Every non-trivial change runs as a numbered experiment — spec written before the work, report written after, advisor ruling last. Metrics are diagnostics; the maintainer’s eye is the judge.',
+      columns: ['Role', 'Does', 'Must not'],
       rows: [
-        ['Director', 'Sets direction; judges every artifact by eye', '—'],
+        ['Maintainer', 'Sets direction; judges every artifact by eye', '—'],
         [
           'Advisor',
           'Writes specs, rules on reports, folds findings into the repo',

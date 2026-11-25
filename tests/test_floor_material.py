@@ -79,7 +79,7 @@ def test_the_grain_comparison_is_made_at_equal_brightness(measured):
 
 
 def test_the_floor_is_dark_the_way_a_bar_floor_is(measured):
-    """Not a preference — the reason A1w exists. The Director's eye rejected a composite
+    """Not a preference — the reason A1w exists. The maintainer's eye rejected a composite
     whose lower two-thirds read as a lit white slab under a dim bar; a wood material at
     studio brightness would reproduce that exactly, and the first parameter set did: it
     measured 0.3515 here, pale with a grazing-angle sheen, until roughness went up and
