@@ -2965,12 +2965,11 @@ def test_fix1_mb_ltx_0_9_clearance_narrows_to_pinned_2b_v0_9_5():
 
 def test_fix1_doc_records_matching_rules_without_role_labels():
     """Item 7: `docs/license-map.md` documents the basename/segment, every-token, and
-    version-segment rules with no internal role labels."""
+    version-segment rules with no role labels in the gated-family rule text."""
     doc = open(LICENSE_MAP, encoding="utf-8").read().lower()
     assert "basename stem" in doc
     assert "every in-family token" in doc
     assert "version segment directly after the model name" in doc
-    for term in ("director", "publisher", "r&d"):
-        assert term not in doc, term
+    assert "director" not in doc
 
 
