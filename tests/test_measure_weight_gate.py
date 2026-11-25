@@ -5,9 +5,11 @@ Tests run with stdlib + synthetic byte files only; no model or weight is downloa
 """
 
 import builtins
+from collections.abc import Mapping
 import datetime
 import hashlib
 import importlib
+import json
 import os
 
 import pytest
@@ -441,11 +443,158 @@ def test_structured_ruling_required_for_conditional_weights_and_legacy_keyword_r
             )
         assert bad_exc.value.evidence["clause"] == "invalid_conditional_ruling"
 
-    with pytest.raises(TypeError):
+    with pytest.raises(MeasureWeightGate) as kw_exc:
         MW.gate_measurement_weight(str(file_a), unknown_flag=True)
+    assert kw_exc.value.evidence["clause"] == "unexpected_keyword_argument"
 
     assert MW._ruling_covers_row({"scope": []}, {"repo_id": "example-org/cond-a"}) is False
     assert MW._ruling_covers_row(base_ruling, {"repo_id": None}) is False
+
+
+def _conditional_table_row(tmp_path):
+    w = tmp_path / "cond_row.safetensors"
+    w.write_bytes(b"conditional-weight-bytes")
+    digest = hashlib.sha256(w.read_bytes()).hexdigest()
+    table = (
+        {
+            "repo_id": "example-org/cond-a",
+            "revision": "rev-a",
+            "filename": "cond_row.safetensors",
+            "sha256": digest,
+            "verdict": "CONDITIONAL",
+            "licence": "Custom-A",
+            "fetched": "2026-11-11",
+            "source": "https://example.invalid/cond-a",
+        },
+    )
+    return w, table
+
+
+def test_ruling_l1_receipt_keeps_only_four_string_normalised_fields(tmp_path):
+    """L1: only the 4 required fields normalised to strings enter receipt['ruling']."""
+    w, table = _conditional_table_row(tmp_path)
+
+    class _SubStr(str):
+        pass
+
+    ruling = {
+        "by": _SubStr(" release-signoff "),
+        "date": _SubStr("2026-11-25"),
+        "scope": {_SubStr("example-org/cond-a"), _SubStr("other/repo")},
+        "licence_clause": _SubStr(" Custom-A §2.1 "),
+        "extra_unserialisable": object(),
+    }
+    receipt = MW.gate_measurement_weight(
+        str(w),
+        repo_id="example-org/cond-a",
+        revision="rev-a",
+        ruling=ruling,
+        table=table,
+        today="2026-11-25",
+    )
+    rec_ruling = receipt["ruling"]
+    assert set(rec_ruling) == set(MW.RULING_REQUIRED_FIELDS)
+    assert rec_ruling["by"] == "release-signoff" and type(rec_ruling["by"]) is str
+    assert rec_ruling["date"] == "2026-11-25" and type(rec_ruling["date"]) is str
+    assert rec_ruling["scope"] == ["example-org/cond-a", "other/repo"]
+    assert all(type(item) is str for item in rec_ruling["scope"])
+    assert rec_ruling["licence_clause"] == "Custom-A §2.1"
+    json.dumps(receipt, allow_nan=False)
+
+
+def test_ruling_l2_mapping_is_snapshotted_once_before_validation(tmp_path):
+    """L2: custom Mapping is snapshotted once for the four keys before validation."""
+    w, table = _conditional_table_row(tmp_path)
+
+    class _SingleReadMapping(Mapping):
+        def __init__(self, data):
+            self._data = dict(data)
+            self.reads = {}
+
+        def __getitem__(self, key):
+            count = self.reads.get(key, 0) + 1
+            self.reads[key] = count
+            if key == "extra_bomb":
+                raise AssertionError("extra key should never be read")
+            if count > 1:
+                raise AssertionError(f"key {key!r} read more than once")
+            return self._data[key]
+
+        def __iter__(self):
+            return iter(self._data)
+
+        def __len__(self):
+            return len(self._data)
+
+    ruling = _SingleReadMapping({
+        "by": "release-signoff",
+        "date": "2026-11-25",
+        "scope": "example-org/cond-a",
+        "licence_clause": "Custom-A §2.1",
+        "extra_bomb": object(),
+    })
+    receipt = MW.gate_measurement_weight(
+        str(w),
+        repo_id="example-org/cond-a",
+        revision="rev-a",
+        ruling=ruling,
+        table=table,
+        today="2026-11-25",
+    )
+    assert ruling.reads == {k: 1 for k in MW.RULING_REQUIRED_FIELDS}
+    assert receipt["ruling"]["scope"] == "example-org/cond-a"
+
+
+def test_ruling_l3_date_before_2000_or_after_utc_today_refuses(tmp_path):
+    """L3: ruling date before 2000-01-01 or after UTC today refuses with structured error."""
+    w, table = _conditional_table_row(tmp_path)
+    utc_today = datetime.datetime.now(datetime.timezone.utc).date()
+    tomorrow = (utc_today + datetime.timedelta(days=1)).isoformat()
+
+    for bad_date in ("1999-12-31", "0001-01-01", "2999-01-01", tomorrow):
+        with pytest.raises(MeasureWeightGate) as exc:
+            MW.gate_measurement_weight(
+                str(w),
+                repo_id="example-org/cond-a",
+                revision="rev-a",
+                ruling={
+                    "by": "release-signoff",
+                    "date": bad_date,
+                    "scope": "example-org/cond-a",
+                    "licence_clause": "Custom-A §2.1",
+                },
+                table=table,
+            )
+        assert exc.value.evidence["clause"] == "invalid_conditional_ruling", bad_date
+        assert exc.value.evidence["field"] == "date", bad_date
+
+    receipt = MW.gate_measurement_weight(
+        str(w),
+        repo_id="example-org/cond-a",
+        revision="rev-a",
+        ruling={
+            "by": "release-signoff",
+            "date": "2000-01-01",
+            "scope": "example-org/cond-a",
+            "licence_clause": "Custom-A §2.1",
+        },
+        table=table,
+        today=utc_today.isoformat(),
+    )
+    assert receipt["ruling"]["date"] == "2000-01-01"
+
+
+def test_ruling_l4_unexpected_keyword_raises_structured_measure_weight_gate(tmp_path):
+    """L4: unexpected keyword argument raises structured MeasureWeightGate."""
+    w, table = _conditional_table_row(tmp_path)
+    with pytest.raises(MeasureWeightGate) as exc:
+        MW.gate_measurement_weight(str(w), table=table, surprise_kw=True)
+    ev = exc.value.evidence
+    assert ev["gate"] == "MEASURE_WEIGHT"
+    assert ev["clause"] == "unexpected_keyword_argument"
+    assert ev["code"] == "unexpected_keyword_argument"
+    assert ev["unexpected_keywords"] == ["surprise_kw"]
+    assert ev["message"] and ev["hint"]
 
 
 def test_m1_every_measurement_weight_row_carries_dated_fetch_and_mirrors_license_map():

@@ -3107,20 +3107,70 @@ def test_no_unpinned_github_or_huggingface_licence_links():
 
 
 def test_bare_family_type_token_in_clip_loader_passes_while_weights_refuse():
-    """Item 6: a widget value that fullmatches `neutral_parent_patterns` with no weight
-    suffix and no path separator (`ltxv` in `CLIPLoader`) is a bare type token and passes,
-    while weight stems (`ltxv-13b-0.9.8-distilled`, `ltx-2-19b`, `da3_giant`) and all H-A/H-B/H-C
-    inputs still refuse."""
+    """Item 1 / H1: a widget value fullmatching `neutral_parent_patterns` with no weight suffix
+    and no path separator passes ONLY in an allow-listed `type`-enum slot (`CLIPLoader` idx 1,
+    `DualCLIPLoader` idx 2, and GGUF twins), while standalone tokens, non-enum slots, weight stems
+    (`ltxv-13b-0.9.8-distilled`, `ltx-2-19b`, `da3_giant`), and all H-A/H-B/H-C inputs refuse."""
     clip_node = {
         "id": 99,
         "type": "CLIPLoader",
         "widgets_values": ["t5xxl_fp16.safetensors", "ltxv", "default"],
     }
-    assert RG.gated_families_of("ltxv") == ()
-    g = graph(top=CLEAN_TOP + [clip_node])
-    ev = RG.verify(g)
+    dual_clip_node = {
+        "id": 100,
+        "type": "DualCLIPLoader",
+        "widgets_values": ["t5xxl_fp16.safetensors", "clip_l.safetensors", "ltxv", "default"],
+    }
+    gguf_clip_node = {
+        "id": 101,
+        "type": "CLIPLoaderGGUF",
+        "widgets_values": ["t5xxl_fp16.gguf", "ltxv"],
+    }
+    assert RG.gated_families_of("ltxv") == ("ltx",)
+    assert RG.gated_families_of("ltxv", node_class="CLIPLoader", widget_index=1) == ()
+    assert RG.gated_families_of("ltxv", node_class="DualCLIPLoader", widget_index=2) == ()
+    assert RG.gated_families_of("ltxv", node_class="CLIPLoader", widget_index=0) == ("ltx",)
+    assert RG.gated_families_of("ltxv", node_class="TripleCLIPLoader", widget_index=2) == ("ltx",)
+
+    ev = RG.verify(graph(top=CLEAN_TOP + [clip_node, dual_clip_node, gguf_clip_node]))
     assert ev["receipt"] == "verify"
-    assert not any(c.get("node_id") == 99 and c.get("file") == "ltxv" for c in ev["components"])
+    assert not any(c.get("file") == "ltxv" for c in ev["components"])
+
+    # API format accepts `inputs={"type": "ltxv"}` on allow-listed CLIP loaders regardless of key
+    # order, while refusing `"clip_name": "ltxv"` or unshifted wrong slots on TripleCLIPLoader.
+    api_ok = {
+        "1": {"class_type": "UNETLoader", "inputs": {"unet_name": "wan2.2_i2v_high_noise_14B_fp8_scaled.safetensors"}},
+        "2": {"class_type": "WanImageToVideo", "inputs": {"width": 832, "height": 480, "length": 81, "batch_size": 1}},
+        "3": {"class_type": "KSampler", "inputs": {"seed": 7, "control_after_generate": "fixed"}},
+        "4": {"class_type": "CLIPLoader", "inputs": {"type": "ltxv", "clip_name": "t5xxl_fp16.safetensors"}},
+    }
+    assert RG.verify(api_ok, frame=(832, 480, 81))["receipt"] == "verify"
+
+    api_bad_slot = dict(api_ok)
+    api_bad_slot["4"] = {
+        "class_type": "CLIPLoader",
+        "inputs": {"type": "stable_diffusion", "clip_name": "ltxv"},
+    }
+    with pytest.raises(RG.RouteGate) as api_exc:
+        RG.verify(api_bad_slot, frame=(832, 480, 81))
+    assert api_exc.value.evidence["clause"] == "unclassified_in_gated_family"
+
+    # TripleCLIPLoader has no `type` slot (all slots are clip_name1..3), so `"ltxv"` refuses.
+    triple_bad = {"id": 99, "type": "TripleCLIPLoader", "widgets_values": ["a.safetensors", "b.safetensors", "ltxv"]}
+    with pytest.raises(RG.RouteGate) as tri_exc:
+        RG.verify(graph(top=CLEAN_TOP + [triple_bad]))
+    assert tri_exc.value.evidence["clause"] == "unclassified_in_gated_family"
+
+    # Save-format converted clip_name shifts widgets_values -> fail-closed.
+    shifted_clip = {
+        "id": 99,
+        "type": "CLIPLoader",
+        "inputs": [{"name": "clip_name", "type": "COMBO", "widget": {"name": "clip_name"}}],
+        "widgets_values": ["t5xxl_fp16.safetensors", "ltxv"],
+    }
+    with pytest.raises(RG.RouteGate) as shift_exc:
+        RG.verify(graph(top=CLEAN_TOP + [shifted_clip]))
+    assert shift_exc.value.evidence["clause"] == "unclassified_in_gated_family"
 
     for bad_gated in ("ltxv-13b-0.9.8-distilled", "ltx-2-19b", "ltxv.safetensors"):
         with pytest.raises(RG.RouteGate) as exc:
@@ -3132,12 +3182,36 @@ def test_bare_family_type_token_in_clip_loader_passes_while_weights_refuse():
     assert giant_exc.value.evidence["clause"] == "banned_or_excluded_component"
 
 
+@pytest.mark.parametrize(
+    ("cls", "widgets"),
+    [
+        ("DiffusersLoader", ["LTX-Video"]),
+        ("DiffusersLoader", ["ltx_video"]),
+        ("DiffusersLoader", ["ltxvideo"]),
+        ("CheckpointLoaderSimple", ["ltx"]),
+        ("DownloadAndLoadDepthAnythingV3Model", ["da3"]),
+        ("DownloadAndLoadDepthAnythingV3Model", ["Depth-Anything-3"]),
+        ("UNETLoader", ["depth_anything_v2"]),
+        ("UNETLoader", ["Video-Depth-Anything"]),
+    ],
+)
+def test_h1_bare_family_tokens_outside_known_type_enum_slots_refuse(cls, widgets):
+    """H1: directory-name loaders and non-enum widget positions keep their gated family
+    and refuse with `unclassified_in_gated_family`."""
+    node = {"id": 99, "type": cls, "widgets_values": list(widgets)}
+    g = graph(top=CLEAN_TOP + [node])
+    comp = [c for c in RG.components(g) if c.get("node_id") == 99]
+    assert comp and comp[0].get("gated_families"), (cls, widgets, comp)
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert exc.value.evidence["clause"] == "unclassified_in_gated_family"
+
+
 def test_neutral_family_parent_folder_judges_non_family_stem_by_own_rows():
-    """Item 7: when every in-family token in a path is a neutral parent segment and the
-    file stem carries no in-family token (`loras/ltxv/smartphonesnapshot_v3.safetensors`),
-    the family check does not apply and the file is judged by its own rows, while in-family
-    weights (`loras/ltxv/ltx-2-19b-lora.safetensors`, `ltxv/ltx-2-19b-dev.safetensors`) and
-    anonymous `model` stems still refuse and the five fix-2 cleared paths still pass."""
+    """H2+M1: when every in-family token in a path is a neutral parent segment, the file stem
+    carries no in-family token, AND the file's own basename matches an ALLOWED or CONDITIONAL
+    row (`loras/ltxv/smartphonesnapshot_v3.safetensors`), the family check does not apply and
+    it is judged by its own rows while the 5 fix-2 map-cleared parent paths still pass."""
     ok_non_family = "loras/ltxv/smartphonesnapshot_v3.safetensors"
     assert RG.gated_families_of(ok_non_family) == ()
     ev = RG.verify(graph(top=CLEAN_TOP + [
@@ -3171,5 +3245,32 @@ def test_neutral_family_parent_folder_judges_non_family_stem_by_own_rows():
         assert RG.verify(graph(top=CLEAN_TOP + [
             loader(99, cleared_ok, cls="PreprocessorWeightLoader"),
         ]))["receipt"] == "verify", cleared_ok
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "Lightricks/LTX-Video/transformer/diffusion_pytorch_model.fp16.safetensors",
+        "Lightricks/LTX-Video/text_encoder/model.fp16-00001-of-00004.safetensors",
+        "ltxv/model.fp16.safetensors",
+        "ltxv/pytorch_model.bin",
+        "ltxv/my_model.safetensors",
+        "depthanything3/weights.pth",
+        "ltxv/checkpoint.safetensors",
+        "ltxv/unet.safetensors",
+        "depth_anything_v2/depth_anything_vitl.pth",
+    ],
+)
+def test_h2_m1_unruled_stems_under_neutral_family_folders_refuse(path):
+    """H2+M1: unruled stems and diffusers variants under neutral family parent folders keep
+    their gated family (including `.bin` in `WEIGHT_SUFFIXES`) and refuse."""
+    assert ".bin" in RG.WEIGHT_SUFFIXES
+    g = graph(top=CLEAN_TOP + [loader(99, path, cls="UNETLoader")])
+    comp = [c for c in RG.components(g) if c.get("node_id") == 99]
+    assert comp and comp[0]["suffix_recorded"] is True, (path, comp)
+    assert comp[0].get("gated_families"), (path, comp)
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(g)
+    assert exc.value.evidence["clause"] == "unclassified_in_gated_family", path
 
 

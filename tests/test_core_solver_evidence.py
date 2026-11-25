@@ -335,7 +335,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
         # first gate raise — `gate_census_table`'s `_refuse`, six clauses through one site.
         # RE-DERIVED with `==` in this worktree against `e8263a3`; BRANCH-LOCAL.
         "canon_census": 1,
-        "measure_weights": 10,
+        "measure_weights": 12,
     }, with_gates
     # WAVE-10 MERGE (coordinator, 2026-09-04): core-gates' branch moved rig_gates 12 -> 15 and
     # route_gates 34 -> 35 in the same wave; merged = 155 + 3 + 1 = 159, MEASURED on the merged tree.
@@ -378,9 +378,9 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # WAVE 35 pin-fix: 222 -> 228 (donor_gate +2, lift_solve +3, turnaround +1).
     # Shot diagnostics (feat/shot-diagnostics, 2026-11-11): 228 -> 235 (+7 MeasureWeightGate in measure_weights).
     # post-#26 licence-gate gaps: 235 -> 236 (+1 route_gates unclassified_in_gated_family).
-    # conditional rulings and review lows: 236 -> 239 (+3 MeasureWeightGate in measure_weights:
-    # invalid_conditional_ruling, legacy_ruling_keyword_removed, ruling_out_of_scope).
-    assert sum(with_gates.values()) == 239
+    # conditional rulings and review lows: 236 -> 241 (+5 MeasureWeightGate in measure_weights:
+    # invalid_conditional_ruling x2, legacy_ruling_keyword_removed, ruling_out_of_scope, unexpected_keyword_argument).
+    assert sum(with_gates.values()) == 241
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():

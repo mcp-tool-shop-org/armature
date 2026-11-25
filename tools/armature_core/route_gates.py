@@ -1059,8 +1059,11 @@ CAMERA_NODES = {
 #: walk's was the one that failed OPEN. `test_amend_w25_core_gates.py` pins that
 #: `components()`' weight population is a SUPERSET of `model_weights`', so the two can no
 #: longer diverge in the direction that matters.
+#: Record the extension in WEIGHT_SUFFIXES, in a commit, if this artifact format is
+#: one this pipeline loads. `.bin` is included so raw PyTorch/Diffusers `.bin` weights
+#: (e.g. `ltxv/pytorch_model.bin`) stay recorded components.
 WEIGHT_SUFFIXES = (
-    ".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".task", ".pkl", ".onnx",
+    ".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".task", ".pkl", ".onnx", ".bin",
 )
 
 #: Extra node-CLASS-NAME substrings that identify a `RULED_COMPONENTS` row, beyond the
@@ -2687,14 +2690,31 @@ def _is_family_cleared(norm, spec):
     return False
 
 
-_ANONYMOUS_WEIGHT_STEM_RE = re.compile(
-    r"(?:diffusion_)?(?:pytorch_)?model(?:[_-](?:fp16|fp32|bf16|fp8|\d+-of-\d+))*"
-)
+#: ComfyUI `(node_class, widget_index)` pairs whose widget slot is a `type` enum rather than
+#: a weight path or repository name. Pinned upstream citations:
+#: - `CLIPLoader` (`type` enum at widget index 1 after `clip_name`):
+#:   https://github.com/comfyanonymous/ComfyUI/blob/f40a4fbb2ac8/nodes.py#L1017-L1025
+#: - `DualCLIPLoader` (`type` enum at widget index 2 after `clip_name1`, `clip_name2`):
+#:   https://github.com/comfyanonymous/ComfyUI/blob/f40a4fbb2ac8/nodes.py#L1044-L1053
+#: - `CLIPLoaderGGUF` (`type` enum at widget index 1) and `DualCLIPLoaderGGUF` (`type` at 2):
+#:   https://github.com/city96/ComfyUI-GGUF/blob/6ea2651e7df6/nodes.py
+#: `TripleCLIPLoader` (`comfy_extras/nodes_sd3.py#L11-L28` @ `f40a4fbb2ac8`),
+#: `QuadrupleCLIPLoader` (`comfy_extras/nodes_hidream.py` @ `f40a4fbb2ac8`), and their GGUF
+#: counterparts declare only `clip_name*` inputs with NO `type` enum slot and are excluded.
+TYPE_ENUM_WIDGET_SLOTS = frozenset({
+    ("CLIPLoader", 1),
+    ("DualCLIPLoader", 2),
+    ("CLIPLoaderGGUF", 1),
+    ("DualCLIPLoaderGGUF", 2),
+})
+_TYPE_ENUM_SLOT_BY_CLASS = dict(TYPE_ENUM_WIDGET_SLOTS)
 
 
-def _is_bare_family_type_token(value, spec):
-    """True iff `value` is a bare type-enum token (e.g. `ltxv` in `CLIPLoader`):
-    fullmatches `neutral_parent_patterns` and carries no weight suffix and no path separator."""
+def _is_bare_family_type_token(value, spec, *, node_class=None, widget_index=None):
+    """True iff `(node_class, widget_index)` is an allow-listed ComfyUI `type`-enum slot and
+    `value` fullmatches `neutral_parent_patterns` with no weight suffix and no path separator."""
+    if (node_class, widget_index) not in TYPE_ENUM_WIDGET_SLOTS:
+        return False
     low = str(value).strip().lower()
     if not low or "/" in low or "\\" in low or low.endswith(WEIGHT_SUFFIXES):
         return False
@@ -2702,8 +2722,9 @@ def _is_bare_family_type_token(value, spec):
 
 
 def _has_only_neutral_family_parents(filename, spec):
-    """True iff every in-family token in `filename` is a neutral parent segment and the
-    file stem itself carries no in-family token and is not a generic `model` stem."""
+    """True iff every in-family token in `filename` is a neutral parent segment, the file
+    basename/stem carries no in-family token, AND the file's own basename matches an
+    `ALLOWED` or `CONDITIONAL` row in `RULED_COMPONENTS`."""
     norm = str(filename).lower().replace("\\", "/").strip("/")
     raw_segs = [s for s in norm.split("/") if s]
     if len(raw_segs) < 2 or ".." in raw_segs or raw_segs[-2] == "blobs":
@@ -2713,22 +2734,25 @@ def _has_only_neutral_family_parents(filename, spec):
     in_fam = lambda seg: any(re.search(p, seg) for p in pats)
     basename = raw_segs[-1]
     stem = _strip_weight_suffix(basename)
-    if in_fam(basename) or in_fam(stem) or _ANONYMOUS_WEIGHT_STEM_RE.fullmatch(stem):
+    if in_fam(basename) or in_fam(stem):
         return False
     fam_parents = [s for s in raw_segs[:-1] if in_fam(s)]
-    return bool(fam_parents) and all(
-        any(re.fullmatch(np, s) for np in neutral) for s in fam_parents
-    )
+    if not (fam_parents and all(any(re.fullmatch(np, s) for np in neutral) for s in fam_parents)):
+        return False
+    basename_hits = rulings_for(basename)
+    return bool(basename_hits) and basename_hits[0]["verdict"] in ("ALLOWED", "CONDITIONAL")
 
 
-def gated_families_of(filename):
+def gated_families_of(filename, *, node_class=None, widget_index=None):
     """Every `GATED_WEIGHT_FAMILIES` key that `filename` belongs to."""
     norm = str(filename).lower().replace("\\", "/").strip("/")
     matched = []
     for fam, spec in GATED_WEIGHT_FAMILIES.items():
         if not any(re.search(p, norm) for p in spec.get("patterns", ())):
             continue
-        if _is_bare_family_type_token(filename, spec):
+        if _is_bare_family_type_token(
+            filename, spec, node_class=node_class, widget_index=widget_index
+        ):
             continue
         if _has_only_neutral_family_parents(filename, spec):
             continue
@@ -2736,14 +2760,16 @@ def gated_families_of(filename):
     return tuple(matched)
 
 
-def unclassified_gated_families_of(filename):
+def unclassified_gated_families_of(filename, *, node_class=None, widget_index=None):
     """Gated family keys that claim `filename` without a map-cleared exception."""
     norm = str(filename).lower().replace("\\", "/").strip("/")
     matched = []
     for fam, spec in GATED_WEIGHT_FAMILIES.items():
         if not any(re.search(p, norm) for p in spec.get("patterns", ())):
             continue
-        if _is_bare_family_type_token(filename, spec):
+        if _is_bare_family_type_token(
+            filename, spec, node_class=node_class, widget_index=widget_index
+        ):
             continue
         if _has_only_neutral_family_parents(filename, spec):
             continue
@@ -2753,7 +2779,7 @@ def unclassified_gated_families_of(filename):
     return tuple(matched)
 
 
-def _component_hits(value):
+def _component_hits(value, *, node_class=None, widget_index=None):
     """`(hits, looks_like_a_weight_file, gated_families)` for one widget value.
 
     See `WEIGHT_SUFFIXES` for the measurement this inversion closes. `hits` is
@@ -2769,8 +2795,35 @@ def _component_hits(value):
     name_shaped = looks_like_weight or _is_name_shaped(value)
     hits = rulings_for(value) if name_shaped else []
     has_banned = any(h["verdict"] == "BANNED" for h in hits)
-    gated = () if (not name_shaped or has_banned) else unclassified_gated_families_of(value)
+    gated = () if (not name_shaped or has_banned) else unclassified_gated_families_of(
+        value, node_class=node_class, widget_index=widget_index
+    )
     return hits, looks_like_weight, gated
+
+
+def _node_widget_entries(node, where):
+    """Yield `(widget_index, value)` pairs for `node`, preserving type-enum slot identity."""
+    cls = node.get("type")
+    if where == "api" and isinstance(node.get("inputs"), dict):
+        enum_idx = _TYPE_ENUM_SLOT_BY_CLASS.get(cls)
+        n_literals = 0
+        for key, raw_val in node["inputs"].items():
+            if isinstance(raw_val, list):
+                continue
+            n_literals += 1
+            yield (enum_idx if (enum_idx is not None and key == "type") else None), raw_val
+        for extra_val in (node.get("widgets_values") or [])[n_literals:]:
+            yield None, extra_val
+        return
+
+    shifted = any(
+        isinstance(slot, dict)
+        and isinstance(slot.get("widget"), dict)
+        and slot["widget"].get("name") not in (None, "device")
+        for slot in (node.get("inputs") or [])
+    )
+    for idx, val in enumerate(node.get("widgets_values") or []):
+        yield (None if shifted else idx), val
 
 
 def components(graph):
@@ -2796,8 +2849,10 @@ def components(graph):
     graph = normalise_graph(graph)
     out = []
     for where, n in _iter_nodes(graph):
-        for v in (n.get("widgets_values") or []):
-            hits, looks_like_weight, gated = _component_hits(v)
+        for idx, v in _node_widget_entries(n, where):
+            hits, looks_like_weight, gated = _component_hits(
+                v, node_class=n.get("type"), widget_index=idx
+            )
             if not hits and not looks_like_weight and not gated:
                 continue
             if hits and hits[0]["verdict"] in ("BANNED", "EXCLUDED"):

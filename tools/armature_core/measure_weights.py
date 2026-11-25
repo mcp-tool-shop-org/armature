@@ -28,8 +28,9 @@ TOOL_VERSION = "shotdiag.1"
 #: Same 90-day advisory horizon `route_gates` applies to licence rulings.
 LICENCE_ADVISORY_DAYS = 90
 
-#: Required fields on a structured `ruling` mapping for `CONDITIONAL` weights.
+#: Required fields and minimum date bound on a structured `ruling` mapping.
 RULING_REQUIRED_FIELDS = ("by", "date", "scope", "licence_clause")
+RULING_MIN_DATE = datetime.date(2000, 1, 1)
 _ISO_DATE_RE = re.compile(r"\d{4}-\d{2}-\d{2}")
 _LEGACY_RULING_KW = "dir" + "ector_ruling"
 
@@ -359,29 +360,28 @@ def _normalize_scope(scope_val):
     return tuple(cleaned), None
 
 
-def _inspect_ruling(ruling):
-    """Return `(message, hint, extra)` when `ruling` is invalid, or `None` if valid."""
+def _resolve_utc_today(today):
+    """Resolve `today` (ISO string / date / None -> current UTC date)."""
+    if today is None:
+        return datetime.datetime.now(datetime.timezone.utc).date()
+    if isinstance(today, datetime.date) and not isinstance(today, datetime.datetime):
+        return today
+    return datetime.date.fromisoformat(str(today).strip())
+
+
+def _inspect_ruling(snapshot, *, max_date):
+    """Return `(message, hint, extra)` when 4-key `snapshot` is invalid, or `None` if valid."""
     hint = (
         "pass ruling={'by': '<decider>', 'date': 'YYYY-MM-DD', "
         "'scope': '<repo_id>', 'licence_clause': '<clause>'}"
     )
-    if not isinstance(ruling, Mapping):
-        return (
-            f"ruling must be a mapping with fields {list(RULING_REQUIRED_FIELDS)}; "
-            f"got {type(ruling).__name__}",
-            hint,
-            {
-                "missing_fields": list(RULING_REQUIRED_FIELDS),
-                "received_type": type(ruling).__name__,
-            },
-        )
 
     missing = []
     for field in RULING_REQUIRED_FIELDS:
-        if field not in ruling or ruling[field] is None:
+        if field not in snapshot or snapshot[field] is None:
             missing.append(field)
             continue
-        val = ruling[field]
+        val = snapshot[field]
         if field == "scope":
             _scopes, err = _normalize_scope(val)
             if err == "missing_or_empty":
@@ -409,32 +409,76 @@ def _inspect_ruling(ruling):
             {"missing_fields": missing},
         )
 
-    date_str = ruling["date"].strip()
+    date_str = snapshot["date"].strip()
     if not _ISO_DATE_RE.fullmatch(date_str):
         return (
-            f"ruling field 'date' must be ISO YYYY-MM-DD; got {ruling['date']!r}",
+            f"ruling field 'date' must be ISO YYYY-MM-DD; got {snapshot['date']!r}",
             "set ruling['date'] to a valid ISO YYYY-MM-DD date",
-            {"field": "date", "date": ruling["date"]},
+            {"field": "date", "date": str(snapshot["date"])},
         )
     try:
-        datetime.date.fromisoformat(date_str)
+        parsed_date = datetime.date.fromisoformat(date_str)
     except ValueError as exc:
         return (
-            f"ruling field 'date' is not a valid calendar date ({exc}): {ruling['date']!r}",
+            f"ruling field 'date' is not a valid calendar date ({exc}): {snapshot['date']!r}",
             "set ruling['date'] to a valid ISO YYYY-MM-DD date",
-            {"field": "date", "date": ruling["date"]},
+            {"field": "date", "date": str(snapshot["date"])},
+        )
+    if parsed_date < RULING_MIN_DATE or parsed_date > max_date:
+        return (
+            f"ruling field 'date' ({date_str!r}) must be within {RULING_MIN_DATE.isoformat()}..{max_date.isoformat()}",
+            f"set ruling['date'] between {RULING_MIN_DATE.isoformat()} and {max_date.isoformat()}",
+            {
+                "field": "date",
+                "date": date_str,
+                "min_date": RULING_MIN_DATE.isoformat(),
+                "max_date": max_date.isoformat(),
+            },
         )
     return None
 
 
-def validate_ruling(ruling):
-    """Validate and copy a structured `CONDITIONAL` weight ruling mapping.
+def validate_ruling(ruling, *, today=None):
+    """Snapshot once and validate a structured `CONDITIONAL` weight ruling mapping.
 
-    Requires a mapping with non-empty `by`, ISO `YYYY-MM-DD` `date`, `scope` (row key or
-    keys covered), and `licence_clause`. Refuses missing, partial, or wrongly typed
-    rulings with a structured `MeasureWeightGate` (`code`/`message`/`hint`).
+    Requires a mapping with non-empty `by`, ISO `YYYY-MM-DD` `date` in `[2000-01-01, today]`,
+    `scope`, and `licence_clause`. Returns a new dict containing only those four string-normalised
+    fields. Refuses missing, partial, wrongly typed, or out-of-range rulings with a structured
+    `MeasureWeightGate` (`code`/`message`/`hint`).
     """
-    err = _inspect_ruling(ruling)
+    hint = (
+        "pass ruling={'by': '<decider>', 'date': 'YYYY-MM-DD', "
+        "'scope': '<repo_id>', 'licence_clause': '<clause>'}"
+    )
+    if not isinstance(ruling, Mapping):
+        msg = (
+            f"ruling must be a mapping with fields {list(RULING_REQUIRED_FIELDS)}; "
+            f"got {type(ruling).__name__}"
+        )
+        raise MeasureWeightGate(
+            f"{msg} (hint: {hint})",
+            {
+                "gate": "MEASURE_WEIGHT",
+                "andon": "MeasureWeightGate",
+                "clause": "invalid_conditional_ruling",
+                "code": "invalid_conditional_ruling",
+                "message": msg,
+                "hint": hint,
+                "missing_fields": list(RULING_REQUIRED_FIELDS),
+                "received_type": type(ruling).__name__,
+            },
+        )
+
+    # Read each required key from the caller mapping at most once before validation.
+    snapshot = {}
+    for key in RULING_REQUIRED_FIELDS:
+        try:
+            snapshot[key] = ruling[key]
+        except KeyError:
+            pass
+
+    max_date = _resolve_utc_today(today)
+    err = _inspect_ruling(snapshot, max_date=max_date)
     if err is not None:
         msg, hint, extra = err
         ev = {
@@ -448,14 +492,20 @@ def validate_ruling(ruling):
         ev.update(extra)
         raise MeasureWeightGate(f"{msg} (hint: {hint})", ev)
 
-    date_str = ruling["date"].strip()
-    scopes, _ = _normalize_scope(ruling["scope"])
-    normalized = dict(ruling)
-    normalized["by"] = ruling["by"].strip()
-    normalized["date"] = date_str
-    normalized["licence_clause"] = ruling["licence_clause"].strip()
-    normalized["scope"] = scopes[0] if isinstance(ruling["scope"], str) else list(scopes)
-    return normalized
+    scopes, _ = _normalize_scope(snapshot["scope"])
+    raw_scope = snapshot["scope"]
+    if isinstance(raw_scope, str):
+        norm_scope = str(scopes[0])
+    elif isinstance(raw_scope, (set, frozenset)):
+        norm_scope = sorted(str(s) for s in scopes)
+    else:
+        norm_scope = [str(s) for s in scopes]
+    return {
+        "by": str(snapshot["by"]).strip(),
+        "date": str(snapshot["date"]).strip(),
+        "scope": norm_scope,
+        "licence_clause": str(snapshot["licence_clause"]).strip(),
+    }
 
 
 def _ruling_covers_row(validated_ruling, row):
@@ -512,10 +562,21 @@ def gate_measurement_weight(
             },
         )
     if unexpected_kwargs:
-        def _reject_unexpected_kwargs():
-            return None
-
-        _reject_unexpected_kwargs(**unexpected_kwargs)
+        bad_keys = sorted(str(k) for k in unexpected_kwargs)
+        msg = f"gate_measurement_weight() got unexpected keyword argument(s): {', '.join(bad_keys)}"
+        hint = "valid keyword arguments are repo_id, revision, ruling, table, stems, today"
+        raise MeasureWeightGate(
+            f"{msg} (hint: {hint})",
+            {
+                "gate": "MEASURE_WEIGHT",
+                "andon": "MeasureWeightGate",
+                "clause": "unexpected_keyword_argument",
+                "code": "unexpected_keyword_argument",
+                "message": msg,
+                "hint": hint,
+                "unexpected_keywords": bad_keys,
+            },
+        )
 
     if not path or not os.path.isfile(path):
         raise MeasureWeightGate(
@@ -616,7 +677,7 @@ def gate_measurement_weight(
             )
 
     if ruling is not None:
-        validated_ruling = validate_ruling(ruling)
+        validated_ruling = validate_ruling(ruling, today=today)
 
     for row in candidates:
         if (repo_id is not None and row.get("repo_id") != repo_id) or (

@@ -1281,9 +1281,9 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # Shot diagnostics (feat/shot-diagnostics, 2026-11-11): 506 -> 558 (+7 MeasureWeightGate in
     # measure_weights.py, +45 ShotDiagError in shotdiag.py).
     # post-#26 licence-gate gaps: 558 -> 559 (+1 RouteGate unclassified_in_gated_family in route_gates.py).
-    # conditional rulings and review lows: 559 -> 571 (measured across armature_core).
-    assert total == 571, (
-        f"{total} family raises in armature_core; this pin asserts 571, MEASURED on fix/conditional-rulings-and-review-lows. "
+    # conditional rulings and review lows: 559 -> 574 (measured across armature_core).
+    assert total == 574, (
+        f"{total} family raises in armature_core; this pin asserts 574, MEASURED on fix/conditional-rulings-and-review-lows. "
         f"This is the denominator every ratio below is quoted against — re-measure it "
         f"deliberately")
 

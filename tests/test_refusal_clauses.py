@@ -2574,6 +2574,7 @@ RECORDED_CLAUSES = [
     'two_frames_share_one_server_name',
     'unbound_declared_over_weighted_fingerprints',
     'unclassified_in_gated_family',
+    'unexpected_keyword_argument',
     'unexpected_source_node',
     'unknown_animation_mode',
     'unknown_argument',

@@ -985,3 +985,34 @@ def test_non_finite_direction_refuses_cleanly_without_json_crash(monkeypatch):
     if pair_res["fired"] and pair_res["model"] == "E":
         assert pair_res["t_dir_in_f0"] is None
         assert pair_res["tdir_reason"] == "degenerate_translation_direction"
+
+
+def test_non_finite_parallax_and_gric_refuse_with_non_finite_direction():
+    """L7: non-finite parallax_residual_px, gric_e, and gric_h refuse with non_finite_direction."""
+    mats = _orbit_matrices(n_frames=2)
+    gt_poses = [SD.blender_to_opencv_pose(m) for m in mats]
+    for field in ("parallax_residual_px", "gric_e", "gric_h"):
+        for bad_val in (float("nan"), float("inf"), float("-inf")):
+            pair = {
+                "fired": True,
+                "n_matches": 16,
+                "n_inliers": 12,
+                "model": "E",
+                "gric_e": 10.0,
+                "gric_h": 20.0,
+                "R_rel": np.eye(3, dtype=np.float64),
+                "t_dir_in_f0": np.array([1.0, 0.0, 0.0], dtype=np.float64),
+                "tdir_reason": None,
+                "parallax_residual_px": 1.0,
+            }
+            pair[field] = bad_val
+            with pytest.raises(ShotDiagError) as exc:
+                SD.score_camera_trajectory(gt_poses, [pair])
+            assert exc.value.evidence["clause"] == "non_finite_direction"
+            assert exc.value.evidence["field"] == field
+
+            unfired = dict(pair, fired=False)
+            with pytest.raises(ShotDiagError) as unfired_exc:
+                SD.score_camera_trajectory(gt_poses, [unfired])
+            assert unfired_exc.value.evidence["clause"] == "non_finite_direction"
+            assert unfired_exc.value.evidence["field"] == field

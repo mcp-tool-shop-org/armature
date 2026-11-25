@@ -15,25 +15,29 @@ installs.
 
 - **Structured `CONDITIONAL` rulings, shot diagnostics lows, route-gate false-refusal fixes, pinned licence links, and CI coverage:**
   - `tools/armature_core/measure_weights.py`, `tools/armature_core/shotdiag.py`: replaced the
-    truthy `ruling` predecessor parameter with structured `ruling={"by", "date", "scope", "licence_clause"}`
-    validation, enforced ISO `YYYY-MM-DD` date and explicit `scope` row coverage, refused
-    missing/partial/out-of-scope/legacy calls with structured errors (`code`/`message`/`hint`),
-    and recorded the full ruling on the receipt.
-  - `tools/armature_core/shotdiag.py`: refused non-finite (`NaN`/`inf`) vectors and trajectory
-    translation directions with `ShotDiagError` (`non_finite_direction`) before JSON serialization;
-    verified `load_state_dict(strict=False)` reports zero `missing_keys` and only documented
-    `DINOV2_ALLOWED_UNEXPECTED_KEYS` (`dinov2_state_dict_mismatch`); documented the injected
-    `embedder=` contract and `MeasureWeightGate` bypass caveat in `shotdiag.py` and `docs/license-map.md`.
+    removed truthy `director_ruling` predecessor keyword parameter with structured
+    `ruling={"by", "date", "scope", "licence_clause"}` validation (single-read 4-key snapshot,
+    `date` bounded to `2000-01-01..UTC today`, only those 4 string-normalised fields recorded in
+    the receipt, and explicit `scope` row coverage), refused missing/partial/out-of-scope/legacy/unexpected
+    keyword calls with structured `MeasureWeightGate` errors (`code`/`message`/`hint`).
+  - `tools/armature_core/shotdiag.py`: refused non-finite (`NaN`/`inf`) vectors, trajectory
+    translation directions, `parallax_residual_px`, `gric_e`, and `gric_h` with `ShotDiagError`
+    (`non_finite_direction`) before JSON serialization; verified `load_state_dict(strict=False)`
+    reports zero `missing_keys` and only documented `DINOV2_ALLOWED_UNEXPECTED_KEYS`
+    (`dinov2_state_dict_mismatch`); documented the injected `embedder=` contract and
+    `MeasureWeightGate` bypass caveat in `shotdiag.py` and `docs/license-map.md`.
   - `docs/license-map.md`, `tools/armature_core/route_gates.py`, `tools/armature_core/measure_weights.py`:
     pinned GitHub and Hugging Face licence source links to commit/revision URLs, added dated
     Wayback archive snapshots alongside live non-git pages, and added a guard test against
     unpinned `/blob/main/`, `/raw/main/`, and `/resolve/main/` links.
-  - `tools/armature_core/route_gates.py`: ignored bare neutral family type tokens with no weight
-    suffix and no path separator (such as `"ltxv"` in `CLIPLoader`), and skipped the gated-family
-    check when every in-family segment is a neutral parent folder and the file stem carries no
-    in-family token (`loras/ltxv/smartphonesnapshot_v3.safetensors`). Note from #31: merged
-    `lightx2v_` + in-family weight names (such as `lightx2v_da3_small.safetensors`) now refuse
-    as `unclassified_in_gated_family` even under `allow=("lightx2v",)`.
+  - `tools/armature_core/route_gates.py`: added `.bin` to `WEIGHT_SUFFIXES`, narrowed bare neutral
+    family type tokens to allow-listed ComfyUI `type`-enum widget slots (`TYPE_ENUM_WIDGET_SLOTS`,
+    e.g. `CLIPLoader` index 1 and `DualCLIPLoader` index 2), and restricted the neutral-parent
+    exemption so it skips the family check only when the file basename carries no in-family token
+    AND matches an `ALLOWED` or `CONDITIONAL` row in `RULED_COMPONENTS`
+    (`loras/ltxv/smartphonesnapshot_v3.safetensors`). Note from #31: merged `lightx2v_` +
+    in-family weight names (such as `lightx2v_da3_small.safetensors`) now refuse as
+    `unclassified_in_gated_family` even under `allow=("lightx2v",)`.
   - `.github/workflows/ci.yml`: added `coverage` line measurement on the Python `3.13`
     matrix leg with a `--fail-under=75` ratchet floor (calibrated against `75.83%` measured total line coverage).
 

@@ -75,13 +75,14 @@ def test_a_banned_weight_is_refused_whatever_its_extension(spelling):
 
 def test_the_banned_name_is_a_component_rather_than_a_dropped_string():
     """The receipt half: `components()` must NAME it, so the licence clause's `of {n}`
-    denominator counts the thing that was ruled on."""
-    rows = [c for c in RG.components(_lora_graph("causvid_x.bin"))
+    denominator counts the thing that was ruled on (`.bin` is now in `WEIGHT_SUFFIXES`,
+    so `.npz` exercises the unrecorded-suffix branch)."""
+    rows = [c for c in RG.components(_lora_graph("causvid_x.npz"))
             if c["kind"] == "weight"]
     named = {c["file"]: c for c in rows}
-    assert "causvid_x.bin" in named, sorted(named)
-    assert named["causvid_x.bin"]["verdict"] == "BANNED"
-    assert named["causvid_x.bin"]["suffix_recorded"] is False
+    assert "causvid_x.npz" in named, sorted(named)
+    assert named["causvid_x.npz"]["verdict"] == "BANNED"
+    assert named["causvid_x.npz"]["suffix_recorded"] is False
     assert named["wan2.2_t2v_high_noise_14B_fp8_scaled.safetensors"][
         "suffix_recorded"] is True
 
@@ -91,10 +92,10 @@ def test_an_allowed_ruled_name_with_an_unrecorded_suffix_refuses_by_name():
     name in an artifact format nobody recorded. Refusing means `WEIGHT_SUFFIXES` is
     extended in a commit rather than by a converter's choice of filename."""
     with pytest.raises(RG.RouteGate) as exc:
-        RG.verify(_lora_graph("technically_color_v2.bin"), frame=(832, 480, 81))
+        RG.verify(_lora_graph("technically_color_v2.npz"), frame=(832, 480, 81))
     assert exc.value.evidence["clause"] == "ruled_name_with_unknown_suffix"
     assert exc.value.evidence["ruled_names_with_unknown_suffix"] == [
-        "technically_color_v2.bin"]
+        "technically_color_v2.npz"]
     assert exc.value.evidence["recorded_suffixes"] == list(RG.WEIGHT_SUFFIXES)
 
 
@@ -105,7 +106,7 @@ def test_a_prompt_carrying_a_ruled_substring_is_not_a_component():
     g = {"1": {"class_type": "CLIPTextEncode",
                "inputs": {"text": "a candid_photography of a knight in plate armour"}}}
     assert [c for c in RG.components(g) if c["kind"] == "weight"] == []
-    assert RG._is_name_shaped("causvid_x.bin") is True
+    assert RG._is_name_shaped("causvid_x.npz") is True
     assert RG._is_name_shaped("a candid_photography of a knight") is False
 
 
@@ -113,11 +114,11 @@ def test_the_licence_walk_reads_a_superset_of_gate_pairs_population():
     """The two readers of one tuple failed in OPPOSITE directions — `model_weights` (Gate
     PAIR) closed, `components` open. PAIR keeps the suffix tuple deliberately, so the
     invariant that matters is containment: nothing PAIR can see escapes the licence walk."""
-    g = _lora_graph("causvid_x.bin")
+    g = _lora_graph("causvid_x.npz")
     licence = {c["file"] for c in RG.components(g) if c["kind"] == "weight"}
     pair = {w["file"] for w in RG.model_weights(g)}
     assert pair <= licence, sorted(pair - licence)
-    assert "causvid_x.bin" in licence - pair
+    assert "causvid_x.npz" in licence - pair
 
 
 # ===================================================================== F-6fcab339 (CRIT)

@@ -794,9 +794,34 @@ def score_camera_trajectory(
 
         fired = bool(est.get("fired"))
         model = est.get("model", "none")
-        parallax_px = est.get("parallax_residual_px")
-        if fired and parallax_px is not None and math.isfinite(float(parallax_px)):
-            parallax_vals.append(float(parallax_px))
+        metrics = {}
+        for metric_name in ("parallax_residual_px", "gric_e", "gric_h"):
+            raw_val = est.get(metric_name)
+            if raw_val is None:
+                metrics[metric_name] = None
+                continue
+            if isinstance(raw_val, bool):
+                fval = float("nan")
+            else:
+                try:
+                    fval = float(raw_val)
+                except (TypeError, ValueError):
+                    fval = float("nan")
+            if not math.isfinite(fval):
+                raise ShotDiagError(
+                    f"estimated {metric_name} at frame {frame_t} must be finite; got {raw_val!r}",
+                    {
+                        "gate": None,
+                        "andon": "ShotDiagError",
+                        "clause": "non_finite_direction",
+                        "frame": frame_t,
+                        "field": metric_name,
+                    },
+                )
+            metrics[metric_name] = fval
+        parallax_px = metrics["parallax_residual_px"]
+        if fired and parallax_px is not None:
+            parallax_vals.append(parallax_px)
 
         if not fired or est.get("R_rel") is None:
             per_pair.append(
@@ -806,8 +831,8 @@ def score_camera_trajectory(
                     "n_matches": int(est.get("n_matches", 0)),
                     "n_inliers": int(est.get("n_inliers", 0)),
                     "model": "none",
-                    "gric_e": est.get("gric_e"),
-                    "gric_h": est.get("gric_h"),
+                    "gric_e": metrics["gric_e"],
+                    "gric_h": metrics["gric_h"],
                     "rot_err_deg": None,
                     "tdir_err_deg": None,
                     "tdir_reason": "not_fired",
@@ -871,16 +896,14 @@ def score_camera_trajectory(
                 "n_matches": int(est.get("n_matches", 0)),
                 "n_inliers": int(est.get("n_inliers", 0)),
                 "model": model,
-                "gric_e": est.get("gric_e"),
-                "gric_h": est.get("gric_h"),
+                "gric_e": metrics["gric_e"],
+                "gric_h": metrics["gric_h"],
                 "rot_err_deg": rot_err,
                 "tdir_err_deg": tdir_err,
                 "tdir_reason": tdir_reason,
                 "gt_rot_from_f0_deg": gt_rot_deg,
                 "est_rot_from_f0_deg": est_rot_deg,
-                "parallax_residual_px": (
-                    float(parallax_px) if parallax_px is not None else None
-                ),
+                "parallax_residual_px": parallax_px,
             }
         )
 
