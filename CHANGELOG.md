@@ -13,6 +13,36 @@ installs.
 
 ## [Unreleased]
 
+- **Licence-gate gap closure (`tools/armature_core/route_gates.py`, `docs/license-map.md`):**
+  - Ban any `da3_large` / `da3-large` / `da3large` name (any case, separator, weight suffix,
+    or HF cache path) unless `1.1` is explicitly present, keeping `DA3-LARGE-1.1` forms passing.
+  - Added explicit `GATED_WEIGHT_FAMILIES` (`da3`, `depth_anything_v2`, `video_depth_anything`,
+    `insightface`, `smpl`, `ltx`); unmatched names inside a gated family now refuse in
+    `verify()` as `unclassified in a gated family` (`clause: unclassified_in_gated_family`),
+    while out-of-family names keep `NOT IN THIS TABLE` reporting.
+  - Added `.pkl` and `.onnx` to `WEIGHT_SUFFIXES` and mirrored `smpl_v1.1.0` plus
+    InsightFace weights `inswapper_128_fp16`, `glintr100`, `scrfd_10g_bnkps`, and `w600k_mbf`
+    from pinned licence documents.
+  - Ruled the four `Depth-Anything-V2-*-hf` Transformers ports (`-Base-hf`, `-Large-hf`,
+    `-Metric-Indoor-Large-hf`, `-Metric-Outdoor-Large-hf`) from their pinned model cards.
+  - Aligned `smpl_` pattern matching with `docs/license-map.md` (`basicModel_*` / `SMPL_*`),
+    extended LTX row matching to underscore and no-hyphen spellings, gave `da3_giant.safetensors`
+    its own row citing both 1.0 and 1.1 `ComfyUI-DepthAnythingV3` mappings, and replaced
+    role labels in `docs/license-map.md` with plain wording.
+  - Hardened gated-family and `DA3-LARGE` matching against bypasses:
+    - Anchored `cleared_patterns` per path segment (basename stem or Hugging Face repo segment)
+      so a cleared token clears the path only when the weight carries cleared variants and
+      every in-family parent folder is cleared or a bare neutral family/container name.
+    - Required `1.1` in `DA3-LARGE` paths to stand as the version segment directly after the
+      model name inside the same path segment rather than anywhere in the path.
+    - Executed the gated-family check whenever no `BANNED` row matched (and keyed `verify()`'s
+      gated-family refusal on `gated_families`), so `ALLOWED`, `CONDITIONAL`, or `allow=`-waived
+      `EXCLUDED` row matches never bypass in-family refusal.
+    - Added `det_500m`, `det_2.5g`, `det_10g`, `1k3d68`, `2d106det`, and `genderage` stems to
+      the `insightface` family patterns.
+    - Pinned `LTX-Video 2B v0.9.5` in `docs/license-map.md` to commit `8984fa25007f` and
+      narrowed the `ltx` cleared pattern to `ltx-video-2b-v0.9.5`.
+
 - **Shot diagnostics (`shotdiag`, `measure_shot`, `measure_weights`):**
   - Tier A two-view camera error (`armature_core.shotdiag`, `tools/measure_shot.py`): OpenCV
     SIFT on background features outside the dilated Blender character mask, Essential matrix

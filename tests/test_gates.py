@@ -1280,8 +1280,9 @@ def test_the_widened_census_examines_the_whole_core_and_not_a_naming_convention(
     # in this denominator.
     # Shot diagnostics (feat/shot-diagnostics, 2026-11-11): 506 -> 558 (+7 MeasureWeightGate in
     # measure_weights.py, +45 ShotDiagError in shotdiag.py).
-    assert total == 558, (
-        f"{total} family raises in armature_core; this pin asserts 558, MEASURED on feat/shot-diagnostics. "
+    # post-#26 licence-gate gaps: 558 -> 559 (+1 RouteGate unclassified_in_gated_family in route_gates.py).
+    assert total == 559, (
+        f"{total} family raises in armature_core; this pin asserts 559, MEASURED on fix/licence-gate-gaps. "
         f"This is the denominator every ratio below is quoted against — re-measure it "
         f"deliberately")
 

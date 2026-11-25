@@ -174,7 +174,8 @@ RECORDED_GATE_RAISES = {
     # hosted block, which reached the pixel clause instead) and
     # `generator_family_contradicted` (F-f1234354 — Gate L's family is now reconciled
     # against the loaded weights). RE-DERIVED with `==` in this worktree; BRANCH-LOCAL.
-    ("route_gates.py", "RouteGate"): 50,  # +3 w12: unreadable_node,
+    # post-#26 licence-gate gaps: 50 -> 51 (`unclassified_in_gated_family` in verify).
+    ("route_gates.py", "RouteGate"): 51,  # +3 w12: unreadable_node,
                                           # uncredited_conditional_component,
                                           # attribution_for_unconditional_row
                                           # +1 w14: orphan_attribution (F-74787978) — the
@@ -327,7 +328,8 @@ def test_the_derived_population_is_the_one_this_file_records():
     # pins this wave and the coordinator re-measures on the merged tree rather than summing.
     # WAVE 34 pin-fix: 115 → 118 (+1 G1 horizon, +2 cli GateCanon).
     # WAVE 35 pin-fix: 118 → 120 (+2 DonorGate on donor-check CLI surface).
-    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 120
+    # post-#26 licence-gate gaps: 120 -> 121 (+1 RouteGate unclassified_in_gated_family).
+    assert sum(counted.values()) == sum(RECORDED_GATE_RAISES.values()) == 121
 
 
 def test_every_gate_raise_carries_evidence_naming_its_own_andon():

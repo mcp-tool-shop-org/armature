@@ -872,7 +872,9 @@ def test_route_gate_is_the_member_the_typed_census_could_not_see():
     # so the coordinator MEASURES it on the merged tree and never sums.
     # WAVE-25 MERGE (coordinator, 2026-09-05): MEASURED on the merged tree — builders read 68 (−6 saved-admission / arm-input sites) and
     # core-gates 77 (+3 new refusals) branch-local; the merged set is what the walk returns.
-    assert len(RAISE_SITES["RouteGate"]) == 71, sorted(RAISE_SITES["RouteGate"])
+    # 2026-11-25 licence-gate gap closure: 71 -> 72 — `verify()` gains
+    # `unclassified_in_gated_family` (+1 in `armature_core/route_gates.py`).
+    assert len(RAISE_SITES["RouteGate"]) == 72, sorted(RAISE_SITES["RouteGate"])
     # WAVE 12 (core-gates, 2026-09-04): +3 = 57, itemised rather than replaced —
     #   +1  `_iter_nodes`' save-format branch: `unreadable_node`, the guard the API branch
     #       and `_iter_definitions` already carried and this one did not (a `None` inside
@@ -2566,6 +2568,7 @@ RECORDED_CLAUSES = [
     'two_answers',
     'two_frames_share_one_server_name',
     'unbound_declared_over_weighted_fingerprints',
+    'unclassified_in_gated_family',
     'unexpected_source_node',
     'unknown_animation_mode',
     'unknown_argument',

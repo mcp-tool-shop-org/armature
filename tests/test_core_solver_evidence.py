@@ -329,7 +329,7 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
 
         # WAVE-22 MERGE (coordinator, 2026-09-05): every row on this line MEASURED on the merged tree by this walk (core-solvers and core-gates
         # each moved different rows branch-local; neither line was a merged measurement).
-        "resample": 8, "rig_gates": 17, "route_gates": 53, "startframe": 21, "turnaround": 17,
+        "resample": 8, "rig_gates": 17, "route_gates": 54, "startframe": 21, "turnaround": 17,
         "walk": 3,
         # WAVE 22 (core-gates, F-682ce228): `canon_census` joins the population with its
         # first gate raise — `gate_census_table`'s `_refuse`, six clauses through one site.
@@ -377,7 +377,8 @@ def test_the_population_is_derived_from_the_tree_and_is_what_it_was_measured_to_
     # WAVE 34 pin-fix: 219 -> 222 (gates +1, cli +2 GateCanon via function-local import).
     # WAVE 35 pin-fix: 222 -> 228 (donor_gate +2, lift_solve +3, turnaround +1).
     # Shot diagnostics (feat/shot-diagnostics, 2026-11-11): 228 -> 235 (+7 MeasureWeightGate in measure_weights).
-    assert sum(with_gates.values()) == 235
+    # post-#26 licence-gate gaps: 235 -> 236 (+1 route_gates unclassified_in_gated_family).
+    assert sum(with_gates.values()) == 236
 
 
 def test_the_exemptions_are_real_members_and_outside_this_domain():
