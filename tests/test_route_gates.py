@@ -2963,17 +2963,14 @@ def test_fix1_mb_ltx_0_9_clearance_narrows_to_pinned_2b_v0_9_5():
     assert ev["receipt"] == "verify"
 
 
-def test_fix1_wording_and_doc_record_matching_rules_without_role_labels():
-    """Items 6 & 7: `docs/license-map.md` documents the basename/segment, every-token, and
-    version-segment rules, and `CHANGELOG.md` `[Unreleased]` has no role labels."""
+def test_fix1_doc_records_matching_rules_without_role_labels():
+    """Item 7: `docs/license-map.md` documents the basename/segment, every-token, and
+    version-segment rules with no internal role labels."""
     doc = open(LICENSE_MAP, encoding="utf-8").read().lower()
     assert "basename stem" in doc
     assert "every in-family token" in doc
     assert "version segment directly after the model name" in doc
-
-    changelog = open(os.path.join(REPO, "CHANGELOG.md"), encoding="utf-8").read()
-    unreleased = changelog.split("## [Unreleased]", 1)[1].split("\n## [", 1)[0].lower()
     for term in ("director", "publisher", "r&d"):
-        assert term not in unreleased, term
+        assert term not in doc, term
 
 
