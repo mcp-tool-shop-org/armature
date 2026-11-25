@@ -535,3 +535,143 @@ def test_i7_identity_provenance_records_weight_receipt_and_labels_stand_in(tmp_p
     assert gated["variant"] == f"{SD.DINOV2_REPO_ID}@{SD.DINOV2_REVISION}"
     assert gated["weight_receipt"] == receipt
     assert gated["weight_receipt"]["sha256"] == ckpt_sha
+
+
+def test_load_dinov2_state_dict_missing_or_unexpected_keys_refuses(tmp_path, monkeypatch):
+    """Item 3: `load_dinov2_vitb14_embedder` refuses when `load_state_dict(strict=False)`
+    reports any missing key or any unexpected key outside `DINOV2_ALLOWED_UNEXPECTED_KEYS`."""
+    ckpt_bytes = b"synthetic-dinov2-state-dict-bytes"
+    ckpt_sha = hashlib.sha256(ckpt_bytes).hexdigest()
+    ckpt_file = tmp_path / "model.safetensors"
+    ckpt_file.write_bytes(ckpt_bytes)
+    table = (
+        {
+            "repo_id": SD.DINOV2_REPO_ID,
+            "revision": SD.DINOV2_REVISION,
+            "filename": "model.safetensors",
+            "sha256": ckpt_sha,
+            "verdict": "ALLOWED",
+            "licence": "Apache-2.0",
+            "fetched": "2026-11-11",
+            "source": "https://huggingface.co/facebook/dinov2-base/blob/f9e44c814b77/README.md",
+        },
+    )
+
+    expected_keys = {"embeddings.cls_token", "layernorm.weight"}
+    fake_state = {"embeddings.cls_token": 1}  # missing layernorm.weight
+
+    class _IncompatibleKeys:
+        def __init__(self, missing_keys, unexpected_keys):
+            self.missing_keys = missing_keys
+            self.unexpected_keys = unexpected_keys
+
+    class _FakeNoGrad:
+        def __enter__(self):
+            return None
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    class _FakeOut:
+        def __init__(self):
+            class _Arr:
+                def __init__(self):
+                    n_tok = 1 + SD.DINOV2_GRID_SIDE * SD.DINOV2_GRID_SIDE
+                    self._arr = np.ones((1, n_tok, 768), dtype=np.float32)
+
+                def __getitem__(self, idx):
+                    sub = _Arr.__new__(_Arr)
+                    sub._arr = self._arr[idx]
+                    return sub
+
+                def cpu(self):
+                    return self
+
+                def numpy(self):
+                    return self._arr
+
+            self.last_hidden_state = _Arr()
+
+    class _FakeModel:
+        def __init__(self, _cfg):
+            pass
+
+        def load_state_dict(self, state, strict=False):
+            missing = sorted(expected_keys - set(state))
+            unexpected = sorted(set(state) - expected_keys)
+            return _IncompatibleKeys(missing, unexpected)
+
+        def to(self, _device):
+            return self
+
+        def eval(self):
+            return self
+
+        def __call__(self, pixel_values=None):
+            return _FakeOut()
+
+    class _FakeTorch:
+        def no_grad(self):
+            return _FakeNoGrad()
+
+        def from_numpy(self, arr):
+            return arr
+
+    class _FakeSafetensorsTorch:
+        def load_file(self, _path, device="cpu"):
+            return dict(fake_state)
+
+    class _FakeTransformers:
+        class Dinov2Config:
+            def __init__(self, **kwargs):
+                self.kwargs = kwargs
+
+        Dinov2Model = _FakeModel
+
+    real_import_module = SD.importlib.import_module
+    fake_mods = {
+        "torch": _FakeTorch(),
+        "safetensors.torch": _FakeSafetensorsTorch(),
+        "transformers": _FakeTransformers(),
+    }
+
+    def _stub_import_module(name, package=None):
+        if name in fake_mods:
+            return fake_mods[name]
+        return real_import_module(name, package)
+
+    monkeypatch.setattr(SD.importlib, "import_module", _stub_import_module)
+
+    with pytest.raises(ShotDiagError) as missing_exc:
+        SD.load_dinov2_vitb14_embedder(str(ckpt_file), weight_table=table)
+    assert missing_exc.value.evidence["clause"] == "dinov2_state_dict_mismatch"
+    assert missing_exc.value.evidence["missing_keys"] == ["layernorm.weight"]
+
+    fake_state = {
+        "embeddings.cls_token": 1,
+        "layernorm.weight": 1,
+        "classifier.weight": 1,
+    }
+    with pytest.raises(ShotDiagError) as unexpected_exc:
+        SD.load_dinov2_vitb14_embedder(str(ckpt_file), weight_table=table)
+    assert unexpected_exc.value.evidence["clause"] == "dinov2_state_dict_mismatch"
+    assert unexpected_exc.value.evidence["unexpected_keys"] == ["classifier.weight"]
+
+    fake_state = {"embeddings.cls_token": 1, "layernorm.weight": 1}
+    embedder = SD.load_dinov2_vitb14_embedder(str(ckpt_file), weight_table=table)
+    assert embedder.weight_receipt["sha256"] == ckpt_sha
+    emb = embedder(np.zeros((SD.DINOV2_INPUT_SIZE, SD.DINOV2_INPUT_SIZE, 3), dtype=np.uint8))
+    assert emb["cls"].shape == (768,)
+    assert emb["patches"].shape == (256, 768)
+
+    # Also verify tuple-returning load_state_dict fallback path.
+    orig_lsd = _FakeModel.load_state_dict
+    _FakeModel.load_state_dict = lambda _self, state, strict=False: (
+        sorted(expected_keys - set(state)),
+        sorted(set(state) - expected_keys),
+    )
+    try:
+        emb2 = SD.load_dinov2_vitb14_embedder(str(ckpt_file), weight_table=table)
+        assert emb2.weight_receipt["sha256"] == ckpt_sha
+    finally:
+        _FakeModel.load_state_dict = orig_lsd

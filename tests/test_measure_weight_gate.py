@@ -5,9 +5,11 @@ Tests run with stdlib + synthetic byte files only; no model or weight is downloa
 """
 
 import builtins
+from collections.abc import Mapping
 import datetime
 import hashlib
 import importlib
+import json
 import os
 
 import pytest
@@ -168,8 +170,8 @@ def test_l3_gate_refuses_before_importing_any_ml_dependency_and_publishes_to_err
         MW.gate_measurement_weight(str(empty_file))
     assert exc.value.evidence["clause"] == "weight_file_empty"
 
-    # Conditional weight without Director ruling -> `weight_conditional_unaccepted`;
-    # with Director ruling + pinned sha256 -> admitted, still without importing `torch`.
+    # Conditional weight without structured ruling -> `weight_conditional_unaccepted`;
+    # with structured ruling + pinned sha256 -> admitted, still without importing `torch`.
     cond_bytes = b"synthetic-conditional-checkpoint-bytes"
     cond_sha = hashlib.sha256(cond_bytes).hexdigest()
     cond_file = tmp_path / "model.safetensors"
@@ -195,14 +197,21 @@ def test_l3_gate_refuses_before_importing_any_ml_dependency_and_publishes_to_err
         )
     assert exc.value.evidence["clause"] == "weight_conditional_unaccepted"
 
+    valid_ruling = {
+        "by": "legal-review-board",
+        "date": "2026-11-25",
+        "scope": "example-org/synthetic-conditional-weight",
+        "licence_clause": "Synthetic-Conditional-1.0 §2",
+    }
     admitted = MW.gate_measurement_weight(
         str(cond_file),
         repo_id="example-org/synthetic-conditional-weight",
         revision="00000001",
-        director_ruling="Director test ruling 2026-11-11",
+        ruling=valid_ruling,
         table=cond_table,
     )
     assert admitted["verdict"] == "CONDITIONAL"
+    assert admitted["ruling"] == valid_ruling
 
     # Also verify `SD.load_dinov2_vitb14_embedder` hits `MeasureWeightGate` BEFORE touching `torch`.
     banned_monst3r = tmp_path / "MonST3R_PO-TA-S-W_ViTLarge_BaseDecoder_512_dpt.pth"
@@ -240,17 +249,394 @@ def test_l4_loading_pi3_and_pi3x_refuses_as_banned(tmp_path, monkeypatch):
         assert row["licence"] == "CC-BY-NC-4.0"
         assert "9fa3ddb3f8d53041f8b2738df404f62223bbaa7b/README.md" in row["source"]
 
-        # Even with a pinned sha256 and a `director_ruling`, BANNED Pi3/Pi3X weights cannot be admitted.
+        # Even with a pinned sha256 and a structured `ruling`, BANNED Pi3/Pi3X weights cannot be admitted.
         pinned = (dict(row, sha256=pi3_sha),)
         with pytest.raises(MeasureWeightGate) as pinned_exc:
             MW.gate_measurement_weight(
                 str(pi3_file),
                 repo_id=repo_id,
                 revision=rev,
-                director_ruling="Director test ruling 2026-11-11",
+                ruling={
+                    "by": "test-reviewer",
+                    "date": "2026-11-25",
+                    "scope": repo_id,
+                    "licence_clause": "test",
+                },
                 table=pinned,
             )
         assert pinned_exc.value.evidence["clause"] == "weight_banned"
+
+
+def test_structured_ruling_required_for_conditional_weights_and_legacy_keyword_refused(tmp_path):
+    """Item 1: a CONDITIONAL row unlocks only on a complete, in-scope structured `ruling`
+    mapping (`by`, `date`, `scope`, `licence_clause`), records the full ruling on the receipt,
+    and refuses the removed legacy keyword."""
+    row_a_bytes = b"conditional-row-a-bytes"
+    row_b_bytes = b"conditional-row-b-bytes"
+    sha_a = hashlib.sha256(row_a_bytes).hexdigest()
+    sha_b = hashlib.sha256(row_b_bytes).hexdigest()
+    file_a = tmp_path / "row_a.safetensors"
+    file_b = tmp_path / "row_b.safetensors"
+    file_a.write_bytes(row_a_bytes)
+    file_b.write_bytes(row_b_bytes)
+
+    table = (
+        {
+            "repo_id": "example-org/cond-a",
+            "revision": "rev-a",
+            "filename": "row_a.safetensors",
+            "sha256": sha_a,
+            "verdict": "CONDITIONAL",
+            "licence": "Custom-A",
+            "fetched": "2026-11-11",
+            "source": "https://example.invalid/cond-a",
+        },
+        {
+            "repo_id": "example-org/cond-b",
+            "revision": "rev-b",
+            "filename": "row_b.safetensors",
+            "sha256": sha_b,
+            "verdict": "CONDITIONAL",
+            "licence": "Custom-B",
+            "fetched": "2026-11-11",
+            "source": "https://example.invalid/cond-b",
+        },
+    )
+
+    base_ruling = {
+        "by": "release-signoff",
+        "date": "2026-11-25",
+        "scope": "example-org/cond-a",
+        "licence_clause": "Custom-A §2.1",
+    }
+
+    # 1. Removed legacy keyword refuses cleanly with structured error.
+    legacy_kw = "dir" + "ector_ruling"
+    with pytest.raises(MeasureWeightGate) as exc:
+        MW.gate_measurement_weight(
+            str(file_a),
+            repo_id="example-org/cond-a",
+            revision="rev-a",
+            table=table,
+            **{legacy_kw: "accepted"},
+        )
+    assert exc.value.evidence["clause"] == "legacy_ruling_keyword_removed"
+    assert exc.value.evidence["code"] == "legacy_ruling_keyword_removed"
+    assert exc.value.evidence["message"] and exc.value.evidence["hint"]
+
+    # 2. Truthy non-mapping string refuses.
+    with pytest.raises(MeasureWeightGate) as exc:
+        MW.gate_measurement_weight(
+            str(file_a),
+            repo_id="example-org/cond-a",
+            revision="rev-a",
+            ruling="accepted-in-prose",
+            table=table,
+        )
+    assert exc.value.evidence["clause"] == "invalid_conditional_ruling"
+    assert exc.value.evidence["code"] == "invalid_conditional_ruling"
+    assert exc.value.evidence["hint"]
+
+    # 3. Missing or empty required field refuses and names the missing field.
+    for missing_field in ("by", "date", "scope", "licence_clause"):
+        partial = dict(base_ruling)
+        partial.pop(missing_field)
+        with pytest.raises(MeasureWeightGate) as exc:
+            MW.gate_measurement_weight(
+                str(file_a),
+                repo_id="example-org/cond-a",
+                revision="rev-a",
+                ruling=partial,
+                table=table,
+            )
+        assert exc.value.evidence["clause"] == "invalid_conditional_ruling"
+        assert missing_field in exc.value.evidence["missing_fields"]
+        assert missing_field in str(exc.value)
+        assert exc.value.evidence["code"] and exc.value.evidence["message"] and exc.value.evidence["hint"]
+
+        empty_val = dict(base_ruling)
+        empty_val[missing_field] = "   " if missing_field != "scope" else []
+        with pytest.raises(MeasureWeightGate) as exc:
+            MW.gate_measurement_weight(
+                str(file_a),
+                repo_id="example-org/cond-a",
+                revision="rev-a",
+                ruling=empty_val,
+                table=table,
+            )
+        assert exc.value.evidence["clause"] == "invalid_conditional_ruling"
+        assert missing_field in exc.value.evidence["missing_fields"]
+
+    # 4. Wrong date formats / invalid calendar dates refuse naming `date`.
+    for bad_date in ("2026/11/25", "20261125", "2026-02-30", "not-a-date"):
+        bad = dict(base_ruling, date=bad_date)
+        with pytest.raises(MeasureWeightGate) as exc:
+            MW.gate_measurement_weight(
+                str(file_a),
+                repo_id="example-org/cond-a",
+                revision="rev-a",
+                ruling=bad,
+                table=table,
+            )
+        assert exc.value.evidence["clause"] == "invalid_conditional_ruling"
+        assert exc.value.evidence["field"] == "date"
+        assert "date" in str(exc.value)
+
+    # 5. Valid ruling for row A unlocks row A and records the whole ruling, while
+    #    refusing out-of-scope row B (including wildcard attempts).
+    receipt = MW.gate_measurement_weight(
+        str(file_a),
+        repo_id="example-org/cond-a",
+        revision="rev-a",
+        ruling=base_ruling,
+        table=table,
+        today="2026-11-25",
+    )
+    assert receipt["verdict"] == "CONDITIONAL"
+    assert receipt["ruling"] == base_ruling
+
+    with pytest.raises(MeasureWeightGate) as exc:
+        MW.gate_measurement_weight(
+            str(file_b),
+            repo_id="example-org/cond-b",
+            revision="rev-b",
+            ruling=base_ruling,
+            table=table,
+        )
+    assert exc.value.evidence["clause"] == "ruling_out_of_scope"
+    assert exc.value.evidence["field"] == "scope"
+
+    with pytest.raises(MeasureWeightGate) as exc:
+        MW.gate_measurement_weight(
+            str(file_b),
+            repo_id="example-org/cond-b",
+            revision="rev-b",
+            ruling=dict(base_ruling, scope="*"),
+            table=table,
+        )
+    assert exc.value.evidence["clause"] == "ruling_out_of_scope"
+
+    # 6. Collection `scope` (e.g. list), wrong types for fields/scope, and unknown kwargs fail cleanly.
+    list_ruling = dict(base_ruling, scope=["other/model", "example-org/cond-a"])
+    receipt_list = MW.gate_measurement_weight(
+        str(file_a),
+        repo_id="example-org/cond-a",
+        revision="rev-a",
+        ruling=list_ruling,
+        table=table,
+        today="2026-11-25",
+    )
+    assert receipt_list["ruling"]["scope"] == ["other/model", "example-org/cond-a"]
+
+    for bad_ruling in (
+        dict(base_ruling, scope=123),
+        dict(base_ruling, scope=[123]),
+        dict(base_ruling, by=123),
+    ):
+        with pytest.raises(MeasureWeightGate) as bad_exc:
+            MW.gate_measurement_weight(
+                str(file_a),
+                repo_id="example-org/cond-a",
+                revision="rev-a",
+                ruling=bad_ruling,
+                table=table,
+            )
+        assert bad_exc.value.evidence["clause"] == "invalid_conditional_ruling"
+
+    with pytest.raises(MeasureWeightGate) as kw_exc:
+        MW.gate_measurement_weight(str(file_a), unknown_flag=True)
+    assert kw_exc.value.evidence["clause"] == "unexpected_keyword_argument"
+
+    assert MW._ruling_covers_row({"scope": []}, {"repo_id": "example-org/cond-a"}) is False
+    assert MW._ruling_covers_row(base_ruling, {"repo_id": None}) is False
+
+
+def _conditional_table_row(tmp_path):
+    w = tmp_path / "cond_row.safetensors"
+    w.write_bytes(b"conditional-weight-bytes")
+    digest = hashlib.sha256(w.read_bytes()).hexdigest()
+    table = (
+        {
+            "repo_id": "example-org/cond-a",
+            "revision": "rev-a",
+            "filename": "cond_row.safetensors",
+            "sha256": digest,
+            "verdict": "CONDITIONAL",
+            "licence": "Custom-A",
+            "fetched": "2026-11-11",
+            "source": "https://example.invalid/cond-a",
+        },
+    )
+    return w, table
+
+
+def test_ruling_l1_receipt_keeps_only_four_string_normalised_fields(tmp_path):
+    """L1: only the 4 required fields normalised to strings enter receipt['ruling']."""
+    w, table = _conditional_table_row(tmp_path)
+
+    class _SubStr(str):
+        pass
+
+    ruling = {
+        "by": _SubStr(" release-signoff "),
+        "date": _SubStr("2026-11-25"),
+        "scope": {_SubStr("example-org/cond-a"), _SubStr("other/repo")},
+        "licence_clause": _SubStr(" Custom-A §2.1 "),
+        "extra_unserialisable": object(),
+    }
+    receipt = MW.gate_measurement_weight(
+        str(w),
+        repo_id="example-org/cond-a",
+        revision="rev-a",
+        ruling=ruling,
+        table=table,
+        today="2026-11-25",
+    )
+    rec_ruling = receipt["ruling"]
+    assert set(rec_ruling) == set(MW.RULING_REQUIRED_FIELDS)
+    assert rec_ruling["by"] == "release-signoff" and type(rec_ruling["by"]) is str
+    assert rec_ruling["date"] == "2026-11-25" and type(rec_ruling["date"]) is str
+    assert rec_ruling["scope"] == ["example-org/cond-a", "other/repo"]
+    assert all(type(item) is str for item in rec_ruling["scope"])
+    assert rec_ruling["licence_clause"] == "Custom-A §2.1"
+    json.dumps(receipt, allow_nan=False)
+
+
+def test_ruling_l2_mapping_is_snapshotted_once_before_validation(tmp_path):
+    """L2: custom Mapping is snapshotted once for the four keys before validation."""
+    w, table = _conditional_table_row(tmp_path)
+
+    class _SingleReadMapping(Mapping):
+        def __init__(self, data):
+            self._data = dict(data)
+            self.reads = {}
+
+        def __getitem__(self, key):
+            count = self.reads.get(key, 0) + 1
+            self.reads[key] = count
+            if key == "extra_bomb":
+                raise AssertionError("extra key should never be read")
+            if count > 1:
+                raise AssertionError(f"key {key!r} read more than once")
+            return self._data[key]
+
+        def __iter__(self):
+            return iter(self._data)
+
+        def __len__(self):
+            return len(self._data)
+
+    ruling = _SingleReadMapping({
+        "by": "release-signoff",
+        "date": "2026-11-25",
+        "scope": "example-org/cond-a",
+        "licence_clause": "Custom-A §2.1",
+        "extra_bomb": object(),
+    })
+    receipt = MW.gate_measurement_weight(
+        str(w),
+        repo_id="example-org/cond-a",
+        revision="rev-a",
+        ruling=ruling,
+        table=table,
+        today="2026-11-25",
+    )
+    assert ruling.reads == {k: 1 for k in MW.RULING_REQUIRED_FIELDS}
+    assert receipt["ruling"]["scope"] == "example-org/cond-a"
+
+
+def test_ruling_l3_date_before_2000_or_after_utc_today_refuses(tmp_path):
+    """L3: ruling date before 2000-01-01 or after UTC today refuses with structured error."""
+    w, table = _conditional_table_row(tmp_path)
+    utc_today = datetime.datetime.now(datetime.timezone.utc).date()
+    tomorrow = (utc_today + datetime.timedelta(days=1)).isoformat()
+
+    for bad_date in ("1999-12-31", "0001-01-01", "2999-01-01", tomorrow):
+        with pytest.raises(MeasureWeightGate) as exc:
+            MW.gate_measurement_weight(
+                str(w),
+                repo_id="example-org/cond-a",
+                revision="rev-a",
+                ruling={
+                    "by": "release-signoff",
+                    "date": bad_date,
+                    "scope": "example-org/cond-a",
+                    "licence_clause": "Custom-A §2.1",
+                },
+                table=table,
+            )
+        assert exc.value.evidence["clause"] == "invalid_conditional_ruling", bad_date
+        assert exc.value.evidence["field"] == "date", bad_date
+
+    receipt = MW.gate_measurement_weight(
+        str(w),
+        repo_id="example-org/cond-a",
+        revision="rev-a",
+        ruling={
+            "by": "release-signoff",
+            "date": "2000-01-01",
+            "scope": "example-org/cond-a",
+            "licence_clause": "Custom-A §2.1",
+        },
+        table=table,
+        today=utc_today.isoformat(),
+    )
+    assert receipt["ruling"]["date"] == "2000-01-01"
+
+    # Caller-supplied `today` later than real UTC date or malformed refuses with MeasureWeightGate.
+    for bad_today in (
+        "9999-12-31",
+        tomorrow,
+        "garbage",
+        "2026-13-40",
+        datetime.datetime(2026, 11, 25, 10, 0),
+        True,
+    ):
+        with pytest.raises(MeasureWeightGate) as today_exc:
+            MW.gate_measurement_weight(
+                str(w),
+                repo_id="example-org/cond-a",
+                revision="rev-a",
+                ruling={
+                    "by": "release-signoff",
+                    "date": "2999-01-01" if bad_today == "9999-12-31" else "2026-11-25",
+                    "scope": "example-org/cond-a",
+                    "licence_clause": "Custom-A §2.1",
+                },
+                table=table,
+                today=bad_today,
+            )
+        assert today_exc.value.evidence["clause"] == "invalid_conditional_ruling", bad_today
+        assert today_exc.value.evidence["field"] == "today", bad_today
+
+    # Also refuses directly on `validate_ruling` if caller mapping raises inside `__getitem__`.
+    class _ExplodingMapping(Mapping):
+        def __getitem__(self, key):
+            raise RuntimeError(f"boom on {key}")
+
+        def __iter__(self):
+            return iter(MW.RULING_REQUIRED_FIELDS)
+
+        def __len__(self):
+            return len(MW.RULING_REQUIRED_FIELDS)
+
+    with pytest.raises(MeasureWeightGate) as map_exc:
+        MW.validate_ruling(_ExplodingMapping())
+    assert map_exc.value.evidence["clause"] == "invalid_conditional_ruling"
+    assert map_exc.value.evidence["error_type"] == "RuntimeError"
+
+
+def test_ruling_l4_unexpected_keyword_raises_structured_measure_weight_gate(tmp_path):
+    """L4: unexpected keyword argument raises structured MeasureWeightGate."""
+    w, table = _conditional_table_row(tmp_path)
+    with pytest.raises(MeasureWeightGate) as exc:
+        MW.gate_measurement_weight(str(w), table=table, surprise_kw=True)
+    ev = exc.value.evidence
+    assert ev["gate"] == "MEASURE_WEIGHT"
+    assert ev["clause"] == "unexpected_keyword_argument"
+    assert ev["code"] == "unexpected_keyword_argument"
+    assert ev["unexpected_keywords"] == ["surprise_kw"]
+    assert ev["message"] and ev["hint"]
 
 
 def test_m1_every_measurement_weight_row_carries_dated_fetch_and_mirrors_license_map():

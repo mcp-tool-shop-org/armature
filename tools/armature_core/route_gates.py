@@ -102,7 +102,7 @@ RULED_COMPONENTS = {
         "verdict": "EXCLUDED",
         "licence": "Apache-2.0 — commercially clean",
         "fetched": "2026-08-10",
-        "source": "https://huggingface.co/lightx2v/Wan2.2-Lightning",
+        "source": "https://huggingface.co/lightx2v/Wan2.2-Lightning/blob/18bccf8884ec/README.md",
         "reason": ("excluded on METHODOLOGY grounds by the licence map, not on licence "
                    "grounds: a 4-step / cfg-1 distilled trajectory is a different sampler "
                    "trajectory from the one every other arm is measured on"),
@@ -118,8 +118,8 @@ RULED_COMPONENTS = {
     },
     "openpose": {"verdict": "BANNED", "licence": "CMU Academic / Non-Commercial",
                  "fetched": "2026-11-11",
-                 "source": ("https://raw.githubusercontent.com/CMU-Perceptual-Computing-"
-                            "Lab/openpose/master/LICENSE"),
+                 "source": ("https://github.com/CMU-Perceptual-Computing-"
+                            "Lab/openpose/blob/5c5d96523ef9/LICENSE"),
                  "reason": "non-commercial preprocessor tier"},
     "dwpose": {"verdict": "BANNED", "licence": "weights not fetched",
                "fetched": "2026-08-10",
@@ -523,7 +523,10 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
         "fetched": "2026-11-11",
-        "source": "https://smpl.is.tue.mpg.de/modellicense.html",
+        "source": (
+            "https://web.archive.org/web/20260705171509/https://smpl.is.tue.mpg.de/"
+            "modellicense.html + https://smpl.is.tue.mpg.de/modellicense.html"
+        ),
         "reason": "non-commercial preprocessor tier",
         "files": (
             "basicmodel_neutral_lbs_10_207_0_v1.0.0.pkl",
@@ -538,7 +541,10 @@ RULED_COMPONENTS = {
         "verdict": "BANNED",
         "licence": "non-commercial scientific research (commercial licence only via Meshcapade)",
         "fetched": "2026-11-11",
-        "source": "https://smpl-x.is.tue.mpg.de/modellicense.html",
+        "source": (
+            "https://web.archive.org/web/20260712210612/https://smpl-x.is.tue.mpg.de/"
+            "modellicense.html + https://smpl-x.is.tue.mpg.de/modellicense.html"
+        ),
         "reason": "non-commercial preprocessor tier",
         "files": ("smpl-x",),
     },
@@ -617,7 +623,7 @@ RULED_COMPONENTS = {
     "instareal": {
         "verdict": "BANNED",
         "fetched": "2026-08-13",
-        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/raw/main/"
+        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/blob/87c84b15123c/"
                    "LICENSE.txt"),
         "licence": "Instara Fair Use License",
         "reason": ("prohibits use on any image/video generation service, platform or API; "
@@ -626,7 +632,7 @@ RULED_COMPONENTS = {
     "instagirl": {
         "verdict": "BANNED",
         "fetched": "2026-08-13",
-        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/raw/main/"
+        "source": ("https://huggingface.co/Instara/instareal-wan-2.2/blob/87c84b15123c/"
                    "LICENSE.txt"),
         "licence": "Instara Fair Use License (same house as instareal)",
         "reason": "inherits the instareal row's verdict per the licence map",
@@ -654,8 +660,11 @@ RULED_COMPONENTS = {
         "fetched": "2026-11-11",
         "source": (
             "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+            "https://web.archive.org/web/20261104120820/"
             "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
-            "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render"
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+            "https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render/"
+            "blob/bd765d5592f0/README.md"
         ),
         "reason": (
             "CONDITIONAL, not accepted: on hold pending a decision (entity incl. affiliates "
@@ -677,8 +686,10 @@ RULED_COMPONENTS = {
         "fetched": "2026-11-11",
         "source": (
             "https://github.com/Lightricks/LTX-2/blob/c1b4675863/LICENSE-2_x + "
+            "https://web.archive.org/web/20261104120820/"
             "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
-            "https://huggingface.co/Lightricks/LTX-2.5"
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
+            "https://huggingface.co/Lightricks/LTX-2.5/blob/49b093a39c19/README.md"
         ),
         "reason": (
             "CONDITIONAL, not accepted: on hold pending a decision (entity incl. affiliates "
@@ -701,6 +712,8 @@ RULED_COMPONENTS = {
         "fetched": "2026-11-11",
         "source": (
             "https://github.com/Lightricks/ComfyUI-LTXVideo/blob/bb70ecba6602/LICENSE + "
+            "https://web.archive.org/web/20261104120820/"
+            "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf + "
             "https://static.lightricks.com/legal/ltx-acceptable-use-policy.pdf"
         ),
         "reason": (
@@ -1046,8 +1059,11 @@ CAMERA_NODES = {
 #: walk's was the one that failed OPEN. `test_amend_w25_core_gates.py` pins that
 #: `components()`' weight population is a SUPERSET of `model_weights`', so the two can no
 #: longer diverge in the direction that matters.
+#: Record the extension in WEIGHT_SUFFIXES, in a commit, if this artifact format is
+#: one this pipeline loads. `.bin` is included so raw PyTorch/Diffusers `.bin` weights
+#: (e.g. `ltxv/pytorch_model.bin`) stay recorded components.
 WEIGHT_SUFFIXES = (
-    ".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".task", ".pkl", ".onnx",
+    ".safetensors", ".ckpt", ".pt", ".pth", ".sft", ".gguf", ".task", ".pkl", ".onnx", ".bin",
 )
 
 #: Extra node-CLASS-NAME substrings that identify a `RULED_COMPONENTS` row, beyond the
@@ -2674,21 +2690,102 @@ def _is_family_cleared(norm, spec):
     return False
 
 
-def gated_families_of(filename):
+#: ComfyUI `(node_class, widget_index)` pairs whose widget slot is a `type` enum rather than
+#: a weight path or repository name. Pinned upstream citations:
+#: - `CLIPLoader` (`type` enum at widget index 1 after `clip_name`):
+#:   https://github.com/comfyanonymous/ComfyUI/blob/f40a4fbb2ac8/nodes.py#L1017-L1025
+#: - `DualCLIPLoader` (`type` enum at widget index 2 after `clip_name1`, `clip_name2`):
+#:   https://github.com/comfyanonymous/ComfyUI/blob/f40a4fbb2ac8/nodes.py#L1044-L1053
+#: - `CLIPLoaderGGUF` (`type` enum at widget index 1) and `DualCLIPLoaderGGUF` (`type` at 2):
+#:   https://github.com/city96/ComfyUI-GGUF/blob/6ea2651e7df6/nodes.py
+#: `TripleCLIPLoader` (`comfy_extras/nodes_sd3.py#L11-L28` @ `f40a4fbb2ac8`),
+#: `QuadrupleCLIPLoader` (`comfy_extras/nodes_hidream.py` @ `f40a4fbb2ac8`), and their GGUF
+#: counterparts declare only `clip_name*` inputs with NO `type` enum slot and are excluded.
+CLIPLOADER_TYPE_ENUM = frozenset({
+    "stable_diffusion", "stable_cascade", "sd3", "stable_audio", "mochi", "ltxv", "pixart",
+    "cosmos", "lumina2", "wan", "hidream", "chroma", "ace", "omnigen2", "qwen_image",
+    "hunyuan_image", "flux2", "ovis", "longcat_image", "cogvideox", "lens", "pixeldit",
+    "ideogram4", "boogu", "krea2", "joyimage", "mage", "minimax", "yue2", "flux3",
+    "moss_image", "fibo2", "pan2",
+})
+DUALCLIPLOADER_TYPE_ENUM = frozenset({
+    "sdxl", "sd3", "flux", "hunyuan_video", "hidream", "hunyuan_image", "hunyuan_video_15",
+    "kandinsky5", "kandinsky5_image", "ltxv", "newbie", "ace",
+})
+TYPE_ENUM_WIDGET_SLOTS = {
+    ("CLIPLoader", 1): CLIPLOADER_TYPE_ENUM,
+    ("DualCLIPLoader", 2): DUALCLIPLOADER_TYPE_ENUM,
+    ("CLIPLoaderGGUF", 1): CLIPLOADER_TYPE_ENUM,
+    ("DualCLIPLoaderGGUF", 2): DUALCLIPLOADER_TYPE_ENUM,
+}
+_TYPE_ENUM_SLOT_BY_CLASS = {cls: idx for (cls, idx) in TYPE_ENUM_WIDGET_SLOTS}
+
+
+def _is_bare_family_type_token(value, spec, *, node_class=None, widget_index=None):
+    """True iff `(node_class, widget_index)` is an allow-listed ComfyUI `type`-enum slot and
+    `value` (after `strip().lower()`) is an exact member of that slot's pinned enum."""
+    allowed_members = TYPE_ENUM_WIDGET_SLOTS.get((node_class, widget_index))
+    if allowed_members is None:
+        return False
+    low = str(value).strip().lower()
+    if not low or "/" in low or "\\" in low or low.endswith(WEIGHT_SUFFIXES):
+        return False
+    if low not in allowed_members:
+        return False
+    return any(re.fullmatch(np, low) for np in (spec.get("neutral_parent_patterns") or ()))
+
+
+def _has_only_neutral_family_parents(filename, spec):
+    """True iff every in-family token in `filename` is a neutral parent segment, the file
+    basename/stem carries no in-family token, AND the file's own basename matches an
+    `ALLOWED` or `CONDITIONAL` row in `RULED_COMPONENTS`."""
+    norm = str(filename).lower().replace("\\", "/").strip("/")
+    raw_segs = [s for s in norm.split("/") if s]
+    if len(raw_segs) < 2 or ".." in raw_segs or raw_segs[-2] == "blobs":
+        return False
+    pats = spec.get("patterns") or ()
+    neutral = spec.get("neutral_parent_patterns") or ()
+    in_fam = lambda seg: any(re.search(p, seg) for p in pats)
+    basename = raw_segs[-1]
+    stem = _strip_weight_suffix(basename)
+    if in_fam(basename) or in_fam(stem):
+        return False
+    fam_parents = [s for s in raw_segs[:-1] if in_fam(s)]
+    if not (fam_parents and all(any(re.fullmatch(np, s) for np in neutral) for s in fam_parents)):
+        return False
+    basename_hits = rulings_for(basename)
+    return bool(basename_hits) and basename_hits[0]["verdict"] in ("ALLOWED", "CONDITIONAL")
+
+
+def gated_families_of(filename, *, node_class=None, widget_index=None):
     """Every `GATED_WEIGHT_FAMILIES` key that `filename` belongs to."""
     norm = str(filename).lower().replace("\\", "/").strip("/")
-    return tuple(
-        fam for fam, spec in GATED_WEIGHT_FAMILIES.items()
-        if any(re.search(p, norm) for p in spec.get("patterns", ()))
-    )
+    matched = []
+    for fam, spec in GATED_WEIGHT_FAMILIES.items():
+        if not any(re.search(p, norm) for p in spec.get("patterns", ())):
+            continue
+        if _is_bare_family_type_token(
+            filename, spec, node_class=node_class, widget_index=widget_index
+        ):
+            continue
+        if _has_only_neutral_family_parents(filename, spec):
+            continue
+        matched.append(fam)
+    return tuple(matched)
 
 
-def unclassified_gated_families_of(filename):
+def unclassified_gated_families_of(filename, *, node_class=None, widget_index=None):
     """Gated family keys that claim `filename` without a map-cleared exception."""
     norm = str(filename).lower().replace("\\", "/").strip("/")
     matched = []
     for fam, spec in GATED_WEIGHT_FAMILIES.items():
         if not any(re.search(p, norm) for p in spec.get("patterns", ())):
+            continue
+        if _is_bare_family_type_token(
+            filename, spec, node_class=node_class, widget_index=widget_index
+        ):
+            continue
+        if _has_only_neutral_family_parents(filename, spec):
             continue
         if _is_family_cleared(norm, spec):
             continue
@@ -2696,7 +2793,7 @@ def unclassified_gated_families_of(filename):
     return tuple(matched)
 
 
-def _component_hits(value):
+def _component_hits(value, *, node_class=None, widget_index=None):
     """`(hits, looks_like_a_weight_file, gated_families)` for one widget value.
 
     See `WEIGHT_SUFFIXES` for the measurement this inversion closes. `hits` is
@@ -2712,8 +2809,41 @@ def _component_hits(value):
     name_shaped = looks_like_weight or _is_name_shaped(value)
     hits = rulings_for(value) if name_shaped else []
     has_banned = any(h["verdict"] == "BANNED" for h in hits)
-    gated = () if (not name_shaped or has_banned) else unclassified_gated_families_of(value)
+    gated = () if (not name_shaped or has_banned) else unclassified_gated_families_of(
+        value, node_class=node_class, widget_index=widget_index
+    )
     return hits, looks_like_weight, gated
+
+
+def _node_widget_entries(node, where):
+    """Yield `(widget_index, value)` pairs for `node`, preserving type-enum slot identity."""
+    cls = node.get("type")
+    if where == "api" and isinstance(node.get("inputs"), dict):
+        enum_idx = _TYPE_ENUM_SLOT_BY_CLASS.get(cls)
+        n_literals = 0
+        for key, raw_val in node["inputs"].items():
+            if isinstance(raw_val, list):
+                continue
+            n_literals += 1
+            yield (enum_idx if (enum_idx is not None and key == "type") else None), raw_val
+        for extra_val in (node.get("widgets_values") or [])[n_literals:]:
+            yield None, extra_val
+        return
+
+    shifted = False
+    for slot in node.get("inputs") or []:
+        if not isinstance(slot, dict) or not isinstance(slot.get("widget"), dict):
+            continue
+        if slot.get("link") is None:
+            continue
+        wname = slot["widget"].get("name")
+        if not isinstance(wname, str):
+            wname = slot.get("name")
+        if wname != "device":
+            shifted = True
+            break
+    for idx, val in enumerate(node.get("widgets_values") or []):
+        yield (None if shifted else idx), val
 
 
 def components(graph):
@@ -2739,8 +2869,10 @@ def components(graph):
     graph = normalise_graph(graph)
     out = []
     for where, n in _iter_nodes(graph):
-        for v in (n.get("widgets_values") or []):
-            hits, looks_like_weight, gated = _component_hits(v)
+        for idx, v in _node_widget_entries(n, where):
+            hits, looks_like_weight, gated = _component_hits(
+                v, node_class=n.get("type"), widget_index=idx
+            )
             if not hits and not looks_like_weight and not gated:
                 continue
             if hits and hits[0]["verdict"] in ("BANNED", "EXCLUDED"):

@@ -5844,3 +5844,18 @@ def test_the_gate_and_work_predicates_do_not_read_each_other():
     publish = {_step_label(s): s for s in _step_blocks("\n".join(_job_lines(RELEASE, "npm")))}
     assert re.search(r"\bexit\s+[1-9]", _code_only(_run_script_of(publish["Publish"])))
     assert _is_work(publish["Publish"]) and not _is_pure_shell_gate(publish["Publish"])
+
+
+def test_python_tests_measures_coverage_with_ratchet_floor_on_one_matrix_leg() -> None:
+    """One python-tests matrix leg measures coverage with a calibrated --fail-under floor."""
+    job_lines = _job_lines(CI, "python-tests")
+    steps = {_step_label(s): s for s in _step_blocks("\n".join(job_lines))}
+    cov_step = steps.get("run tests with coverage")
+    assert cov_step is not None, "ci.yml python-tests must include 'run tests with coverage'"
+    assert "matrix.python-version == '3.13'" in "\n".join(cov_step)
+    assert "matrix.python-version != '3.13'" in "\n".join(steps["run tests"])
+    script = _code_only(_run_script_of(cov_step))
+    assert "coverage run --source=tools -m pytest tests -q" in script
+    match = re.search(r"coverage report\b[^\n]*--fail-under=(\d+)", script)
+    assert match is not None and int(match.group(1)) == 75
+    assert "--fail-under" in script

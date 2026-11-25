@@ -45,6 +45,9 @@ DINOV2_LABEL = "DINOv2-B/14"
 DINOV2_INPUT_SIZE = 224
 DINOV2_PATCH_SIZE = 14
 DINOV2_GRID_SIDE = DINOV2_INPUT_SIZE // DINOV2_PATCH_SIZE  # 16x16 = 256 tokens
+#: `facebook/dinov2-base` (`f9e44c81`) ships `Dinov2Model` with zero head weights, so
+#: `load_state_dict(strict=False)` must report zero unexpected keys.
+DINOV2_ALLOWED_UNEXPECTED_KEYS = frozenset()
 
 DEFAULT_MASK_DILATION_FRAC = 0.05
 DEFAULT_CROP_MARGIN_FRAC = 0.10
@@ -155,7 +158,27 @@ def blender_to_opencv_pose(matrix_world, *, convert_axes=True):
 
 def geodesic_angle_deg(r_mat):
     """Geodesic angle in degrees of a 3x3 rotation matrix on SO(3), in `[0, 180]`."""
-    r = np.asarray(r_mat, dtype=np.float64)
+    try:
+        r = np.asarray(r_mat, dtype=np.float64)
+    except (TypeError, ValueError) as exc:
+        raise ShotDiagError(
+            f"rotation matrix is not numeric: {exc}",
+            {
+                "gate": None,
+                "andon": "ShotDiagError",
+                "clause": "invalid_camera_matrix",
+            },
+        ) from exc
+    if r.shape != (3, 3) or not np.all(np.isfinite(r)):
+        raise ShotDiagError(
+            f"rotation matrix must be finite with shape (3, 3); got shape {r.shape}",
+            {
+                "gate": None,
+                "andon": "ShotDiagError",
+                "clause": "invalid_camera_matrix",
+                "shape": list(r.shape),
+            },
+        )
     sin_val = 0.5 * math.hypot(
         float(r[2, 1] - r[1, 2]),
         float(r[0, 2] - r[2, 0]),
@@ -166,9 +189,38 @@ def geodesic_angle_deg(r_mat):
 
 
 def direction_angle_deg(vec_a, vec_b):
-    """Angle in degrees between two non-zero 3-vectors, or `None` if either vanishes."""
-    a = np.asarray(vec_a, dtype=np.float64).reshape(3)
-    b = np.asarray(vec_b, dtype=np.float64).reshape(3)
+    """Angle in degrees between two finite non-zero 3-vectors, or `None` if either vanishes.
+
+    Refuses non-finite (`NaN` / `inf`) or non-3-vector inputs with `ShotDiagError`
+    (`clause: "non_finite_direction"`) rather than propagating `NaN` to JSON output.
+    """
+    try:
+        a = np.asarray(vec_a, dtype=np.float64).reshape(3)
+        b = np.asarray(vec_b, dtype=np.float64).reshape(3)
+    except (TypeError, ValueError) as exc:
+        raise ShotDiagError(
+            f"direction vectors must be numeric 3-vectors: {exc}",
+            {
+                "gate": None,
+                "andon": "ShotDiagError",
+                "clause": "non_finite_direction",
+            },
+        ) from exc
+    non_finite = [
+        name
+        for name, arr in (("vec_a", a), ("vec_b", b))
+        if not np.all(np.isfinite(arr))
+    ]
+    if non_finite:
+        raise ShotDiagError(
+            f"direction vector(s) {', '.join(non_finite)} contain non-finite (NaN/inf) values",
+            {
+                "gate": None,
+                "andon": "ShotDiagError",
+                "clause": "non_finite_direction",
+                "non_finite_inputs": non_finite,
+            },
+        )
     na = float(np.linalg.norm(a))
     nb = float(np.linalg.norm(b))
     if na <= 1e-12 or nb <= 1e-12:
@@ -645,7 +697,13 @@ def estimate_pair_pose(
 
     r_rel = best_r21.T
     c_dir_f0 = -r_rel @ best_t21
-    c_dir_f0 = c_dir_f0 / float(np.linalg.norm(c_dir_f0))
+    c_norm = float(np.linalg.norm(c_dir_f0)) if np.all(np.isfinite(c_dir_f0)) else 0.0
+    if not np.all(np.isfinite(c_dir_f0)) or c_norm <= 1e-12:
+        c_dir_unit = None
+        tdir_reason = "degenerate_translation_direction"
+    else:
+        c_dir_unit = c_dir_f0 / c_norm
+        tdir_reason = None
     return {
         "fired": True,
         "n_matches": n_matches,
@@ -654,8 +712,8 @@ def estimate_pair_pose(
         "gric_e": gric_e,
         "gric_h": gric_h,
         "R_rel": r_rel,
-        "t_dir_in_f0": c_dir_f0,
-        "tdir_reason": None,
+        "t_dir_in_f0": c_dir_unit,
+        "tdir_reason": tdir_reason,
         "parallax_residual_px": parallax_px,
     }
 
@@ -694,6 +752,16 @@ def score_camera_trajectory(
     r0_gt, c0_gt = gt_poses_cv[0]
     r0_gt = np.asarray(r0_gt, dtype=np.float64)
     c0_gt = np.asarray(c0_gt, dtype=np.float64)
+    if c0_gt.shape != (3,) or not np.all(np.isfinite(c0_gt)):
+        raise ShotDiagError(
+            "GT camera centre at frame 0 contains non-finite values",
+            {
+                "gate": None,
+                "andon": "ShotDiagError",
+                "clause": "non_finite_direction",
+                "frame": 0,
+            },
+        )
 
     per_pair = []
     rot_errs = []
@@ -708,6 +776,16 @@ def score_camera_trajectory(
         rt_gt, ct_gt = gt_poses_cv[frame_t]
         rt_gt = np.asarray(rt_gt, dtype=np.float64)
         ct_gt = np.asarray(ct_gt, dtype=np.float64)
+        if ct_gt.shape != (3,) or not np.all(np.isfinite(ct_gt)):
+            raise ShotDiagError(
+                f"GT camera centre at frame {frame_t} contains non-finite values",
+                {
+                    "gate": None,
+                    "andon": "ShotDiagError",
+                    "clause": "non_finite_direction",
+                    "frame": frame_t,
+                },
+            )
 
         r_gt_rel = r0_gt.T @ rt_gt
         c_gt_rel = r0_gt.T @ (ct_gt - c0_gt)
@@ -716,9 +794,34 @@ def score_camera_trajectory(
 
         fired = bool(est.get("fired"))
         model = est.get("model", "none")
-        parallax_px = est.get("parallax_residual_px")
-        if fired and parallax_px is not None and math.isfinite(float(parallax_px)):
-            parallax_vals.append(float(parallax_px))
+        metrics = {}
+        for metric_name in ("parallax_residual_px", "gric_e", "gric_h"):
+            raw_val = est.get(metric_name)
+            if raw_val is None:
+                metrics[metric_name] = None
+                continue
+            if isinstance(raw_val, bool):
+                fval = float("nan")
+            else:
+                try:
+                    fval = float(raw_val)
+                except (TypeError, ValueError):
+                    fval = float("nan")
+            if not math.isfinite(fval):
+                raise ShotDiagError(
+                    f"estimated {metric_name} at frame {frame_t} must be finite; got {raw_val!r}",
+                    {
+                        "gate": None,
+                        "andon": "ShotDiagError",
+                        "clause": "non_finite_direction",
+                        "frame": frame_t,
+                        "field": metric_name,
+                    },
+                )
+            metrics[metric_name] = fval
+        parallax_px = metrics["parallax_residual_px"]
+        if fired and parallax_px is not None:
+            parallax_vals.append(parallax_px)
 
         if not fired or est.get("R_rel") is None:
             per_pair.append(
@@ -728,8 +831,8 @@ def score_camera_trajectory(
                     "n_matches": int(est.get("n_matches", 0)),
                     "n_inliers": int(est.get("n_inliers", 0)),
                     "model": "none",
-                    "gric_e": est.get("gric_e"),
-                    "gric_h": est.get("gric_h"),
+                    "gric_e": metrics["gric_e"],
+                    "gric_h": metrics["gric_h"],
                     "rot_err_deg": None,
                     "tdir_err_deg": None,
                     "tdir_reason": "not_fired",
@@ -754,7 +857,28 @@ def score_camera_trajectory(
                 n_h_unobservable += 1
                 tdir_reason = "t_unobservable"
         else:
-            t_arr = np.asarray(t_vec, dtype=np.float64).reshape(3)
+            try:
+                t_arr = np.asarray(t_vec, dtype=np.float64).reshape(3)
+            except (TypeError, ValueError) as exc:
+                raise ShotDiagError(
+                    f"estimated translation direction at frame {frame_t} is invalid: {exc}",
+                    {
+                        "gate": None,
+                        "andon": "ShotDiagError",
+                        "clause": "non_finite_direction",
+                        "frame": frame_t,
+                    },
+                ) from exc
+            if not np.all(np.isfinite(t_arr)):
+                raise ShotDiagError(
+                    f"estimated translation direction at frame {frame_t} contains non-finite values",
+                    {
+                        "gate": None,
+                        "andon": "ShotDiagError",
+                        "clause": "non_finite_direction",
+                        "frame": frame_t,
+                    },
+                )
             if float(np.linalg.norm(c_gt_rel)) <= 1e-12:
                 tdir_reason = "gt_zero_translation"
             else:
@@ -762,6 +886,8 @@ def score_camera_trajectory(
                 if tdir_err is not None:
                     tdir_errs.append(tdir_err)
                     tdir_reason = None
+                elif tdir_reason is None:
+                    tdir_reason = "zero_translation_direction"
 
         per_pair.append(
             {
@@ -770,16 +896,14 @@ def score_camera_trajectory(
                 "n_matches": int(est.get("n_matches", 0)),
                 "n_inliers": int(est.get("n_inliers", 0)),
                 "model": model,
-                "gric_e": est.get("gric_e"),
-                "gric_h": est.get("gric_h"),
+                "gric_e": metrics["gric_e"],
+                "gric_h": metrics["gric_h"],
                 "rot_err_deg": rot_err,
                 "tdir_err_deg": tdir_err,
                 "tdir_reason": tdir_reason,
                 "gt_rot_from_f0_deg": gt_rot_deg,
                 "est_rot_from_f0_deg": est_rot_deg,
-                "parallax_residual_px": (
-                    float(parallax_px) if parallax_px is not None else None
-                ),
+                "parallax_residual_px": parallax_px,
             }
         )
 
@@ -1319,6 +1443,7 @@ def load_dinov2_vitb14_embedder(
     *,
     repo_id=DINOV2_REPO_ID,
     revision=DINOV2_REVISION,
+    ruling=None,
     weight_table=None,
 ):
     """Build the DINOv2 ViT-B/14 (`facebook/dinov2-base`) CPU embedder behind two hard checks:
@@ -1326,7 +1451,8 @@ def load_dinov2_vitb14_embedder(
     1. **Presence check (`weights_not_present`):** never downloads weights from any network
        source. A missing or omitted path refuses immediately with `ShotDiagError`.
     2. **Licence load gate (`MeasureWeightGate`, gate `MEASURE_WEIGHT`):** hashes the file
-       on disk before any ML library is imported and checks `MEASUREMENT_WEIGHTS`.
+       on disk before any ML library is imported and checks `MEASUREMENT_WEIGHTS` (and any
+       structured `ruling` mapping if loading a `CONDITIONAL` checkpoint).
     """
     if not weights_path or not os.path.isfile(str(weights_path)):
         raise ShotDiagError(
@@ -1347,6 +1473,7 @@ def load_dinov2_vitb14_embedder(
         weights_path,
         repo_id=repo_id,
         revision=revision,
+        ruling=ruling,
         table=weight_table,
     )
 
@@ -1376,7 +1503,31 @@ def load_dinov2_vitb14_embedder(
     )
     model = transformers.Dinov2Model(cfg)
     state = safetensors_torch.load_file(str(weights_path), device="cpu")
-    model.load_state_dict(state, strict=False)
+    incompatible = model.load_state_dict(state, strict=False)
+    if hasattr(incompatible, "missing_keys"):
+        missing_keys = list(incompatible.missing_keys)
+        unexpected_keys = list(incompatible.unexpected_keys)
+    else:
+        missing_keys = list(incompatible[0])
+        unexpected_keys = list(incompatible[1])
+    unexpected_ok = (not unexpected_keys) or (
+        set(unexpected_keys) == set(DINOV2_ALLOWED_UNEXPECTED_KEYS)
+    )
+    if missing_keys or not unexpected_ok:
+        raise ShotDiagError(
+            f"checkpoint {weights_path!r} state_dict keys do not match Dinov2Model "
+            f"(missing={sorted(missing_keys)}, unexpected={sorted(unexpected_keys)})",
+            {
+                "gate": None,
+                "andon": "ShotDiagError",
+                "clause": "dinov2_state_dict_mismatch",
+                "weights_path": str(weights_path),
+                "missing_keys": sorted(missing_keys),
+                "unexpected_keys": sorted(unexpected_keys),
+                "allowed_unexpected_keys": sorted(DINOV2_ALLOWED_UNEXPECTED_KEYS),
+                "weight_receipt": receipt,
+            },
+        )
     model.to("cpu")
     model.eval()
 
@@ -1419,6 +1570,19 @@ def measure_masked_identity(
     **Gates nothing.** No low score, zero fired count, or floor overlap raises; only
     malformed/missing inputs (`ShotDiagError`, `gate: None`) or disallowed weights
     (`MeasureWeightGate`, inside `load_dinov2_vitb14_embedder`) refuse before scoring.
+
+    Injected-embedder seam (`embedder=`):
+    - Callers may pass a callable `embedder(rgb_224)` receiving a `(224, 224, 3)` `uint8`
+      RGB crop (`DINOV2_INPUT_SIZE`) and returning `{"cls": <1-D float array>,
+      "patches": <(256, D) float array>}` (`16x16` row-major spatial tokens).
+    - Attach `.weight_receipt` (from `measure_weights.gate_measurement_weight`) if the
+      callable loads real model weights; when absent or `None`, the record marks
+      `"variant": "injected_stand_in"`.
+    - **Gate bypass warning:** passing `embedder=` skips `load_dinov2_vitb14_embedder` and
+      therefore skips `MeasureWeightGate` (`Gate MEASURE_WEIGHT`) for any weights loaded
+      inside that callable. Callers supplying a weight-backed `embedder` are responsible
+      for gating their own weights through `measure_weights.gate_measurement_weight` before
+      loading them.
     """
     frame_list = list(frames) if frames is not None else []
     if not frame_list:
