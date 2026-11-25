@@ -21,11 +21,12 @@ Depth-Anything V2, Video-Depth-Anything, InsightFace / inswapper / antelope, SMP
 and LTX) that matches no ruled row and no map-cleared variant is refused in `route_gates.verify`
 as `unclassified in a gated family` (`clause: unclassified_in_gated_family`), while names outside
 every covered family keep the existing `NOT IN THIS TABLE` reporting behaviour. That gated-family
-check runs whenever no `BANNED` or `EXCLUDED` row matched, including when an `ALLOWED` or
-`CONDITIONAL` row matched another token in the same name. Map clearance is anchored to the
-basename stem (or to the Hugging Face repo segment for `org/name` and `models--org--name` forms),
-never searched across the whole path, and applies only when every in-family token and every
-in-family path segment is a cleared variant. Version exemptions such as `DA3-LARGE` `1.1` apply
+check runs whenever no `BANNED` row matched, including when an `ALLOWED`, `CONDITIONAL`, or
+`allow=`-waived `EXCLUDED` row matched another token in the same name. Map clearance is anchored
+to the basename stem (or to the Hugging Face repo segment for `org/name` and `models--org--name`
+forms), never searched across the whole path, and applies when the weight carries only cleared
+variant tokens while any in-family parent folder is either cleared or a bare neutral family/repo
+container with no variant token. Version exemptions such as `DA3-LARGE` `1.1` apply
 only when `1.1` stands as the version segment directly after the model name inside one path
 segment (`DA3-LARGE-1.1`, `da3_large_1.1`, `models--depth-anything--DA3-LARGE-1.1`), never in a
 parent folder, later suffix, or hash.

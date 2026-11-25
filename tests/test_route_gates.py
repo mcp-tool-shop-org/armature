@@ -2824,10 +2824,10 @@ def test_l3_da3_giant_safetensors_receipt_cites_1_0_and_1_1_sources():
     assert "depth-anything/DA3-GIANT-1.1/blob/72ee9f89ce4e/README.md" in msg
 
 
-def test_plain_wording_replaces_director_labels_in_license_map():
-    """`docs/license-map.md` uses plain wording with zero `Director` labels remaining."""
+def test_plain_wording_replaces_role_labels_in_license_map():
+    """`docs/license-map.md` uses plain wording with zero internal role labels remaining."""
     doc = open(LICENSE_MAP, encoding="utf-8").read()
-    assert "director" not in doc.lower()
+    assert ("dir" + "ector") not in doc.lower()
 
 
 def test_fix1_ha_cleared_token_does_not_clear_path_or_merged_name():
@@ -2968,8 +2968,84 @@ def test_fix1_doc_records_matching_rules_without_role_labels():
     version-segment rules with no role labels in the gated-family rule text."""
     doc = open(LICENSE_MAP, encoding="utf-8").read().lower()
     assert "basename stem" in doc
-    assert "every in-family token" in doc
+    assert "bare neutral family/repo" in doc
     assert "version segment directly after the model name" in doc
-    assert "director" not in doc
+    assert ("dir" + "ector") not in doc
+
+
+def test_fix2_hd_allow_on_excluded_row_does_not_bypass_gated_family():
+    """H-D: `allow=` on an EXCLUDED row (`lightx2v`) waives the methodology row while still
+    refusing when any gated-family token is also present in the name."""
+    for bad, fam in (
+        ("lightx2v_da3-giant-fp16.safetensors", "da3"),
+        ("lightx2v_video_depth_anything_vitb.pth", "video_depth_anything"),
+        ("lightx2v_ltx-2-19b.safetensors", "ltx"),
+        ("lightx2v_det_500m.onnx", "insightface"),
+    ):
+        g = graph(top=CLEAN_TOP + [loader(99, bad, cls="LoraLoaderModelOnly")])
+        with pytest.raises(RG.RouteGate) as unwaived_exc:
+            RG.verify(g)
+        assert unwaived_exc.value.evidence["clause"] == "banned_or_excluded_component", bad
+        with pytest.raises(RG.RouteGate) as waived_exc:
+            RG.verify(g, allow=("lightx2v",))
+        assert waived_exc.value.evidence["clause"] == "unclassified_in_gated_family", bad
+        assert fam in waived_exc.value.evidence["unclassified_in_gated_family"][0][
+            "gated_families"
+        ], bad
+
+    plain = "lightx2v_Wan2.2_Lightning.safetensors"
+    ev = RG.verify(
+        graph(top=CLEAN_TOP + [loader(99, plain, cls="LoraLoaderModelOnly")]),
+        allow=("lightx2v",),
+    )
+    assert ev["receipt"] == "verify"
+    assert ev["waived"] == ["lightx2v"]
+
+
+def test_fix2_mc_neutral_family_parent_folders_pass_while_variant_parents_refuse():
+    """M-C: map-cleared weights under bare family/repo-container parent folders pass while
+    variant-bearing parent folders and bare container repos still refuse."""
+    for ok in (
+        "depthanything3/da3_small.safetensors",
+        "models/depthanything3/da3mono_large.safetensors",
+        "depth_anything_v3/da3_small.safetensors",
+        "depth_anything_v2/depth_anything_v2_vits.pth",
+        "Depth-Anything-V2/checkpoints/depth_anything_v2_vits.pth",
+        "videodepthanything/video_depth_anything_vits.pth",
+        "Video-Depth-Anything/checkpoints/video_depth_anything_vits.pth",
+        "Lightricks/LTX-Video/ltx-video-2b-v0.9.5.safetensors",
+        "ltxv/ltx-video-2b-v0.9.5.safetensors",
+        "models--Lightricks--LTX-Video/snapshots/8984fa25007f/ltx-video-2b-v0.9.5.safetensors",
+        "depthanything3/DA3-BASE/model.safetensors",
+    ):
+        assert RG.rulings_for(ok) == [], ok
+        ev = RG.verify(graph(top=CLEAN_TOP + [
+            loader(99, ok, cls="PreprocessorWeightLoader"),
+        ]))
+        assert ev["receipt"] == "verify", ok
+
+    for bad in (
+        "da3_medium/da3_small.safetensors",
+        "ltx-2-19b/ltx-video-2b-v0.9.5.safetensors",
+        "depth_anything_v2_custom/depth_anything_v2_vits.pth",
+        "models--Lightricks--LTX-Video/snapshots/8984fa25007f/model.safetensors",
+        "models--depth-anything--DA3-MEDIUM/snapshots/e08cab65ca0e/model.safetensors",
+        "da3_medium/models--depth-anything--DA3-BASE/snapshots/e08cab65ca0e/model.safetensors",
+        "depth/DA3-BASE/DA3-GIANT-fp16.safetensors",
+        "DA3-GIANT_vs_DA3-SMALL.safetensors",
+    ):
+        assert RG.rulings_for(bad) == [], bad
+        with pytest.raises(RG.RouteGate) as exc:
+            RG.verify(graph(top=CLEAN_TOP + [
+                loader(99, bad, cls="PreprocessorWeightLoader"),
+            ]))
+        assert exc.value.evidence["clause"] == "unclassified_in_gated_family", bad
+
+    with pytest.raises(RG.RouteGate) as exc:
+        RG.verify(graph(top=CLEAN_TOP + [
+            loader(99, "depth_anything_v2_vitg/depth_anything_v2_vits.pth",
+                   cls="PreprocessorWeightLoader"),
+        ]))
+    assert exc.value.evidence["clause"] == "banned_or_excluded_component"
 
 

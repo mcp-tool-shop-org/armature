@@ -31,12 +31,13 @@ installs.
     role labels in `docs/license-map.md` with plain wording.
   - Hardened gated-family and `DA3-LARGE` matching against bypasses:
     - Anchored `cleared_patterns` per path segment (basename stem or Hugging Face repo segment)
-      so a cleared token in a parent folder or merged filename clears the path only when
-      every in-family token and segment is a cleared variant.
+      so a cleared token clears the path only when the weight carries cleared variants and
+      every in-family parent folder is cleared or a bare neutral family/container name.
     - Required `1.1` in `DA3-LARGE` paths to stand as the version segment directly after the
       model name inside the same path segment rather than anywhere in the path.
-    - Executed the gated-family check whenever no `BANNED` or `EXCLUDED` row matched, so
-      matching an `ALLOWED` or `CONDITIONAL` row does not skip in-family refusal.
+    - Executed the gated-family check whenever no `BANNED` row matched (and keyed `verify()`'s
+      gated-family refusal on `gated_families`), so `ALLOWED`, `CONDITIONAL`, or `allow=`-waived
+      `EXCLUDED` row matches never bypass in-family refusal.
     - Added `det_500m`, `det_2.5g`, `det_10g`, `1k3d68`, `2d106det`, and `genderage` stems to
       the `insightface` family patterns.
     - Pinned `LTX-Video 2B v0.9.5` in `docs/license-map.md` to commit `8984fa25007f` and

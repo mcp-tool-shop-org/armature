@@ -738,6 +738,10 @@ GATED_WEIGHT_FAMILIES = {
             r"da3(?:mono|metric)[_-]?large(?:[_-](?:fp16|fp32|bf16|fp8))?",
             r"da3[_-]?large[_-]?v?1\.1(?:[_-](?:fp16|fp32|bf16|fp8))?",
         ),
+        "neutral_parent_patterns": (
+            r"da3",
+            r"depth[_-]?anything[_-]?v?3",
+        ),
     },
     "depth_anything_v2": {
         "label": "Depth-Anything V2",
@@ -752,6 +756,9 @@ GATED_WEIGHT_FAMILIES = {
             r"(?:_(?:fp16|fp32|bf16|fp8))?",
             r"depth-anything-v2-small",
         ),
+        "neutral_parent_patterns": (
+            r"depth[_-]?anything[_-]?v2",
+        ),
     },
     "video_depth_anything": {
         "label": "Video-Depth-Anything",
@@ -765,6 +772,9 @@ GATED_WEIGHT_FAMILIES = {
             r"(?:metric_)?video_depth_anything_vits(?:_(?:fp16|fp32|bf16|fp8))?",
             r"(?:metric-)?video-depth-anything-small",
         ),
+        "neutral_parent_patterns": (
+            r"video[_-]?depth[_-]?anything",
+        ),
     },
     "insightface": {
         "label": "InsightFace / inswapper / antelope",
@@ -774,6 +784,7 @@ GATED_WEIGHT_FAMILIES = {
             r"det_(?:500m|2\.5g|10g)|1k3d68|2d106det|genderage)",
         ),
         "cleared_patterns": (),
+        "neutral_parent_patterns": (),
     },
     "smpl": {
         "label": "SMPL / SMPL-X",
@@ -781,6 +792,7 @@ GATED_WEIGHT_FAMILIES = {
             r"(?<![a-z0-9])(?:smpl|basicmodel)",
         ),
         "cleared_patterns": (),
+        "neutral_parent_patterns": (),
     },
     "ltx": {
         "label": "LTX",
@@ -791,6 +803,9 @@ GATED_WEIGHT_FAMILIES = {
         # docs/license-map.md; other 0.9.x and 13B variants carry no pinned source here).
         "cleared_patterns": (
             r"ltx-video-2b-v0\.9\.5",
+        ),
+        "neutral_parent_patterns": (
+            r"ltx(?:v|[_-]?video)?",
         ),
     },
 }
@@ -2610,47 +2625,52 @@ def _strip_weight_suffix(name):
 
 
 def _is_family_cleared(norm, spec):
-    """True iff `norm` (`/`-normalised, stripped, lower-cased) names ONLY map-cleared
-    variants of `spec` on its basename or Hugging Face repo segment (`org/name` or
-    `models--org--name`), with every in-family token anchored start-to-end."""
+    """True iff `norm` (`/`-normalised, stripped, lower-cased) names a map-cleared
+    variant of `spec` on its basename stem or Hugging Face repo segment (`org/name` or
+    `models--org--name`), with every in-family parent segment either cleared or a bare
+    neutral family/container name carrying no variant token."""
     cleared = spec.get("cleared_patterns") or ()
     raw_segs = [s for s in norm.split("/") if s]
     if not cleared or not raw_segs:
         return False
     pats = spec.get("patterns") or ()
+    neutral = spec.get("neutral_parent_patterns") or ()
     in_fam = lambda seg: any(re.search(p, seg) for p in pats)
     seg_ok = lambda seg, suf=False: any(
         re.fullmatch(cp, _strip_weight_suffix(seg) if suf else seg) for cp in cleared
     )
+    parent_ok = lambda seg: seg_ok(seg) or any(re.fullmatch(np, seg) for np in neutral)
 
     for idx, seg in enumerate(raw_segs):
         cache_m = re.fullmatch(r"models--([a-z0-9._-]+)--([a-z0-9._-]+)", seg)
         if not cache_m:
             continue
         org, repo = cache_m.group(1), cache_m.group(2)
-        if in_fam(org) or not seg_ok(repo):
+        if (in_fam(org) and not parent_ok(org)) or not parent_ok(repo):
             return False
-        if not all(seg_ok(s) for s in raw_segs[:idx] if in_fam(s)):
+        if not all(parent_ok(s) for s in raw_segs[:idx] if in_fam(s)):
             return False
         rest = raw_segs[idx + 1:]
         if not rest or (len(rest) == 2 and rest[0] == "snapshots"
                         and re.fullmatch(r"[0-9a-f]{7,64}", rest[1])):
-            return True
+            return seg_ok(repo)
         if (len(rest) == 3 and rest[0] == "snapshots"
                 and re.fullmatch(r"[0-9a-f]{7,64}", rest[1])):
             fname = rest[2]
-            return seg_ok(fname, suf=True) if in_fam(fname) else fname == "model.safetensors"
+            if in_fam(fname):
+                return seg_ok(fname, suf=True)
+            return fname == "model.safetensors" and seg_ok(repo)
         return False
 
     basename = raw_segs[-1]
     if in_fam(basename):
         return seg_ok(basename, suf=True) and all(
-            seg_ok(s) for s in raw_segs[:-1] if in_fam(s)
+            parent_ok(s) for s in raw_segs[:-1] if in_fam(s)
         )
     if basename == "model.safetensors" and len(raw_segs) >= 2:
         repo = raw_segs[-2]
         parents = raw_segs[:-2]
-        return seg_ok(repo) and all(seg_ok(s) for s in parents if in_fam(s))
+        return seg_ok(repo) and all(parent_ok(s) for s in parents if in_fam(s))
     return False
 
 
@@ -2681,18 +2701,18 @@ def _component_hits(value):
 
     See `WEIGHT_SUFFIXES` for the measurement this inversion closes. `hits` is
     `rulings_for(value)` for any name-shaped string; `gated_families` identifies any
-    covered family in `GATED_WEIGHT_FAMILIES` when no BANNED or EXCLUDED row matched
-    (an ALLOWED or CONDITIONAL match on one token never waives another in-family token).
-    The suffix test is only the predicate for counting an UNRULED out-of-family string
-    as an unclassified component.
+    covered family in `GATED_WEIGHT_FAMILIES` when no BANNED row matched (ALLOWED,
+    CONDITIONAL, or `allow=`-waivable EXCLUDED matches on one token never waive another
+    in-family token). The suffix test is only the predicate for counting an UNRULED
+    out-of-family string as an unclassified component.
     """
     if not isinstance(value, str):
         return [], False, ()
     looks_like_weight = value.lower().endswith(WEIGHT_SUFFIXES)
     name_shaped = looks_like_weight or _is_name_shaped(value)
     hits = rulings_for(value) if name_shaped else []
-    has_kill = any(h["verdict"] in ("BANNED", "EXCLUDED") for h in hits)
-    gated = () if (not name_shaped or has_kill) else unclassified_gated_families_of(value)
+    has_banned = any(h["verdict"] == "BANNED" for h in hits)
+    gated = () if (not name_shaped or has_banned) else unclassified_gated_families_of(value)
     return hits, looks_like_weight, gated
 
 
@@ -4083,8 +4103,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # · ANDON — an unmatched weight/model name inside a covered family (`GATED_WEIGHT_FAMILIES`)
     # is refused rather than waived through as `NOT IN THIS TABLE` ("unclassified in a gated
     # family"), placed AFTER the BANNED/EXCLUDED kill so explicit kills stay the headline.
-    gated_unclassified = [c for c in comp
-                          if not c["ruling"].get("matched_on") and c.get("gated_families")]
+    gated_unclassified = [c for c in comp if c.get("gated_families")]
     if gated_unclassified:
         ev["clause"] = "unclassified_in_gated_family"
         ev["unclassified_in_gated_family"] = [
