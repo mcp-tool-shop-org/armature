@@ -306,7 +306,7 @@ RULED_COMPONENTS = {
             r"(?<![0-9])1\.1(?![0-9])",
         ),
     },
-    # `da3_giant.safetensors` was mapped by `ComfyUI-DepthAnythingV3` (`configs.py:103`) to
+    # `da3_giant.safetensors` was mapped by `ComfyUI-DepthAnythingV3` (`configs.py`, line 103) to
     # `depth-anything/DA3-GIANT` (1.0, CC-BY-NC-4.0) at `9fb61e26fa09` before 2025-12-27 and
     # to `depth-anything/DA3-GIANT-1.1` (CC-BY-NC-4.0) since 2025-12-27 (`2bd9c34870a9`)
     # without replacing an existing local file; cite both 1.0 and 1.1 sources.
