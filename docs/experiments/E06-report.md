@@ -1,9 +1,9 @@
 # E06 report — a reference onto a schematic control
 
-**Seat:** executor · **Run:** 2026-08-10 · **Spec:**
+**Role:** executor · **Run:** 2026-08-10 · **Spec:**
 [E06-reference-onto-schematic.md](E06-reference-onto-schematic.md) ·
 **Predictions:** [E06-predictions.md](E06-predictions.md), committed at `07fd37a` before any
-tooling was read · **Advisor rules after this report** · **The Director judges the sheets.**
+tooling was read · **Advisor rules after this report** · **The maintainer judges the sheets.**
 
 **Two generations submitted, ceiling three, one reserve unspent. No gate fired.**
 
@@ -46,7 +46,7 @@ throughout.** B1 has no reference; D1 adds one; D2 adds one and names the charac
 
 ## 3. What the arms produced
 
-Described, not graded. **Whether either figure is the same man is the Director's call and no
+Described, not graded. **Whether either figure is the same man is the maintainer's call and no
 sentence here answers it.**
 
 **B1 (E03, no reference, carried forward as the baseline)** — a black stick figure on flat grey:
@@ -129,12 +129,12 @@ horns, amber visor slit, silver pauldron rims, chainmail texture, red-brown belt
 **Clause B — identity does not change: MISSED, and this is the more important half.** I predicted
 naming the character would not produce an identity-relevant difference, on the reasoning that the
 reference already carried identity and there was too little figure to carry it. D2 carries the
-**horned helm** and **segmented pauldrons**; D1 carries neither. Both are elements the Director's
+**horned helm** and **segmented pauldrons**; D1 carries neither. Both are elements the maintainer's
 own [E02 canon ruling](E02-canon-ruling.md) named as the carrying evidence, alongside the tattered
 cape and ragged hem that both arms do carry.
 
 ⚠ **This is a difference report and not an identity ruling.** Whether D1 is the same man, whether
-D2 is, and whether they are each other, is canon and the Director's alone. Nothing above answers
+D2 is, and whether they are each other, is canon and the maintainer's alone. Nothing above answers
 it, and the fill-ratio and width numbers approximate it in no way.
 
 ---
@@ -175,7 +175,7 @@ this also confirms the 33 server filenames transcribed into the submission corre
 | 5 | E02's reference plate is still resident server-side | **ASSUMED** | **now MEASURED** — see below |
 | 6 | E03's 33 posearc frames are still resident | **ASSUMED** | **now MEASURED** — see below |
 | 7 | a reference does not loosen control authority over position | ASSUMED (P3's question) | width tracks the control within 0.007 at every frame in both arms |
-| 8 | generation costs 4 credits | MEASURED (E02) | not re-measured here; the Director's balance is the instrument |
+| 8 | generation costs 4 credits | MEASURED (E02) | not re-measured here; the maintainer's balance is the instrument |
 
 ### How residency was verified, and it is worth stating plainly
 
@@ -223,7 +223,7 @@ different question than intended and the arm should be re-read accordingly.
 `HAVE_E02_UPLOADS` / `HAVE_E03_UPLOADS` test `os.path.isfile` against gitignored output paths, so
 in a clean checkout `test_E02_payload_bytes_have_not_moved` — the test the module docstring calls
 load-bearing — **silently skips**, along with the whole `TestE03Arms` class. It is the regression
-net protecting a shared builder during a round when two seats are editing that builder, and by
+net protecting a shared builder during a round when two sessions are editing that builder, and by
 default it is not running. Staging the manifests locally turned it on; it then passed unchanged.
 
 **I have not fixed this.** It is the shared regression net, E04 is live in the same file, and a
@@ -260,7 +260,7 @@ have been choosing the answer.
 | projected spend | **8 credits** at E02's measured rate, stated before the first submission |
 | reserve | 1 generation, **unspent** |
 
-The Director's balance is the instrument of record. Workspace GPU-hours before submission:
+The maintainer's balance is the instrument of record. Workspace GPU-hours before submission:
 $0.7246 on 2026-08-10, $0.5377 on the 2026-08-11 partial bucket — recorded as context, not as a
 credit measurement.
 
@@ -291,7 +291,7 @@ naming no motion. Two more drive the existing checks to failure.
 
 Rebased on `origin/main` before editing `tools/build_payload.py`, again before committing the
 tooling, and the suite ran green after each. **`origin/main` did not move during this session** —
-E04's seat had pushed nothing, so no gate of theirs was present to preserve, and nothing of theirs
+E04's session had pushed nothing, so no gate of theirs was present to preserve, and nothing of theirs
 was refactored, renamed or removed.
 
 **No foreign files appeared in this tree.** `git status` was clean at every checkpoint.
@@ -299,14 +299,14 @@ was refactored, renamed or removed.
 **Collisions named, untouched:** the test-count surface (197 → 206 here) and the `HAVE_E02_UPLOADS`
 skip guard in §8① are both shared with E04's edit surface. Neither is reconciled here.
 
-Work happened only in `E:/AI/armature-E06`. Nothing was written into another seat's tree. E03's
+Work happened only in `<worktree-E06>`. Nothing was written into another session's tree. E03's
 outputs were **read** and copied *into* this tree; nothing was written back.
 
 ---
 
 ## 12. What this report does not claim
 
-- That either output is good, correct, or usable. **The Director's eye judges.**
+- That either output is good, correct, or usable. **The maintainer's eye judges.**
 - That either figure is the same man as the reference. Canon, and his alone.
 - Any ranking of D1 against D2, or of either against B1 or A1a, **on a magnitude**. E04's
   between-generation floor is unmeasured; every number here is a diagnostic and gates nothing.

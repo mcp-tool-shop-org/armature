@@ -1,9 +1,9 @@
 # E12 wave 1 — report: the tooling, the baseline, and the band the plate actually gets
 
-**Executor seat, 2026-08-12, branch `E12-run` at `E:\AI\armature-E12`, cut from `main` at
+**Executor session, 2026-08-12, branch `E12-run` at `<worktree-E12>`, cut from `main` at
 `775abe6`.** The no-spend wave. **Zero generations submitted, zero uploads, zero credits.**
 The run is **HALTED at Gate PLATE**, which is where the spec puts it: no composite, no
-upload, no submission until the Director's word names the plate.
+upload, no submission until the maintainer's word names the plate.
 
 **No judgement of quality is offered or implied.** Wave 1 tests no hypothesis — the
 advisor's four (H-E12a…d) are about generations that do not exist yet, and nothing here has
@@ -33,7 +33,7 @@ extension*. Enumerated first, as instructed.
 **The premise resolves ASSUMED → MEASURED: an extension was needed.** It is three pieces.
 
 - **`startframe.cover_fit`** — scale to fill, crop the overhang, **never pad**. The sibling
-  fitter pads on purpose because the Director ruled an identity reference must arrive whole;
+  fitter pads on purpose because the maintainer ruled an identity reference must arrive whole;
   a padded *backdrop* is the opposite case, and this repo carries that disease on file twice
   (E08's letterbox bands; the baked grey void the alpha law ended). What the crop discards is
   reported in both source and resized pixels.
@@ -139,7 +139,7 @@ The authored character occupies a narrow column near centre in that band. The wa
 mannequin's head sits near centre too, and would **not** be covered by it. A candidate from
 wave 1 therefore puts **a second figure's head in the conditioning image**. That is a fact,
 not an objection — the spec's default plate source is wave 1's clips, and the spec's
-alternative is a photograph the Director owns.
+alternative is a photograph the maintainer owns.
 
 ## 4. The candidates
 
@@ -170,7 +170,7 @@ is softer and the light strip dominates.
 
 | gate | state |
 |---|---|
-| **Gate PLATE** | **HALTED — open, the Director's** |
+| **Gate PLATE** | **HALTED — open, the maintainer's** |
 | the w3 baseline hash check | all 6 artifacts + 2 payload hashes match |
 | Gate BACKDROP | built, calibrated against a measured round trip, `-O`-exercised — **not yet run on a plate** |
 | Gates WHOLE / COVERAGE / ALPHA | unchanged, untouched by this wave |
@@ -192,7 +192,7 @@ sheet, the band strip, their sidecars) and `outputs/_test_plate_composite/` (the
 renders). Compensator for both: delete the directory; owner: the executor session. Two
 commits on a branch, revertable. **No irreversible act has been performed.**
 
-## 7. What wave 2 needs from the Director
+## 7. What wave 2 needs from the maintainer
 
 **The plate.** Either a frame index from the six above, or a photograph he owns. Nothing
 else is blocking; the payload, frame spec, seeds and settings are all pinned from the
@@ -203,5 +203,5 @@ recommendation: that the plate becomes the **top ~32% of rows** rather than the 
 w3's pale studio floor unchanged beneath it; and that a wave-1 candidate puts a **second
 mannequin's head** in the band, which a photograph would not.
 
-**This seat has not composited, uploaded or submitted anything, and will not until his word
+**This session has not composited, uploaded or submitted anything, and will not until his word
 names the plate.**

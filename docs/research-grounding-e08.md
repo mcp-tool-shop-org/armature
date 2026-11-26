@@ -1,6 +1,6 @@
 # Research grounding — the E08 study-swarm (the two generative slots)
 
-Run 2026-08-11 by the advisor seat at the Director's word, after consult #6 confirmed SLOT 1
+Run 2026-08-11 by the advisor session at the maintainer's word, after consult #6 confirmed SLOT 1
 (prompt → skeletal motion) unfilled on Cloud. Five parallel research lanes on Sonnet
 executors: the SLOT-1 field · monocular motion lift · the driving-signal convention ·
 cross-shot identity · retargeting practice. Protocol:
@@ -97,7 +97,7 @@ rights to generated output by contract; none discloses its training-data chain.*
 agent-retrieved from vendor pages (deepmotion.com/saymotion, uthana.com, Cartwheel press),
 2026-08-11. → The only present-day prompt→skeletal-motion path that requires no build.
 Enters, if at all, through the map's partner-API procedure: terms fetched per vendor, ruled
-CONDITIONAL at most, **Director decision by definition**.
+CONDITIONAL at most, **maintainer decision by definition**.
 
 ### SLOT 2 — the performer (Wan-Animate route)
 
@@ -174,7 +174,7 @@ binding relative to photographs.** — Chen et al. 2024 (arXiv:2406.13272, AniFa
 Existence oracle-confirmed; finding advisory.
 → Budget a lower identity floor for the mannequin than photoreal benchmarks suggest; when
 identity wobbles in the probe, reference class ranks **above** convention error in the
-candidate-cause list. The Director's eye remains the verifier of record.
+candidate-cause list. The maintainer's eye remains the verifier of record.
 
 **G14. Cross-shot consistency degrades sharply with recurrence distance; a persistent,
 locked per-entity reference memory yields the highest character fidelity (Cohen's
@@ -206,7 +206,7 @@ accuracy required, ~85–90 % measured on complex dance; kinematic-only retarget
 severe skating vs near-zero for contact-aware methods.** — LoBSTr / PhysCap /
 UnderPressure / OmniRetarget line (advisory tier).
 → For a **dance** first shot via the lift arm, foot artifacts are the expected defect
-class: graded on the sheet at the Director's zoom, never tuned past silently.
+class: graded on the sheet at the maintainer's zoom, never tuned past silently.
 
 ---
 
@@ -221,16 +221,16 @@ class: graded on the sheet at the Director's zoom, never tuned past silently.
 | One locked, hashed reference-render set reused across all shots | G14 |
 | Probe measures scene-from-prompt strength explicitly | G15 |
 | Probe measures identity fidelity as its own clause; stylized-reference floor expected lower | G9, G13, G11 |
-| SLOT-1 fork is a Director decision (hosted contract vs clean-lift build) | G1–G5, G16, G17 |
+| SLOT-1 fork is a maintainer decision (hosted contract vs clean-lift build) | G1–G5, G16, G17 |
 
 ## The SLOT-1 verdict this grounding supports
 
 The open-weight research line is closed by the data tier itself (G1); the SMPL lift line is
 closed at code or body-model layer (G2, G3). What remains: **Arm A** — a hosted
 text-to-motion API under per-vendor contract terms (G5; partner-API procedure, CONDITIONAL
-at most, Director's call on whether an undisclosed training chain is acceptable at all);
+at most, maintainer's call on whether an undisclosed training chain is acceptable at all);
 **Arm B** — the fully self-hosted clean chain: Wan T2V (Apache, outputs owned) generates a
 performance clip → MediaPipe (G4, licence pending the map's fetch) lifts world landmarks →
 our own solver (G16, G17) lands them on the rig — quality unmeasured, calibration
 experiment first. Both arms' next step is a zero-credit licence/terms fetch; neither is
-adopted here. The spec rewrite waits on the Director's pick.
+adopted here. The spec rewrite waits on the maintainer's pick.

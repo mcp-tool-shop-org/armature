@@ -4,7 +4,7 @@
 > official-docs translation landed in `docs/wan-video-prompt-guide-notes.md`. This
 > rendition stays for its fuller camera/atmosphere/style vocabulary.
 
-**Provenance.** Retrieved by the Director on 2026-08-12 as a local text export
+**Provenance.** Retrieved by the maintainer on 2026-08-12 as a local text export
 (`Wan 2.1 Prompt Guide.txt`) of a web rendition titled "Wan 2.1 Prompt Guide (Official
 Reference)" — byline "Wan AI Team", page-dated 2025-03-19, self-linking to a `wan2-2`
 site path. This is **not** the official DingTalk guide; that original remains unfetched

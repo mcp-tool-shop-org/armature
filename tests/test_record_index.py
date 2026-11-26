@@ -10,7 +10,7 @@ files - `docs/index/armature.db` and its certificate - with `sqlite3`, `hashlib`
 `json`, so it rides every suite run and every CI run.
 
 WHAT THE SIX DANGLING ROWS ACTUALLY WERE, because it decides what is worth gating:
-five artifact rows anchored to `HANDOFF.md` and one to `README.md`, both rewritten
+five artifact rows anchored to `HANDOFF.md` (kept privately) and one to `README.md`, both rewritten
 after the index was built. The rows were not corrupt - they were correct about a
 corpus that had moved. Three of them named facet's files (`tools/mask_geometry.py`,
 `tests/test_t64_plate_geometry.py`, `armature.glb`), harvested out of a handoff

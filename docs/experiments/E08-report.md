@@ -1,13 +1,13 @@
 # E08 — report: the first painted shot, on the calibrated chain
 
-**Seat: executor**, branch `E08-shot`, worktree `E:\AI\armature-E08b`, from `main` at
+**Role: executor**, branch `E08-shot`, worktree `<worktree-E08b>`, from `main` at
 `aa09986`. **One generation of the shot** (`prompt_id`
 `eb1fb0df-d754-4b2f-a4f4-b2f3b9d8c29f`, seed `2026081211`), plus one model-free bridge
 verification (`ef07f754-cf79-4998-8fdf-0f3d63051029`). Reserve seeds `2026081212` and
 `2026081213` **unspent**. No gate fired.
 
 This report carries measurements, gate states, and predictions against outcomes. It contains
-no judgement of whether the footage is good; the Director's eye is the verifier of record and
+no judgement of whether the footage is good; the maintainer's eye is the verifier of record and
 the advisor rules on what the measurements mean.
 
 **Look first:** `outputs/E08/sheets/E08-gate0.png` — previz | control | painted | reference |
@@ -22,7 +22,7 @@ sheets in the order the spec asks: arms, hands, skull, the bar.
 |---|---|---|---|
 | 1 | The E09 A3 baseline motion + GLB | MEASURED | **CONFIRMED with a label correction.** The digest matches exactly. The spec calls `cd4e2f6ee85e…` an **md5**; the E09 report's table heads that column **sha256 (first 32)**, and sha256 is what matches. The file's actual md5 is `6614691df9db7cacfe8580a30a2593d9`. Value right, algorithm mislabelled in the spec. |
 | 2 | The drawing convention, "fetched + banked with hash (E09 route2)" | MEASURED | **FALSIFIED as stated.** No copy of `human_visualization.py` existed in `outputs/E09/route2/`, anywhere else in the repo, or in any worktree — that directory holds the Wan **T2V** configs and README. The only record was G6, a summary. Re-fetched under the map's existing Apache-2.0 row, banked at `outputs/E08/convention/`, sha256 `962813c71b2f…`, 44,228 bytes, pinned to commit `29d4a35d32273d5309a3a95250bd4e118d8789b2`. §2 records what the summary got wrong. |
-| 3 | The twin reference, Director-approved | MEASURED | Confirmed; sha256 `4d40c9a19c46bb09…`, 352×1024. §5 records what the node does to it. |
+| 3 | The twin reference, maintainer-approved | MEASURED | Confirmed; sha256 `4d40c9a19c46bb09…`, 352×1024. §5 records what the node does to it. |
 | 4 | `WanAnimateToVideo` socket schema, "six optionals" | MEASURED | **SEVEN optionals**, measured 2026-08-12: `clip_vision_output`, `reference_image`, `face_video`, `pose_video`, `background_video`, `character_mask`, `continue_motion`. |
 | 5 | Licence rows | MEASURED | Confirmed. Every weight this graph loads has a row (§8). |
 | 6 | The model accepts CG-rendered sticks at product quality | **ASSUMED — the experiment** | §9–§11. |
@@ -122,7 +122,7 @@ so `y = round((1024 − 1024 × (0.344/1.733)) / 2) = 410` and the node keeps **
 errors; the node resizes cleanly and the run completes.
 
 Measured, rendered as a comparison (`outputs/E08/sheets/E08-reference-fit.png`) and put to the
-Director. **He ruled letterbox.** `tools/fit_reference.py` performs the contain-fit — scale to
+Maintainer. **He ruled letterbox.** `tools/fit_reference.py` performs the contain-fit — scale to
 480 tall (165×480), centred on 832×480, pad sampled as the median of the source's own outer
 4% border — and its provenance carries the source hash, the derived hash, the transform, and
 what the node would have done instead. The figure occupies **19.83%** of the reference frame;
@@ -279,9 +279,9 @@ instruments were built to test it and **neither discriminates**:
 So: the banding is a description from looking, and the pad-leak reading is a **named candidate
 cause, not a finding**. Ask of a metric what value it takes when the hypothesis is false;
 these two take nearly the same value either way, which is the "grade an arm only on what it
-can move" law failing in this seat's own instruments. A discriminating test would need a
+can move" law failing in this session's own instruments. A discriminating test would need a
 second generation with the as-is (cover-cropped) reference, and that is the advisor's call
-against the remaining ceiling, not this seat's.
+against the remaining ceiling, not this session's.
 
 ---
 
@@ -312,11 +312,11 @@ Each clause read separately.
 | clause | predicted | outcome |
 |---|---|---|
 | **H-E08a** gross body pose tracks the sticks — 80% | tracks | **HIT.** Correspondence visible at all five sampled frames, arms and legs. |
-| **H-E08a** limb timing matches frame for frame — 65% | matches | **HELD, not isolated.** The sheet samples five frames; frame-exact timing across all 65 was not measured, and this seat did not build an instrument for it. |
+| **H-E08a** limb timing matches frame for frame — 65% | matches | **HELD, not isolated.** The sheet samples five frames; frame-exact timing across all 65 was not measured, and this session did not build an instrument for it. |
 | **H-E08a** the 1-px stick width costs something visible — 55% | costs | **NOT SUPPORTED as the dominant risk.** Adherence is visible despite a one-pixel skeleton. Whether it costs *degree* is unmeasured. |
 | **H-E08b** terracotta / bald jointed-mannequin read survives — 70% | survives | **HIT.** |
 | **H-E08b** the face survives as the twin's face — **30%** | mostly not | **MISS, and by a wide margin.** The face reads at 4 of 5 sampled frames — brows, lidded eyes, small closed smile, ears. I under-predicted this badly. The one exception is f16, where it smears. |
-| **H-E08b** the pad leaks in as a grey field — 40% | maybe | **UNRESOLVED.** Banding is present; §11 shows this seat's two tests cannot attribute it. |
+| **H-E08b** the pad leaks in as a grey field — 40% | maybe | **UNRESOLVED.** Banding is present; §11 shows this session's two tests cannot attribute it. |
 | **H-E08c** some scene arrives — 75% | arrives | **HIT.** |
 | **H-E08c** a recognisable bar — counter, bottles, warm light — 45% | maybe | **HIT**, and more completely than predicted: shelving, bottles, under-shelf lighting, glassware, counter, machine. |
 | **H-E08c** other people, as the prompt asks — 25% | probably not | **HIT on the prediction, and the pre-named cause stands unrefuted.** No people in any frame. Wan's default negative names both "cluttered background" and "many people in the background". Named before the run; still only a candidate, since nothing tested it. |
@@ -391,7 +391,7 @@ Measured here, with no authority to rule on any of it:
 2. **Gate C has no number on an all-OSS route.** `estimate_credits` returns 0 by construction.
    Either the spec's Gate C is re-specified against generation count, or a GPU-time meter that
    resolves before the invoice window is found.
-3. **The banding is unattributed and this seat's two tests cannot attribute it.** A
+3. **The banding is unattributed and this session's two tests cannot attribute it.** A
    discriminating experiment exists — one generation on the as-is cover-cropped reference,
    same seed — and it would spend a reserve.
 4. **The negative prompt fights the positive's crowd clause.** Wan's own default excludes
@@ -404,4 +404,4 @@ Measured here, with no authority to rule on any of it:
    clause and it resolved differently per joint — the "predict each clause separately" law
    applies one level finer than I applied it.
 
-The Director judges the shot.
+The maintainer judges the shot.

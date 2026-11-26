@@ -1,13 +1,13 @@
 # E12 wave 2 — report: the world held on both seeds, and the figure did not
 
-**Executor seat, 2026-08-12, branch `E12-run`, rebased onto `main` at `a3aa00f`.** Arm
+**Executor session, 2026-08-12, branch `E12-run`, rebased onto `main` at `a3aa00f`.** Arm
 **A2w** (full-bleed plate, authored shadow layer) at w3's pinned trajectory, **two seeds**.
 **Two generations spent of the amended six-submission ceiling.** A1w was not submitted — the
-Director ruled it broken at Gate LOOK, so its two submissions are unspent. **No gate fired.**
+Maintainer ruled it broken at Gate LOOK, so its two submissions are unspent. **No gate fired.**
 
-**No judgement of quality is offered or implied.** The Director judges the dance, the world
+**No judgement of quality is offered or implied.** The maintainer judges the dance, the world
 and the figure. What follows is what was submitted, what the gates said, what came back, and
-what this seat looked at.
+what this session looked at.
 
 **Look first:** `outputs/E12/probe/seed1/seed1.mp4` and `seed2/seed2.mp4` at true tempo, and
 `outputs/E12/sheets/E12-w2-seed1-face.png`, which carries the finding a number does not.
@@ -25,7 +25,7 @@ what this seat looked at.
 |---|---|---|
 | Cloud still serves the pinned camera files | ASSUMED | **MEASURED** — `search_models` returns exactly four `wan2.2_fun_camera` diffusion_model entries; both pinned `fp8_scaled` files present, the same four w3 measured |
 | The startframe compositor may need an extension for a plate | ASSUMED | **MEASURED** — it did; three pieces, tests in the same commits |
-| Candidate plate frames exist in w1's outputs at pickable quality | ASSUMED | **RESOLVED AGAINST** — every candidate carried wave 1's own mannequin; the Director supplied his own generation instead |
+| Candidate plate frames exist in w1's outputs at pickable quality | ASSUMED | **RESOLVED AGAINST** — every candidate carried wave 1's own mannequin; the maintainer supplied his own generation instead |
 | w3's recipe reproducible from the E11 records | MEASURED | **re-checked** — 6 artifact hashes and 2 payload hashes recompute |
 | Catalog 6.0 / uni_pc | ASSUMED | **still ASSUMED** — wave 3's rung, not this one's. The catalog re-stated it today |
 
@@ -86,10 +86,10 @@ and double under motion, most visibly at f40 and f80. *The room persists; the pe
 repainted.* Those are different claims and only the first is a world-holding result.
 
 **Contact.** At f8 and f40 both feet sit on the tiled floor with a soft painted contact shadow
-under them, and read grounded to this seat's eye. This is the clause the amendment expected to
+under them, and read grounded to this session's eye. This is the clause the amendment expected to
 degrade.
 
-**Hands — the Director's question, measured.** The conditioning image carries the mesh's
+**Hands — the maintainer's question, measured.** The conditioning image carries the mesh's
 closed pincer. At **f8 on seed 1 the model has repainted it into an open hand with separated,
 distinguishable fingers** — a better hand than the mesh's own, and unlike any E11 outcome
 (wave 1's closed claw, wave 3's digits→wisps→stump). By f80 structure is gone again. ⚠ The
@@ -111,7 +111,7 @@ and does not support a claim about the arc.
 > on this arm.** This was registered blind before submission, in those words: w3's horizon was
 > a hard authored seam between a lit floor and a dark void — the easiest possible edge for a
 > row detector — and A2w has no seam at all, only a soft tiled floor partly occluded by
-> people. **0/81 is a detector limit, not a camera result**, and this seat will not convert it
+> people. **0/81 is a detector limit, not a camera result**, and this session will not convert it
 > into one. H-E12d is unresolved and needs a different instrument.
 
 > ⚠ Correlation-to-f0 is **not** like-for-like against w3. w3 held a nearly static authored
@@ -134,7 +134,7 @@ E11, the A2w start frame, or the advisor's hypotheses — disclosed there and he
 | c1–c3 | horizon spread / count | 55–60 % | **NOT MEASURABLE** — 0/81, the caveat registered with them applies |
 | n1 | contact reads wrong on ≥1 seed | 70 % | **MISS** — reads grounded at f8 and f40 on both |
 | n2 | contact wrong on BOTH seeds | 50 % | **MISS** |
-| n3 | figure slides/floats against the tile lines | 65 % | **NOT SCORED** — this seat did not build a tile-tracking instrument and will not score it by impression |
+| n3 | figure slides/floats against the tile lines | 65 % | **NOT SCORED** — this session did not build a tile-tracking instrument and will not score it by impression |
 | i1 | face at f80 reads as the same character, both seeds | 70 % | **MISS** — holds on …241, gone on …233 |
 | i2 | surface drifts smoother/waxier | 75 % | **HIT** |
 | i3 | limbs read longer at f80 | 55 % | **HIT** on …233; …241 shows one arm grossly elongated |
@@ -147,7 +147,7 @@ E11, the A2w start frame, or the advisor's hypotheses — disclosed there and he
 | q4 | no gate fires after submission | 80 % | **HIT** |
 | q5 | seeds differ visibly | 85 % | **HIT** |
 
-**The h1 miss is the interesting one.** This seat put 92 % on the hands staying broken and was
+**The h1 miss is the interesting one.** This session put 92 % on the hands staying broken and was
 wrong at f8 on the seed that shares w3's noise field. Given the same weights, trajectory and
 seed as w3 — whose hands went digits→wisps→stump — the plate is the only thing that changed.
 **One frame on one seed is an observation, not a route property**, and no claim about hands is
@@ -171,7 +171,7 @@ from "this trajectory loses the figure by f40 regardless."
 |---|---|
 | `estimate_credits` | **0** (all-OSS; the ceiling is counted in generations) |
 | generations spent | **2 of 6** — A1w's two unspent, ruled broken at Gate LOOK before submission |
-| remaining | 4, of which wave 3 (6.0 / uni_pc, same two seeds) is the Director's next call |
+| remaining | 4, of which wave 3 (6.0 / uni_pc, same two seeds) is the maintainer's next call |
 | GPU / queue time | metered by the provider; to the ledger when the window resolves |
 | suite | **950 passed, 48 skipped** (from w3's 827 / 46) |
 
@@ -190,7 +190,7 @@ from "this trajectory loses the figure by f40 regardless."
 2. **A record defect, noted not fixed.** `build_camera_i2v_payload` writes
    `start_image.fit = "native — authored at 832x480, the same upload wave 1 ran"`. That string
    is false for w3 and for E12 — both ran 1024×576 — and it prints on the Gate 0 sheet. It is
-   cosmetic, it was already wrong in w3's committed record, and this seat did not edit a
+   cosmetic, it was already wrong in w3's committed record, and this session did not edit a
    builder after its graphs were submitted.
 3. **A second stale figure**, from wave 1: the w3 report's comparison column gives wave 1's
    mean luma as `180.8 → ~60`; wave 1's own `measure/E11-clip.json` has f0 = 180.76 and

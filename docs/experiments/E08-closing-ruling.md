@@ -1,10 +1,10 @@
 # E08 — closing ruling: the first shot exists
 
-**E08 is CLOSED. Advisor ruling 2026-08-12; the Director judged the shot the same day** —
+**E08 is CLOSED. Advisor ruling 2026-08-12; the maintainer judged the shot the same day** —
 his verdict, recorded as decision content: the character landed in the scene and the
 movements worked as registered; the background and the motion's smoothness both need work;
 a strong result for a first experiment — it shows a character can be put in a scene.
-**That verdict is the judgment of record.** Verified by this seat before ruling: the suite
+**That verdict is the judgment of record.** Verified by this session before ruling: the suite
 (**556 passed / 43 skipped**, own run), tip `d5fd70a`, and the Gate 0 sheet at full size —
 the painted figure tracks the sticks at every sampled frame, the bar arrives with shelving,
 bottles, glassware and light, the face reads as the twin's at four of five samples, the
@@ -14,7 +14,7 @@ washed vertical bands are where the report says.
 
 1. **Motion adherence — YES.** Gate B proved the driving signal reached the model
    bit-identical on all 65 frames, and the sheet shows the painted body performing the
-   rig's dance. The chop the Director's eye flagged is the *texture* of the motion, not its
+   rig's dance. The chop the maintainer's eye flagged is the *texture* of the motion, not its
    correspondence — a lever, below.
 2. **Identity — the floor held, above prediction.** The face reads as the twin's at 4/5
    sampled frames (the executor blind-predicted 30 %), smearing at f16; hands resolve no
@@ -67,11 +67,11 @@ instruments — reported as such, which is the honest shape. E08's reserves laps
 GPU-hours invoice window closes after the run — baseline recorded, the resolved number
 lands in the ledger. Two uploads and one saved cloud workflow remain live with their
 deletes listed in the report — kept by default as reusable inputs for the lever
-experiments; the Director's word removes them. `E08-shot` merges to `main`; the worktree
-`E:\AI\armature-E08b` is retained (outputs live there, hash-pinned). The stale `E08-run`
+experiments; the maintainer's word removes them. `E08-shot` merges to `main`; the worktree
+`<worktree-E08b>` is retained (outputs live there, hash-pinned). The stale `E08-run`
 branch retires once its bank is confirmed subsumed (ledger item, unchanged).
 
-## The forward map, in the Director's own diagnosis
+## The forward map, in the maintainer's own diagnosis
 
 - **"Movements are choppy"** → the motion is 3D and ours, so the cheapest lever is
   upstream: **densify the in-betweens** — proper rotation interpolation (slerp) over the
@@ -85,4 +85,4 @@ branch retires once its bank is confirmed subsumed (ledger item, unchanged).
 - **Aspect / figure size** (E09's named variable) serves hands and face detail and waits
   its turn.
 
-One lever, one experiment, per the posture. The shelf is the Director's to order.
+One lever, one experiment, per the posture. The shelf is the maintainer's to order.

@@ -9,7 +9,7 @@ it did: `facebook/dinov2-base` (Apache-2.0, ALLOWED), `facebook/map-anything-apa
 
 This module keys rulings on `(repo_id, revision, filename, sha256)` and hashes candidate
 bytes on disk with stdlib `hashlib.sha256` before any model-loading library is imported.
-An unknown or unpinned digest refuses: under `CLAUDE.md`, UNVERIFIED is NO, and a row
+An unknown or unpinned digest refuses: under `docs/engineering-rules.md#licence-gate`, UNVERIFIED is NO, and a row
 whose bytes have not yet been hashed under a weight-download grant carries `sha256: None`
 so no unverified local `model.safetensors` can slip past on its filename alone.
 """
@@ -86,7 +86,7 @@ DISTINCTIVE_BANNED_STEMS = {
 }
 
 
-#: Measurement weight rulings fetched 2026-11-11 (`docs/dispatches/shot-diagnostics-design.md` §4).
+#: Measurement weight rulings fetched 2026-11-11 (`docs/dispatches/shot-diagnostics-design.md` §4, kept privately).
 #: `sha256` is `None` until a weight-download grant reads and pins the exact checkpoint bytes;
 #: `None` never matches a candidate file digest, keeping unpinned files fail-closed.
 MEASUREMENT_WEIGHTS = (

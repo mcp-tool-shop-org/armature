@@ -1,25 +1,25 @@
 # E07 — the skeleton: a named-bone rig on the canonical character
 
-**Seat:** executor · **Spec written:** 2026-08-11, before the work · **Advisor rules after the
-report** · **Director judges the sheet** · **Credit ceiling: 0 generations. This experiment
+**Role:** executor · **Spec written:** 2026-08-11, before the work · **Advisor rules after the
+report** · **maintainer judges the sheet** · **Credit ceiling: 0 generations. This experiment
 spends no credits.**
 
 > ## ✅ UNBLOCKED 2026-08-11 — F01 delivered as facet E33; premise 1 carries the hash
 >
-> The performer exists: `E:\AI\training\facet_E33\out\performer_textured.glb`, sha256
+> The performer exists: `<sibling-training>/facet_E33\out\performer_textured.glb`, sha256
 > `9e20ea7d…b1aa`, 21,588,628 bytes, 299,956 tris, one mesh object, one embedded 4096
-> atlas, terracotta register (Director's r3 ruling), **unrigged** — hash re-verified
-> independently by the dispatching seat before this banner lifted. Known asset facts the
+> atlas, terracotta register (maintainer's r3 ruling), **unrigged** — hash re-verified
+> independently by the dispatching session before this banner lifted. Known asset facts the
 > rig work inherits: **67 interior shells, watertight false** (a TRELLIS shell asset —
 > premise 5/6's measurement is exactly how skinning behaves on it), and the brush stage
 > was declared not-run, so hand-interior texels are dilation fill (irrelevant to rigging).
 >
 > **AMENDED 2026-08-11, same day, before any work:** the subject is no longer the blackguard.
-> The Director ruled the first performer comes **fresh off the facet line** — *"I want to use
+> The maintainer ruled the first performer comes **fresh off the facet line** — *"I want to use
 > something from the facet pipeline, not an old glb"* — and he was right about the blackguard
 > twice over: the audit's own §2e names a black-armoured figure as the palette that starves
 > the judgment, and this spec reused it anyway. The subject is now the **F01 deliverable**
-> ([F01-the-first-performer.md](../dispatches/F01-the-first-performer.md)). A rig-wide survey
+> (`docs/dispatches/F01-the-first-performer.md`, kept privately). A rig-wide survey
 > of the 284 existing GLBs (eight rendered: `outputs/E07/cast-survey/`) found no
 > facet-canonical character, which is the enumeration that justifies the commission. Nothing
 > else in this spec changes: the gates, the site-list rule, the probe arc and the dailies
@@ -33,7 +33,7 @@ poses and movement, any footage. Every one of those requires posing the canonica
 rig importing as 30 `EMPTY` objects named `bone_0…bone_29`, **zero of 18 anatomical sites
 identifiable by name**. That gap was ruled armature's blocking dependency (E03 closing,
 Ruling 7), the attempt to route around it with a wire proxy failed on measurement (E06 closing,
-Ruling 2), and nothing governs against closing it (E03 closing, Ruling 12). The Director named
+Ruling 2), and nothing governs against closing it (E03 closing, Ruling 12). The maintainer named
 this exact sequence: he asked why limbs were being tested before any skeleton-building process existed
 
 E07 builds the skeleton. Its follow-on, E08, stages the first authored performance **of the
@@ -45,15 +45,15 @@ character** — the first frames of the actual product.
 registered site list completely, (b) preserves the rest pose, and (c) deforms without shredding
 when posed** — so that authored performances are staged on *him*, not on a wire proxy?
 
-(c) is judged by the Director on the sheet. (a) and (b) are gated in code.
+(c) is judged by the maintainer on the sheet. (a) and (b) are gated in code.
 
 ## Premises — marked
 
 | # | premise | status |
 |---|---|---|
-| 1 | The subject is the **F01 deliverable** — a facet-line painted character GLB from the Director-picked concept | **MEASURED 2026-08-11** — `E:\AI\training\facet_E33\out\performer_textured.glb`, sha256 `9e20ea7d800c0ffd2cff101a5e1bcc01fa13c620bbbe3ef05ae23b093547b1aa`, hash re-verified by the dispatcher; full provenance in facet E33's manifest (117 files, per-file sha256) |
+| 1 | The subject is the **F01 deliverable** — a facet-line painted character GLB from the maintainer-picked concept | **MEASURED 2026-08-11** — `<sibling-training>/facet_E33\out\performer_textured.glb`, sha256 `9e20ea7d800c0ffd2cff101a5e1bcc01fa13c620bbbe3ef05ae23b093547b1aa`, hash re-verified by the dispatcher; full provenance in facet E33's manifest (117 files, per-file sha256) |
 | 2 | The delivered GLB carries no pre-existing rig (facet's route emits unrigged painted meshes) | **ASSUMED** — verify on import; if a rig exists, report what it is before touching it |
-| 3 | No existing GLB on this rig qualifies as the subject | **MEASURED 2026-08-11** — 284 GLBs surveyed, eight rendered with stats (`outputs/E07/cast-survey/E07-cast-survey.png`); Director ruled the performer comes off the facet line, new |
+| 3 | No existing GLB on this rig qualifies as the subject | **MEASURED 2026-08-11** — 284 GLBs surveyed, eight rendered with stats (`outputs/E07/cast-survey/E07-cast-survey.png`); maintainer ruled the performer comes off the facet line, new |
 | 4 | Blender 5.2 slotted-action API shape | **MEASURED** — `tools/make_test_armature.py` `_action_fcurves`, measured on this rig 2026-08-10 |
 | 5 | `ARMATURE_AUTO` automatic weights produce a usable, non-shredding deform on this mesh | **ASSUMED — this is the thing the experiment measures.** UniRig's shredding of faced characters is a measured property of UniRig, not of skinning in general; whether Blender's bone-heat weighting fails the same way here is unknown |
 | 6 | The delivered mesh is skinnable as imported (object count, loose parts, manifoldness) | **ASSUMED** — measure on import, report per-object stats before rigging |
@@ -79,7 +79,7 @@ first bone is placed. A site list chosen after seeing what was easy to rig is na
 
 ## Build order
 
-1. **Verify the watchdog** (`pwsh -NoProfile -File E:\AI\training\_watchdog_start.ps1` — live
+1. **Verify the watchdog** (`pwsh -NoProfile -File <sibling-training>/_watchdog_start.ps1` — live
    heartbeat confirmed) before any Blender/GPU step. It was found dead 2026-08-11.
 2. Verify the F01 delivery: premise 1's hash against the file on disk; copy it into
    `outputs/E07/subject/` and work from the copy.
@@ -114,14 +114,14 @@ first bone is placed. A site list chosen after seeing what was easy to rig is na
 
 **Deformation under pose is deliberately NOT a gate.** Per-bone vertex-displacement stats are
 reported **per structure** as diagnostics; whether the deform is acceptable — whether he still
-looks like *him* when his arm is up — is the Director's, on the sheet, at his zoom. No metric
+looks like *him* when his arm is up — is the maintainer's, on the sheet, at his zoom. No metric
 here approximates it.
 
 ## Predictions
 
 Registered by the executor **before step 4**, blind status disclosed, **each clause
 separately**: (P1) does `ARMATURE_AUTO` produce a usable deform on this mesh — usable meaning
-the Director does not reject the sheet outright; (P2) does any site fail to map cleanly to the
+the maintainer does not reject the sheet outright; (P2) does any site fail to map cleanly to the
 mesh's actual topology; (P3) does Gate P hold at the stated epsilon on the first export.
 A miss with its mechanism is worth more than a hit.
 
@@ -136,9 +136,9 @@ full size decides.
 ## Out of scope
 
 Finger and face bones; weapon bones; a retargeting library; **any generation** (zero credits —
-E08's job); any write into `E:\AI\facet` or `E:\AI\training` (sources are read-only; the rigged
+E08's job); any write into `<sibling-facet>` or `<sibling-training>` (sources are read-only; the rigged
 GLB and everything else land in armature's tree, big binaries gitignored with sha256 manifests
-committed); any promotion of rigging upstream into facet's pipeline (a later Director call,
+committed); any promotion of rigging upstream into facet's pipeline (a later maintainer call,
 foreclosed by nothing here).
 
 ## Licence rows introduced
@@ -150,7 +150,7 @@ from the installed build's own licence documents). No model, weight, or preproce
 
 Predictions with blind status first; premises re-verified with what moved; the source-choice
 record; gates with verdicts (a gate that has not run is written **NOT YET RUN**); per-structure
-deformation diagnostics; the sheet; manifest hashes. **No judgement words.** The Director
+deformation diagnostics; the sheet; manifest hashes. **No judgement words.** The maintainer
 decides whether the skeleton is fit to perform.
 
 ## Standards compliance
@@ -161,8 +161,8 @@ decides whether the skeleton is fit to perform.
 | ANDON_AUTHORITY | **3** | Gates N/P/D raise inside the exporting tool, no skip flag; the watchdog precondition guards the GPU step |
 | NAMED_COMPENSATORS | **3** | Nothing irreversible: zero credits, all outputs new files under `outputs/E07/` (`rm -r` undoes), sources opened read-only |
 | DECOMPOSE_BY_SECRETS | **2** | Rigging, rendering, and measurement are separate tools; the site list is data, not code |
-| UNCERTAINTY_GATED_HUMANS | **3** | The one question that matters — is the deform acceptable — goes to the Director on a sheet built for the judgment; diagnostics gate nothing |
-| EXTERNAL_VERIFIER | **1** | Standing pipeline weakness, named not inflated: advisor ruling + Director's eye, a different kind of check rather than a different model family |
+| UNCERTAINTY_GATED_HUMANS | **3** | The one question that matters — is the deform acceptable — goes to the maintainer on a sheet built for the judgment; diagnostics gate nothing |
+| EXTERNAL_VERIFIER | **1** | Standing pipeline weakness, named not inflated: advisor ruling + maintainer's eye, a different kind of check rather than a different model family |
 
 **14 / 18.** Sub-3 scores carry their reasons above rather than remediation theater; the two 2s
 are honest ceilings for a local build experiment.
@@ -234,7 +234,7 @@ each:
   mannequin. Rigid segments articulating at drawn joints are not a fallback for this
   character — they are what the character *is*.
 
-**The Director picks the binding from the sheet. No metric picks it.** The dailies sheet
+**The maintainer picks the binding from the sheet. No metric picks it.** The dailies sheet
 becomes a comparison sheet — rest | arc frames | 1:1 joint insets, arm (a) beside arm (b),
 uniform panels, no gate states printed.
 
@@ -242,9 +242,9 @@ uniform panels, no gate states printed.
 structural, facial markers non-deforming); the P2 joint-versus-limb correction; and the
 glTF-split-versus-welded units finding — the last two noted for the closing ruling.
 
-### Amendment 3 — 2026-08-11, Director's catch at 1:1, and the hard gate that follows
+### Amendment 3 — 2026-08-11, maintainer's catch at 1:1, and the hard gate that follows
 
-**The Director zoomed the halt sheet's joint insets and ruled:**
+**The maintainer zoomed the halt sheet's joint insets and ruled:**
 
 > *"This looks like it's not lined up properly."*
 
@@ -270,12 +270,12 @@ look measured. Implemented in `armature_core/joints.py`; the offset table rides 
 
 ---
 
-## ⛔ HARD GATE — the Director approves the skeleton before anything downstream runs
+## ⛔ HARD GATE — the maintainer approves the skeleton before anything downstream runs
 
-> he gated all further work on his approval of the skeleton — Director, 2026-08-11
+> he gated all further work on his approval of the skeleton — maintainer, 2026-08-11
 
 **Binding, and it supersedes the sequencing in the ruling above.** The two candidate bindings
-of Amendment 2 — ENVELOPE and RIGID-PER-SEGMENT — **do not run** until the Director has ruled
+of Amendment 2 — ENVELOPE and RIGID-PER-SEGMENT — **do not run** until the maintainer has ruled
 on the skeleton-approval sheet. Neither does the probe arc, the deformation diagnostics, E08,
 or anything else downstream of E07.
 
@@ -297,7 +297,7 @@ same camera. No metric approximates this judgement and none is printed on the sh
 
 ## ✅ SKELETON APPROVED — 2026-08-11 — **with reservations, and the difference is on the record**
 
-**Director, verbatim:**
+**Maintainer, verbatim:**
 
 > he approved the skeleton, directed that a future version articulate the fingers, and noted he was not fully satisfied
 
@@ -305,7 +305,7 @@ same camera. No metric approximates this judgement and none is printed on the sh
 
 **An approved-with-reservations is not a clean approval, and this section exists so no later
 reader can flatten the two together.** The skeleton passes for what E07 asked of it — 22 named
-bones, every limb pivot on its own sculpted ball. It does **not** satisfy the Director, and the
+bones, every limb pivot on its own sculpted ball. It does **not** satisfy the maintainer, and the
 sentence that says so is quoted above rather than paraphrased into a checkmark. Anything
 downstream that cites "the skeleton was approved" must carry the second half of his sentence
 with it.
@@ -335,9 +335,9 @@ Joins the standing-notes ledger beside the **wood-grain finish** and the **not-r
 
 ---
 
-## ⛔ BOTH BINDING ARMS FAILED — Director's ruling, 2026-08-11
+## ⛔ BOTH BINDING ARMS FAILED — maintainer's ruling, 2026-08-11
 
-**Director, on the binding comparison sheet, verbatim:**
+**Maintainer, on the binding comparison sheet, verbatim:**
 
 > he ruled it a hard failure
 
@@ -348,7 +348,7 @@ rigid-per-segment** for the joint stepping. Neither is a route forward.
 It graded **relative improvement** — (b) is measurably cleaner than (a2) on every diagnostic in
 the report's §21 — where the question was **shippability**. A binding that is the better of two
 failures is still a failure, and no diagnostic in this experiment was ever entitled to make that
-call. *Metrics are diagnostics; the Director's eye is the judge.*
+call. *Metrics are diagnostics; the maintainer's eye is the judge.*
 
 ### E07 status
 
@@ -360,8 +360,8 @@ call. *Metrics are diagnostics; the Director's eye is the judge.*
 
 ### Parked pending an ecosystem consult
 
-The route decision now waits on the consult's answer, not on another arm from this seat.
-Brief: **`docs/comfy-consult-5-brief.md`** (on `main` once pushed).
+The route decision now waits on the consult's answer, not on another arm from this session.
+Brief: `docs/comfy-consult-5-brief.md` (kept privately).
 
 **Explicitly NOT to be done while parked:**
 
@@ -380,8 +380,8 @@ pivot*); and the standing item **skeleton v2 — articulated fingers**.
 
 ## Amendment 4 — 2026-08-11: arm (c), the rigid-parts armature, on consult #5's ranking
 
-**E07 un-parks.** Comfy Agent consult #5 ([comfy-consult-5.md](../comfy-consult-5.md), brief
-[comfy-consult-5-brief.md](../comfy-consult-5-brief.md)) ranked the rigid-parts route first
+**E07 un-parks.** Comfy Agent consult #5 (`docs/comfy-consult-5.md`, kept privately; brief
+`docs/comfy-consult-5-brief.md`, kept privately) ranked the rigid-parts route first
 **"and it's not close"**, and its load-bearing promise was calibrated on this performer before
 any of it was scripted:
 
@@ -413,22 +413,22 @@ this asset the image bytes ARE the contract, because "no re-bake" is the promise
 ranked on).
 
 **Arms (a) envelope and (b) rigid-per-segment stay in the record** as the measured failures
-that motivated the consult, per the Director's ruling: he ruled it a hard failure
+that motivated the consult, per the maintainer's ruling: he ruled it a hard failure
 
 **E07 status:** skeleton APPROVED with its reservation intact · binding **arm (c) delivered,
-awaiting the Director's eye on the joint-seam read** · arms (a) and (b) FAILED · the standing
+awaiting the maintainer's eye on the joint-seam read** · arms (a) and (b) FAILED · the standing
 item **skeleton v2 — articulated fingers** unchanged.
 
 ---
 
-## ⛔ ARM (c) RULED — Director, 2026-08-11: he ruled it not a pass
+## ⛔ ARM (c) RULED — maintainer, 2026-08-11: he ruled it not a pass
 
 Recorded verbatim. Arm (c) as delivered does **not** pass at his eye. The fix round below was
 run against it and is the control arm; its residue is reported rather than smoothed.
 
 ## ⚖ LICENCE RULING — QuadRemesher is struck, and the dispatcher's verdict is overruled
 
-**Director, verbatim:** he ruled it not commercially safe for the pipeline
+**Maintainer, verbatim:** he ruled it not commercially safe for the pipeline
 
 **QuadRemesher (Exoside) is NOT enabled, NOT measured, and carries no licence row.** The
 dispatcher's *owned-commercial YES* is **overruled and recorded as the dispatcher's error**.
@@ -436,7 +436,7 @@ dispatcher's *owned-commercial YES* is **overruled and recorded as the dispatche
 **The principle, stated so it is not re-litigated:** the licence gate protects the
 **pipeline's** cleanliness and reproducibility, not one rig's right to run a tool. A canonical
 route stage cannot depend on a proprietary paid addon — a licence that lives on one machine is
-not a licence the route has. *Owned by the Director* and *fit for the pipeline* are different
+not a licence the route has. *Owned by the maintainer* and *fit for the pipeline* are different
 questions, and only the second one is the gate's business.
 
 ## Amendment 5 — arm (d), the retopo route, **stock Blender only**

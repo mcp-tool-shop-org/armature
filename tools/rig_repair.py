@@ -29,7 +29,7 @@ composed from `--out` and a fixed literal, so no operator-supplied name componen
 carry the exported GLB outside the directory the compensator names. The source GLB is
 opened read-only.
 
-Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Named because docs/engineering-rules.md#named-compensators's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
 Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
 question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
 the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
@@ -137,7 +137,7 @@ def manifold_stats(ob):
     evaluating the expression on the zero-count dict: `closed_manifold = True`. So Gate
     REPAIR's `if not final["closed_manifold"]` clause passed a mesh that had been deleted
     entirely, and total deletion was caught one clause LOWER, by the face BUDGET — and
-    only while `shell_faces > 0`. CLAUDE.md rules on that direction: a gate whose andon is
+    only while `shell_faces > 0`. docs/engineering-rules.md#gates-raise-inside-the-step rules on that direction: a gate whose andon is
     load-bearing only in another gate's presence is not an andon. A vacuous PASS is not a
     PASS; nothing is not a closed manifold.
     """

@@ -7,7 +7,7 @@
 # time: of 89 repos in this org, 71 have Pages and ALL 71 use build_type
 # "workflow". facet runs exactly ci.yml + pages.yml + release.yml. A rule that
 # every deploying repo in the org breaks is mis-scoped, not enforced.
-# Ruled approved in docs/dispatches/S01-ruling.md §2.
+# Ruled approved in `docs/dispatches/S01-ruling.md` §2 (kept privately).
 #
 # `release.yml` is NOT available for this job: its filename is authenticated by
 # PyPI's Trusted Publisher OIDC and cannot be repurposed (docs/publishing.md).

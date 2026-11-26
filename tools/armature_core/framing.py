@@ -127,7 +127,7 @@ def _finite_positive(value):
     — policed by nothing — for a raise whose evidence dict it cannot resolve. A shared
     raising helper mutating a caller's `ev` is exactly that shape, so every refusal below
     is spelled at its own site with a literal dict carrying `gate`, `andon` and `clause`.
-    A diagnostic and a gate are different objects (CLAUDE.md); this is the diagnostic.
+    A diagnostic and a gate are different objects (docs/engineering-rules.md#diagnostics-versus-gates); this is the diagnostic.
     """
     try:
         f = float(value)
@@ -173,7 +173,7 @@ def half_fovs(lens_mm, sensor_mm, width, height):
     that stays inside the frame clears Gate WHOLE, Gate CROP and Gate ALPHA — an eight-view
     turnaround rendered and shipped upside down with every andon green.
 
-    **The andon is inside the function performing the step**, per CLAUDE.md, rather than at
+    **The andon is inside the function performing the step**, per docs/engineering-rules.md#gates-raise-inside-the-step, rather than at
     each caller: `blender_scene.auto_radius` divides by `math.sin(min(hx, hy))` and
     `project` divides by `math.tan(hx)`, so both are closed by this one clause in each
     copy rather than by a guard per division.

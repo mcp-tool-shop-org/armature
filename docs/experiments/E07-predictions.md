@@ -2,7 +2,7 @@
 
 **Registered 2026-08-11, before `tools/rig_character.py` was written, before the subject GLB was
 imported into Blender even once, and before any measurement of its geometry was taken.**
-Committed on its own so its timestamp is git's and not a seat's.
+Committed on its own so its timestamp is git's and not a session's.
 
 ---
 
@@ -25,7 +25,7 @@ sha256 and its byte length.
    tool on this asset class. It is evidence about auto-rigging generally being hard here, and I
    am recording that it pushes P1 pessimistic.
 3. **That the deform question is what the experiment exists to measure**, and that a
-   "usable" verdict is the Director's. Knowing which prediction the experiment hangs on is a
+   "usable" verdict is the maintainer's. Knowing which prediction the experiment hangs on is a
    pressure on it.
 4. **That "clay mannequin" implies a smooth featureless head.** This is the largest pressure on
    P2 and I am naming it before P2 rather than after.
@@ -57,8 +57,8 @@ weighted) or *poking through* is the thing I cannot know without looking.
 
 ## P1 — does `ARMATURE_AUTO` produce a usable deform on this mesh?
 
-**"Usable" is defined in the spec as: the Director does not reject the sheet outright.** I am
-predicting the Director's rejection, not grading the mesh. Clauses predicted separately.
+**"Usable" is defined in the spec as: the maintainer does not reject the sheet outright.** I am
+predicting the maintainer's rejection, not grading the mesh. Clauses predicted separately.
 
 **Clause A — does the bone-heat solve COMPLETE without falling back?**
 **Prediction: NO. It reports a failure for at least one bone.**
@@ -80,7 +80,7 @@ whatever they do, the outer skin occludes them. Confidence: **low-moderate**. Th
 mode: if a shell is weighted to a different bone than the skin around it, posing pushes it
 *through* the skin and it appears as a shard. I rate that ~30%.
 
-**Clause D — overall, does the Director reject the sheet outright?**
+**Clause D — overall, does the maintainer reject the sheet outright?**
 **Prediction: NO — he does not reject it outright.** This is a conjunction of B holding and C
 not firing, so it is weaker than either. Confidence: **moderate, and lower than B alone.**
 
@@ -137,7 +137,7 @@ writing that here so the commitment predates the result.
 ## What is NOT predicted
 
 - Whether the character **is the same character** after rigging, or whether the deform is
-  **good**. Both are the Director's, off the sheet. No metric here approximates either.
+  **good**. Both are the maintainer's, off the sheet. No metric here approximates either.
 - Any number for per-structure deformation displacement. Those are diagnostics with no
   registered threshold, and inventing one now would be exactly the pass-condition failure this
   repo has a law about.

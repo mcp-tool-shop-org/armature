@@ -1,13 +1,13 @@
 # E11 wave 3 — report: the camera held to one pixel, and the world it was given never left
 
-**Executor seat, 2026-08-12, branch `E11-nocontrol`.** The corrected wave 2, per the E11 w2
+**Executor session, 2026-08-12, branch `E11-nocontrol`.** The corrected wave 2, per the E11 w2
 ruling R5, on the last reserve. **One generation** (`prompt_id`
 `61e03fe0-8433-4794-b2e8-2ce16ba977a9`, seed `2026081233`). **The ceiling is now exhausted:
 3 of 3.** No gate fired.
 
-**No judgement of quality is offered or implied.** The advisor rules; the Director judges the
+**No judgement of quality is offered or implied.** The advisor rules; the maintainer judges the
 dance, the camera and the hands. What follows is what was built, what the gates said, what
-came back, and what this seat looked at.
+came back, and what this session looked at.
 
 **Look first:** `outputs/E11/w3/review/E11-w3-vs-w1-truetempo.webp` — wave 1 beside wave 3 at
 true tempo; and `outputs/E11/w3/sheets/E11-w3-hands.png`, which carries the one finding a
@@ -25,7 +25,7 @@ shipped without this table; that omission is what the generation bought.
 |---|---|---|
 | 1 | The graph loads **`wan2.2_fun_camera_high_noise_14B_fp8_scaled.safetensors`** and **`wan2.2_fun_camera_low_noise_14B_fp8_scaled.safetensors`** | **MEASURED** — names read from `search_models` 2026-08-12 (exactly four `fun_camera` diffusion_model entries exist: bf16/fp8_scaled × high/low), asserted on the built graph by a test, and re-read off the saved file by `gate_saved_graph` |
 | 2 | Those weights are the family `WanCameraImageToVideo` requires | **MEASURED** — Gate PAIR reports `families_present ['fun_camera']` on both the built and the saved graph, and goes RED on wave 2's banked graph |
-| 3 | Their licence permits commercial use | **MEASURED** — `docs/license-map.md` line 43 on `main` (Apache-2.0, re-fetched at the w2 ruling). ⚠ This seat previously reported "no Fun-Camera row at all" from a stale branch checkout; the row was on `main`. Corrected by the ruling and read from `main` this session |
+| 3 | Their licence permits commercial use | **MEASURED** — `docs/license-map.md` line 43 on `main` (Apache-2.0, re-fetched at the w2 ruling). ⚠ This session previously reported "no Fun-Camera row at all" from a stale branch checkout; the row was on `main`. Corrected by the ruling and read from `main` this session |
 | 4 | Length 81 is the model's trained frame count | **MEASURED** — card README_en.md, fetched 2026-08-12, verbatim: *"multi-resolution (512, 768, 1024) video prediction, trained with 81 frames at 16 FPS"* |
 | 5 | 1024×576 is the nearest in-distribution frame to our aspect | **DERIVED** — from premise 4's tiers; enumeration in `FRAME_DERIVATION` and §3 below |
 | 6 | The camera node's socket schema | **MEASURED** — `get_node` 2026-08-12; widget order re-confirmed empirically on the converted save file at the new size |
@@ -101,12 +101,12 @@ Every frame named was opened at full size; the zooms are 3× native.
   unchanged. At 3× the arm terminates in a rounded stump with no hand visible.
 
 **Across all 81 frames the authored studio is never replaced.** There is no bar, no counter,
-no bottles, no floor change and no other human figure at any point this seat examined.
+no bottles, no floor change and no other human figure at any point this session examined.
 
 **Identity.** The face persists to the final frame: same bald crown, single drawn brow,
 closed lidded eye, long straight nose, thin mouth line, small ear. **The drift axis is
 surface**: the matte sculpted clay and thumbprint hatching visible at f0 read progressively
-smoother and waxier, and by f40–f80 the hatching is gone. A second axis the Director's eye
+smoother and waxier, and by f40–f80 the hatching is gone. A second axis the maintainer's eye
 should land on: the limbs and neck read **longer** at f40–f80 than at f0.
 
 ## 6. Measurements
@@ -157,12 +157,12 @@ waves 1–2 or to wave 3's own start frame, disclosed there and here.
 | j2 | horizon found on ≥ 41/81 | 45 % | **HIT** — 70/81 |
 | j3 | horizon found at f80 | 35 % | **HIT** — found, row 183 |
 | j4 | figure not cut by any border at f80 | 60 % | **HIT** — whole in frame, read at full size |
-| j5 | on-screen height at f80 within ±15 % of f0 | 55 % | **HIT, read by eye not measured** — the figure is slightly shorter at f80; this seat did not build a bbox instrument for it and says so rather than quoting a number it did not compute |
+| j5 | on-screen height at f80 within ±15 % of f0 | 55 % | **HIT, read by eye not measured** — the figure is slightly shorter at f80; this session did not build a bbox instrument for it and says so rather than quoting a number it did not compute |
 | j6 | similarity at f80 above wave 1's −0.1984 | 70 % | **HIT** — +0.9247 |
 | k1 | frame-delta median above 5.282 | 55 % | **MISS** — 3.843, and not like-for-like (§6) |
 | k2 | 81/81 distinct | 90 % | **HIT** |
 | k3 | a frame with both arms above shoulder height | 55 % | **NOT OBSERVED, coverage stated** — not seen in the six frames read at full size; all 81 were not inspected for it |
-| k4 | the Director calls it a dance | 45 % | **his verdict — not this seat's to score** |
+| k4 | the maintainer calls it a dance | 45 % | **his verdict — not this session's to score** |
 | m1 | hands clearly better than wave 1's claw | 25 % | **his verdict.** Described in §5: the failure mode CHANGED rather than simply improving or worsening |
 | m2 | hands clearly worse | 30 % | **his verdict** |
 | m3 | a frame with separated fingers | 15 % | **HIT** — f8, clearly separated digits |
@@ -175,7 +175,7 @@ waves 1–2 or to wave 3's own start frame, disclosed there and here.
 | q2 | Gate B pixel-identical | 90 % | **HIT** |
 | q3 | no gate fires after submission | 85 % | **HIT** |
 
-**The n-block missed four of five in the same direction, registered blind.** This seat
+**The n-block missed four of five in the same direction, registered blind.** This session
 expected partial world replacement and got **none at all**. That is the mirror image of wave
 1, whose executor also missed its four scene predictions in one direction — there, the frame
 anchored the subject and surrendered the world; here it anchored both.
@@ -204,7 +204,7 @@ four frames and cut the feet from f32.
 |---|---|
 | `estimate_credits` | 0 (all-OSS; the ceiling is counted in generations) |
 | generations spent | **3 of 3 — the ceiling is exhausted** |
-| reserves remaining | **none.** Any further E11 generation needs a new ceiling from the Director; this seat has not assumed one |
+| reserves remaining | **none.** Any further E11 generation needs a new ceiling from the maintainer; this session has not assumed one |
 | GPU / queue time | metered by the provider; to the ledger when the window resolves |
 | `prompt_id` | `61e03fe0-8433-4794-b2e8-2ce16ba977a9` |
 | suite | 827 passed, 46 skipped (from 795) |
@@ -236,4 +236,4 @@ The trajectory premise (#7) is still ASSUMED and was never tested: this graph ra
 euler while the catalog recommends cfg 6.0 / uni_pc for these exact files. The run did not
 disappoint in the way that would have implicated it, so it remains open rather than
 resolved — and with the ceiling exhausted, testing it is a new-ceiling decision, not this
-seat's.
+session's.

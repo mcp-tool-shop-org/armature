@@ -1,6 +1,6 @@
 """The lift solver, against mathematics.
 
-Every fixture here was written by asking the question CLAUDE.md asks of a fixture: *what
+Every fixture here was written by asking the question docs/engineering-rules.md#fixture-falsification-question asks of a fixture: *what
 would this look like if the code were wrong in the specific way this check exists to
 catch?* The two that matter most are the last kind — a gate that cannot fail is not a gate,
 so `test_the_round_trip_gate_can_actually_fail` breaks a good solve on purpose, and

@@ -1,6 +1,6 @@
 """Gate R — the round trip that stands between our frames and a spent credit.
 
-Every fixture here is written by asking the question CLAUDE.md asks of a fixture:
+Every fixture here is written by asking the question docs/engineering-rules.md#fixture-falsification-question asks of a fixture:
 **what would this look like if the code were wrong in the specific way this check
 exists to catch?** For Gate R that way is precise and is named in the spec — an
 encoder that is luma-lossless and chroma-lossy. So the central test is not "does it
@@ -145,7 +145,7 @@ def test_empty_input_raises_rather_than_passing_vacuously():
 
 
 def test_it_is_a_gate_failure_and_not_an_assertion():
-    """CLAUDE.md: gates raise; an `assert` is deleted by -O."""
+    """docs/engineering-rules.md#gates-raise-inside-the-step: gates raise; an `assert` is deleted by -O."""
     assert issubclass(GateRRoundTrip, GateFailure)
     assert not issubclass(GateRRoundTrip, AssertionError)
     assert GateRRoundTrip.gate == "R"

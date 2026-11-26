@@ -85,7 +85,7 @@ def repo():
     if REPO is None:
         raise RootNotFound(
             "no record corpus found - neither %s nor the working directory %s "
-            "contains CLAUDE.md + docs/experiments"
+            "contains docs/engineering-rules.md + docs/experiments"
             % (os.path.dirname(HERE), os.getcwd()))
     return REPO
 

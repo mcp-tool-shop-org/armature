@@ -25,7 +25,7 @@ is the only instrument that can say so.
 --------------------------------------------------------------------------------
 THE CONTRACT IS THE PRINTED RECORD, NOT THE EXIT CODE.
 
-This used to be designed as a shell-chain exit code, which CLAUDE.md forbids by name — a
+This used to be designed as a shell-chain exit code, which docs/engineering-rules.md#gates-raise-inside-the-step forbids by name — a
 chain can walk past a failing exit code, and for three months nothing ran this file at
 all: every sibling under `tests/blender/` had a `test_*.py` wrapper and this one did not.
 It now prints one line, `POSE_ARC <json>`, carrying every measurement it made, and

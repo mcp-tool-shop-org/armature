@@ -395,7 +395,7 @@ def parse_args(argv=None):
                          "actually happened, and the positive is required to DIFFER")
     build_opts.add_argument("--start-frame", default=None,
                     help="path to the LOCAL re-authored start frame. Required: this is the "
-                         "single load-bearing control input of an i2v route, and CLAUDE.md "
+                         "single load-bearing control input of an i2v route, and docs/engineering-rules.md#alpha-law "
                          "requires every generation to record its control-input hashes. "
                          "The tool hashes the file itself; it does not accept a typed "
                          "digest as the record")
@@ -448,7 +448,7 @@ def build_prompt():
     The identity clause is re-read from its own source through E08's own code — the same
     call wave 1 made — so it is carried verbatim rather than copied out of a record.
     """
-    ident, ident_original, drops = E08.identity_clause()
+    ident, ident_original, drops, ident_source = E08.call_identity_clause()
     positive = f"{ident}. {PERFORMANCE_CLAUSE}. {SET_DRESSING_CLAUSE}"
 
     perf_words = word_count(PERFORMANCE_CLAUSE)
@@ -468,7 +468,7 @@ def build_prompt():
 
     log = {
         "carried_verbatim": {"identity_clause": ident,
-                             "source": E08.TWIN_PROMPT_JSON,
+                             "source": ident_source,
                              "why": ("identity is what the maintainer decides on; rewriting the "
                                      "subject's description would confound that read")},
         "added": {"performance_clause": PERFORMANCE_CLAUSE,
@@ -541,7 +541,7 @@ DELIBERATE_BREAKS = {
         "wave_1": "832x480 RGB, world background baked opaque",
         "wave_3": ("1024x576, authored RGBA, submitted composite over a named colour "
                    "recorded in the render provenance"),
-        "why": ("the alpha law (CLAUDE.md, the maintainer's ruling 2026-08-12) plus the "
+        "why": ("the alpha law (docs/engineering-rules.md#alpha-law, the maintainer's ruling 2026-08-12) plus the "
                 "resolution change — the frame has to be re-rendered either way"),
         "authority": "E11 w2 ruling R5(4)"},
 }
@@ -632,7 +632,7 @@ def resolve_start_frame(path, declared_sha256):
     `problems.append` condition, so the hash of the re-authored start frame — the single
     load-bearing control input of an i2v route, and the artifact the maintainer's alpha
     ruling governs — was an optional operator-typed string that rode the record unverified
-    and read as `null` when omitted. CLAUDE.md requires every generation to record its
+    and read as `null` when omitted. docs/engineering-rules.md#reproducible-generation-records requires every generation to record its
     control-input hashes, and a value nothing checks is worse than an absent one.
 
     So the tool reads the file. A declared digest is kept only as a cross-check, and a

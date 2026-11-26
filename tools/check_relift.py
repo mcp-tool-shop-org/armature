@@ -12,7 +12,7 @@ re-derived.
 
 **Geometry, not bytes.** A byte-identical pair settles the question outright, because
 identical bytes cannot decode to different geometry; but the converse does not hold, and
-CLAUDE.md's law is explicit that a file-hash mismatch is not evidence a render changed. glTF
+docs/engineering-rules.md#pixel-comparison-not-file-hash's law is explicit that a file-hash mismatch is not evidence a render changed. glTF
 export can reorder buffers or embed a generator string without a vertex moving. So the
 comparison here is per-frame **evaluated world-space geometry** — what the renderer would
 actually draw, following the imported action — and the byte hash rides the record as a

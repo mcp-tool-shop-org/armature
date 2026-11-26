@@ -1,20 +1,20 @@
 # E12 wave 2 — predictions, registered before submission
 
-**Executor seat, 2026-08-12, branch `E12-run`. Committed BEFORE `submit_workflow` is called
+**Executor session, 2026-08-12, branch `E12-run`. Committed BEFORE `submit_workflow` is called
 on any E12 graph.** A hypothesis with no prediction cannot be wrong, and one that cannot be
 wrong teaches nothing.
 
 **Blindness, disclosed.** These are blind with respect to **every E12 generation** — none
 exists. They are **not** blind with respect to: E11 waves 1 and 3 and their reports; the
-A2w start frame, which this seat built and looked at at full size; the Director's Gate LOOK
+A2w start frame, which this session built and looked at at full size; the maintainer's Gate LOOK
 ruling (A2w approved, A1w and the band-only composite ruled broken); or the advisor's
-hypotheses H-E12a/c/d/e/f, which are on `main` and which this seat has read. Where a
+hypotheses H-E12a/c/d/e/f, which are on `main` and which this session has read. Where a
 prediction below restates one of the advisor's, it is marked.
 
 **The arm.** A2w only — the full-bleed plate with the authored shadow layer, at w3's pinned
 trajectory (20 steps, split 10, shift 8.0, **cfg 3.5, euler, simple**), 1024×576 × 81 @ 16 fps,
 Fun-Camera experts, `Static` camera embedding, w3's prompt verbatim. Two seeds:
-**2026081233** (w3's own) and **2026081241**. A1w is not submitted — the Director ruled it
+**2026081233** (w3's own) and **2026081241**. A1w is not submitted — the maintainer ruled it
 broken at Gate LOOK, so its two submissions are unspent.
 
 ## The world
@@ -27,7 +27,7 @@ broken at Gate LOOK, so its two submissions are unspent.
 | w4 | neither seed replaces the crowd with a different scene wholesale | 65 % |
 | w5 | individual background faces are NOT stable — they churn frame to frame | 80 % |
 
-The w5 clause is the one this seat most expects to be told is obvious and still wants on
+The w5 clause is the one this session most expects to be told is obvious and still wants on
 record: E11 w3 held an authored studio because it was flat and simple. A plate of twelve
 out-of-focus human faces is a much harder thing to hold, and *held the world* and *held every
 face* are different claims. Predicted separately for that reason.
@@ -45,13 +45,13 @@ between a lit floor and a dark void — the easiest possible edge for a row-dete
 no seam at all; the plate's own floor line is soft, tiled and partly occluded by people. **The
 instrument may simply find less to lock onto, and that is not the camera moving.** If the
 horizon count collapses, the honest reading is a detector limit, not a lever failure, and
-this seat will report it that way rather than as a camera result.
+this session will report it that way rather than as a camera result.
 
 ## Contact (H-E12f, the advisor's: contact visibly wrong on at least one of two seeds)
 
 | # | claim | degree |
 |---|---|---|
-| n1 | feet/shadow contact reads wrong to this seat's eye on at least one seed | 70 % |
+| n1 | feet/shadow contact reads wrong to this session's eye on at least one seed | 70 % |
 | n2 | it reads wrong on BOTH seeds | 50 % |
 | n3 | the figure appears to slide or float relative to the plate's tile lines at some point | 65 % |
 
@@ -67,12 +67,12 @@ clauses because "contact degrades" is not one claim.
 | i2 | the surface drifts smoother/waxier from f0 to f80, as w3 measured | 75 % |
 | i3 | limbs read longer at f80 than at f0, as w3 measured | 55 % |
 
-## Hands — the Director's question, answered by measurement rather than hope
+## Hands — the maintainer's question, answered by measurement rather than hope
 
 The conditioning image carries the **mesh's** hand: a closed pincer loop, unchanged since
 E09, byte-for-byte the hand w3 conditioned on (the figure differs 0.167/255 between the two
 start frames). Hand geometry is explicitly out of E12's scope; prompt-side mitigation was
-measured insufficient twice. The Director's ruling on this run: *run it as is, so as not to
+measured insufficient twice. The maintainer's ruling on this run: *run it as is, so as not to
 contaminate the experiment.*
 
 | # | claim | degree |
@@ -80,7 +80,7 @@ contaminate the experiment.*
 | h1 | hands are not clean, legible five-fingered hands on either seed at any inspected frame | 92 % |
 | h2 | at least one inspected frame shows the hand degraded FURTHER than the mesh's pincer — wisps, stump, or spikes | 80 % |
 | h3 | the failure mode differs between the two seeds | 55 % |
-| h4 | whether these hands beat or lose to w3's | **the Director's verdict — not this seat's to score** |
+| h4 | whether these hands beat or lose to w3's | **the maintainer's verdict — not this session's to score** |
 
 ## Mechanics
 
@@ -92,11 +92,11 @@ contaminate the experiment.*
 | q4 | no gate fires after submission | 80 % |
 | q5 | the two seeds differ visibly from each other — not a near-duplicate pair | 85 % |
 
-## What would make this seat wrong in an interesting way
+## What would make this session wrong in an interesting way
 
 If the crowd holds *and* the faces stay stable *and* contact reads correct, then the plate's
 perspective mismatch costs less than the amendment assumes and the full-bleed route is
-stronger than either seat expected. If the world dissolves by f8 the way E11 wave 1's did,
+stronger than either session expected. If the world dissolves by f8 the way E11 wave 1's did,
 then holding a world is a property of *simple* authored worlds and the tier's
 world-preservation result does not generalise to photographic plates — which would be the
 most useful negative result available here, and a full success.

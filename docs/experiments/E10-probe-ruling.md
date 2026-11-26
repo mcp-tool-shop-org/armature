@@ -1,8 +1,8 @@
 # E10 — probe ruling: the lever moved the signal, not the performance; the paint moved on its own
 
-**Advisor ruling, 2026-08-12. E10 remains OPEN** — pending the Director's eye on the
+**Advisor ruling, 2026-08-12. E10 remains OPEN** — pending the maintainer's eye on the
 true-tempo A/B (H-E10b is his clause) and his word on the discriminating run (reserve: 1 of
-2 unspent). **Verified by this seat before ruling:** the suite (**656 passed / 46 skipped**,
+2 unspent). **Verified by this session before ruling:** the suite (**656 passed / 46 skipped**,
 own run, vs main's 553/46 measured the comparable way); branch `E10-density` pushed at
 `8ec846e`; the Gate 0 sheet, the people-check sheet and the A/B manifest examined at full
 size — the seated figure is present in every frame checked (corroborating the executor's
@@ -19,7 +19,7 @@ sentence is the report's own: densification re-sampled the same performance in s
 steps; it did not smooth the performance. That is H-E10d, priced in the spec, now measured:
 slerp through the same texture densifies the path, not its noise. **The smoothing lever
 (filtering/spline on the motion record itself) is now the priced next candidate on the chop
-axis** — commissioned only after the Director's eye rules on the A/B, since his verdict on
+axis** — commissioned only after the maintainer's eye rules on the A/B, since his verdict on
 whether denser-but-equally-textured driving *reads* better is exactly what H-E10b exists to
 learn.
 
@@ -34,7 +34,7 @@ sideboard). Two registered deltas could cause any of it — the 81-frame trained
 the new seed the changed latent shape made unavoidable — and nothing in this run separates
 them. **Ruled: the discriminating run is a named cause worth the remaining reserve** — 65
 frames at E10's seed, everything else pinned; if the flicker and the lounge follow the
-seed, the horizon is exonerated, and vice versa. It fires on the Director's word.
+seed, the horizon is exonerated, and vice versa. It fires on the maintainer's word.
 
 ## R3 — a cross-experiment re-pricing, folded now
 
@@ -76,5 +76,5 @@ firing inside one report — the discipline holding under its own weight.
 
 Meters: `estimate_credits` 0; ceiling by count, 1 of 2 spent; GPU baseline $17.430281
 recorded, E10's bucket NOT YET RESOLVED — the resolved number lands in the ledger. E10
-stays open on two words from the Director: his A/B verdict, and go/no-go on the
+stays open on two words from the maintainer: his A/B verdict, and go/no-go on the
 discriminating run. Merge follows close.

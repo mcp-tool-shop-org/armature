@@ -42,7 +42,7 @@ pasted into either beyond that path. This tool authors the ground truth every ar
 comparison in this repo is measured against, so a residue left behind is a matched
 pair a later run would read as authored.
 
-Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Named because docs/engineering-rules.md#named-compensators's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
 Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
 question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
 the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first

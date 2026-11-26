@@ -1,8 +1,8 @@
 # E11 — probe ruling: the frame anchored the subject and surrendered the world
 
-**Advisor ruling, 2026-08-12. E11 remains OPEN** — pending the Director's eye on identity
+**Advisor ruling, 2026-08-12. E11 remains OPEN** — pending the maintainer's eye on identity
 (H-E11a's verdict is his) and the true-tempo A/B (H-E11b), and his pick for the two unspent
-reserves. **Verified by this seat before ruling:** the suite (**749 passed / 46 skipped**,
+reserves. **Verified by this session before ruling:** the suite (**749 passed / 46 skipped**,
 own run); branch `E11-nocontrol` pushed at `f731539`; the Gate 0 sheet and face zoom
 examined at full size — the report's descriptions corroborate frame for frame, including
 the feet cut by the bottom border from f032.
@@ -37,7 +37,7 @@ A large uncommanded push-in: whole figure through f024, feet cut from f032, the 
 found on 4 of 65 frames and never again. Consult #7's ruling landed the exact counter while
 this branch was open: **`WanCameraEmbedding` → `WanCameraImageToVideo`** — core nodes,
 Fun-Camera weights fetched Apache — whose `Static` pose plus `speed` exists to hold a
-camera. **Wave 2, if the Director picks it: the same probe plus the camera embedding, one
+camera. **Wave 2, if the maintainer picks it: the same probe plus the camera embedding, one
 variable, one reserve** — simultaneously the discriminating test of the shelf's licensed
 lever and the fix for this route's one measured defect.
 
@@ -45,7 +45,7 @@ lever and the fix for this route's one measured defect.
 
 65/65 frames distinct; median per-frame delta 5.282 vs E08's 3.917 — the free route moves
 **more** per frame, not less. Exposure is the steadiest of the three probes: |Δ luma|
-median 0.210 vs E08's 0.870 vs E10's 9.05. Livelier-or-not is the Director's A/B call, and
+median 0.210 vs E08's 0.870 vs E10's 9.05. Livelier-or-not is the maintainer's A/B call, and
 the numbers will sit beside whichever way his eye goes.
 
 ## R5 — instruments and the report's own catches
@@ -61,7 +61,7 @@ look-and-verify laws holding inside a report, again.
 ## R6 — standing
 
 Meters: `estimate_credits` 0; 1 of 3 spent, two reserves whole; GPU bucket to the ledger
-when the window resolves. E11 stays open on the Director's verdicts and his pick among:
+when the window resolves. E11 stays open on the maintainer's verdicts and his pick among:
 **(a) wave 2 — camera-hold via the embedding** (this ruling's recommendation: one variable,
 fixes the measured price, tests the licensed lever); **(b) arm A2 — the VACE reference
 comparison**; **(c) a second seed** for the world-replacement hypothesis; **(d) close as

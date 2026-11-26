@@ -638,7 +638,7 @@ def test_the_two_unbanned_doors_are_named_so_the_next_session_reads_the_truth():
 
 # ============================================================== the -O leg, per refusal
 #
-# CLAUDE.md: gates raise, never `assert` — an `assert` is deleted by `-O` or
+# docs/engineering-rules.md#gates-raise-inside-the-step: gates raise, never `assert` — an `assert` is deleted by `-O` or
 # `PYTHONOPTIMIZE=1`, and 87 of facet's andons turned out to be removable by an environment
 # variable. Every refusal this amend ADDED or RE-CLASSED mutates the protected thing here
 # and must still fire, under the same class name, with assertions gone. The probe runs in a

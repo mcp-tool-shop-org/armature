@@ -26,7 +26,7 @@ outside the directory the compensator names -- the property `preview_glb`'s
 compensator records as the condition its own statement rests on. The source GLB is
 opened read-only.
 
-Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Named because docs/engineering-rules.md#named-compensators's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
 Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
 question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
 the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first

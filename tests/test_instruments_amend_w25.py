@@ -62,7 +62,7 @@ def owned_trees():
 # `clause` a halt reader can key on** — 43 carrying an evidence dict without the key and 35
 # carrying no evidence at all, which the shared handler serialises as `"evidence": null`.
 # The 78 were spread over 19 of the 21 modules. The sharpest member was the LICENCE andon in
-# `render_start_frame.build_wood_material`: it exists because CLAUDE.md bans a
+# `render_start_frame.build_wood_material`: it exists because docs/engineering-rules.md#licence-gate bans a
 # non-commercially-licensed asset outright, it conditions the image a paid generation is
 # submitted with, and its only identifier on the halt line was the class attribute
 # `gate = "STARTFRAME"` — shared with six other STARTFRAME refusals.
@@ -415,7 +415,7 @@ def test_the_empty_record_is_refused_above_the_index_and_above_the_first_write()
 
 def test_the_vacuity_clause_does_not_depend_on_the_ordering_fix():
     """The two halves are independent statements, which is the whole point: a gate whose
-    andon is load-bearing only in another statement's presence is the direction CLAUDE.md
+    andon is load-bearing only in another statement's presence is the direction docs/engineering-rules.md#gates-raise-inside-the-step
     rules against. `gate_coverage`'s clause is inside `gate_coverage`."""
     tree = ast.parse(CN.read_source("render_performer"))
     fn = next(n for n in ast.walk(tree)
@@ -552,7 +552,7 @@ def test_the_probe_records_the_import_status_instead_of_refusing_on_it():
 # MEASURED on `580af47` by grepping the 21 owned modules: SEVEN declared a named
 # compensator with an owner (render_turnaround, preview_glb, render_start_frame,
 # render_performer, author_walk, lift_solve, check_relift) and FOURTEEN declared none — and
-# the fourteen included six of the eight GLB exporters in the tree. CLAUDE.md's workflow
+# the fourteen included six of the eight GLB exporters in the tree. docs/engineering-rules.md#named-compensators's workflow
 # standard 3 (NAMED_COMPENSATORS — Sagas, Garcia-Molina & Salem, SIGMOD 1987) takes NO skip.
 #
 # The exposure is not hypothetical ordering: `_census_nodes.refusal_and_write_lines`, run

@@ -1,6 +1,6 @@
 """Render-visibility selection, checked inside Blender. Prints; asserts nothing.
 
-This is the fixture for the defect G4 caught on 2026-08-10. The question CLAUDE.md asks
+This is the fixture for the defect G4 caught on 2026-08-10. The question docs/engineering-rules.md#fixture-falsification-question asks
 of every fixture — *what would this look like if the code were wrong in the specific way
 this check exists to catch?* — has a concrete answer here: a `type == "MESH"` filter
 returns 3 meshes instead of 1, and the reported bounds balloon from the subject's own

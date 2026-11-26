@@ -3,13 +3,14 @@
 
     <venv-python> tools\\extract_clip_frames.py --clip=<mp4> --out=<dir> [--label=A1-seed1]
 
-CLAUDE.md: **video is judged in motion AND as frames.** A clip that reads well at speed can
+docs/engineering-rules.md#diagnostics-versus-gates: **video is judged in motion AND as frames.** A clip that reads well at speed can
 carry a melted hand in every frame, so the frames have to exist as files before anything is
 judged or sheeted. This writes them losslessly and records what the container actually said
 rather than what the request asked for — a 720P request and a 1280x720 stream are two
 different facts, and only the second one is measured.
 
-`encode_control.FFMPEG` prefers `ARMATURE_FFMPEG`, then `imageio_ffmpeg.get_ffmpeg_exe()`,
+`encode_control.FFMPEG` prefers `ARMATURE_FFMPEG`, then `imageio_ffmpeg.get_ffmpeg_exe()`
+(skipped on Intel macOS `darwin`/`x86_64`, where `0.6.0` ships a `--enable-nonfree` build),
 falling back to `ffmpeg` on `PATH`; dimensions are read off the stream rather than supplied, because supplying them is how a decode silently reshapes.
 
 Compensator (NAMED_COMPENSATORS): writes PNGs + JSON under `outputs/`. Compensator: delete

@@ -1,7 +1,7 @@
 # E06 — registered predictions
 
 **Registered 2026-08-10, before any submission to any generator and before any E06 tooling was
-written.** Committed on its own so its timestamp is git's and not a seat's.
+written.** Committed on its own so its timestamp is git's and not a session's.
 
 ---
 
@@ -134,14 +134,14 @@ dominance better than I think reference conditioning does — but I am recording
 predicted the opposite, so a miss here is a real miss and not a hedge cashed in.
 
 ⚠ **Clause B is not an identity ruling and cannot become one.** *Whether it is the same man* is the
-Director's call. Clause B predicts only whether D2 **differs from D1** in that respect — a
+Maintainer's call. Clause B predicts only whether D2 **differs from D1** in that respect — a
 difference question, answerable from the sheet. It says nothing about whether either arm succeeded.
 
 ---
 
 ## What is NOT predicted
 
-- Whether any output is **good**, or whether the figure **is the same man**. Both are the Director's,
+- Whether any output is **good**, or whether the figure **is the same man**. Both are the maintainer's,
   off the sheet.
 - Any ranking of D1 against D2, or of either against B1 or A1a, **on a magnitude**. E04's
   between-generation floor is unmeasured; a result that turns on a small numeric gap is a halt.

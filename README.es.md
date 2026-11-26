@@ -72,7 +72,7 @@ El paquete npm es un **lanzador, no un puerto**: volver a implementar un umbral 
 ## Estado: la tesis se mide a nivel de producto
 
 Fundado el **10 de agosto de 2026**. Trece experimentos cerrados y la tesis ha pasado de estar *en fase de prueba* a ser **medida a nivel de producto**: el personaje ha bailado en la pantalla, controlado por su propio sistema de animación y libre; un mundo creado manualmente se mantiene hasta el último fotograma con dos semillas (E12), y **la identidad ahora sobrevive a una capa alojada, entrenada por humanos, alimentada únicamente con referencias creadas** (E13); todo ello juzgado por la mirada del mantenedor. La auditoría del arco fundacional está en
-[docs/audit-first-arc.md](docs/audit-first-arc.md); la postura desde el 12 de agosto de 2026 es un monorepositorio de aprendizaje: los experimentos demuestran caminos, ningún camino es canónico por inercia (CLAUDE.md).
+[docs/audit-first-arc.md](docs/audit-first-arc.md); la postura desde el 12 de agosto de 2026 es un monorepositorio de aprendizaje: los experimentos demuestran caminos, ningún camino es canónico por inercia ([docs/engineering-rules.md#scope-and-posture](docs/engineering-rules.md#scope-and-posture)).
 
 | | |
 |---|---|
@@ -115,8 +115,8 @@ la forma exacta del próximo trabajo, y el plan indicó que así sería antes de
 
 ## Cómo funciona este repositorio
 
-- [CLAUDE.md](CLAUDE.md) — cómo trabajar aquí: los tres roles, las reglas bajo las cuales opera cada rol y
-los aspectos innegociables (la puerta de la licencia, créditos limitados, la identidad se juzga a simple vista).
+- [docs/engineering-rules.md](docs/engineering-rules.md) — las reglas de ingeniería que el código hace cumplir (la puerta de licencia,
+créditos limitados, puertas que lanzan excepciones en lugar de aserciones, y la identidad juzgada a simple vista).
 - [docs/ROADMAP.md](docs/ROADMAP.md) — toda la estructura, sesión por sesión, con los puntos críticos definidos por adelantado.
 - `docs/experiments/` — cada cambio no trivial se ejecuta como un experimento numerado:
 **especificación antes del trabajo → informe después → decisión final del asesor.**

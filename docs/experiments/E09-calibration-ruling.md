@@ -3,7 +3,7 @@
 **Advisor ruling, 2026-08-11.** Report: `docs/experiments/E09-report.md` on `E09-run` @
 `0c2b3cd` (pushed). **E09 remains OPEN** — Stage B2 runs under amendment A2 of the spec.
 
-**Verified by this seat before ruling, not taken from the summary:** the suite
+**Verified by this session before ruling, not taken from the summary:** the suite
 (**417 passed / 35 skipped**, run with the repo venv in the worktree); the sheet's sha256
 (`9c74074d86ebbd28…`, exact match); the route-gate evidence JSON (all four counts present as
 reported, including the pinned-vs-randomized split across the two samplers); the branch
@@ -32,7 +32,7 @@ the root (`hips` 27.98° vs 19.14°) and nowhere else — measured, with the mec
 (parent-relative rotations absorb a global mis-rotation at the root) demonstrated rather
 than reasoned.
 
-**The finding this seat weights highest: arms are the worst group in every arm of the
+**The finding this session weights highest: arms are the worst group in every arm of the
 decomposition, including the detector-free one** (model gap: arms 40.00° vs legs 14.72°).
 For a first shot whose performance is a **dance**, the arms are the performance. B2's sheet
 inspects arms first, and any B2 judgement names them explicitly.
@@ -78,7 +78,7 @@ falsification and the corrected route.
 gate**: every graph this repo submits passes Gate ROUTE before Gates S and L arm — it walks
 subgraph blueprints, so nothing hides in a wrapper. The served-template pattern is now
 measured twice in one day (the Animate template wires the banned detector tier; the T2V
-template wires the excluded trajectory), so the law lands in CLAUDE.md: **a served template
+template wires the excluded trajectory), so the law lands in docs/engineering-rules.md#served-templates-and-gate-route: **a served template
 is a reference, never a route.**
 
 ## R8 — the clean T2V graph is commissioned
@@ -96,10 +96,10 @@ named cause.
 
 ## R9 — standing
 
-E09 stays open for B2 under amendment A2; the same executor seat may continue in the same
+E09 stays open for B2 under amendment A2; the same executor session may continue in the same
 worktree. The branch is pushed; the advisor merges when E09 truly closes. E08's rewrite
 waits on B2's report. **No quality verdict is made here** — B1's purpose was measurement,
-and the chain's worth-a-shot call belongs to the Director at B2's sheet on the true
+and the chain's worth-a-shot call belongs to the maintainer at B2's sheet on the true
 population; if his eye rules the B1 sheet's third column disqualifying before B2 runs, that
 ruling overrides this one's sequencing.
 
@@ -107,7 +107,7 @@ ruling overrides this one's sequencing.
 
 # A3 ruling — the resumption ruled, 2026-08-12
 
-**Verified by this seat before ruling:** the suite (**480 passed / 35 skipped**, own run);
+**Verified by this session before ruling:** the suite (**480 passed / 35 skipped**, own run);
 tip `3b08e81`; the addendum's artifact table, compensators and §30 read; **the Gate 0 sheet
 examined at full size** — the correspondence between the source's poses and the rig's is
 legible row by row across all five sampled frames, ankles observed (heel visibility 0.94),
@@ -120,7 +120,7 @@ while looking at the result it judged. The thinness is permanent record — medi
 34 of 64 pairs below threshold — and amendment A4 raises the bar **forward**: future donors
 clear mean AND median. Never backward.
 
-**R11 — E09 closes as the baseline on the Director's eye.** The baseline's subject is the
+**R11 — E09 closes as the baseline on the maintainer's eye.** The baseline's subject is the
 chain, not the choreography: the solver exact (Stage A), the floor decomposed (Stage B1),
 and a true-population donor lifted onto the rig with every gate green and both meters
 reported (A3). The closing act is his — the sheet and both review clips go to him; the

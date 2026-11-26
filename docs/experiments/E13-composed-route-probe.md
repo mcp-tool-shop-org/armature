@@ -1,14 +1,14 @@
 # E13 — the composed-route probe (spec)
 
-**Status:** **DISPATCHED 2026-08-13** — the Director's go given; keys recorded in the
+**Status:** **DISPATCHED 2026-08-13** — the maintainer's go given; keys recorded in the
 dispatch amendment at the end of this file. *(Originally: SPEC, written 2026-08-12 on the
-Director's word ("make this E13, to run when E12 lands"), QUEUED on three dispatch
+Maintainer's word ("make this E13, to run when E12 lands"), QUEUED on three dispatch
 requirements: **(1)** E12 landed and ruled; **(2)** the terms gate cleared; **(3)** a fresh
 credit re-estimate at dispatch with the exact overrides — (1) and (2) turned 2026-08-12,
 (3) is the executor's first act.)*
 **Route:** the composed route — authored references into the Wan 2.7 reference-to-video
 partner tier (`Wan2ReferenceVideoApi`, model `wan2.7-r2v`, hosted).
-**Branch/worktree convention:** `E13-run` at `E:\AI\armature-E13`.
+**Branch/worktree convention:** `E13-run` at `<worktree-E13>`.
 
 | Trajectory | This spend probes whether a native identity-lock tier can serve the product when **everything handed to it is authored** — turnaround stills and performance clips we own. If identity holds, the scope gains a footage class where model-decided cinematography is acceptable (performance studies, motion reels, idea footage) and the studio learns what the lock is worth on a stylized character no platform documents. If it fails, the negative closes the tier honestly and the authored-spatial routes stand alone, measured twice. |
 |---|---|
@@ -20,7 +20,7 @@ references themselves. So the probe asks exactly that: **from authored reference
 stills versus a clip — does `wan2.7-r2v` hold OUR character's identity, and what does
 its model-decided spatial behavior do with what it is handed?**
 
-## The terms gate (blocks dispatch; two unblock paths, both the Director's)
+## The terms gate (blocks dispatch; two unblock paths, both the maintainer's)
 
 The Comfy-side ToS row is retrieved and stands ("Customer retains all right, title, and
 interest in and to… Output"; no training on Input/Output). The **provider-side**
@@ -29,18 +29,18 @@ JS-rendered shell; Alibaba's master ToS carries no AI-output clauses). The map's
 standing treatment for partner tiers blocks use until the provider document exists.
 E13 dispatches only when either:
 
-1. the provider document is fetched (the Director's browser-export path is the known
+1. the provider document is fetched (the maintainer's browser-export path is the known
    instrument) and its row is ruled through the gate; **or**
-2. the Director rules the Comfy ToS row sufficient for this tier — a CONDITIONAL,
+2. the maintainer rules the Comfy ToS row sufficient for this tier — a CONDITIONAL,
    recorded in the map at ruling time.
 
 `watermark=false` is pinned in every payload; if any fetched term conditions commercial
-use on watermarking, that is a new CONDITIONAL for the Director before submission.
+use on watermarking, that is a new CONDITIONAL for the maintainer before submission.
 
-**Amendment — 2026-08-12, the provider document retrieved.** The Director's export
+**Amendment — 2026-08-12, the provider document retrieved.** The maintainer's export
 delivered the full *Wan Terms of Service* (updated 2026-08-06; pinned in the licence
 map with sha256). The gate's state moves from *unfetched* to **fetched, ruled
-CONDITIONAL — awaiting the Director's ruling on two named conditions:**
+CONDITIONAL — awaiting the maintainer's ruling on two named conditions:**
 
 1. **AI-disclosure duty:** published Outputs require clear and conspicuous
    AI-generated disclosure (§III.8(g)). Manageable; must be acknowledged as a
@@ -57,7 +57,7 @@ CONDITIONAL — awaiting the Director's ruling on two named conditions:**
    no-training clause, accepting the governance ambiguity · hold E13 for the
    Alibaba API-tier paper · proceed with reduced-exposure references.
 
-Dispatch remains blocked until the Director rules. Watermark note: §II.1(a) bans
+Dispatch remains blocked until the maintainer rules. Watermark note: §II.1(a) bans
 removing applied marks; the node's `watermark=false` requests none be applied, which
 the clause does not prohibit.
 
@@ -69,21 +69,21 @@ recorded as such). The input-training fear is now bounded by two vendor commitme
 Comfy's contractual no-training clause and Alibaba's published API-tier posture — with
 the consumer surface's heavy licence sitting on a page whose own text cannot describe
 API calls. The residual is the unseeable Comfy↔Alibaba reseller agreement, a residual
-every partner tier carries permanently. The Director's ruling remains the gate.
+every partner tier carries permanently. The maintainer's ruling remains the gate.
 
-**RULED, same day (the Director): the CONDITIONAL is accepted — proceed via Comfy.**
+**RULED, same day (the maintainer): the CONDITIONAL is accepted — proceed via Comfy.**
 Training use assumed as the industry default; exposure accepted for open-source work;
-**disclosure attached as standing law** (*Per-route disclosure*, CLAUDE.md — this
+**disclosure attached as standing law** (*Per-route disclosure*, docs/engineering-rules.md#per-route-disclosure — this
 spec's route carries its disclosure note at dispatch). **The terms gate is CLEARED**,
 and with the E12 close-merge landed (`5668ea6`), **both dispatch keys are turned:
-E13 is dispatch-ready.** Remaining at dispatch, for the seat that runs it: the
-Director's word to go · his A2 reference-clip pick (E12 wave-3 seed 1 is the standing
+E13 is dispatch-ready.** Remaining at dispatch, for the session that runs it: the
+Maintainer's word to go · his A2 reference-clip pick (E12 wave-3 seed 1 is the standing
 candidate) · the fresh credit re-estimate with exact overrides · the route disclosure
 note riding the spec per the new law.
 
 **Amendment — 2026-08-13, the route disclosure note** (*Per-route disclosure*,
-CLAUDE.md — the law's first application). Written by the advisor seat ahead of the
-Director's word, so the spec the executor branches from is complete; every clause is
+docs/engineering-rules.md#per-route-disclosure — the law's first application). Written by the advisor session ahead of the
+Maintainer's word, so the spec the executor branches from is complete; every clause is
 grounded in a fetched document recorded in the [licence map](../license-map.md) (the
 wan2.x partner-tier row; the Services-and-tools rows). The spec is the composed
 route's only document today — if the probe leads to adoption, this note moves to the
@@ -121,7 +121,7 @@ at write time).
   be applied, which no fetched clause prohibits. Removing an applied label or
   watermark is banned (§II.1(a)): if a mark appears despite the request (H-E13d checks
   exactly this), it stays on the artifact, the clip is reported as-is, and the finding
-  surfaces to the Director before any use of that output.
+  surfaces to the maintainer before any use of that output.
 
 ## Premises
 
@@ -134,7 +134,7 @@ at write time).
 | Stylized-reference behavior (a wooden, non-photoreal character) | **UNKNOWN BY DESIGN** — the probe's central question; the platform documents nothing |
 | `characterN` ↔ upload-slot binding order | **NOT VISIBLE** — record exactly what is sent per slot; observe what binds |
 | A1 references: facet's canonical turnaround renders (consumed READ-ONLY from facet's tree; rig-local — CI skips visibly) | **MEASURED** (facet canon exists); authored-RGBA law applies — submitted RGB composites recorded with reasons |
-| A2 reference clip: E08's painted shot (banked, Director-judged a strong first result) or E12's best output | **PENDING the Director's pick at dispatch** — E12's candidacy exists only if E12 lands well |
+| A2 reference clip: E08's painted shot (banked, maintainer-judged a strong first result) or E12's best output | **PENDING the maintainer's pick at dispatch** — E12's candidacy exists only if E12 lands well |
 | Reference-clip format/length constraints on the video slots | **NOT VISIBLE** — a platform rejection is a finding, not a failure |
 
 ## Arms — one variable: the reference modality
@@ -147,7 +147,7 @@ across arms · negative prompt minimal and recorded verbatim.
 - **A1 — stills.** `model.reference_images.image1…imageN` (3–5 canonical turnaround
   renders: front, three-quarter, profile at minimum), slot order recorded.
 - **A2 — the clip.** `model.reference_videos.video1` = the authored performance clip
-  the Director picks at dispatch.
+  the maintainer picks at dispatch.
 
 Two seeds per arm (scene claims need two seeds; the tier's worlds are model-decided,
 so world claims WILL arise). **Four submissions total.**
@@ -156,7 +156,7 @@ so world claims WILL arise). **Four submissions total.**
 
 | id | clause | prediction |
 |---|---|---|
-| H-E13a | A1 (stills): identity reads as the twin's at the Director's zoom | holds on **at most 1 of 2 seeds** — the stylized character defeats consistent binding from stills |
+| H-E13a | A1 (stills): identity reads as the twin's at the maintainer's zoom | holds on **at most 1 of 2 seeds** — the stylized character defeats consistent binding from stills |
 | H-E13b | A2 (clip): identity reads as the twin's | holds on **2 of 2** — the richer signal binds |
 | H-E13c | model-decided worlds differ across the two seeds within each arm | DIFFER (the seed-volatility law, both prior sightings) |
 | H-E13d | `watermark=false` is honored — no visible watermark | YES |
@@ -165,7 +165,7 @@ so world claims WILL arise). **Four submissions total.**
 
 **Four submissions.** Estimate bracket 424–844 credits total (4 × 106–211, bundled
 catalog 2026-08-12). At dispatch the executor re-estimates with the exact overrides;
-**if the re-estimated total exceeds 900 credits, HALT and surface to the Director
+**if the re-estimated total exceeds 900 credits, HALT and surface to the maintainer
 before any submission.** No re-runs; a fired gate ends the run where it stands. Spent
 credits have no compensator — the ceiling is the honest treatment.
 
@@ -185,7 +185,7 @@ credits have no compensator — the ceiling is the honest treatment.
 - **Uploads and saved cloud workflows:** delete commands listed in the report (E11
   convention).
 
-## Metrics and sheets (diagnostics; the Director's eye is the verdict)
+## Metrics and sheets (diagnostics; the maintainer's eye is the verdict)
 
 A references | output | provenance sheet per arm before any number is quoted (the
 existing sheet tooling extends to a references strip if needed — enumerate first;
@@ -199,7 +199,7 @@ judged in motion AND as frames. Identity is canon and his; no metric approximate
 Dialogue / lip-sync / voice (no quoted dialogue anywhere) · the 2.6 voice tier ·
 1080P · multi-character (`character2`) · any local-control composition (measured
 impossible at consult #8) · any adoption ruling — this is a probe; adoption would be
-its own Director decision on the probe's evidence · prompt experimentation beyond the
+its own maintainer decision on the probe's evidence · prompt experimentation beyond the
 one pinned prompt.
 
 ## Standards compliance
@@ -210,20 +210,20 @@ one pinned prompt.
 | ANDON_AUTHORITY | 3 | the terms gate blocks dispatch; the round-trip gate fails closed on unknown classes; the 900-credit re-estimate halt fires before any submission; all raise in-tool |
 | NAMED_COMPENSATORS | 2 | upload/saved-workflow deletes named in the report; spent credits have no undo — the bounded four-submission ceiling is the honest treatment (no skip claimed) |
 | DECOMPOSE_BY_SECRETS | 2 | one variable (reference modality) between arms; seeds pinned across arms; tooling changes ride their own tested commits |
-| UNCERTAINTY_GATED_HUMANS | 3 | two Director checkpoints gate on genuinely his calls: the terms CONDITIONAL and the A2 clip pick — both before spend, both contrastively framed |
-| EXTERNAL_VERIFIER | 2 | no model grades its own output; identity is judged by the Director's eye, the studio's standing verifier; diagnostics gate nothing |
+| UNCERTAINTY_GATED_HUMANS | 3 | two maintainer checkpoints gate on genuinely his calls: the terms CONDITIONAL and the A2 clip pick — both before spend, both contrastively framed |
+| EXTERNAL_VERIFIER | 2 | no model grades its own output; identity is judged by the maintainer's eye, the studio's standing verifier; diagnostics gate nothing |
 
 ## Amendment — 2026-08-13: DISPATCH
 
-The Director's go was given 2026-08-13. The keys, recorded:
+The maintainer's go was given 2026-08-13. The keys, recorded:
 
-- **A2 reference clip — the Director's pick:** the standing candidate, **E12 wave-3
+- **A2 reference clip — the maintainer's pick:** the standing candidate, **E12 wave-3
   seed 1**, ratified at go (no alternative named; surfaced contrastively at dispatch).
-  Pinned: `E:\AI\armature-E12\outputs\E12\probe\w3-seed1\w3-seed1.mp4`, sha256
+  Pinned: `<worktree-E12>/outputs\E12\probe\w3-seed1\w3-seed1.mp4`, sha256
   `b3b43e23f9bc5fb4e173d22815a12eb536e1e456510bf41700fe17e04eb9bd27`, seed `2026081233`,
   prompt_id `bc390dc6-af02-45d1-9085-0df807430565`, 1024×576 × 81 frames @ 16 fps,
   generated on the camera tier at 6.0 / uni_pc (E12 w3 report — the seed whose figure
-  held to f80 and whose crowd stayed human; the Director ruled it the route's strongest
+  held to f80 and whose crowd stayed human; the maintainer ruled it the route's strongest
   result). The A2 premise row resolves from PENDING to this pick. The executor verifies
   the sha256 before upload; the pin above is the clip's provenance and rides the payload
   record.
@@ -233,20 +233,20 @@ The Director's go was given 2026-08-13. The keys, recorded:
   submission — a 0 reading is recorded as a meter artifact, the bundled-catalog bracket
   (424–844) stands as the operative estimate, and the four-submission ceiling binds
   regardless of what the meter says.
-- **Worktree:** `E13-run` at `E:\AI\armature-E13`, cut from `main` at the dispatch
+- **Worktree:** `E13-run` at `<worktree-E13>`, cut from `main` at the dispatch
   commit. The executor's first check: the branched spec contains this amendment and the
   2026-08-13 disclosure note — a branch carrying yesterday's spec is the measured
   failure this law exists for.
 
-## Amendment — 2026-08-13: RE-ARM (the Director's eye passed the S03 kit)
+## Amendment — 2026-08-13: RE-ARM (the maintainer's eye passed the S03 kit)
 
 E13 halted the day it dispatched, before its first submission, on two structural
 premise failures ([E13-halt-ruling.md](E13-halt-ruling.md)); S03 built the repair kit
-and was ruled ([S03-ruling.md](../dispatches/S03-ruling.md)); **the Director's eye
+and was ruled (`docs/dispatches/S03-ruling.md`, kept privately); **the maintainer's eye
 passed the kit the same day.** E13 re-arms as follows; everything not amended here
 stands as dispatched.
 
-**A1 resolves to the S03 kit.** `E:\AI\armature-S03\outputs\S03\turn_rgba\` —
+**A1 resolves to the S03 kit.** `<worktree-S03>/outputs\S03\turn_rgba\` —
 authority: `turnaround_manifest.json` beside it (source GLB `performer_textured.glb`,
 sha256 `9e20ea7d800c0ffd2cff101a5e1bcc01fa13c620bbbe3ef05ae23b093547b1aa`; Blender
 5.2.0 `fbe6228777e7`; 352×1024; orbit from azimuth 270° in 45° steps). The four
@@ -255,7 +255,7 @@ submitted views, pinned by manifest entry: **`turn_0` (front, `83ab99d1…`) →
 image3 · `turn_4` (back, `8772ad21…`) → image4** — slot order exactly as listed,
 recorded in the payload record; full hashes verified against the manifest before
 compositing. **RGBA-law composite, pinned:** each view submits as RGB composited over
-the survey's neutral mid-grey — the presentation the Director's eye passed — with the
+the survey's neutral mid-grey — the presentation the maintainer's eye passed — with the
 plate value recorded. The patched views (1, 2) ride with his pass; identity at judging
 remains his eye's canon.
 
@@ -280,8 +280,8 @@ walks it; the round-trip table is taught any new class with tests riding the com
   without interpretation — is a HALT, not a branch selection.
 
 **Premise updates:** A1 row → the S03 kit (MEASURED — gates ALPHA/TURN/WHOLE green;
-the Director's pass 2026-08-13). The coherence row → **VERIFIED** at three looks
-(executor, advisor, the Director's eye — the kit's subject is the A2 clip's
+the maintainer's pass 2026-08-13). The coherence row → **VERIFIED** at three looks
+(executor, advisor, the maintainer's eye — the kit's subject is the A2 clip's
 performer). The A2 upload-path premise → replaced by the cascade premise (the cap
 MEASURED as present; the cascade shape ASSUMED until the probe runs). The
 r2v-acceptance premise unchanged: ASSUMED, provable only by the first A2 submission

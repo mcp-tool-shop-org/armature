@@ -300,7 +300,7 @@ def read_seed_registration(path, *, flag="--seeds"):
     # reason `gate_saved_graph._same_value` guards it.
     #
     # No numeric RANGE is invented here. This module records no measured bound for a seed's
-    # magnitude, and CLAUDE.md forbids a global constant governing a local feature; the
+    # magnitude, and docs/engineering-rules.md#no-global-constant-for-local-feature forbids a global constant governing a local feature; the
     # generator-side enums that ARE measured live in `route_gates.HOSTED_TIER_RULES`. The
     # clause bounds the TYPE the callers index and test membership against, which is what
     # the five clauses above already promised.
@@ -615,7 +615,7 @@ def disclosure_lines(block):
     wave 14 (F-92f67091) for the E14 arm's ONE credits line. `build_r2v_payload` authors the
     only hosted-partner-tier spend in this repo and had no disclosure surface at all: its nine
     printed lines named no data-use posture, no AI-content disclosure duty and no watermark
-    policy, and its payload record carried no disclosure key. That is the gap CLAUDE.md's
+    policy, and its payload record carried no disclosure key. That is the gap docs/engineering-rules.md#per-route-disclosure's
     per-route disclosure ruling exists to close, on the route the ruling was born on.
 
     So the renderer has ONE home and two callers, rather than a second spelling of a shape that
@@ -714,7 +714,7 @@ def gate_create_video_fps(fps):
     including Gate ROUTE, and printed `BUILD_CASCADE_OK`. Contrast `--group` in the same
     file, which IS bounded in both directions, and `build_r2v_payload`'s hosted enums,
     where `--duration=99` raises. A tool that records a generator constraint and does not
-    enforce it is exactly what CLAUDE.md's "generation frames must be generator-legal" rule
+    enforce it is exactly what docs/engineering-rules.md#generator-legal-frames's "generation frames must be generator-legal" rule
     exists to prevent: the clip is either rejected at submission after the upload round
     trip, or accepted at a rate the record then names as fact.
 

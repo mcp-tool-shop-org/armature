@@ -1,7 +1,7 @@
 """Read a workflow graph and answer, in code, whether it can carry an experiment.
 
 No bpy, no network, no numpy — it parses JSON and reports. Written because
-`docs/license-map.md` and CLAUDE.md both say the same thing in different words:
+`docs/license-map.md` and docs/engineering-rules.md#licence-gate both say the same thing in different words:
 
 > A `dry_run` PASS does not prove link sanity. Submit saved workflow files verbatim and
 > check link topology in code before submission.
@@ -65,7 +65,7 @@ PROFILE_FAMILY = {
 
 #: How old a licence ruling may be before `docs/license-map.md`'s own rule calls it
 #: advisory. The map states the law in its header — "**Entries older than 90 days are
-#: advisory until re-fetched** — licenses in this space change" — and CLAUDE.md repeats it
+#: advisory until re-fetched** — licenses in this space change" — and docs/engineering-rules.md#licence-gate repeats it
 #: ("entries older than 90 days are advisory until re-fetched"). It is a NUMBER here, and
 #: `fetched` is a FIELD on every row below, because a rule expressed only in prose cannot
 #: be administered by the gate that applies the rulings.
@@ -85,7 +85,7 @@ LICENCE_ADVISORY_DAYS = 90
 #: go advisory 2026-11-08 and 2026-11-11; on that day every receipt and every refusal
 #: would have read exactly as it did before, and neither the operator about to spend nor a
 #: later reader of a stored receipt could tell an in-date ruling from a lapsed one — on the
-#: gate CLAUDE.md calls non-negotiable. This module's own docstring sets the standard the
+#: gate docs/engineering-rules.md#licence-gate calls non-negotiable. This module's own docstring sets the standard the
 #: omission missed ("This is a MIRROR of `docs/license-map.md`, not a second authority"):
 #: a mirror that omits the field the authority's rule is expressed in cannot administer
 #: that rule.
@@ -565,7 +565,7 @@ RULED_COMPONENTS = {
         # returned a clean verdict, and `[k for k in ev if 'cred' in k.lower()]` was `[]` —
         # so E14 arm T footage could be published uncredited with Gate ROUTE green and
         # nothing in the record that a human reviewing the spend could read the obligation
-        # off. CLAUDE.md's licence gate names the vocabulary
+        # off. docs/engineering-rules.md#licence-gate's licence gate names the vocabulary
         # `COMMERCIAL: YES / NO / CONDITIONAL(<condition>)` and rules that a CONDITIONAL is
         # a maintainer decision surfaced contrastively; the condition was accepted as the map
         # already records it (coordinator ruling, delegated by the maintainer on 2026-09-04) and
@@ -943,7 +943,7 @@ def hosted_tier_string_literals(paths):
 #: its own width/height/length inputs, so an Animate graph contains no `Empty*LatentVideo`
 #: node at all — and this table drove `latents()`, which drove `frame_legality()`. On the
 #: first E08 graph Gate L therefore examined ZERO latents and reported the graph legal
-#: without checking anything, which is the failure mode CLAUDE.md names outright: a check
+#: without checking anything, which is the failure mode docs/engineering-rules.md#licence-gate names outright: a check
 #: that cannot fail is not a check. Any future conditioning node that sizes a latent belongs
 #: here the day it is first used.
 #:
@@ -1197,7 +1197,7 @@ RULED_COMPONENT_CLASSES = {
 # internally consistent. The missing question is about the relationship between two things
 # each of which was individually correct.
 #
-# ⚠ **A licence row is not a wiring claim** (now also a CLAUDE.md law). The wave-2 dispatch
+# ⚠ **A licence row is not a wiring claim** (now also a docs/engineering-rules.md#licence-row-not-wiring-claim law). The wave-2 dispatch
 # said "weights mapped Apache" and that was TRUE — of weights the graph never loaded.
 
 #: Weight-file substrings that identify a model family, lower-cased. A file may match more
@@ -2212,7 +2212,7 @@ def licence_fetch_reading(comp, today=None):
     already past `LICENCE_ADVISORY_DAYS`, and the applied rows carrying no date at all.
 
     It REPORTS and never raises. Whether a lapsed ruling refuses is the maintainer's call
-    (CLAUDE.md: CONDITIONAL and re-fetch decisions belong to the maintainer), and a gate that invented that
+    (docs/engineering-rules.md#licence-gate: CONDITIONAL and re-fetch decisions belong to the maintainer), and a gate that invented that
     refusal for itself would be this repo's own "a global constant governs a local
     feature". What the gate owes is that no receipt and no refusal can be read without the
     age of the ruling it applied.
@@ -2491,7 +2491,7 @@ def rulings_for(filename):
     ⚠ **`components()` used to take the FIRST match in dict-insertion order and record
     no other.** `families_of()` on the same page deliberately does the opposite and its
     table's comment says why: "A file may match more than one and every match is
-    recorded." The licence clause — the one CLAUDE.md calls a non-negotiable — got the
+    recorded." The licence clause — the one docs/engineering-rules.md#licence-gate calls a non-negotiable — got the
     weaker rule. Measured 2026-09-03: `technically_color_instagirl_v2.safetensors`
     matches `technically_color` (ALLOWED, typed in at index 4) and `instagirl` (BANNED,
     Instara Fair Use — "prohibits use on any image/video generation service", index 9),
@@ -4158,7 +4158,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # `SavedAdmission` clause words, the licence walk's name-shaped-widget pass, the
     # blueprint level-label andon), so two receipts stored in `outputs/<experiment>/` from
     # either side of those waves were indistinguishable in the record — which is the
-    # reproducibility claim CLAUDE.md makes of every generation record. Neither key is a
+    # reproducibility claim docs/engineering-rules.md#reproducible-generation-records makes of every generation record. Neither key is a
     # `clause`, so the invariant above is untouched.
     ev = {"gate": "ROUTE", "andon": "RouteGate", "receipt": "verify",
           "tool_version": TOOL_VERSION,
@@ -4187,7 +4187,7 @@ def verify(graph, *, family="wan", require_pinned_seeds=True, allow=(), frame=No
     # `allow` may wave a METHODOLOGY ruling. It may not wave a LICENCE one. The filter
     # used to treat the two verdicts as one class, so `allow=('causvid',)` moved a
     # CC-BY-NC weight through and returned a green verdict that said nothing about the
-    # waiver — measured 2026-09-03. CLAUDE.md's licence gate is a non-negotiable: no
+    # waiver — measured 2026-09-03. docs/engineering-rules.md#licence-gate's licence gate is a non-negotiable: no
     # non-commercially-licensed weight anywhere in the pipeline, experiments included.
     # An attempt to allow one is refused here rather than obeyed, and it is refused even
     # on a graph that does not load it, because the call itself is the defect.

@@ -64,7 +64,7 @@ Le paquet npm est un **lanceur, et non une porte d’entrée** : réimplémenter
 
 ## État : la thèse est mesurée au niveau du produit
 
-Fondé le **10 août 2026**. Treize expériences ont été menées à bien et la thèse est passée de *« en cours d’évaluation »* à **« mesurée au niveau du produit »** : le personnage a dansé à l’écran, animé par son propre squelette, et il est libre. Un monde créé manuellement reste intact jusqu’à la dernière image sur deux ensembles de données (E12), et **l’identité survit désormais grâce à une couche hébergée, entraînée par des humains et alimentée uniquement par des références créées** (E13) — le tout étant jugé par l’œil du mainteneur. L’audit de la phase initiale se trouve sur [docs/audit-first-arc.md](docs/audit-first-arc.md) ; depuis le 12 août 2026, il s’agit d’un monoreposo d’apprentissage : les expériences prouvent les voies possibles, aucune voie n’est canonique par inertie (CLAUDE.md).
+Fondé le **10 août 2026**. Treize expériences ont été menées à bien et la thèse est passée de *« en cours d’évaluation »* à **« mesurée au niveau du produit »** : le personnage a dansé à l’écran, animé par son propre squelette, et il est libre. Un monde créé manuellement reste intact jusqu’à la dernière image sur deux ensembles de données (E12), et **l’identité survit désormais grâce à une couche hébergée, entraînée par des humains et alimentée uniquement par des références créées** (E13) — le tout étant jugé par l’œil du mainteneur. L’audit de la phase initiale se trouve sur [docs/audit-first-arc.md](docs/audit-first-arc.md) ; depuis le 12 août 2026, il s’agit d’un monoreposo d’apprentissage : les expériences prouvent les voies possibles, aucune voie n’est canonique par inertie ([docs/engineering-rules.md#scope-and-posture](docs/engineering-rules.md#scope-and-posture)).
 
 | | |
 |---|---|
@@ -99,7 +99,7 @@ Une réponse négative reste un succès total ici — l’échec cuisant d’E11
 
 ## Comment ce dépôt fonctionne
 
-- [CLAUDE.md](CLAUDE.md) — comment travailler ici : les trois rôles, les règles auxquelles chaque rôle est soumis et les éléments non négociables (la validation de la licence, les crédits limités, l’identité est jugée visuellement).
+- [docs/engineering-rules.md](docs/engineering-rules.md) — les règles d’ingénierie que le code fait respecter (la validation de la licence, les crédits limités, les points de contrôle qui lèvent des erreurs plutôt que des assertions, et l’identité jugée visuellement).
 - [docs/ROADMAP.md](docs/ROADMAP.md) — l’ensemble du processus, session par session, avec les points de basculement identifiés à l’avance.
 - `docs/experiments/` — chaque modification importante est exécutée sous forme d’expérience numérotée : **spécification avant le travail → rapport après → décision finale de l’examinateur.**
 - `docs/license-map.md` — la carte vérifiée pour une utilisation commerciale. Rien n’entre dans le pipeline sans un document de licence récupéré.

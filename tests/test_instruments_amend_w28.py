@@ -50,7 +50,7 @@ OWNED = (
     "rig_parts.py", "rig_repair.py", "rig_retopo.py",
 )
 
-#: The falsified approaches kept runnable beside them (CLAUDE.md: "failures stay in the
+#: The falsified approaches kept runnable beside them (docs/engineering-rules.md#scope-and-posture: "failures stay in the
 #: repo"). They are in this domain's globs and their parsers reach an operator too.
 SUPERSEDED = tuple(
     "superseded/" + n for n in sorted(os.listdir(os.path.join(TOOLS, "superseded")))

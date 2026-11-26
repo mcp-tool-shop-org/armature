@@ -260,7 +260,7 @@ def test_the_two_frame_size_flags_name_the_route_their_defaults_came_from():
     Red on `3380ae2`: both were bare `type=int, default=...` in `fit_reference` (the tool
     that builds the reference image a paid run SUBMITS) and in `project_pose_keypoints` (the
     control side of the same frame), while `--pad` and `--alpha-over` in the same parser
-    carried two of the best help strings in the domain. CLAUDE.md's generator-legality rule
+    carried two of the best help strings in the domain. docs/engineering-rules.md#generator-legal-frames's generator-legality rule
     reached the operator nowhere in either tool.
     """
     for name in ("fit_reference", "project_pose_keypoints"):
@@ -301,7 +301,7 @@ def test_every_ffmpeg_subprocess_in_this_domain_runs_under_a_bound():
 
 
 def test_the_bound_is_derived_from_the_work_and_not_one_global_constant():
-    """A global constant must not govern a local feature (CLAUDE.md).
+    """A global constant must not govern a local feature (docs/engineering-rules.md#no-global-constant-for-local-feature).
 
     A 39-byte truncated download and a 500-frame lossless encode cannot honestly share one
     ceiling, so the bound is start-up plus a charge against the structure the call is given.

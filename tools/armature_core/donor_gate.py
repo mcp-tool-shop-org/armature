@@ -430,7 +430,7 @@ def gate_donor(motion, framing):
     'min_fraction_of_frames_with_ankles_in_image': 0.0}` returned the verdict "mean
     consecutive-frame difference 0.0000/255 (>= 0.0) and ankles in image on at least 0.0%
     of frames (>= 0%)" on a dead-still, ankles-never-in-frame clip — measured 2026-09-03.
-    That is a skip flag inside an andon, which CLAUDE.md forbids outright, and it
+    That is a skip flag inside an andon, which docs/engineering-rules.md#gates-raise-inside-the-step forbids outright, and it
     contradicted this module's own docstring two screens above it: the thresholds "are
     not tuned here and they are not tunable here". A fixture that needs a different
     number monkeypatches `THRESHOLDS`; a different experiment writes a different module

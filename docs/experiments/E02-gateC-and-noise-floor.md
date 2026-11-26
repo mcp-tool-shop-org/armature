@@ -13,7 +13,7 @@ every later arm in this arc must be read.
 
 No programmatic surface exposes it — `estimate_credits` returns 0 because Wan's entire cost is
 the GPU time that estimator excludes, the invoice lags with no bucket for the day, and the job
-record carries no cost field. The Director found the instrument that does work: **the workspace
+record carries no cost field. The maintainer found the instrument that does work: **the workspace
 credit balance**, read either side of a single generation.
 
 | | |
@@ -95,8 +95,8 @@ through an uncharacterised codec is exactly the moving denominator this repo kee
 
 ## 3. Process — my own role drift, stated
 
-**I executed a generation and measured its output.** That is executor work. The Director asked
-for the run directly and the measurement followed immediately from it, but the seat that rules
+**I executed a generation and measured its output.** That is executor work. The maintainer asked
+for the run directly and the measurement followed immediately from it, but the session that rules
 on results should not be grading output it produced.
 
 So, precisely: **§2 is a measurement, not a ruling.** It is recorded so the number is not lost
@@ -104,7 +104,7 @@ and so the spec amendment can be written, and **the E02 executor should reproduc
 independently** — with the lossless tap in place — before any arm leans on it. If their number
 disagrees with mine, theirs is the one that counts.
 
-§1 is a ruling and is properly mine: the Director supplied the observation, the arithmetic is
+§1 is a ruling and is properly mine: the maintainer supplied the observation, the arithmetic is
 arithmetic, and the conclusion is insensitive to the one uncertainty in it.
 
 ## 4. State after this ruling
@@ -112,6 +112,6 @@ arithmetic, and the conclusion is insensitive to the one uncertainty in it.
 - **Generations spent: 2 of 12.** Both arm A1a, identical payloads, the second bought a price
   and a floor.
 - **Gate C: CLOSED.** Gate B: PASS. Gate L: PASS. Gate R: N/A (retained). Gate 0: pending the
-  Director's eye on the sheet.
+  Maintainer's eye on the sheet.
 - **Next:** add the lossless output tap, then A0's three submissions, then the arms. A2 — the
   no-control row — remains the one that makes this an experiment rather than a demonstration.

@@ -1,8 +1,8 @@
 # E11 wave 2 — ruling: every gate passed on a graph that could only produce noise
 
-**Advisor ruling, 2026-08-12. E11 remains OPEN; one reserve whole.** Verified by this seat:
+**Advisor ruling, 2026-08-12. E11 remains OPEN; one reserve whole.** Verified by this session:
 the suite (**795 passed / 46 skipped**, own run); branch pushed at `a952019`; the collapse
-looked at with this seat's own eyes — f1 holds the figure in silhouette inside a degrading
+looked at with this session's own eyes — f1 holds the figure in silhouette inside a degrading
 frame with the face already unreadable, f8 is a pure orange lattice with no subject, no
 scene, no camera. The report's description corroborates exactly.
 
@@ -13,8 +13,8 @@ carried and the composed wave skipped. Its route line, "both core, weights mappe
 fused two claims and concealed a third: *that the camera tier runs on the weights the graph
 already loads.* That third claim was never stated, never marked measured-or-assumed, and
 never checked — by the advisor who wrote it, or anyone downstream inheriting it as settled.
-The licence row this seat landed at consult #7 was for weights **the graph never loaded**.
-One generation bought the lesson. Two laws land in CLAUDE.md:
+The licence row this session landed at consult #7 was for weights **the graph never loaded**.
+One generation bought the lesson. Two laws land (`docs/engineering-rules.md#licence-row-not-wiring-claim` and the internal guide, kept privately):
 
 - **A licence row is not a wiring claim.** Every spec that adds a conditioning node names
   the exact weight files its graph loads, as a marked premise, checked against the builder.
@@ -63,11 +63,11 @@ fetch resolved what it believed was a blocking gap.
 
 ## R5 — wave 3 is dispatched: the corrected wave 2, on the last reserve
 
-The Director's standing direction (camera held + performance-dominant prompt) proceeds,
+The maintainer's standing direction (camera held + performance-dominant prompt) proceeds,
 corrected: **(1)** experts swap to `wan2.2_fun_camera_{high,low}_noise_14B_fp8_scaled` —
 Comfy-Org repacks of the fetched Apache card; the map's repack ruling extends, and the row
 gains the filenames and the card's training facts; **(2)** length moves to **81** (the
-card's training horizon, and the Director's more-fps ruling agrees); **(3)** resolution is
+card's training horizon, and the maintainer's more-fps ruling agrees); **(3)** resolution is
 **derived, not assumed** — the card names 512/768/1024 training resolutions; the executor
 derives the nearest in-distribution frame to our aspect, records the choice and its source,
 Gate L on the actual graph; **(4)** the start frame is re-authored at the chosen size
@@ -81,5 +81,5 @@ so.
 ## Standing
 
 Meters: `estimate_credits` 0 throughout; 2 of 3 spent; GPU buckets to the ledger on
-resolution. E11 stays open for wave 3's report, where the Director's three verdicts —
+resolution. E11 stays open for wave 3's report, where the maintainer's three verdicts —
 the dance, the camera, the hands — finally get their test.

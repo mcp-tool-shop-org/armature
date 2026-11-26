@@ -29,7 +29,7 @@ input type. The video path was always a convenience wrapper (`LoadVideo` →
 
 **Option (b) is disqualified on reproducibility.** A manual upload puts a human in the middle of
 every submission, and a recipe that does not reproduce its output is not a recipe. It would also
-make every future arm — E03's modality sweep, E04's strength curve — wait on the Director. That
+make every future arm — E03's modality sweep, E04's strength curve — wait on the maintainer. That
 is a worse trade than re-topologising two graphs once.
 
 ### What adopting (a) changes
@@ -111,13 +111,13 @@ and that E01 ruling §7's rule protects against *me sweeping their work*, not ag
 committing onto their branch*. **Correct, and the gap is real.**
 
 That was my third contamination of the day. The repair I reached for afterwards is the one that
-actually holds and it is now **standing practice for the advisor seat: while any executor
+actually holds and it is now **standing practice for the advisor session: while any executor
 session is live, advisor commits are authored in a detached `git worktree` on `origin/main`.**
 This ruling was written that way. It removes the failure by construction rather than by my
 remembering to check `HEAD` — which I had done, two commits earlier, and which had gone stale.
 
 Leaving `fe18dff` in place was also right: its content is accurate, and rewriting history under
-a live seat to tidy provenance is a worse act than the untidy provenance.
+a live session to tidy provenance is a worse act than the untidy provenance.
 
 ## 6. Amendments to the E02 spec
 
@@ -137,9 +137,9 @@ we are getting away from:
    (no paid API nodes; GPU time excluded from its model), so no arm can be priced in advance.
    One real submission, then halt and do the arithmetic — exactly as specified.
 
-## 7. What still needs the Director, not me
+## 7. What still needs the maintainer, not me
 
 The `reference_image` plates (`blackguard_apose_{0..3}.png`) exist and are RGB 1024×1024. The
 executor correctly declined to certify that they depict **this** character, because that rests
 on a filename stem. **Whether the figure in those plates is the same man as the mesh is canon,
-and no metric approximates it** — that is an eye check on a sheet, and it is the Director's.
+and no metric approximates it** — that is an eye check on a sheet, and it is the maintainer's.

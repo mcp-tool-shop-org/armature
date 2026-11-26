@@ -1,6 +1,6 @@
 """E09 B2's graph, checked before a credit is spent on it.
 
-The fixtures ask CLAUDE.md's question of each check: what would this look like if the code
+The fixtures ask docs/engineering-rules.md#fixture-falsification-question's question of each check: what would this look like if the code
 were wrong in the specific way it exists to catch? The two that carry the most weight are
 the derived expert split — a two-expert model run as one and a half produces a plausible
 clip and no error — and the LoRA clause, because the graph this replaces wired the licence
@@ -149,7 +149,7 @@ def test_the_prompt_carries_the_bounds_the_findings_named():
 
 
 def test_every_link_points_at_a_node_that_exists():
-    """Link integrity in code. `dry_run` checks this too, and CLAUDE.md's law is that a
+    """Link integrity in code. `dry_run` checks this too, and docs/engineering-rules.md#served-templates-and-gate-route's law is that a
     dry_run PASS does not prove link sanity — so it is checked here as well, on the object
     we actually wrote."""
     graph, _ = B.build_graph(SEEDS["seeds"][0], profile="derived")

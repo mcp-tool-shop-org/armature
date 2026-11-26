@@ -120,7 +120,7 @@ def mesh_sample_frames(n_frames):
     only that the rest pose survived" — so on a short gait the skin clause degraded to a
     check that could not fail, and neither the gate's evidence nor the sidecar said so.
 
-    CLAUDE.md: *a global constant must not govern a local feature.* The schedule is a
+    docs/engineering-rules.md#no-global-constant-for-local-feature: *a global constant must not govern a local feature.* The schedule is a
     fraction of the gait's own length, and the LAST frame is always in it: the gesture and
     the hold are at the end, which is where a broken armature modifier is most visible.
     """

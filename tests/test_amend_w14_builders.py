@@ -348,7 +348,7 @@ def test_the_credit_obligation_is_printed_at_the_moment_it_is_incurred(tmp_path,
 
 
 def test_the_record_carries_a_disclosure_block_naming_the_obligation(tmp_path):
-    """F-92f67091 · per-route disclosure (CLAUDE.md): the obligation rides the provenance.
+    """F-92f67091 · per-route disclosure (docs/engineering-rules.md#per-route-disclosure): the obligation rides the provenance.
 
     reverted-red: yes — `disclosure` is not a key of the record on the reverted tree.
     """

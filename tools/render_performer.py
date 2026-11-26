@@ -497,7 +497,7 @@ def gate_coverage(paths, empty_plate, min_frac=MIN_SUBJECT_FRAC):
     #
     # The empty-record refusal in `main` shields this today, which is exactly why
     # the clause belongs HERE as well: a gate whose andon is load-bearing only in
-    # another statement's presence is the direction CLAUDE.md rules against, and
+    # another statement's presence is the direction docs/engineering-rules.md#gates-raise-inside-the-step rules against, and
     # the next caller of this function would inherit the vacuity. Same family as
     # F-1dd37d93 (Gate D on `{}` vs `{}`) and F-2c39d08d (two empty weight dicts).
     if not paths:

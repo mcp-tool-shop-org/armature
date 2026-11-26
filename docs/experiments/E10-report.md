@@ -1,12 +1,12 @@
 # E10 — report: the same dance, 81 samples over the same four seconds
 
-**Seat: executor**, branch `E10-density`, worktree `E:\AI\armature-E10`, from `main` at
+**Role: executor**, branch `E10-density`, worktree `<worktree-E10>`, from `main` at
 `e80f813`. **One generation** (`prompt_id` `263bc224-cf3c-47ff-867e-6814dfda59e7`, seed
 `2026081221`). Reserve seed `2026081222` **unspent**. No gate fired on the experiment; four
 defects fired inside this session's own tools and are recorded below with their fixes.
 
 This report carries measurements, gate states and predictions against outcomes. It contains
-no judgement of whether the footage is good; the Director's eye is the verifier of record and
+no judgement of whether the footage is good; the maintainer's eye is the verifier of record and
 the advisor rules on what the measurements mean.
 
 **Look first:** the true-tempo A/B — `outputs/E10/review/E10-vs-E08-truetempo.webp` (E08's
@@ -14,7 +14,7 @@ the advisor rules on what the measurements mean.
 retimed). Then `outputs/E10/sheets/E10-gate0.png` at full size, then the 0.50×/10 fps clip
 from `lossless/`, then the zoom sheets.
 
-**The headline this seat can state without judging it:** the driving signal did what the
+**The headline this session can state without judging it:** the driving signal did what the
 lever intended — per-frame second differences fell to 0.585 of E08's at the median, with
 every one of the 20 keypoints falling and none rising — and the painted output changed in a
 way the experiment did not aim at: its **frame-to-frame luminance swing is about ten times
@@ -166,12 +166,12 @@ down the legs.
 
 **The toe markers (18, 19) sit just outside the rendered feet.** They sit there in **E08's
 own shipped overlay too**, at the same offset and in the same direction — compare
-`outputs/E10/sheets/E10-overlay-feet.png` with `E:\AI\armature-E08b\outputs\E08\sheets\
+`outputs/E10/sheets/E10-overlay-feet.png` with `<worktree-E08b>/outputs\E08\sheets\
 E08-overlay-feet.png`. The measured quantity agrees: ankle→toe distance over the whole clip
 is min 12.86 / median 23.27 / max 28.38 px in E08 and 12.91 / 23.30 / 28.35 px in E10, and
 the foot/leg ratio is 0.087–0.139 (median 0.113) against the rig manifest's measured
 0.087–0.139. This is the inherited placement of the shipped projector, not something E10
-introduced; recorded here because the next seat will see it and should not re-derive it.
+introduced; recorded here because the next session will see it and should not re-derive it.
 
 ---
 
@@ -205,7 +205,7 @@ Two readings, kept apart deliberately:
   the median. So the dominant effect is that the same path is being shown in smaller steps,
   not that the performance was smoothed.
 
-The 8.6 % is not fully explained by this seat's own model and is **not** claimed as
+The 8.6 % is not fully explained by this session's own model and is **not** claimed as
 smoothing. A candidate mechanism, offered as a candidate: a destination step that straddles
 one of the source path's turns carries a blended velocity, so a single knot's turn is spread
 across two second-difference terms and each is smaller than the whole. The `max` column
@@ -245,7 +245,7 @@ offered or implied.**
   80 and across two 12-frame consecutive strips (20–31, 60–71) plus a 21-frame contact
   sheet.** The figure is present in every frame checked at full size; a first read off the
   small contact sheet recorded it as absent at f24/f40/f56 and that read was **wrong** —
-  sheets locate, full size decides, and this is that law firing on this seat.
+  sheets locate, full size decides, and this is that law firing on this session.
 - **Exposure and tone swing frame to frame.** Measured as mean image luminance per frame:
 
 | | E08 | E10 |
@@ -261,13 +261,13 @@ offered or implied.**
   segment is 3.6× E08's noisiest.** Visible in the consecutive strips as the figure and the
   room alternating between pale-and-bright and dark-and-warm from one frame to the next.
 
-**This seat did not measure a cause for either the luminance swing or the appearance of
+**This session did not measure a cause for either the luminance swing or the appearance of
 people, and cannot separate one from the other.** The registered changes are the frame count
 (65→81, the trained horizon's ceiling) and the seed; the prompt and negative are byte-
 identical, and `CreateVideo`'s fps is downstream of the decode and cannot reach a lossless
 frame. A discriminating design exists — the reserve seed at the **same** 81 frames, which
 separates seed from frame count — and it would spend the reserve. That is the advisor's call
-against the remaining ceiling, not this seat's.
+against the remaining ceiling, not this session's.
 
 ---
 
@@ -306,7 +306,7 @@ whole clip.
 
 | artifact | what it is |
 |---|---|
-| `outputs/E10/review/E10-vs-E08-truetempo.webp` | **the A/B the Director judges** — E08 at 16 fps beside E10 at 20 fps, lossless, 129 composite frames, 4.062 s. Built on the union of both arms' frame times with each side holding its own frame between its own events: **neither arm is resampled or retimed** |
+| `outputs/E10/review/E10-vs-E08-truetempo.webp` | **the A/B the maintainer judges** — E08 at 16 fps beside E10 at 20 fps, lossless, 129 composite frames, 4.062 s. Built on the union of both arms' frame times with each side holding its own frame between its own events: **neither arm is resampled or retimed** |
 | `…-truetempo-q95.webp` | the same at quality 95, 9.8 MB against 63 MB — a convenience copy, not a measurement source |
 | `outputs/E10/review/half-speed/review_0.50x_10fps.webp` | the 0.5× review clip from `lossless/`, lossless |
 | `outputs/E10/review/eight-fps/review_0.40x_8fps.webp` | 8 fps from the same source. **The spec's "0.5× / 8 fps" is one clip at 16 fps and two different clips at 20 fps**, so both are delivered and each is named for what it is |
@@ -351,18 +351,18 @@ submission. Each clause read separately. Blindness disclosed in the predictions 
 | **H-E10a** per-frame **max** ratio in [0.70, 0.95] — 55 % | in range | **MISS, narrowly, same direction.** 0.693. |
 | **H-E10a** all 20 keypoints fall, none rises — 70 % | all 20 | **HIT.** None rose. |
 | **H-E10a** per-**second** median ratio in [0.85, 1.15] — 60 % | in range | **HIT.** 0.914. |
-| **H-E10b** the Director reads it as visibly smoother at true tempo — 45 % | maybe | **NOT THIS SEAT'S TO SCORE.** The A/B is built; his eye rules. |
+| **H-E10b** the maintainer reads it as visibly smoother at true tempo — 45 % | maybe | **NOT THIS SESSION'S TO SCORE.** The A/B is built; his eye rules. |
 | **H-E10b** some visible difference in motion texture — 70 % | yes | **HELD, but not for the reason predicted.** The measured difference in the painted output is a ~10× larger frame-to-frame luminance swing, which is not what the lever aimed at. |
 | **H-E10c** durations agree within one frame — 90 % | yes | **HIT.** 4.0625 s vs 4.0500 s = 0.25 of an E10 frame. |
 | **H-E10c** exactly 81 lossless frames — 90 % | yes | **HIT.** 81, all distinct. |
 | **H-E10d** the lever reads weak at stick level (median ratio > 0.90) — 20 % | no | **HIT on the prediction.** 0.585 is not a weak move at the stick level. |
-| **H-E10d** painted chop unchanged though the sticks smoothed — 35 % | possible | **UNRESOLVED at this seat.** The Director's eye decides; this seat measured that something else changed a great deal. |
+| **H-E10d** painted chop unchanged though the sticks smoothed — 35 % | possible | **UNRESOLVED at this session.** The maintainer's eye decides; this session measured that something else changed a great deal. |
 | Gate B identical on all 81 — 85 % | yes | **HIT.** |
 | the bar arrives — 85 % | yes | **HIT.** Counter, bottles, glasses, warm strip lighting, panelling. |
 | **no other people — 80 %** | none | **MISS, and by the widest margin of the run.** A seated human figure is present at the frame edge in every frame inspected at full size, plus a hand near the counter in some. The negative that E08 named as the cause of their absence is byte-identical here. |
-| the face reads as the twin's at ≥ 3 of 5 sampled frames — 65 % | yes | **HIT** — 6 of 6 at the fastest frames, which is the hardest sample this seat could pick. |
+| the face reads as the twin's at ≥ 3 of 5 sampled frames — 65 % | yes | **HIT** — 6 of 6 at the fastest frames, which is the hardest sample this session could pick. |
 | no frame resolves fingers — 90 % | none | **HIT.** |
-| the vertical banding is still present — 70 % | yes | **NOT SUPPORTED as stated, and not tested.** E08's washed vertical bands are not what this output shows; what it shows is a whole-frame luminance swing. This seat built no instrument that separates the two, and E08's own two banding instruments were reported as failed instruments. |
+| the vertical banding is still present — 70 % | yes | **NOT SUPPORTED as stated, and not tested.** E08's washed vertical bands are not what this output shows; what it shows is a whole-frame luminance swing. This session built no instrument that separates the two, and E08's own two banding instruments were reported as failed instruments. |
 | the painted body tracks the sticks at every sampled frame — 85 % | yes | **HIT**, checked by compositing the driving sticks onto the output at the four fastest frames rather than at even spacing. |
 
 **The pattern in my own misses:** both H-E10a tail misses fell on the same side — the
@@ -457,6 +457,6 @@ Measured here, with no authority to rule on any of it:
    which is a reading and not a confirmation.
 7. **The stick-level lever worked and the per-second control says why**: densification did
    not smooth the performance, it re-sampled the same performance in smaller steps. Whether
-   that is what the Director's eye wanted is his call, and the A/B is built for it.
+   that is what the maintainer's eye wanted is his call, and the A/B is built for it.
 
-The Director judges the motion at true tempo.
+The maintainer judges the motion at true tempo.

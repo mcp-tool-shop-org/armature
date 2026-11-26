@@ -1,6 +1,6 @@
 # Research grounding — movement-library sourcing survey
 
-**Requested by the Director 2026-08-12** (the admin-shelf lever, on request per the E09
+**Requested by the maintainer 2026-08-12** (the admin-shelf lever, on request per the E09
 closing ruling). **Frame:** the ruling's two admission paths govern — (1) online sources
 enter **only on fetched terms**, with a licence-map row before the first clip downloads;
 (2) **the owned factory**: licence-clean donors lifted through the studio's own chain,
@@ -28,7 +28,7 @@ gate (entries age; >90 days advisory). Survey-grade claims are pointers, not row
 | **CMU Graphics Lab DB** | "free for use in research projects. You may include this data in commercially-sold products"; "you may not resell this data directly, even in converted form" | **CANDIDATE, flagged** — direct fetch failed on a TLS cert error twice; quotes came through the search layer; the cert failure also blocks scripted download |
 | **MoCap Online** | commercial use while "your project stays under 1 million end users and $1 million revenue"; binary-only distribution, no as-is resale | **CONDITIONAL** (revenue/user ceiling; the agent's summary line disagreed with its quoted clause on the user cap — the quote governs; resolve at adoption) |
 | **Reallusion ActorCore** | "provide, sell, and redistribute your creations with full ownership"; but "may NOT … distribute, or sublicense the Content to any third party" | **CONDITIONAL** — baked output open, source motion files never exposed |
-| **Rokoko marketplace** | free clips "including for commercial use"; platform default "you may not reproduce, distribute, sublicense … any Rokoko Asset" | **CONDITIONAL** — real grant is per-clip per publisher; diligence per clip |
+| **Rokoko marketplace** | free clips "including for commercial use"; platform default "you may not reproduce, distribute, sublicense … any Rokoko Asset" | **CONDITIONAL** — real grant is per clip, per licensor (the marketplace creator or studio granting rights to the asset); diligence per clip |
 | **Truebones** | "absolutely royalty free … even commercial"; no as-is redistribution | **CONDITIONAL** — no canonical EULA document located, only recurring Gumroad statements; re-verify before any adoption |
 | **SFU mocap** | "The data cannot be used for commercial products or resale, unfortunately." | **BANNED-here** |
 | **Bandai Namco motion dataset** | "Attribution-NonCommercial 4.0 … NonCommercial purposes only" | **BANNED-here** — a GitHub-hosted dataset that reads "open" at a glance and is not |

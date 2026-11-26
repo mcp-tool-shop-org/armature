@@ -736,7 +736,7 @@ def test_every_one_of_the_four_sites_bounds_its_measurement_before_comparing_it(
 
 def test_each_sheet_keeps_its_own_refusal_at_its_own_site():
     """The raise is NOT consolidated, on purpose: an andon lives inside the tool performing
-    the step (CLAUDE.md), and `make_binding_sheet.render_arm` is a refusing function in the
+    the step (docs/engineering-rules.md#gates-raise-inside-the-step), and `make_binding_sheet.render_arm` is a refusing function in the
     write-ordering census only while it raises in its own body."""
     for filename, fn in (("make_parts_sheet.py", "main"),
                          ("make_binding_sheet.py", "render_arm"),

@@ -3,14 +3,14 @@
 
 # E02 — canon ruling: the reference plates and the mesh are the same character
 
-**Director's ruling, 2026-08-10.** Asked whether `blackguard_apose_{0..3}.png` depict the same
-man as the mesh E02 renders control from, the Director looked at the sheet and ruled them
+**Maintainer's ruling, 2026-08-10.** Asked whether `blackguard_apose_{0..3}.png` depict the same
+man as the mesh E02 renders control from, the maintainer looked at the sheet and ruled them
 **the same man.**
 
 Evidence sheet: [E02-identity-sheet.png](../assets/E02-identity-sheet.png).
 
 This is canon, not a measurement. No metric was consulted and none should be — whether the
-figure on screen is the right character is a ground truth the Director holds, and this repo has
+figure on screen is the right character is a ground truth the maintainer holds, and this repo has
 twice recorded the cost of substituting a measurable proxy for that question.
 
 ## What the sheet showed, and why it is built the way it is

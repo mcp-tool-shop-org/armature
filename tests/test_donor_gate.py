@@ -264,7 +264,7 @@ def test_no_fired_frames_halts_rather_than_passing():
 
 
 def test_the_gate_is_a_raise_and_not_an_assert():
-    """CLAUDE.md: an `assert` is deleted by -O. This gate must survive PYTHONOPTIMIZE."""
+    """docs/engineering-rules.md#gates-raise-inside-the-step: an `assert` is deleted by -O. This gate must survive PYTHONOPTIMIZE."""
     src = open(os.path.join(TOOLS, "armature_core", "donor_gate.py"),
                encoding="utf-8").read()
     body = "\n".join(l for l in src.splitlines() if not l.strip().startswith("#"))
@@ -294,7 +294,7 @@ def test_gate_donor_takes_no_thresholds_argument():
     `thresholds={'min_mean_consecutive_frame_difference_over_255': 0,
     'min_fraction_of_frames_with_ankles_in_image': 0}` returned a green verdict on a
     dead-still, ankles-never-in-frame clip — a skip flag inside an andon, which
-    CLAUDE.md forbids outright. A test that needs a different number monkeypatches
+    docs/engineering-rules.md#gates-raise-inside-the-step forbids outright. A test that needs a different number monkeypatches
     `DG.THRESHOLDS`; a different experiment writes a different module constant with its
     own amendment reference."""
     import inspect

@@ -1,6 +1,6 @@
 # E06 closing ruling — the reference paints the tubes, and the rigging gap is confirmed rather than routed around
 
-**Seat:** advisor · **Ruled:** 2026-08-10 · **Spec:**
+**Role:** advisor · **Ruled:** 2026-08-10 · **Spec:**
 [E06-reference-onto-schematic.md](E06-reference-onto-schematic.md) ·
 **Report:** [E06-report.md](E06-report.md) · **Status:** EXPERIMENTING
 
@@ -18,10 +18,10 @@ demonstrated anywhere in this record.
 
 E06 was dispatched to test whether a reference could supply the body while a posable wire armature
 supplied the performance — which, if true, would have made authored motion available **without
-rigging anything**. Read off the discriminator sheet and the structure zoom by this seat:
+rigging anything**. Read off the discriminator sheet and the structure zoom by this session:
 
 **It cannot. The control owns the outline.** Figure width tracks the control within 0.007 of frame
-width at every frame in every arm, the limbs are the wire's cylinder segments, and at the Director's
+width at every frame in every arm, the limbs are the wire's cylinder segments, and at the maintainer's
 zoom **both arms terminate in bristled cylinder ends rather than hands**. D1 and D2 are a stick
 figure wearing armour.
 
@@ -73,18 +73,18 @@ canon ruling named as carrying — and it does NOT answer *"does a bare proper n
 question is UNANSWERED.** It is not worth a generation today; it is worth not pretending it was
 asked.
 
-## Ruling 7 — ⚑ MY ERROR, and it was live under two seats spending credits
+## Ruling 7 — ⚑ MY ERROR, and it was live under two sessions spending credits
 
-E06's spec told two concurrent seats:
+E06's spec told two concurrent sessions:
 
 > *"The regression net is real, not hope: `tests/test_build_payload.py` pins E02's payload bytes, so
 > a merge that corrupts the builder fails the suite before it can spend a credit."*
 
-**That was false, and the executor found it.** Verified by this seat:
+**That was false, and the executor found it.** Verified by this session:
 `test_E02_payload_bytes_have_not_moved` carries
 `@pytest.mark.skipif(not HAVE_E02_UPLOADS, reason="E02 upload records are gitignored output")`, and
 `outputs/` is gitignored — **so the pin skips in every fresh worktree**, which is exactly what both
-the E04 and E06 seats created. The net I instructed two credit-spending seats to rely on **was not
+the E04 and E06 sessions created. The net I instructed two credit-spending sessions to rely on **was not
 running**, over the one file both of them are editing.
 
 **I asserted a safety property without checking it.** That is the same failure as citing a resource
@@ -92,7 +92,7 @@ without enumerating it, in its most expensive form: the assertion was load-beari
 else's work.
 
 **And it is a law, one layer past a familiar one.** *A check that cannot fail is not a check* — a
-check that **silently skips** is worse, because a skip is a pass-shaped absence. A seat reading
+check that **silently skips** is worse, because a skip is a pass-shaped absence. A session reading
 "206 passed" does not see that the load-bearing pin was not among them.
 
 **Ruled, and it is mine because the surface is shared:**
@@ -101,7 +101,7 @@ check that **silently skips** is worse, because a skip is a pass-shaped absence.
    fixtures** so the pin becomes **unconditional**, rather than reading a gitignored output path.
 2. Any remaining skip on a **regression pin** must be **loud** — the suite reports it, or the
    condition is removed.
-3. **The E04 seat is live and must be told now.** It has been editing that builder under a pin that
+3. **The E04 session is live and must be told now.** It has been editing that builder under a pin that
    was not running.
 
 ## Ruling 8 — The byte-versus-pixel catch is upheld
@@ -117,7 +117,7 @@ The silhouette instrument's subject fraction ran **0.0586–0.0877** across all 
 approaching E03's confounded **0.456**, and a **mask evidence sheet** was built so the segmentation
 is checkable by eye. The band was fixed before any number was read.
 
-That is E03's confounded-classifier lesson applied by the next seat without being told to. Adopted.
+That is E03's confounded-classifier lesson applied by the next session without being told to. Adopted.
 
 **Also upheld:** premises 4, 5 and 6 moved from assumed to **measured** — B1's submitted payload
 verified by recorded sha256, and all **34 assets** re-uploaded with every one returning the name
@@ -130,7 +130,7 @@ unspent; **no gate fired and nothing was re-run to get past one.** Gate C was st
 first submission and D2 was held until D1 reached a terminal state, so a systematic failure would
 have cost 4 credits rather than 8.
 
-**Open, and the Director's alone:** whether either figure is the same man as the reference. No
+**Open, and the maintainer's alone:** whether either figure is the same man as the reference. No
 sentence in the report or this ruling answers it, and no metric here approximates it.
 
 **What E06 establishes:** a reference paints a schematic control's figure without stopping its
@@ -142,5 +142,5 @@ shut.
 
 **Next:** rigging is the blocking dependency, unchanged and now confirmed twice — **and nothing
 governs against it.** See E03's closing ruling, Ruling 7, for the retraction of the "June decision"
-framing this seat raised three times. There is no permission to obtain. The next step is to rig a
+framing this session raised three times. There is no permission to obtain. The next step is to rig a
 character.

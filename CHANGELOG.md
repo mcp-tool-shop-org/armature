@@ -13,8 +13,12 @@ installs.
 
 ## [Unreleased]
 
-- **Public-repo hygiene:**
-  - Removed internal labels and local paths from public code and docs
+- **Public-repo hygiene & ffmpeg / receipt consistency:**
+  - Deleted 50 internal dispatch, consult, and role-governance files (moved to private store) and de-labelled the 89 remaining historical docs and index files; upgraded `tests/test_public_hygiene.py` to scan the entire repository with identifier-aware label matching and drive/`/mnt/` path coverage
+  - Added `docs/engineering-rules.md` documenting only the engineering rules cited in `tools/`, `tests/`, and `specs/`, and repointed code, spec, README, and handbook rule citations from the removed internal guide
+  - Added optional `[project.optional-dependencies]` `media = ["imageio-ffmpeg==0.6.0"]` (shipping GPL FFmpeg v7.1 on Windows x86_64 / macOS arm64 and v7.0.2 on Linux) in `pyproject.toml`, documented ffmpeg resolution precedence (`ARMATURE_FFMPEG` > `imageio-ffmpeg` > `PATH`, recorded as `ffmpeg_source` in receipts), and ensured receipt env-source fields (`identity_clause_source`, `ffmpeg_source()`, `from_env` / `ffmpeg_from_env`) reflect the path or binary actually used
+  - Skipped `imageio-ffmpeg` in `tools/encode_control.py` on Intel macOS (`darwin` / `x86_64`, where the `0.6.0` wheel binary is built `--enable-nonfree`), resolving `ARMATURE_FFMPEG` > `PATH` > `none` and recording `imageio_ffmpeg_skipped` in receipts, and updated `docs/license-map.md` with full five-wheel provenance, GPL-2.0 §0 / GPL-3.0 §2 citations, and redistribution / codec-patent caveats
+  - Removed internal labels and local paths from public code and docs (PR #33)
   - De-labelling `pinned_by` in `specs/E13-prompt.json` changes its `prompt_sha256` (`0ec902e0…` → `63a58097…`), so a rebuilt E13 record will not match the original run's digest
 
 - **Structured `CONDITIONAL` rulings, shot diagnostics lows, route-gate false-refusal fixes, pinned licence links, and CI coverage:**
@@ -388,7 +392,7 @@ closed and the free route's LoRA scene-lever priced live.
   **Gate PAIR_TIER**, which raises on a crossed tier-labeled pair and reports NOT VISIBLE
   for an unlabeled single file. 32 tests, including the red test for the crossed pair the
   spec named in advance.
-- **Consult #11** ([docs/comfy-consult-11.md](docs/comfy-consult-11.md)) — the
+- **Consult #11** (`docs/comfy-consult-11.md`, kept privately) — the
   GLB→2.5D-sprite side question ruled reference-not-route: the local catalog's honest
   limit banked (no headless mesh-camera render; the wired-camera path is splat-only;
   Load3D's camera is serializable node state with round-trip fidelity NOT VISIBLE), the
@@ -461,7 +465,7 @@ with the reason — because a falsified approach that leaves the tree becomes do
 tier (2026-08-12). A Trajectory row on every credit-spending spec. Authored image inputs
 carry alpha rather than a baked void. A licence row is not a wiring claim — the graph must
 be shown to load the weights the row names. Binding documents are read from `main` at
-dispatch time. Each is recorded in CLAUDE.md next to the measurement that earned it.
+dispatch time. The code-enforced rules are recorded in `docs/engineering-rules.md` (`#per-route-disclosure`, `#alpha-law`, `#licence-row-not-wiring-claim`), while the workflow rules and the measurements behind them are kept privately.
 
 **The public surfaces.** README with its seven translations — landed before this tag was
 cut, per the release-ordering rule that a tag is immutable and stale translations under it

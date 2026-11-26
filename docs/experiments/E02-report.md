@@ -1,6 +1,6 @@
 # E02 — report (PARTIAL — halted before any credit was spent)
 
-**Seat:** executor · **Written:** 2026-08-10 · Spec:
+**Role:** executor · **Written:** 2026-08-10 · Spec:
 [E02-first-contact.md](E02-first-contact.md) · Predictions:
 [E02-predictions.md](E02-predictions.md) (committed `95e2dd2`, before any submission).
 
@@ -173,7 +173,7 @@ commissioning):
 | URL/remote loader in core | none found |
 | `VHS_LoadVideo` (videohelpersuite) | reads the same server input folder we cannot write a video into |
 | **33 × `LoadImage` → `BatchImagesNode` → `control_video`** | **available**, and lossless by construction |
-| Director uploads a video by hand in the Cloud web UI | possible, needs the Director |
+| maintainer uploads a video by hand in the Cloud web UI | possible, needs the maintainer |
 
 `control_video` is typed `IMAGE` on both `WanVaceToVideo` and `Wan22FunControlToVideo`, so a
 batch of images is a first-class input, not a workaround. `BatchImagesNode` is a core node
@@ -187,14 +187,14 @@ links, control_video fed by the batch, video-bridge and Canny nodes absent). It 
 `dry_run`. **That is not sufficient evidence to spend on**, for two reasons:
 
 1. `dry_run` accepted a `LoadImage` naming a file that does not exist, without a warning —
-   so its silence is weak evidence, exactly as CLAUDE.md warns. Whether `BatchImagesNode`
+   so its silence is weak evidence, exactly as docs/engineering-rules.md#served-templates-and-gate-route warns. Whether `BatchImagesNode`
    truly batches all 33 or silently takes the first can only be settled by execution.
 2. Adopting it replaces `LoadVideo` + `GetVideoComponents` with 34 nodes in **both** graphs.
    The spec pins those graphs by parsed content and rests its PIN_PER_STEP score on them.
    Re-topologising a pinned artifact is a ruling, not an execution detail.
 
-Spent credits have no compensator, which is precisely why the seat that redesigned the
-bridge should not also be the seat that decides the redesign is sound.
+Spent credits have no compensator, which is precisely why the session that redesigned the
+bridge should not also be the session that decides the redesign is sound.
 
 ### Gate C could not be pre-computed, and that confirms the spec's design
 
@@ -237,7 +237,7 @@ blackguard_apose_{0,1,2,3}.png    RGB, 1024x1024, no alpha
 So no reference needs generating. **Whether these depict the same character as
 `blackguard_unirig_rigged.glb` is not something I can settle** — a shared filename stem is
 exactly the kind of evidence this repo has been burned by twice, and identity is canon and
-the Director's. They are named here as the candidates, with their measured properties, for
+the maintainer's. They are named here as the candidates, with their measured properties, for
 his eye. E05 owns reference count and identity; E02 needs only that one exists, and one does.
 
 ## 9. Tests
@@ -268,7 +268,7 @@ bridge*:
 - **(a)** adopt the PNG-batch bridge as a documented deviation — lossless by construction,
   no encoder in the path at all, Gate R becomes N/A rather than PASS for the arms that use
   it; costs a re-topologised graph and one cheap execution to confirm batching semantics;
-- **(b)** have the Director upload the control videos by hand through the Cloud web UI,
+- **(b)** have the maintainer upload the control videos by hand through the Cloud web UI,
   keeping both pinned graphs byte-for-byte as built;
 - **(c)** something else.
 
@@ -322,7 +322,7 @@ a list of links under a bare `images` key. **The list form passed `dry_run` clea
 That is the **third measured instance in E02** of `dry_run` validating something the real
 path refuses. The first two were a `LoadImage` naming a file that does not exist, accepted
 without a warning. This one is stronger: a structurally invalid graph, validated silently.
-CLAUDE.md already says a `dry_run` PASS does not prove link sanity; E02 now has receipts.
+docs/engineering-rules.md#served-templates-and-gate-route already says a `dry_run` PASS does not prove link sanity; E02 now has receipts.
 
 **Cost of learning it: zero.** The rejection happened at prompt validation, before the
 worker ran, and no GPU-hours bucket appeared. `verify_topology` now rejects the bare-list
@@ -397,7 +397,7 @@ ceiling waits on it.
 
 `outputs/E02/sheets/E02-A1a-gate0.png` — control | output | reference | provenance, native
 480x832 in both rows with no resampling, plus the 33-frame clip and all 33 stills.
-Delivered to the Director. **No arm metric is quoted anywhere above**: sections 11-14 are
+Delivered to the maintainer. **No arm metric is quoted anywhere above**: sections 11-14 are
 gate verdicts and bridge measurements, which is the ordering Gate 0 governs.
 
 ## 16. Status after part 2
@@ -534,7 +534,7 @@ load-bearing: the A1a sheet on its own could never have distinguished "control w
 what A2 shows they do.
 
 The panel is `outputs/E02/sheets/E02-thesis-A1a-vs-A2.png` — one control row, two output
-rows, same five frame indices. Delivered to the Director with both clips at 8fps.
+rows, same five frame indices. Delivered to the maintainer with both clips at 8fps.
 
 ### Diagnostic — motion *timing*, gating nothing
 
@@ -608,7 +608,7 @@ fail. The re-registration was made while A1b did not yet exist.
 |---|---|
 | timing correlation vs control: **+0.30** | **+0.581** |
 | A1b nearer A1a than A2 on that unit | **correct** — \|A1b−A1a\| 0.061 vs \|A1b−A2\| 0.646 |
-| direction: **WORSE** than A1a | **the Director's call on the sheet** — see below |
+| direction: **WORSE** than A1a | **the maintainer's call on the sheet** — see below |
 
 **The number missed, and it missed in the direction I did not expect.** I predicted A1b
 would track *less* well than A1a (+0.30 against A1a's +0.521). Measured, A1b sits at
@@ -669,7 +669,7 @@ I defined it before measuring, deliberately in terms no metric settles:
 > **AS WELL** — for at least **28 of 33** frames, A1b's figure occupies the same region of
 > frame and shows the same facing as A1a's, judged by eye at full size.
 
-That count is the Director's to make on `E02-A1a-vs-A1b-polarity.png`. **P2 is reported as
+That count is the maintainer's to make on `E02-A1a-vs-A1b-polarity.png`. **P2 is reported as
 measured-and-unruled**: the numeric clause missed, and the direction clause is registered,
 unjudged, and waiting on an eye.
 
@@ -696,7 +696,7 @@ The verbatim header was added to the top of seven documents:
 |---|---|
 | P1 | **measured — registered 0 bit-identical pairs, measured 3. Wrong.** |
 | P2 | numeric clause **missed** (+0.30 registered, +0.581 measured); direction clause **unruled** |
-| P3 | **unruled** — the Director's eye on the thesis panel |
+| P3 | **unruled** — the maintainer's eye on the thesis panel |
 | P4 | **not measured** — A3 deferred |
 
 **Generations: 7 of 12. Credits: 28 of a 48-credit ceiling.** Five generations unspent — the
@@ -719,7 +719,7 @@ written after my P2 commit at 19:24:59, while this executor session was live. Th
 the same `255-x` transform I had already performed inline, as a recorded re-runnable tool
 with 10 tests, and those tests pass.
 
-**They are left untracked and uncommitted.** Committing them would attribute another seat's
+**They are left untracked and uncommitted.** Committing them would attribute another session's
 work to the executor and would tidy away the very thing the standing rule exists to surface;
 deleting them would be worse. The standing instruction covers commits on the branch, and no
 commit appeared — but a write into a live executor's working tree is the same class of event,

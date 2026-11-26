@@ -24,7 +24,7 @@ session. Every path it writes is composed from `--out` and a fixed literal, so n
 operator-supplied name component can carry a panel outside the directory the
 compensator names. The GLB is opened read-only.
 
-Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Named because docs/engineering-rules.md#named-compensators's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
 Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
 question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
 the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
@@ -69,7 +69,7 @@ INSET_JOINTS = (("shoulder", "shoulder"), ("elbow", "elbow"),
 SIDE_PROBE_JOINTS = ("shoulder", "elbow", "wrist")
 
 #: The liveness floor, as a FRACTION of the subject's own bbox diagonal rather than as a
-#: length in metres (F-8958f574; CLAUDE.md, "a global constant must not govern a local
+#: length in metres (F-8958f574; docs/engineering-rules.md#no-global-constant-for-local-feature, "a global constant must not govern a local
 #: feature"). Carried from `make_rig_sheet`'s `1e-4 * diagonal`, which is the same andon on
 #: the same quantity and was already written this way -- one number, not two that can drift.
 ARC_FLOOR_FRACTION = 1e-4
@@ -208,7 +208,7 @@ def arc_liveness(measured, name, at_rest, where):
 
     WAVE 16, F-8958f574 -- the floor. Two of the three copies bounded a measured
     displacement with `1e-6`, an absolute length in metres, where the third bounded it as
-    `1e-4 * diagonal` and carried a comment saying so. CLAUDE.md rules the direction: a
+    `1e-4 * diagonal` and carried a comment saying so. docs/engineering-rules.md#no-global-constant-for-local-feature rules the direction: a
     global constant must not govern a local feature. On a subject authored at a small unit
     scale a real arc below 1e-6 m read as "this route does not move" and the sheet was
     refused; on a large-unit subject, float32 round-trip noise above 1e-6 m read as a

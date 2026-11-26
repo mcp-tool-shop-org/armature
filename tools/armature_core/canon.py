@@ -960,7 +960,7 @@ def require_canon(
     # `donor_gate` (:458) and `lift_solve` (:627) write theirs into the record they emit
     # and every payload builder records its own `tool_version`. Two Gate CANON records
     # stored in `outputs/<experiment>/` from either side of a clause change were
-    # indistinguishable in the record, which is the reproducibility claim CLAUDE.md makes
+    # indistinguishable in the record, which is the reproducibility claim docs/engineering-rules.md#reproducible-generation-records makes
     # of every generation record. Written on BOTH verdicts — see the UNGATED literal above.
     covered["tool_version"] = TOOL_VERSION
     return covered

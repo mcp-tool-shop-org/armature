@@ -1,15 +1,15 @@
-# The first-arc audit — called by the Director, 2026-08-11
+# The first-arc audit — called by the maintainer, 2026-08-11
 
-**Seat:** advisor (incoming 2026-08-11) · **Trigger:** the Director called a repo-wide audit, judging the experiments repetitive and
-basic, and asked this seat to weigh whether to start from scratch carrying the learnings.
+**Role:** advisor (incoming 2026-08-11) · **Trigger:** the maintainer called a repo-wide audit, judging the experiments repetitive and
+basic, and asked this session to weigh whether to start from scratch carrying the learnings.
 
-**Why this seat grades it:** the founding rule — the seat that designs an experiment does not
-grade its results. This seat designed nothing in the arc; every document cited below was read
+**Why this session grades it:** the founding rule — the session that designs an experiment does not
+grade its results. This session designed nothing in the arc; every document cited below was read
 this session, and every number was re-measured from payloads, ledgers and git rather than
 inherited from the handoff.
 
 **What this audit may not judge:** whether any figure is the same man, and whether any output
-is good. Those are the Director's, and two artifacts still await his eye (§6). No sentence here
+is good. Those are the maintainer's, and two artifacts still await his eye (§6). No sentence here
 answers them.
 
 ---
@@ -27,7 +27,7 @@ answers them.
 
 Verified from payload JSONs on disk (`outputs/*/payloads/` — 4+10+3+2 files, E02's seven
 reconstructed from its report's ledger lines at "6 of 12"/"7 of 12"), and from each closing
-ruling's Gate C count. Credits are 4 per generation, measured once via the Director's balance
+ruling's Gate C count. Credits are 4 per generation, measured once via the maintainer's balance
 delta (14,284 → 14,280); `estimate_credits` returns 0 on the open-weights route, so the balance
 remains the only instrument.
 
@@ -78,24 +78,24 @@ level and an empty one at the product level. The spec template marks every premi
 ASSUMED — premises are *facts*; no row exists for *purpose*. A law that must bind gets a gate.
 A correction that lives as prose in a closed experiment's folder binds nobody.
 
-**2c. The alternative was never put to the Director contrastively.** He un-deferred E04 —
+**2c. The alternative was never put to the maintainer contrastively.** He un-deferred E04 —
 his credits, his call, and the deferral had been framed to him as a *priority* question. What
 was never framed: *"these 40 credits can buy ten re-runs of the turntable for a noise floor, or
-the first authored shot — the seat recommends which and why."* The studio's own standard
+the first authored shot — the session recommends which and why."* The studio's own standard
 (UNCERTAINTY_GATED_HUMANS) requires exactly that shape. The removed credit ceiling made the
 portfolio question *more* important, and it was never asked once.
 
 **2d. The pace made the portfolio question unaskable.** The entire arc — E01 through E06, S01,
 S02, four consults, two handoffs — ran in roughly 36 hours, under the standing marathon
-instruction. At sprint pace each seat optimised its own experiment; no session ever
-stepped back to ask what the last three spends had bought toward footage. The Director's late-night
+instruction. At sprint pace each session optimised its own experiment; no session ever
+stepped back to ask what the last three spends had bought toward footage. The maintainer's late-night
 assessment closing that session is that cost surfacing.
 
 **2e. The setup work never happened, and the subject sabotaged the judge.** Every judgment
 artifact in the repo's life shows a **black-armoured figure on grey or white** — the palette
 that crushes exactly the material, face and silhouette-edge information the identity question
 needs, against his standing rule that *dark means tone with colour in the shadows*. Read with
-this seat's own eyes on `E06-discriminator.png` and `E04-C-bright-s4.png`: the provenance
+this session's own eyes on `E06-discriminator.png` and `E04-C-bright-s4.png`: the provenance
 columns are genuinely strong (hashes, seeds, gate verdicts on the sheet), but panel scales are
 mixed, labels are 8-px grey, there are no zoom insets on hands or face — the regions every
 ruling says decide — and internal debug states (`Gate B NOT YET RUN`) print on artifacts meant
@@ -157,12 +157,12 @@ again. The sprawl problem is real but is a *reading-order* problem, already solv
 scale by the closing-ruling pattern; it does not require a migration.
 
 **What a restart does not fix — and this is the decisive clause.** The failure is not stored in
-the tree. It is in the **dispatch criterion** — what a seat chooses to spend the next session
-on — and that travels with the seats, not the repo. The proof is in §2b: the correction *was in
-the tree*, quoted by the seat that violated it. A fresh tree has strictly fewer bindings, not
+the tree. It is in the **dispatch criterion** — what a session chooses to spend the next session
+on — and that travels with the sessions, not the repo. The proof is in §2b: the correction *was in
+the tree*, quoted by the session that violated it. A fresh tree has strictly fewer bindings, not
 more.
 
-**Recommendation — the Director may have expected "scrap it" or "keep it"; this seat recommends
+**Recommendation — the maintainer may have expected "scrap it" or "keep it"; this session recommends
 neither pole:** keep the repo, **end the E-series**. Close the arc as the record of a mechanism
 now measured, and open a new series whose unit is **the shot** — numbered SH01, SH02, … — under
 the conditions in §5. The E-numbering does not continue; an experiment may exist afterward only
@@ -183,7 +183,7 @@ The call is his. This document gives him the ledger to make it, and nothing here
    route is hand-rigging or transfer from a named-bone skeleton.
 3. **The first credit after that buys the first authored shot.** Staged, lit, on a facet
    canonical asset, with a shot spec in `specs/`. Rig → stage → shoot, in that order — the
-   sequence the Director named (he asked why limbs were being tested before any
+   sequence the maintainer named (he asked why limbs were being tested before any
    skeleton-building process existed) and the arc never ran.
 4. **Corrections get enforcement surfaces.** The spec template gains a standing-corrections row
    the advisor checks at dispatch, the way premises are checked now. A correction that matters
@@ -193,7 +193,7 @@ The call is his. This document gives him the ledger to make it, and nothing here
    re-cuts are recorded in it per its own header, and the advisor reads it at every dispatch.
 6. **Sheets become dailies.** Uniform panel scale; the reference at judgment size; zoom insets
    on hands, face, and whatever region the experiment turns on; labels readable at review
-   distance; no internal gate states on Director-facing artifacts. And the judgment subject must
+   distance; no internal gate states on maintainer-facing artifacts. And the judgment subject must
    carry judgment information — colour in the shadows, a face, material variety. *These are
    studio artifacts and they should look like a studio made them.*
 7. **Public surfaces stay true.** The README simultaneously said 12 and 22 generations, and 206
@@ -215,19 +215,19 @@ The call is his. This document gives him the ledger to make it, and nothing here
   and the two caveats from the handoff (record-index has no tests of its own; certificate logic
   exists twice) argue the next version should follow soon, not that 0.1.0 waits.
 
-**Advisor queue (after his read):** the five S02 ruling questions (`S02-report.md` §7); E02
+**Advisor queue (after his read):** the five S02 ruling questions (`docs/dispatches/S02-report.md` §7, kept privately); E02
 Ruling 5's disposition of `tools/invert_frames.py` (adoptable by separate advisor commit, still
 untracked); the roadmap re-cut per §5.5 once §4 is decided.
 
 **Standing hazard:** the VRAM watchdog was found dead this session (heartbeat 7.5 h stale). No
 GPU work — Blender renders included — until
-`pwsh -NoProfile -File E:\AI\training\_watchdog_start.ps1` shows a live heartbeat.
+`pwsh -NoProfile -File <sibling-training>/_watchdog_start.ps1` shows a live heartbeat.
 
 ---
 
-## AMENDMENT 1 — 2026-08-11, advisor, on the Director's reading
+## AMENDMENT 1 — 2026-08-11, advisor, on the maintainer's reading
 
-The Director restated the audit's target as he directed, and they are sharper than §2's framing:
+The maintainer restated the audit's target as he directed, and they are sharper than §2's framing:
 the drift shrank a complete professional GLB-to-video pipeline for movies, game cutscenes, and character poses and movement into a turnaround repo, and he had
 to correct it twice in two sessions. That is the finding; the validity/value mechanics in §2
 are the anatomy of it, not a substitute for it.
@@ -235,7 +235,7 @@ are the anatomy of it, not a substitute for it.
 **His direction going forward is ruled and supersedes §4's renumbering proposal:** the method
 stays **experiments** — aimed at the full pipeline, consulting the Comfy Agent as needed,
 trajectory held true. The SH-series is therefore **DROPPED**; the E-series continues under §5's
-conditions, which stand in full. §5.1's trajectory requirement and the scope block now bind
-mechanically in `CLAUDE.md` (this commit) rather than living as prose here. E07 (the skeleton)
+conditions, which stand in full. §5.1's trajectory requirement (internal guide, kept privately) and the scope block
+(`docs/engineering-rules.md#scope-and-posture`) now bind mechanically (this commit) rather than living as prose here. E07 (the skeleton)
 is the first spec dispatched under them; E08 (the first authored performance of the character)
 follows it and is where credits next flow.

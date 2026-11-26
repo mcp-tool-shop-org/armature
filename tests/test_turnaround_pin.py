@@ -327,7 +327,7 @@ def test_both_the_pin_and_the_span_function_now_reject_a_non_finite_scale():
     thing binding a non-finite scale. The premise was true and is now false: the guard read
     `if ortho_scale <= 0.0`, and `nan <= 0.0` is False while `inf > 0.0` is True, so BOTH
     walked past the function's own and only clause and it returned `(inf, inf)` /
-    `(nan, nan)`. That is the direction the invariant did not bound, and CLAUDE.md puts the
+    `(nan, nan)`. That is the direction the invariant did not bound, and docs/engineering-rules.md#gates-raise-inside-the-step puts the
     andon inside the function performing the step, so the clause is now
     `not (math.isfinite(ortho_scale) and ortho_scale > 0.0)`.
 

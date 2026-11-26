@@ -1,21 +1,21 @@
 # E13 — closing ruling: the composed route answers its question
 
-**E13 is CLOSED. Advisor ruling 2026-08-13; the Director's eye is the verdict of
+**E13 is CLOSED. Advisor ruling 2026-08-13; the maintainer's eye is the verdict of
 record throughout.** The arc, all in four days of repo life and two of experiment
 life: dispatched → halted at zero spend on two structural premise failures
 ([the halt ruling](E13-halt-ruling.md)) → repaired by S03
-([its ruling](../dispatches/S03-ruling.md)) → re-armed → run to all four submissions.
+(`docs/dispatches/S03-ruling.md`, kept privately) → re-armed → run to all four submissions.
 Reports: [E13-report.md](E13-report.md) (the halt) and
 [E13-run-report.md](E13-run-report.md) (the run), branch `E13-run` @ `53757c6`,
 merged at this close. **The repo's first partner-credit generations: four, inside the
 424–844 bracket, the 900 halt never approached.**
 
-## R1 — Identity holds. The Director's verdict, and the route's question answered
+## R1 — Identity holds. The maintainer's verdict, and the route's question answered
 
 On both arms, both seeds, the wooden performer came through a hosted, human-trained
 tier as **his character** — ball joints, ovoid cranium, wood tone, the face at close
 range — ruled at the only instrument that is canon. The mis-prediction family is owned
-on both seats: the spec's stills clause (this seat, blind) and the run's R2/R3/S4 (the
+on both sessions: the spec's stills clause (this session, blind) and the run's R2/R3/S4 (the
 executor, blind) all expected the tier to overwrite non-human structure, and it did
 not in any looked-at frame. That is the **third consecutive sighting of one-directional
 pessimism about what these models do with authored material** (E12 R8 named the first
@@ -24,7 +24,7 @@ robustness; predictions about "the model will destroy X" now carry that history.
 
 ## R2 — The worlds verdict: both interiors work, and the lever is named
 
-The Director ruled both interiors **work** — and reads the co-variance as the route's
+The maintainer ruled both interiors **work** — and reads the co-variance as the route's
 steering lever: **what rides in the reference's own ground steers the model-decided
 world.** Grey plates begat a grey studio with a model-chosen push-in; the warm bar
 clip begat a warm interior. The spec's seed-volatility hypothesis **missed in the
@@ -32,7 +32,7 @@ informative direction**: within each arm, both seeds produced the same world fam
 on this tier the reference ground dominates seed chaos, the reverse of every prior
 sighting on the local tiers. Mechanism caveat kept intact, per the executor's honest
 flag: at four generations with no measured repeat-variance floor, plate-bleed and
-studio-default are unseparated; the Director's ruling is about the results and the
+studio-default are unseparated; the maintainer's ruling is about the results and the
 lever's usefulness, and any property-grade steering claim runs under the two-seed law
 in a designed follow-up. One adjacent null recorded: the kit's darker staging did
 **not** carry into output key — both A1 outputs are high-key. Ground and palette
@@ -49,12 +49,12 @@ VIDEO-typed socket on the platform is in principle reachable from authored frame
 driving videos for the driven route's unpark, edit-tier inputs, all of it. The
 assembly instruments ride this merge.
 
-## R4 — The holes propagated, and the Director acted the same day
+## R4 — The holes propagated, and the maintainer acted the same day
 
 Output carries the performer's texture patches at jaw, temple, shoulder, ribcage and
 flank — the confound the re-arm named blind: **a faithful hole and an identity failure
 are not separable by looking at the patch.** Ruled **TOP PRIORITY in facet** by the
-Director (facet `docs/known-defects.md`, final entry + the kickoff banner, facet
+Maintainer (facet `docs/known-defects.md`, final entry + the kickoff banner, facet
 commit `ea34a45`). The cross-repo pointer is the record; armature documents and
 consumes, never edits.
 
@@ -84,9 +84,9 @@ than rewrite them — correct on the enumerate-before-commissioning law. This cl
 merges `E13-run` into `main` carrying S03's commits with it: **the repair arc and the
 experiment it repaired close together**, and `S03-run` reads fully merged from today.
 
-## R7 — Scorecard, both seats, owned
+## R7 — Scorecard, both sessions, owned
 
-Spec hypotheses (this seat, blind at spec time): **H-E13a MISS** (predicted stills
+Spec hypotheses (this session, blind at spec time): **H-E13a MISS** (predicted stills
 identity holds on at most 1 of 2 — held on both, pessimistic) · **H-E13b HIT** (clip
 identity 2/2) · **H-E13c MISS** (predicted worlds differ across seeds — the reference
 ground dominated; the miss is the finding) · **H-E13d HIT** (watermark=false honored).
@@ -102,7 +102,7 @@ credits per generation, under its disclosure note (the spec's 2026-08-13 amendme
 with the residuals named there. Its role in the scope: the footage class where
 model-decided framing is acceptable — performance studies, motion reels, idea footage
 — now measured rather than hoped. **Adoption into any production shape remains a
-per-use Director decision; no route is canon by momentum.** The strength lever
+per-use maintainer decision; no route is canon by momentum.** The strength lever
 (reference count, clip length, the subject-scoped clause) and the steering lever
 (authored grounds in references) are the route's named follow-on questions, each a
 spec away.

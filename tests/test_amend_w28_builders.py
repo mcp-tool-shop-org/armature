@@ -337,7 +337,7 @@ def _r2v(tmp_path, *extra):
 
 def test_the_paid_route_prints_its_disclosure_above_its_success_line(tmp_path, capsys):
     """Read BACK off stdout, not off the record: the obligation is said at the moment the
-    spend is authored, which is what CLAUDE.md's per-route disclosure ruling asks."""
+    spend is authored, which is what docs/engineering-rules.md#per-route-disclosure's per-route disclosure ruling asks."""
     argv, _out = _r2v(tmp_path)
     assert BR2V.main(argv) == 0
     printed = capsys.readouterr().out
@@ -380,7 +380,7 @@ def test_the_record_carries_the_disclosure_block(tmp_path):
 
 
 def test_the_watermark_line_is_read_off_the_payload_not_off_a_literal(tmp_path):
-    """A licence row is not a wiring claim (CLAUDE.md). The disclosure's watermark half
+    """A licence row is not a wiring claim (docs/engineering-rules.md#licence-row-not-wiring-claim). The disclosure's watermark half
     must describe the value the GRAPH carries, so it cannot drift from the request."""
     argv, out = _r2v(tmp_path)
     assert BR2V.main(argv) == 0
@@ -527,7 +527,7 @@ def test_the_downloader_command_carries_curls_own_bounds():
 
 
 def test_the_process_bound_is_derived_from_the_work_not_a_global_constant():
-    """CLAUDE.md: a global constant must not govern a local feature. One wave of the
+    """docs/engineering-rules.md#no-global-constant-for-local-feature: a global constant must not govern a local feature. One wave of the
     throttle costs one per-request bound; the start-up is not any request's."""
     one_wave = F.DOWNLOAD_STARTUP_S + F.CURL_MAX_TIME_S
     assert F.timeout_for_jobs(1) == one_wave

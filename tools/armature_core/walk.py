@@ -792,7 +792,7 @@ def build_gait(performer, params):
     # because THIS is the tool that performs the step - authoring the ground truth every
     # downstream measurement is graded against. A params object whose `stance_frac` was
     # mutated after construction would otherwise walk straight past the constructor's
-    # check, and CLAUDE.md puts the andon inside the tool that performs the step.
+    # check, and docs/engineering-rules.md#gates-raise-inside-the-step puts the andon inside the tool that performs the step.
     gate_stance_frac_is_modelled(getattr(p, "stance_frac", STANCE_FRAC_MODELLED),
                                  where="build_gait")
     # The same argument for the other mutable attribute the schedule is solved from

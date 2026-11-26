@@ -724,7 +724,7 @@ def test_every_committed_registration_in_specs_still_reads():
 # registration_missing, registration_unreadable, registration_not_a_mapping,
 # registration_no_seeds_key, registration_seeds_not_a_list, and the element clause added
 # here. NO numeric range is invented: this module records no measured bound for a seed's
-# magnitude, and CLAUDE.md forbids a global constant governing a local feature. Emptiness
+# magnitude, and docs/engineering-rules.md#no-global-constant-for-local-feature forbids a global constant governing a local feature. Emptiness
 # stays out by the reader's own stated rule (the caller that defaults raises
 # `no_seed_and_no_registration`).
 

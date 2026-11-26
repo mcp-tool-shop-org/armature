@@ -38,7 +38,7 @@ outer border, which on an authored RGBA master is the RGB sitting UNDER alpha=0.
 produced an RGB fit whose pad pixel was (128, 128, 128), recorded as
 `"pad_source": "median of the source's own outer 4% border"` with the word `alpha` nowhere
 in the provenance. `fit_reference` output is the reference image E08 and E10 both submitted,
-and CLAUDE.md already names these pads as the standing suspect for E08's washed bands.
+and docs/engineering-rules.md#reproducible-generation-records already names these pads as the standing suspect for E08's washed bands.
 
 So the read is `IMREAD_UNCHANGED`, a 4-channel source refuses unless `--alpha-over=R,G,B`
 names the plate (`composite_reference.compose_over_named_plate` — the one implementation,
@@ -95,7 +95,7 @@ def parse_args(argv=None):
                     help="directory for the fitted image and its provenance JSON")
     # WAVE 28 (F-01f7eda9): these two decide the pixel size of the image a paid run
     # SUBMITS and carried no help at all, in a parser whose `--pad` and `--alpha-over`
-    # carry two of the best help strings in the domain. CLAUDE.md's generator-legality
+    # carry two of the best help strings in the domain. docs/engineering-rules.md#generator-legal-frames's generator-legality
     # rule — every video model constrains resolution and frame count, and the constraint
     # is recorded per model in the spec that first uses it — reached the operator nowhere
     # in this tool, and the defaults are E08-era literals with no note of the route they

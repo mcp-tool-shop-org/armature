@@ -7,7 +7,7 @@
     "db_env": "ARMATURE_INDEX_DB"
   },
   "markers": [
-    "CLAUDE.md",
+    "docs/engineering-rules.md",
     "docs/experiments"
   ],
   "corpora": {
@@ -15,14 +15,13 @@
     "record_roots": [
       "docs"
     ],
-    "_record_top_files": "HANDOFF.md is armature's dispatch record and carries no `## Session handoff` headers — it is indexed as prose rather than as handoff rows, which is a difference from facet, not a defect.",
+    "_record_top_files": "docs/engineering-rules.md holds the public rule record and README.md is indexed as prose; armature carries no `## Session handoff` headers, which is a difference from facet, not a defect.",
     "record_top_files": [
-      "CLAUDE.md",
-      "README.md",
-      "HANDOFF.md"
+      "docs/engineering-rules.md",
+      "README.md"
     ],
     "law_files": [
-      "CLAUDE.md"
+      "docs/engineering-rules.md"
     ],
     "_prose_files": "EMPTY BY DECLARATION, not by omission. armature has no docs/context-architecture.md, no docs/handbook/, no docs/profiles-design.md, no docs/style-registers.md. Declaring the emptiness is a different statement from leaving the key out, and only one of them is a declaration.",
     "prose_files": [],
@@ -38,7 +37,7 @@
   },
   "discovery": {
     "ruling_doc": "^E\\d\\d-.*ruling.*\\.md$",
-    "_kickoff_doc": "MATCHES NOTHING TODAY, and that is measured rather than assumed: armature has zero `E\\d\\d-*kickoff*.md` documents — its dispatches are docs/dispatches/S\\d\\d-*.md and its handoff record is HANDOFF.md. The pattern is declared in facet's shape so that a kickoff, if armature ever writes one, is discovered rather than silently missed.",
+    "_kickoff_doc": "MATCHES NOTHING TODAY, and that is measured rather than assumed: armature has zero `E\\d\\d-*kickoff*.md` documents (session dispatches were archived privately). The pattern is declared in facet's shape so that a kickoff, if armature ever writes one, is discovered rather than silently missed.",
     "kickoff_doc": "^E\\d\\d-.*kickoff.*\\.md$",
     "_ruling_arc": "STEM-DERIVED, and load-bearing here specifically: armature carries FOUR E02 ruling documents (bridge, canon, closing, halt). Stem-derived they are four distinct arcs numbering from 1 independently. Keyed on the E-number they would be one arc and — once the second header form below is admitted — would collide on rulings 1–7 from three documents at once. Measured before this file was written.",
     "ruling_arc": {
@@ -96,8 +95,8 @@
       "RULED"
     ],
     "authority": {
-      "pattern": "\\bDirector\\b",
-      "named": "Director",
+      "pattern": "\\bmaintainer\\b",
+      "named": "maintainer",
       "default": "advisor"
     },
     "experiment_status": [
@@ -196,15 +195,13 @@
   "sweep": {
     "current_state_files": [
       "README.md",
-      "CLAUDE.md",
-      "HANDOFF.md"
+      "docs/engineering-rules.md"
     ],
     "current_state_dirs": [
       "site/src/content/docs/"
     ],
     "historical_dirs": [
-      "docs/experiments/",
-      "docs/dispatches/"
+      "docs/experiments/"
     ],
     "bannered": "",
     "banner": "SUPERSEDED",
@@ -327,7 +324,7 @@
     ],
     "_handoff_coverage": "NULL BY DECLARATION — armature has no `## Session handoff` documents at all, so a coverage check here would be a check that cannot fail.",
     "handoff_coverage": null,
-    "_experiment_coverage": "NULL BY DECLARATION for the same reason as above: armature's arcs are still opening and a fixed span would go stale the week it was written. The record is moving under live seats.",
+    "_experiment_coverage": "NULL BY DECLARATION for the same reason as above: armature's arcs are still opening and a fixed span would go stale the week it was written. The record is moving under live sessions.",
     "experiment_coverage": null,
     "_seeded": "THE EXTERNAL VERIFIER'S KEY. Every phrase here ran report-only through `q` FIRST and its target ranked <= 3 BEFORE the row entered the gate — seeds are ruled in from measured ranks, never added and then tuned until green. Populated in the commit that measured them.",
     "seeded": [
@@ -381,7 +378,7 @@
       ],
       [
         "whose eye governs",
-        "The Director's eye governs and it overturns the report's framing",
+        "The maintainer's eye governs and it overturns the report's framing",
         [
           "docs/experiments/E03-closing-ruling.md",
           "Ruling 1"

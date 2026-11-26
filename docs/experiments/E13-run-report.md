@@ -1,6 +1,6 @@
 # E13 (re-armed) — the run report
 
-**Executor session, 2026-08-13.** Worktree `E:\AI\armature-E13`, branch `E13-run`.
+**Executor session, 2026-08-13.** Worktree `<worktree-E13>`, branch `E13-run`.
 Spec: [E13-composed-route-probe.md](E13-composed-route-probe.md) with its RE-ARM
 amendment. Predictions: [E13-rerun-predictions.md](E13-rerun-predictions.md), committed
 at `d46d3fe` **before the probe was built and before any reference was composited**.
@@ -10,7 +10,7 @@ at `d46d3fe` **before the probe was built and before any reference was composite
 halt-era session's and are untouched. Nothing in either file is rewritten, rescored, or
 softened by anything here.
 
-**Nothing in this report is a judgement of output quality.** The Director's eye is the
+**Nothing in this report is a judgement of output quality.** The maintainer's eye is the
 verdict; every number here is a diagnostic and gates nothing.
 
 ---
@@ -21,9 +21,9 @@ verdict; every number here is a diagnostic and gates nothing.
 |---|---|
 | `git merge origin/main` in the worktree | **done** — 23 files, docs-only as expected (translations, SECURITY/SCORECARD/SHIP_GATE, the S03 dispatch + ruling, the E13 halt ruling, licence-map and publishing edits) |
 | the branched spec contains the RE-ARM amendment | **yes** — `grep -c "RE-ARM"` → 1 |
-| binding documents read from `main`, not the worktree | CLAUDE.md blob `b6b9c61d…` is byte-identical between `main` and the merged worktree (the whole-file `diff` is CRLF in the checkout against LF in the object store, the same artefact the halt report recorded). Read in full: CLAUDE.md · the E13 spec with all four amendments · [E13-halt-ruling.md](E13-halt-ruling.md) · [S03-ruling.md](../dispatches/S03-ruling.md) · the S03 report from `S03-run` · E12 w2/w3 §7 |
+| binding documents read from `main`, not the worktree | Internal rule guide (`CLAUDE.md`, kept privately) blob `b6b9c61d…` is byte-identical between `main` and the merged worktree (the whole-file `diff` is CRLF in the checkout against LF in the object store, the same artefact the halt report recorded). Read in full: `CLAUDE.md` (kept privately) · the E13 spec with all four amendments · [E13-halt-ruling.md](E13-halt-ruling.md) · `docs/dispatches/S03-ruling.md` (kept privately) · the S03 report from `S03-run` · E12 w2/w3 §7 |
 | VRAM watchdog | **alive** at session start (heartbeat fresh, 6951/32607 MiB, 24249 below the 31200 ceiling). No GPU work ran this session — no Blender, no local weights; compositing and measurement are CPU |
-| `E:\AI\armature-S03`, `E:\AI\armature-E12`, `E:\AI\training`, `E:\AI\facet` | **read only.** Nothing written to any of them |
+| `<worktree-S03>`, `<worktree-E12>`, `<sibling-training>`, `<sibling-facet>` | **read only.** Nothing written to any of them |
 
 ## 1. The fresh credit re-estimate — the ordered first act
 
@@ -46,7 +46,7 @@ catalog's 2026-08-12 figure.
 ## 2. The node contract, re-measured
 
 `Wan2ReferenceVideoApi` re-measured with `get_node`, 2026-08-13, because it is the contract
-any graph is built against and a premise of this seat's own dispatch. **Byte-consistent
+any graph is built against and a premise of this session's own dispatch. **Byte-consistent
 with the spec's premise row and with the halt report's re-measurement:** `model.prompt`,
 `model.negative_prompt`, `model.resolution` ∈ {720P, 1080P}, `model.ratio` ∈ {16:9, 9:16,
 1:1, 4:3, 3:4}, `model.duration` INT default 5 (min 2, max 10), `model.reference_images.
@@ -58,7 +58,7 @@ image1…image5`, `model.reference_videos.video1…video3`, `seed` INT (max 2147
 five classes at once returned `LoadImage`'s `image` COMBO with an **empty** option list;
 `get_node` on `LoadImage` alone returned a populated list of several hundred
 content-addressed uploads. The empty list is a property of the multi-name query, not
-evidence that uploads were purged. Recorded so the next seat does not read a batched query
+evidence that uploads were purged. Recorded so the next session does not read a batched query
 as an outage.
 
 ---
@@ -125,7 +125,7 @@ warnings, zero partner credits. One output: `6a143745b3…mp4`, downloaded to
 ### The decode comparison
 
 `tools/measure_cascade_clip.py` (`E13.1`) against the same 81 source frames S03 pinned
-(`E:\AI\armature-E12\outputs\E12\probe\w3-seed1\lossless`, read-only), with the repo's
+(`<worktree-E12>/outputs\E12\probe\w3-seed1\lossless`, read-only), with the repo's
 pinned ffmpeg. Full record: `outputs/E13/route/cascade_decode_compare.json`.
 
 | | measured |
@@ -238,7 +238,7 @@ not by prefix (Gate PIN). Gate ALPHA re-measured extrema (0, 255) on all four ra
 inheriting S03's manifest. Gate FLAT measured 0.159–0.260 of each frame off-plate.
 
 **The plate: sRGB (154, 154, 157)** — `make_hole_survey.OLD_VOID_RGB`, the presentation the
-Director's eye passed. Straight-alpha composite, `rgb*a + plate*(1-a)`; the submitted PNGs
+Maintainer's eye passed. Straight-alpha composite, `rgb*a + plate*(1-a)`; the submitted PNGs
 carry no alpha channel, because a video VAE is RGB and raw transparency cannot reach the model.
 
 **What the four plates show, looked at at full size, described and not judged.** All four
@@ -307,7 +307,7 @@ reference clip.
 ### Observations, stated as observations
 
 **None of this is a judgement of quality or of identity. Identity is canon and the
-Director's; no metric here approximates it and every number gates nothing.**
+Maintainer's; no metric here approximates it and every number gates nothing.**
 
 - **Material and articulation.** In every frame looked at, on all four submissions, the
   figure reads as a jointed wooden/clay lay figure: ball joints at shoulder, elbow, hip and
@@ -376,7 +376,7 @@ Scored honestly, including the three I got wrong.
 |---|---|---|
 | S1 | the socket accepts a constructed VIDEO at runtime | **HELD** — both A2 submissions completed |
 | S2 | material class holds, 2 of 2 | **HELD** in every frame looked at |
-| S3 | proportions fail on ≥1 of 2, and on **strictly fewer** seeds than A1 | **UNSCOREABLE as written.** A1 did not visibly fail (R2), so "strictly fewer than A1" has no room below it. The comparison the clause was built to make cannot be made from this evidence, and inventing a rescoring after seeing the outputs would be the retuning CLAUDE.md forbids |
+| S3 | proportions fail on ≥1 of 2, and on **strictly fewer** seeds than A1 | **UNSCOREABLE as written.** A1 did not visibly fail (R2), so "strictly fewer than A1" has no room below it. The comparison the clause was built to make cannot be made from this evidence, and inventing a rescoring after seeing the outputs would be the retuning the internal guide (kept privately) forbids |
 | S4 | the head fails to read as the carved cranium on ≥1 of 2 | **WRONG as written**, same reading as R3 |
 | S5 | worlds differ across seeds | **HELD** |
 | S6 | the source clip's bar **does not** reproduce as A2's world | **HELD** in its literal clause — no crowd, no dance floor. The warm tone is recorded separately in §7 and is not what this clause claimed |
@@ -405,7 +405,7 @@ Cloud and thence to the hosted `wan2.7-r2v` partner tier. The A2 arm sent no new
 generated. The trade a user of this route inherits is the one the spec's disclosure note
 states — Comfy's contractual no-training clause and Alibaba's published API-tier posture on
 one side, the wan.video consumer terms' training-use licence and the unseeable reseller
-agreement on the other, accepted by the Director's CONDITIONAL of 2026-08-12. Every payload
+agreement on the other, accepted by the maintainer's CONDITIONAL of 2026-08-12. Every payload
 pinned `watermark=false`; no watermark appeared, so the "a mark that appears stays on the
 artifact" clause was not exercised.
 
@@ -449,7 +449,7 @@ blocked on are now answered by execution rather than by typing:**
 3. **The tier's two gates that could not fail can now fail**, with fixtures.
 
 **What this run does not establish, and will not be read as establishing.** Whether the
-figure on screen is the same character is canon and the Director's; nothing here approximates
+figure on screen is the same character is canon and the maintainer's; nothing here approximates
 it. The tier's repeat-variance floor is unmeasured, so no difference quoted above has a floor
 to be read against. Four generations, two seeds per arm, one prompt: the world observation in
 §7 is an observation about four clips, not a property of the route. And the arm comparison the

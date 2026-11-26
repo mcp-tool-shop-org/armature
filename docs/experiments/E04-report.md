@@ -1,11 +1,11 @@
 # E04 — report: the between-generation floor, measured
 
-**Seat:** executor · **Run:** 2026-08-10 · **Advisor rules after this** · **Director judges the
+**Role:** executor · **Run:** 2026-08-10 · **Advisor rules after this** · **maintainer judges the
 sheets** · Predictions registered blind at [`E04-predictions.md`](E04-predictions.md), committed
 `6808489`, **before the first submission**.
 
 **There is no pass condition in this experiment and none is invented here.** The spread and the
-gap are reported side by side. What they mean is not this seat's to say.
+gap are reported side by side. What they mean is not this session's to say.
 
 ---
 
@@ -180,7 +180,7 @@ The difference between them varies **2.5× less** than two independent draws wou
 in section 3 (gap = 0.79 SD, ranges overlap) and the paired arithmetic here (a difference that
 is consistent in 5 of 6 seeds, with a third the noise) are **two honest readings of the same
 twelve numbers**. Which one governs a future arm comparison depends on whether that comparison
-shares its seeds — and that is a design decision, and the Director's and the advisor's, not a
+shares its seeds — and that is a design decision, and the maintainer's and the advisor's, not a
 measurement.
 
 **What it does NOT establish:** that C-dark tracks better than C-bright. One seed reverses, the
@@ -218,9 +218,9 @@ invented after the fact.
 - **n = 6 per condition.** An SD from 6 values is itself uncertain; P2b registered in advance
   that this design cannot separate two spreads that differ by less than about 3×.
 - **Nothing here is about identity.** No metric in this document bears on whether the figure is
-  the same character. That is canon and the Director's eye.
+  the same character. That is canon and the maintainer's eye.
 
-## 8. This seat's error record
+## 8. This session's error record
 
 - **P1a / P1c:** underestimated the spread ~2× by letting an n=1 estimate I had explicitly
   called worthless pull my number away from the theory that was right.
@@ -238,7 +238,7 @@ invented after the fact.
   reverse is not anti-correlation (+0.61), and integer halving is not exact scaling. Both are
   corrected in place with the reason.
 
-## 9. What the Director is asked to look at
+## 9. What the maintainer is asked to look at
 
 1. **`outputs/E04/sheets/E04-C-bright-s{1..6}.png` and `E04-C-dark-s{1..6}.png`** — twelve
    panels, control | output | reference | provenance, at full size rather than as a contact

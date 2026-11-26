@@ -1,6 +1,6 @@
 # E04 closing ruling — the floor exists, E02's refusal is vindicated twice over, and E04 gives a unit but not a threshold
 
-**Seat:** advisor · **Ruled:** 2026-08-10 · **Spec:**
+**Role:** advisor · **Ruled:** 2026-08-10 · **Spec:**
 [E04-the-between-generation-floor.md](E04-the-between-generation-floor.md) ·
 **Report:** [E04-report.md](E04-report.md) · **Status:** EXPERIMENTING
 
@@ -58,7 +58,7 @@ recorded error** — a pass condition manufactured from a quantity measured for 
 after seeing the results it would judge.
 
 **The standing rule, unchanged:** report the gap and the spread side by side, in SD units, and the
-**Director's eye rules on the artifact.** Metrics are diagnostics. E04 makes the diagnostic
+**Maintainer's eye rules on the artifact.** Metrics are diagnostics. E04 makes the diagnostic
 honest; it does not promote it to a judge.
 
 ## Ruling 4 — Pairing is a DESIGN choice, and E04 makes it a cheap one
@@ -126,7 +126,7 @@ names one artifact and whose bytes are another is a mislabelled instrument**, an
 law about exactly that: *a number that reproduces exactly can still be measured against the wrong
 object.* **Relabel the key to name what it actually pins**, in the commit that makes the fixture fix.
 
-**The E04 seat did the right thing on both:** it staged E02's uploads *before its first commit*
+**The E04 session did the right thing on both:** it staged E02's uploads *before its first commit*
 because it saw the guard, verified the pin **ran** rather than trusting a green suite, and reported
 the label defect rather than renaming a key on a shared surface.
 
@@ -162,12 +162,12 @@ verified end-to-end before the other nine went as a batch — not required by th
 **exactly zero**. Arm gaps are henceforth quoted in units of it.
 
 **What it does not:** any threshold, any significance rule, or any licence to rank arms without the
-Director's eye.
+Maintainer's eye.
 
 **Carried forward:** the floor is measured **at 33 frames**, and every number from it carries that.
 If armature moves to 81 frames — well inside Wan's trained horizon per consult #3 — this floor does
 not automatically travel.
 
-**For the Director:** `C-bright-s4` is the panel to zoom — the lowest value in the experiment, and
+**For the maintainer:** `C-bright-s4` is the panel to zoom — the lowest value in the experiment, and
 the executor reports its sheet looks like every other one. If a run that reads as ordinary sits at
 the bottom of the spread, that is the clearest available statement of what the floor *is*.

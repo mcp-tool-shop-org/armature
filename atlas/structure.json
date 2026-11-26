@@ -172,15 +172,15 @@
           "path": ".github/dependabot.yml"
         },
         {
-          "hash": "c8320a8096d563c10b589ac20a61ac1ab713daee8dc6e613c15dd8259a1fdce9",
+          "hash": "9568d8280128a39d4ce87c6ef8900aff05d21712a758037a6f08d89f74a0c50d",
           "path": ".github/workflows/ci.yml"
         },
         {
-          "hash": "b82154c2e9ec2e461c95c7c93ffb28abc87d7b706009a009ebeeb70638e018d2",
+          "hash": "5bc2e0e4b1e93a8ed165907704a901e55003189c686adac8e5b9c309b42d0ab1",
           "path": ".github/workflows/pages.yml"
         },
         {
-          "hash": "bad8ff7450243d5c1914689606cc34e906f52484c087b6997a65fca79201e68b",
+          "hash": "c880d91a6c8cff0ed721a7e42a7caed0d27d9dd766d260e0e91d642c7e74a69c",
           "path": ".github/workflows/release.yml"
         }
       ],
@@ -214,7 +214,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "8b73791550bab7999c011124b712f06bc689525d1998aacae818d9dda54941ed",
+          "hash": "5f97b4b4e3dea74327dfa90eebefef87883e8a4142ebfe5af86c8e513c1c464d",
           "path": "docs/ROADMAP.md"
         },
         {
@@ -230,523 +230,335 @@
           "path": "docs/assets/mark-figure.png"
         },
         {
-          "hash": "2a1145398ec45fa54cb46494f8ecccb3e0a22cc861da2b39cd65caf8969a9ab9",
+          "hash": "f9ca16180fcb909fb0806ff67d6ed6e8da8c545579cb7e8d53f128b14fe2177e",
           "path": "docs/audit-first-arc.md"
-        },
-        {
-          "hash": "cb407366653487519c9f2cc29aee517123e11773eca7933e9a8980407872c601",
-          "path": "docs/comfy-consult-10-brief.md"
-        },
-        {
-          "hash": "11ceb258c8b35e3fbb2e0f265ff85aa74c13ab62bfb2302c1f1557b3717670cc",
-          "path": "docs/comfy-consult-10.md"
-        },
-        {
-          "hash": "d3b07ff51c9e2baf7dc29e3105cf004208b9b2e324a3772f158b6f1623d3decd",
-          "path": "docs/comfy-consult-11.md"
-        },
-        {
-          "hash": "245a07e5ad312d2c2792e6a575f73f8fb5ae043a8a321d1965d8264646b825ee",
-          "path": "docs/comfy-consult-12-brief.md"
-        },
-        {
-          "hash": "93b44ec96f317bea74e4102860d289d8bb48ddc84e5849dcc1ad83e170cd1353",
-          "path": "docs/comfy-consult-3.md"
-        },
-        {
-          "hash": "b7b789163e1d6c76670fa8211aa80627d30c453162a5145fd13d662a1a599522",
-          "path": "docs/comfy-consult-5-brief.md"
-        },
-        {
-          "hash": "9455b325d75dd07cb7a762a20d0b18a79176e8b452be8e6152b1844a9160c683",
-          "path": "docs/comfy-consult-5.md"
-        },
-        {
-          "hash": "09a8acdebbeee2597525dd36dba884395cdf0e327cb4147cfc85dabca1a91470",
-          "path": "docs/comfy-consult-6-brief.md"
-        },
-        {
-          "hash": "c289b9c47328d80fdc46fa51210f6476b318da90200b4003b242f89cee518e90",
-          "path": "docs/comfy-consult-6.md"
-        },
-        {
-          "hash": "dcfb850a230d1a52939d8ea2647738ad1afd26089041a112b3f2efbe07ccd341",
-          "path": "docs/comfy-consult-7-brief.md"
-        },
-        {
-          "hash": "c5c6bba2c1d75927045a955158a6d8d9d3260c86539b4aadc6d0766617ad2f5d",
-          "path": "docs/comfy-consult-7.md"
-        },
-        {
-          "hash": "203e57a0c882a227da47191c4b895998c0bacc069793cfdf593bc6fbeef3e23e",
-          "path": "docs/comfy-consult-8-brief.md"
-        },
-        {
-          "hash": "0cc36d535beca1a7e7d6ba39c295be1bddfc506681b10b4a3b0edb71c3b6dcef",
-          "path": "docs/comfy-consult-8.md"
-        },
-        {
-          "hash": "352c3cfeb1912b6136a272597a287014f910503c978b45ffb9ff86265afc037b",
-          "path": "docs/comfy-consult-9-brief.md"
-        },
-        {
-          "hash": "b71b177614538a547fc33eb053f418755884058a5f07c0507ec12d6199a23c9e",
-          "path": "docs/comfy-consult-9.md"
         },
         {
           "hash": "e070bf1bc4342b0c8e50fca0127f3d31c36ba2ecb1dda4656d1ae1e84e575b16",
           "path": "docs/comfy-consult-brief-01.md"
         },
         {
-          "hash": "ea0e95ebf1ddc366ccd7cbb437bb59b2784aedaf5243e41a9126227822eddf5b",
-          "path": "docs/dispatches/F01-the-first-performer.md"
+          "hash": "df8d1b1e80b2683f12995ff55ef7b15f5b3b68ca84b9d905e85abbb5f44812cb",
+          "path": "docs/engineering-rules.md"
         },
         {
-          "hash": "28aed5cfa04d46a9774064660b9042730dc60ec23abdfb517d77643f4fdc4c75",
-          "path": "docs/dispatches/S01-public-surfaces.md"
-        },
-        {
-          "hash": "a1b1d9393251a60889a68f9839ab17e66345bb7c177152497975e03bce1a1890",
-          "path": "docs/dispatches/S01-report.md"
-        },
-        {
-          "hash": "d680984df6404f073846cc532335fe9e428f14e1cc706cc0a50dcbbd8d8c269c",
-          "path": "docs/dispatches/S01-ruling.md"
-        },
-        {
-          "hash": "07bbfda238c7c1cdcb26185d56e01fd48126a2e6dd13f77f2c1a1f0ae5ecffe0",
-          "path": "docs/dispatches/S02-closing-ruling.md"
-        },
-        {
-          "hash": "9f53e47c21cfc1e960472eb7428f57a86e9e82d604e5ba6f525978481652354c",
-          "path": "docs/dispatches/S02-record-index-extraction.md"
-        },
-        {
-          "hash": "afa885e95da576e85d81fb81ae316c469da3a2ae122f130cab5b0f2a2f429546",
-          "path": "docs/dispatches/S02-report.md"
-        },
-        {
-          "hash": "f4b56383ffd971e936c1b038c28d26038985186b1691a5efbe5dc44a9ecf7aa6",
-          "path": "docs/dispatches/S02-step2-classification.md"
-        },
-        {
-          "hash": "e1d24a54015dd42e3b94c77579084b83a00cbe3cbea5521d1c74e496ec386544",
-          "path": "docs/dispatches/S02-step2-ruling.md"
-        },
-        {
-          "hash": "b740412baef4b28589a8bd86995347a202802559efa40e1e9d29704456abfe83",
-          "path": "docs/dispatches/S02-step3-halt.md"
-        },
-        {
-          "hash": "ae65352a33997c06364d6e8749b46cc6cd17b133af0dfd1c3690630ee325bf6d",
-          "path": "docs/dispatches/S02-step3-ruling.md"
-        },
-        {
-          "hash": "df791d8c0a2c5181bd7d62e5f47c430bea9e36a9658e4aaad11a4de90ddd11c7",
-          "path": "docs/dispatches/S03-performer-reference-kit.md"
-        },
-        {
-          "hash": "b26ae8ed8ee6ed09e2cce9904ede0a08ed47a7a52ec786fc0680119c698877db",
-          "path": "docs/dispatches/S03-predictions.md"
-        },
-        {
-          "hash": "f67046f331231def7be7d53aa2ee8a44029d9457bda36c3e5e86ef451872ac16",
-          "path": "docs/dispatches/S03-report.md"
-        },
-        {
-          "hash": "d4e35945eb62c18c5b8317260f81a01331c7ee98274f37f32c86a95562df3b06",
-          "path": "docs/dispatches/S03-ruling.md"
-        },
-        {
-          "hash": "fc21c14e95a8bdf7bc293e3a2b461325e25578b9b38c6a0c612c7e28fd585fcf",
-          "path": "docs/dispatches/S04-predictions.md"
-        },
-        {
-          "hash": "d7c19fe54fec3da6d755ed5089a2808635e33d7e49e67bad4ba2412dc2ce4b3a",
-          "path": "docs/dispatches/S04-report.md"
-        },
-        {
-          "hash": "db0509981559c320134437772f824aec9dbc88a6e7a0131c2da337438afc3cb4",
-          "path": "docs/dispatches/S04-ruling.md"
-        },
-        {
-          "hash": "969c4f88a2ac24bbc55dd83a62ee262bd48fa553f89100833cece9328ba28101",
-          "path": "docs/dispatches/S04-sprite-shotset.md"
-        },
-        {
-          "hash": "ebbd1c851829861387c2aed9611bb25c9a4e66f377913db3215268d908201982",
-          "path": "docs/dispatches/S05-predictions.md"
-        },
-        {
-          "hash": "762146b5b154d737666fe0d37ac376b0ff009bcd29354fd06f0f3d73201e3162",
-          "path": "docs/dispatches/S05-report.md"
-        },
-        {
-          "hash": "8e56062b234b4997b100197f02d7e7a379a034eec2911dd9d05e39071a65ab78",
-          "path": "docs/dispatches/S05-roster-pin.md"
-        },
-        {
-          "hash": "4b1e4cba4341f5c6b8cf77880a637d827727ade52eaca436b9429c7ea149f903",
-          "path": "docs/dispatches/S05-ruling.md"
-        },
-        {
-          "hash": "263a89da6009091a39d39bf9448c378f6232e150abfc92518bbadf7a78b80146",
-          "path": "docs/dispatches/S06-predictions.md"
-        },
-        {
-          "hash": "786426901ac4f9d683dcbb3f0e05376834cbce9af203b30b259865f32088b480",
-          "path": "docs/dispatches/S06-repaired-performer-resurvey.md"
-        },
-        {
-          "hash": "788236c3d9f337a5e6b844e7f06add68f26a1123d84961ea542be8977da5278d",
-          "path": "docs/dispatches/S06-report.md"
-        },
-        {
-          "hash": "d3d894900ce9b60473e3a5df8be6ad4e8bbe1759ff54726cf5bba9076eb2751e",
-          "path": "docs/dispatches/S06-ruling.md"
-        },
-        {
-          "hash": "9c1a66cb441c5a60912cc452e68cade53e36cc002eb3e3cfa7dfba95a2821fe2",
-          "path": "docs/dispatches/attribution-repair.md"
-        },
-        {
-          "hash": "11cb9829cca50962ad30e45a67b41ce151f10dfc7bac393d7eda3a1251a73961",
-          "path": "docs/dispatches/shot-diagnostics-design.md"
-        },
-        {
-          "hash": "ff1fca29010b16a2d4e99dc08aa6218a51d89c4be398299e150dc0eea99b55dd",
+          "hash": "8200c491d0f11c1e64253ae2f40c5291ec47915b285cbdee556464e77487a109",
           "path": "docs/experiments/E01-control-sequence-exporter.md"
         },
         {
-          "hash": "c63ff120fa3ca9da81fdc2e026f0dff419b9a1d2b74b02c57eba098b906652a7",
+          "hash": "bf3bde6f56d56dd8d80deaa4dd0c616fa249555746a78269a4bb1f627503fc4d",
           "path": "docs/experiments/E01-report.md"
         },
         {
-          "hash": "4bfd6e61cce046cc452566d0e5510d6541a1937687bc83d92344ed3a051948b7",
+          "hash": "cfe9713180fa3be8c66e96fd11f02c1e3910ad7d1677bef01048fc898a38fc17",
           "path": "docs/experiments/E01-ruling.md"
         },
         {
-          "hash": "db090502d6e596fa4961e9dfea20f379e5c8dd9fc472fa9b09151da307aed3f6",
+          "hash": "ccf819d73be23efe8d69b3c842cf4d5357b422c4cb110ed8b398026f18f106ee",
           "path": "docs/experiments/E02-CORRECTION-not-a-turnaround-tool.md"
         },
         {
-          "hash": "f6eb41698ee7dbaf05357c07cb04127d9319bfaedaef665d7f71a42ef2e12e15",
+          "hash": "0b6e669450c77f068c89313fc10732c9c1e7adada6b2b8d89f0b431f3d7b2a12",
           "path": "docs/experiments/E02-STATUS.md"
         },
         {
-          "hash": "84de7f2a8a0a60b7be9f9a534245fd2c8cc338cf812d42e1deefb6cdc6421bd3",
+          "hash": "863c03471e539610fc69d4bfd002420a31c02f16f41e73e7733860845cd494ef",
           "path": "docs/experiments/E02-bridge-ruling.md"
         },
         {
-          "hash": "f9183048f464ae1d8d6659e1cfdeeb00c6778d6d54b41e353bd2ab5ddc64cf1c",
+          "hash": "a94537ac9e43fe81c529eba9fff661eb5954c9c62cc0f6f5b8ec9fe6d06e0185",
           "path": "docs/experiments/E02-canon-ruling.md"
         },
         {
-          "hash": "36e3cd757ee5972d213b506e95576d0bdc517d3ae580a8762be41ea7605c0e9c",
+          "hash": "ac9db54291a549882fc95bcf6aa5bde9c694dfc087ac1334a5d87a28ff363d7a",
           "path": "docs/experiments/E02-closing-ruling.md"
         },
         {
-          "hash": "62c450b1600cc868b02f39345d79ab513e56afa9f6ec0fff168e3a0fc33e23d9",
+          "hash": "51bf43795c1a61a61bb437b62a7cc3381235ad9892787c94b99eea50e9599f4d",
           "path": "docs/experiments/E02-first-contact.md"
         },
         {
-          "hash": "a8a93f419556af5b38de6ca8faa30987796d1cc7d6c624ee1254124153282be0",
+          "hash": "a6f3aec8f242e999f18ed31eb11962fd6548700cdbc4bffd8c3bbe48284a4427",
           "path": "docs/experiments/E02-floor-and-thesis-notes.md"
         },
         {
-          "hash": "321c6f8d1f151727681d1ef2e8ffc0a914e310979020770df6252166e5d41558",
+          "hash": "921064c6306d710b4fa42e16b200d758666cd829d4c8f492a830af15a1298cea",
           "path": "docs/experiments/E02-gateC-and-noise-floor.md"
         },
         {
-          "hash": "ab910a6b96d498c7e27d27f43b794794553b24324e62ca4a0f717f908f498f49",
+          "hash": "af99ec203f3f2c18f0f60bbe8073e5fa2e38f84e4ea15791a9fd0c6a47cccb19",
           "path": "docs/experiments/E02-halt-ruling.md"
         },
         {
-          "hash": "24124e71a352e54657a94a07e4db5bc655d7619f5bf8ebe4bedcc13f1210c8d1",
+          "hash": "90557fbc913821140c786ca6d64e20084e0fd1dd785457d79ac5dbe199dfbf05",
           "path": "docs/experiments/E02-predictions.md"
         },
         {
-          "hash": "7a7fee183568f2a25040188fcfc34c9b55061d9cd7f9dab7c8cb8490274ac6a7",
+          "hash": "f2e79e3712171f7dd07bd8cca7ed6120aa771e06631dace6730e5cbc11212286",
           "path": "docs/experiments/E02-report.md"
         },
         {
-          "hash": "c9fbc13876fd45c5735786e112e7718d34f089b310a5d7b6a2439806ad13f1c2",
+          "hash": "f5c7a766408dd11a46c5267c3a55e08d1336031c823778b3f1a54cb177a3b3b1",
           "path": "docs/experiments/E03-authored-motion.md"
         },
         {
-          "hash": "df4d97d9884f80f3603914f4bd280f991846eadf4f5b00337243dc4367ca1e65",
+          "hash": "8c77efe58da54b56c65bcf572871e2443c9b3b5c06b73aecd6aaabb5b8c12dd0",
           "path": "docs/experiments/E03-closing-ruling.md"
         },
         {
-          "hash": "bbcfaa7168ce303c869de318565ec3b594b09a81eb3263d251c3503e38411efb",
+          "hash": "25d902fed165d47f5ac71ffb5d66b380fae983296e69873252bd3fe7cfb4f9a1",
           "path": "docs/experiments/E03-predictions.md"
         },
         {
-          "hash": "b433daba64df11731fe37d71b240dd359a1d4bc5e220fbf9db7d84c964a5934e",
+          "hash": "c1c71e9fdb13e9bdf03130b2ea69005bb87ee6340aefa9491f8d730d3db233ed",
           "path": "docs/experiments/E03-report.md"
         },
         {
-          "hash": "4c793a49a6be3e4764ff4da5ef6f2b726693a71614a43469e72c6817b7f7603c",
+          "hash": "fc5b4d11a1ff69448be1952c2f22e49242f457dd6f8a8d880af3a833e0fa3aef",
           "path": "docs/experiments/E04-closing-ruling.md"
         },
         {
-          "hash": "ba79c70a31d4f9612bde9af895f60a7e1364b654010b4697d5730d52a6fa955c",
+          "hash": "4f3777eadd593b82a1bcce96bc6efb4f0d58781127ca4b091fced38288a5716c",
           "path": "docs/experiments/E04-predictions.md"
         },
         {
-          "hash": "374d5538bab6ee0534dfcacb4aeab02c0748bb68c86a9c4699d2203126a5ce69",
+          "hash": "32dc968fde4394c0e30b8cdeb50576e3e8c26cdca2da6f1a134bc6974a6bc762",
           "path": "docs/experiments/E04-report.md"
         },
         {
-          "hash": "e70e23dfed9310dea85d276bba3d30165b6ecfba7482b3eb39da1c7456279ed7",
+          "hash": "30220607364cccad4cbaa1ad2f09b21a1386a442b01d0254672b0d14cece335a",
           "path": "docs/experiments/E04-the-between-generation-floor.md"
         },
         {
-          "hash": "5f724685f0c36286036475317ebf75282b65558f9ccc1ec3e03e014442fcd1c6",
+          "hash": "3b38466c57a31ef7e0d1fb4aa8e8ff8b8ebc1af5523ddfb174133b8acb13eb85",
           "path": "docs/experiments/E05-control-strength.md"
         },
         {
-          "hash": "f4701bbcbb6b0be56914f7425064140eeb955f15d2ab766e8df72f49928b82c9",
+          "hash": "e17ab8d14133c19d039fa95f8c229f8fc49948ff9f2ae95f83c04ae3367eaa5c",
           "path": "docs/experiments/E06-closing-ruling.md"
         },
         {
-          "hash": "2d401fd83405586e38a53b54c90fe3f3a41a4c769322f52f757c60871971074e",
+          "hash": "58949044e5f3936099d63ef33e05bf0f6ba40fd6fe8f6c4693c8a52282728f77",
           "path": "docs/experiments/E06-predictions.md"
         },
         {
-          "hash": "49ee4de27be4f98dd2fb7dfbf2de4beea47f9d558265f37b024ff15ac58a1344",
+          "hash": "443e62dbe2034fa87c555c00848e0035a9f0bc3d59c35a7dbba97400925e8b8f",
           "path": "docs/experiments/E06-reference-onto-schematic.md"
         },
         {
-          "hash": "441eee9fc35d94651da754c196f1bbfe275c539c82add1af1e4a65b7eedb5159",
+          "hash": "0c29173bd25b56629bf39dcf859bc7967e2aeb0a2ed9ba39594b3d3a1cf8ce3f",
           "path": "docs/experiments/E06-report.md"
         },
         {
-          "hash": "10887c2e8564a75e04c908addbc8cbc5d75cacc6607c2f9e16c2c810126cfa54",
+          "hash": "757ea76ee2ce639d7c713911125770e87c0e83ef615c4cee149b1ec969fa4fab",
           "path": "docs/experiments/E07-closing-ruling.md"
         },
         {
-          "hash": "e8a57bd273307e63dc9b1ee8abaf6bad071989fbcec8ffd513967987f87579ee",
+          "hash": "46db2ca38317e469eb92f3f5695e89dde816add0ff38a79877d430748dbb9bcc",
           "path": "docs/experiments/E07-predictions.md"
         },
         {
-          "hash": "6730535eb64582d645251d4cac25a604f2de64cd0cc586b042407069a437bdc9",
+          "hash": "56400911cceffefbf02881256a0999df018f88dc12ba157faf73d0d06899034b",
           "path": "docs/experiments/E07-report.md"
         },
         {
-          "hash": "741b2454202f0c9b36cdc4ca57ebc66b0781277b4e27656ce469b3707bfcd5ea",
+          "hash": "5704dcd938f262474a523f5e0e50062a3d20a538c5fef5ef98f24fe861f29eff",
           "path": "docs/experiments/E07-site-list.md"
         },
         {
-          "hash": "90d225c3292a6c2b33779a1b4885991f4104b0b9a959e4b6f69b7ab6f0160167",
+          "hash": "4d585bd2895a68bc7c7276e614dfe1322aced231fcfb12b964cacfe26b1c54f4",
           "path": "docs/experiments/E07-the-skeleton.md"
         },
         {
-          "hash": "1c681d5761acad154661738daf5d69179a92c59ea405ad1bc6db75bdcffd7d88",
+          "hash": "e182bcec7407cb399d5ad68e5f218865cb51786f02c496d3ec407bdc5a2a6770",
           "path": "docs/experiments/E08-closing-ruling.md"
         },
         {
-          "hash": "c12767e7fca43aba15ac5fbd5b571200be2985cc81520f2a8b22fc985dbda1ca",
+          "hash": "c3b0530766ce5e4d37327ba0cfc3f5ca56eb3f334b7bf20331d081bc507af451",
           "path": "docs/experiments/E08-predictions.md"
         },
         {
-          "hash": "391b327e09a2eb374e2a9590a8d94a2512088d4b5848cb1ae2540fa39983cf68",
+          "hash": "6e15d63f72edac5a92298aa1646ba645c97576fa0545db72edf01a24895d652d",
           "path": "docs/experiments/E08-report.md"
         },
         {
-          "hash": "c8454d699f79aa3aed4bf809713e1cae369e152c9d35b57289d5e0f3fecf71ae",
+          "hash": "b7d63d16ab8839a1abb5e3f0a2483a1e74df7a8c5940bce6b70383a084e74f32",
           "path": "docs/experiments/E08-the-first-shot.md"
         },
         {
-          "hash": "6fbd83246fc80bbba91b647be2ffeb0b8b93a6190fa81b131afd30a7607a7041",
+          "hash": "3c14d7695339b580b35965bb82631b5ad71dfe0ee6985c5c6d9b222d4c614a61",
           "path": "docs/experiments/E09-calibration-ruling.md"
         },
         {
-          "hash": "051553b9a297b5c39d5010399f71efa6f533f32203e78bc829eabfdd60564a49",
+          "hash": "bd0f93a06851835120b04cd2170b4da9c84a784c589c516060d4adcb3e7fb902",
           "path": "docs/experiments/E09-clean-chain-calibration.md"
         },
         {
-          "hash": "c309951bc06d398e0623554243d83abab8535c507de252a2c5c5c04963f5515b",
+          "hash": "db3fe999ddbeddaab52c9b8916068b92064b0c029760cc21e764025eedb2b370",
           "path": "docs/experiments/E09-closing-ruling.md"
         },
         {
-          "hash": "6b310cb8556b3b21d798f0552fe3ff299d384c47cc3c5734b538b6fca1942930",
+          "hash": "363474932c1475adcc5417778261a542f2cd99775af3480817eb1f8813d7acda",
           "path": "docs/experiments/E09-predictions.md"
         },
         {
-          "hash": "287a2109783af159dc6265fcb08b1a02261ee92058eecc8bf97004e68a4d4cef",
+          "hash": "b13794acae3c8f5d7b1c646a190b2c14a372c00250a6096ca7ba9486c2e4a8c0",
           "path": "docs/experiments/E09-report.md"
         },
         {
-          "hash": "fff27efa0e84996a9a4cbb45de53dcef0b6ae526692da7d78604df1c0da6cf87",
+          "hash": "6ef8f17d2616723866fe4e5c01cb0267d4670c3dea48739f3c6b8dbf00b9586b",
           "path": "docs/experiments/E10-closing-ruling.md"
         },
         {
-          "hash": "edb67693170759b629e40850912b11b402bff76d71bb125e7d1a21380cac4545",
+          "hash": "fdcc23a71ba3abe46c9de712e85673b2dedd2985281d573a941c713cb7c01e4f",
           "path": "docs/experiments/E10-densified-driving.md"
         },
         {
-          "hash": "aa96d2233944baedac22729861cbded2490aefa58f5d5aaee5168948340d39bc",
+          "hash": "0e92b5c38d2366e65115069c6d01d6f922dea1612746b394573052f2aff503e4",
           "path": "docs/experiments/E10-predictions.md"
         },
         {
-          "hash": "896a766f2df38fefa166321208c3a60ab144d0d58b6691a240a3856ebd233e5b",
+          "hash": "a65b98b61e270d5807b30b81a46e8a777400ac1d0a00bc5da86dc20785dee174",
           "path": "docs/experiments/E10-probe-ruling.md"
         },
         {
-          "hash": "2c3c7fe4c6ddd644483acf69f3311d28b73da5a0981fbbf5af8712e0d752f6a8",
+          "hash": "939a358d5de824fbedacf93029e7ffb7016d1fe5e2966689d797ce8ad564a6c4",
           "path": "docs/experiments/E10-report.md"
         },
         {
-          "hash": "f6f3a30bc393adeb4c419e9353be0e133034fa735b5e2ac33994279224b716e8",
+          "hash": "0c1013fac06f805e08c4dbe50d5869094eb2926c6bae24b1e44a43901e16aaa1",
           "path": "docs/experiments/E11-closing-ruling.md"
         },
         {
-          "hash": "b5754f1e1f833cc8f37513a21008cf4c8e5ef0c267ec7170a7496ebef91f7d52",
+          "hash": "3d62b2ad685a18fe12ba751ad5c52c34f05f8441480b59e896eabc3538d9e14b",
           "path": "docs/experiments/E11-no-control-route.md"
         },
         {
-          "hash": "352af2da0e7bc8f18f13e1672b0e2680cc880478d71e0a4120a72bdd64a97b80",
+          "hash": "d94a464e5d54c4d978b9d452b96ad9add72712cb4320c49c19f646244ab102c1",
           "path": "docs/experiments/E11-predictions.md"
         },
         {
-          "hash": "4357a4802ebdd1cf044f272eef6488ef60d629f983e124fedc1cda16d55390c5",
+          "hash": "2ef3f97f92098cee9f6a9aaee769c8ca57b22f62da14994bc2af7a0c1faae4a5",
           "path": "docs/experiments/E11-probe-ruling.md"
         },
         {
-          "hash": "10fbfc281826308b700bfd40005c84fe923f8138637027072ad5dcd2ddb800ce",
+          "hash": "4e89f81bd3885991a5a04ec241d2e0b4649382097018986232ba78ba60bf1add",
           "path": "docs/experiments/E11-report.md"
         },
         {
-          "hash": "fffed17742b5fae7aa749522a95a73725d09696aba16738473eee92585fae55d",
+          "hash": "b5c0c11aad445a0024fe76dfe3d80c28aa69bc468a00c6907e2b257a6513a487",
           "path": "docs/experiments/E11-w2-predictions.md"
         },
         {
-          "hash": "336e187809ca37087d79c46de4ca27ce77a16e054027973398e18500d0c8e1b9",
+          "hash": "2841fe71e919ee08f638aec9c294a0aec1262365e870f0ea6793f75e4599b0ca",
           "path": "docs/experiments/E11-w2-report.md"
         },
         {
-          "hash": "27fe0ad6b7ad85616bc253ea7fc3e438277937bf308bd91faee65e0063435d19",
+          "hash": "6b6cb9dd6af0c9f494a62abcce5359f57a8880e99475eb867e4a2415a5384d6d",
           "path": "docs/experiments/E11-w2-ruling.md"
         },
         {
-          "hash": "d680b2296c77f17d4feefa66269bcf036c66eea5ff0c0013af7d1aa3edbee469",
+          "hash": "c1a2414067e0359966ba2b3e131d80096a69f5d9d2bf700e85291dd611d82ff4",
           "path": "docs/experiments/E11-w3-predictions.md"
         },
         {
-          "hash": "18c2ff7e8fe3dd0ec538c1f79de698e1d771103f978feb10b3d7b2830a50081f",
+          "hash": "dad833e9f41ae7cdf6bd3d91d28e1fb07988bb568de554e94055457d8d7bdf20",
           "path": "docs/experiments/E11-w3-report.md"
         },
         {
-          "hash": "d2fc3dd093b1d1f6b53d6e10a4ae61545e28df0b4eefe00b78bbdeada23167a6",
+          "hash": "dfb140482ad6c4ad21886f1687dd300ac56776ed6f42a44726559ce54ed07467",
           "path": "docs/experiments/E11-w3-ruling.md"
         },
         {
-          "hash": "bd359ac57cfe02a1ef83f4185e7d8fdb84881e6e9b117daf9f6b941e7edc52e7",
+          "hash": "6899906808e36dee270ca03e3fbfabb48a4f908b4259bd4d34e9dd558ef44083",
           "path": "docs/experiments/E12-closing-ruling.md"
         },
         {
-          "hash": "19143184cf0ab4c0ae78ea779639a57a1d1bcc2258b22e0d6e1d0e530c2da087",
+          "hash": "cdbbe10f27be5bafb6a8941378ee73d494293a7f13ad97b658950321d60ccccd",
           "path": "docs/experiments/E12-relift-check.md"
         },
         {
-          "hash": "85cf44ffc10e06e2e7e48672f7444c5537fa6df687d689bf5144bc16466c9b9d",
+          "hash": "7296f3a43819b41df68bbae15077439b88e9cba98c0a4d26b466c0feea0da2d2",
           "path": "docs/experiments/E12-scene-bearing-start-frame.md"
         },
         {
-          "hash": "e7b3cd8a8116b49bf52597891bbb559a189dac78a94e0319eede70d04e1fc2d0",
+          "hash": "3beebe24b2c003cf25ee29e37b7f2f06a8e25c4b5389d4dda6f844d3c9bee9b3",
           "path": "docs/experiments/E12-w1-report.md"
         },
         {
-          "hash": "d8db45f237b33669f7fa96f81cac5707d1d08064c0519e256042ed77e401da3b",
+          "hash": "3f6b4cd15f1be062b6b5ab86c338c5d2fabcc09f54d38110d9129a7c6cef3a08",
           "path": "docs/experiments/E12-w2-predictions.md"
         },
         {
-          "hash": "1cc5bad6b8bb949c5a3557bb184a50d49c5a029297b3428d8ef316288915dd96",
+          "hash": "78dc3c877b29e033e73404a3a8b6c9a68bb6f558fc2523ae9669694cd74cc324",
           "path": "docs/experiments/E12-w2-report.md"
         },
         {
-          "hash": "c3a632e08220ff9f63d62a9c00f1a26dfbd60da7b5affbe138c148968c7a4446",
+          "hash": "5b58741ca37a9eaf636af2bc92d243434f9e46f3acabc77f1d41ef683625c9e3",
           "path": "docs/experiments/E12-w3-predictions.md"
         },
         {
-          "hash": "187bbba575d06ab3e2cedc6d95b7237095d6486c4a33226d4ef2677eb6c89f34",
+          "hash": "3fbe4c0be9f4006105380d715f61afada7f68bf44c5e9a733cb4d5c5676eaaf8",
           "path": "docs/experiments/E12-w3-report.md"
         },
         {
-          "hash": "31c2c97f63ae7468d761240bffe2dae244cbf246cdd6683fc8b32c723306d878",
+          "hash": "93c006a5b3b36c82315bc15cbc1259c75ad64e464d74606aa8fb4fee0a040069",
           "path": "docs/experiments/E13-closing-ruling.md"
         },
         {
-          "hash": "f1934c92b0e2946cfba154c46ce37b0ef9c4f2be2e7f7a5dedc991196e3b8286",
+          "hash": "a7eccc0eb8a8dbf18be9b87691ebf3db5667fe3df58aa89556f4e5c376da3042",
           "path": "docs/experiments/E13-composed-route-probe.md"
         },
         {
-          "hash": "b6dee65f538330c74a79be22a9d41408b5aa6220a2a5941b76aae21a456582c9",
+          "hash": "66cf857964c1b47146c283bc67f733f5b2ad004f4c77d48911bc6c35194f7bba",
           "path": "docs/experiments/E13-halt-ruling.md"
         },
         {
-          "hash": "c4fe5fcf1d9cfc6bac962280842d401153d334e9085aa67ef7ba9eaf6508b699",
+          "hash": "9e74bcda48bdde2d519fc8704af506608788abd52a197de3695fe6a2aedc82d0",
           "path": "docs/experiments/E13-predictions.md"
         },
         {
-          "hash": "3b1b3adab3f9482827652e6d0915b2ca15c06b5ff06e23813180bea845a4941d",
+          "hash": "09d093ded905ab3fb94f1d676c69c48e9666b5551b8602878f95a968723249f6",
           "path": "docs/experiments/E13-report.md"
         },
         {
-          "hash": "9acb1bd0d6a425159acaa8fe8d20465139bda78987df14d0dfd762007c04d6eb",
+          "hash": "46d1046e09704a22d40dd2a84a329b49d9f46da13105efa5cfd505e997708fd6",
           "path": "docs/experiments/E13-rerun-predictions.md"
         },
         {
-          "hash": "bd760b4fe896846a12647db224d57a88728b0ce287649a3d24704782926c5006",
+          "hash": "518c6cce474a654113c867662f9549fd8c684062912ac32829c58600d07d8200",
           "path": "docs/experiments/E13-run-report.md"
         },
         {
-          "hash": "3809a72148248b68f6be04ee2483b978b797a5e10a24a504d68d05c6ec71955a",
+          "hash": "c5f394df3d48dfd9805b7efcc8277859163bbb1ec4f0dc37daef4b60dd84a29d",
           "path": "docs/experiments/E14-closing-ruling.md"
         },
         {
-          "hash": "4231751e0223b0586baf738398684c75b63352ae450d71976f6cd4d07a9848f5",
+          "hash": "634c1c4fcfa110b76073451088c71da2c801516cc4ac61ecfbf57d2f5ee461c2",
           "path": "docs/experiments/E14-lora-scene-lever.md"
         },
         {
-          "hash": "514eb86f931a66bf16455a74c6215afbc9bf25382775601b3d51508eec9fa028",
+          "hash": "fd6f8d93f065e0b78ec3ba48b627850741484790f94d0ff41c11afc4f18f78b1",
           "path": "docs/experiments/E14-predictions.md"
         },
         {
-          "hash": "bdee9d5ad2b649fc9072e648d72678ec5e0e4e7eeabba4a79e90c4d1839c817a",
+          "hash": "bc2840eeeca1a074f92926ac5ca601bf356bce941d138a599bb20cdb279556aa",
           "path": "docs/experiments/E14-report.md"
         },
         {
-          "hash": "7634ddc238a2ca38797081f37c749d24cb0d7b06b967ca8c6afe926639441b0e",
-          "path": "docs/grok-consult-1-brief.md"
-        },
-        {
-          "hash": "fbc6835e8cd40edec307c2ae709910748f075df965c9c35b2beb849b3194bbfe",
-          "path": "docs/grok-consult-2-brief.md"
-        },
-        {
-          "hash": "3e31d7d713a5e4ded638a7fa3d9a7d01dbad7dc5cb33858d6c647d1763935aff",
-          "path": "docs/grok-consult-3-brief.md"
-        },
-        {
-          "hash": "58d69a29c7b33db7d6a40c9e34af7f4d3f32ff10b52dd466d5bc4c75c849d981",
-          "path": "docs/grok-consult-4-brief.md"
-        },
-        {
-          "hash": "f321c2484f549ccd37c8477882cb01b34e7ec11bb8edc01ae21422b310c14308",
+          "hash": "cd7753b3766074c4d5220c4cd0f5cc17da53f387345e36d6aa677b35c4366650",
           "path": "docs/index/armature.db"
         },
         {
-          "hash": "d5c32ded4b6797f7baee016a6ba8b7f0d3c32abea049d31f7164d61356b8b995",
+          "hash": "b8cd21429ee365b5808a096c8e0b2bf561beae845fc0ea8bcc8c013338840f0b",
           "path": "docs/index/armature.db.cert.json"
         },
         {
-          "hash": "2848af5e21bf65790c06a4ab9c2ca7a641cf1260770ad72474a9b9aadc91f363",
+          "hash": "a0e79cc950502f2860dcfb609f7ab92a10b21dc9982b66eabc9e6c029a2a624b",
           "path": "docs/index/conventions.json"
         },
         {
-          "hash": "38939244ab2e4e171bb5ad7d859c98d266cb5683945d6fc90a3f9c3b44232ecc",
+          "hash": "011e52f11d8e1d77181812bb05c97eb2fa5cf000e02e290479390201edebbb6b",
           "path": "docs/license-map.md"
         },
         {
@@ -754,23 +566,23 @@
           "path": "docs/publishing.md"
         },
         {
-          "hash": "b5a12a2b0c70e15e16218ef2bd2908211ce25ab17caae4e69b06597f0082e1c7",
+          "hash": "0614a9f0b61e39f7ed1615c32df50261c0f09dfc2188de071221d3b8960c60b9",
           "path": "docs/random-routes.md"
         },
         {
-          "hash": "c7a24e4cd43f56c729e41ecd95a1e3fd1a2257471ed0333369ff5cf0d7f8d9b0",
+          "hash": "5139cb88d799f886df9cd38b8057e67d6eb348d171497a54f1c6131384cbb651",
           "path": "docs/research-grounding-e08.md"
         },
         {
-          "hash": "de207db5e4a387bae9610634e3d6900940bc676963a63e5e8b16f87bcced4b49",
+          "hash": "58b4c303abd74035c150f04fab23ba214669fdb2405526d6eb3aa61bd80fee94",
           "path": "docs/research-grounding-movement-library.md"
         },
         {
-          "hash": "2e1c0a8cefff4a5e33d68e0eb8b43ac1a80331868022771d37dc8057af8c6fa4",
+          "hash": "6cdc57bbfd65ae452300453190f5a9d85384ebb8930dd681feb3a47663c6b829",
           "path": "docs/research-grounding-verification-gates.md"
         },
         {
-          "hash": "3c909009d235beb3c16826ba153c1f9219926bb9cf4d7b0d3f78a4be79ed5058",
+          "hash": "f63c24bec9718b8793b1e34df5b2ac0121847e1df842dff459fd227bce993f52",
           "path": "docs/research-grounding.md"
         },
         {
@@ -778,19 +590,19 @@
           "path": "docs/tools.md"
         },
         {
-          "hash": "580eb355552b69eb57acd5c0aa3760802198aa7fec40f30c9f7d03c17194d0ac",
+          "hash": "335af1de6a7fd23fa1234c09b318509aefbc0e6254d74ed27d5b1456e42db862",
           "path": "docs/video-provider-field-notes.md"
         },
         {
-          "hash": "bbc383fc6f2688206f16f4a209da8290c2b7d947daf79b9b95c74322665a3280",
+          "hash": "bb66570187ff5740b83b8258659c350ff6f17aa3b01c1ab28071080402992c0a",
           "path": "docs/wan-video-prompt-guide-notes.md"
         },
         {
-          "hash": "731f76d26ae9d2b0a60cf3bfc5ea7c70a567a098e236a88b72d38da2a8026d20",
+          "hash": "8f251041defc8d8b507ec01169581f9e01e19472730a154fce7f05bae507cb20",
           "path": "docs/wan21-prompt-guide-notes.md"
         },
         {
-          "hash": "7d12689ad2c042bca53ab14f47db34855d1bf979cc3f698ce37b179f1e429155",
+          "hash": "9f989d4214769cb91bedb671a24e2418dff50fe9a8c7873abb4a7027d137ea26",
           "path": "docs/wan26-image-guide-notes.md"
         }
       ],
@@ -876,20 +688,12 @@
       "externals": 0,
       "files": [
         {
-          "hash": "c0cfc00aeb7f88fb16c4bd2648f3f805ca56422c82f0bb078561a6b5ce06550a",
+          "hash": "7d1d5c5f6bc0f8daf8db632e26ffce03de486fa454371aa15d6045bad2781946",
           "path": ".gitignore"
         },
         {
-          "hash": "d358a37b31f7b921a5726860c87e183715fb05e84478ad5ae718385b809e66ab",
+          "hash": "7abe7e283d0f42d79bc6be278b21cfa570d93402fd51f4f3a7bbc890a4a8f79d",
           "path": "CHANGELOG.md"
-        },
-        {
-          "hash": "9b80e73af4a8399baf7a0f2cc842fc93d3b4d6b75f78b781106f7a5b019f4a07",
-          "path": "CLAUDE.md"
-        },
-        {
-          "hash": "cc6d58b2283780196acc2ffecaea299dc0205a6c8137ae146b04d621dcd728d3",
-          "path": "HANDOFF.md"
         },
         {
           "hash": "367e5141e4f5884e5791c4021f33a9faa958840a5decf44e1b273a87aad1c459",
@@ -900,31 +704,31 @@
           "path": "MANIFEST.in"
         },
         {
-          "hash": "793ea361fba6e95aae66a1d0194e36c7262d819bbf3e8e1e1d35990aa261e251",
+          "hash": "4fa12fb9eb4aeb88399a9a4690023e5dccb1ae5f30be40c18f880db8d13ce383",
           "path": "README.es.md"
         },
         {
-          "hash": "e1dae77165537b51a2dd92341bcd24bf454528766825957d121264073f6a372d",
+          "hash": "0c18d2fdf1155f1047a96bf5f16978e547321bdf85b17b205bd3fbb0fcf9b240",
           "path": "README.fr.md"
         },
         {
-          "hash": "f2d48f398aa33882cfaec539fe8e1528174d69622249f26b28300c137030ce89",
+          "hash": "ffbae5822d346155bea5794a7c6e2e7fc8912803675b153484af243e0d93da81",
           "path": "README.hi.md"
         },
         {
-          "hash": "571858c546783ace756701e9b9b9950ee3409a2cebc30db87a79c262e3a7ba84",
+          "hash": "155cead94c4f398742ba03bc60aefa05876a03aa9da5fa6b101049d66ba26ecf",
           "path": "README.it.md"
         },
         {
-          "hash": "b089cc18f539d3d6b892e63e07e0387fdd058e2b90307d1a87087b2c4d868bf6",
+          "hash": "6b63fc1a717d6eeeda512f6f649560512fabf5f08394e217f16e7b88f704d4cf",
           "path": "README.ja.md"
         },
         {
-          "hash": "eabfcf512d1aa8ea39443c100332d532bf71ce4fdff7d6bb7de90adfa75d182f",
+          "hash": "049fe5ed4a73b3f39cc5cebd855ce0147780276c3bd9066cc3da385a65c42c92",
           "path": "README.md"
         },
         {
-          "hash": "003dd31fac3003ab3bdcdeecff6522ec95b65df6f69383f8e128caffc0da11a9",
+          "hash": "ba0beff48a21b313b37c5563f8164111850f7bf0a277fbad43ff6807203cdd17",
           "path": "README.pt-BR.md"
         },
         {
@@ -932,7 +736,7 @@
           "path": "README.pypi.md"
         },
         {
-          "hash": "8d51bfbf4ee20829d7e748bec525ddf4a4fe75e482b27e30371aea22e7301f82",
+          "hash": "fb078e0f268482403388e58d3acc36396d271f3b94e42c89b4db05c513e1daf6",
           "path": "README.zh.md"
         },
         {
@@ -940,7 +744,7 @@
           "path": "SCORECARD.md"
         },
         {
-          "hash": "5a9a7cf02c1822e8d27cd99ac4fe0de533ba44a3dd1b198484bb5cecc1d84f84",
+          "hash": "9d75403c820ccf0e3805c91c83a8da4cbb7b6939e9a551c088c43316847de3e1",
           "path": "SECURITY.md"
         },
         {
@@ -948,7 +752,7 @@
           "path": "SHIP_GATE.md"
         },
         {
-          "hash": "506d01e139aafc4c5d0d51444b55136bdda547b3c5d8fbe4df5f362575763a15",
+          "hash": "d68505eb2f544bfdada1ff2e2fefd99633ade922a5522919ae35200acf221f91",
           "path": "pyproject.toml"
         },
         {
@@ -1020,7 +824,7 @@
           "path": "site/src/content.config.ts"
         },
         {
-          "hash": "775f9247e090db1fc081ae00b64fd249edd67752fca1de093c28d0a7cade28a7",
+          "hash": "6035243e2d28325dba5bbd2fd5ea4a136a76be0d15b3312c36e45c870059e2de",
           "path": "site/src/content/docs/handbook/index.md"
         },
         {
@@ -1028,7 +832,7 @@
           "path": "site/src/content/docs/handbook/license-gate.md"
         },
         {
-          "hash": "a0524c19aa963e55cad54d8d720353118d87be429e5cecc1b5386425f14fb680",
+          "hash": "0d770c3d59bf131c71ee883e3f637fe4cfb918603644f4528f6ba46aff1729d6",
           "path": "site/src/content/docs/handbook/method.md"
         },
         {
@@ -1136,11 +940,11 @@
           "path": "specs/E12-seeds.json"
         },
         {
-          "hash": "ba9e94bead1bebbe643a6f0e85e06acb871b93822cbe8ff01cd8cfb1d9f44936",
+          "hash": "6cfc6816421b83916c4ce1d30e4490a1ffae34cfa7597ed409b79316e0ff2892",
           "path": "specs/E13-prompt.json"
         },
         {
-          "hash": "a0a003e6a6ec0a093d260a8ba36dfec663280403739e1ec51ed5d2a0150327b8",
+          "hash": "b42cc9c3a4888d9b21aef05e5501d245af772c4c241ac310c0f6dc9bfc524e6a",
           "path": "specs/E13-seeds.json"
         },
         {
@@ -1148,7 +952,7 @@
           "path": "specs/E14-seeds.json"
         },
         {
-          "hash": "754859ae45812d040fae0c33770b3e537960e9552cba8ee1091033c7813723c2",
+          "hash": "2e355481ad861e8db1edad48dd362c46ad7abe5e653a5a8cf334549e044df964",
           "path": "specs/ceiling-why-machine-readable.md"
         },
         {
@@ -1299,14 +1103,14 @@
             "main",
             "parse_argv"
           ],
-          "hash": "956af31f8a47d255f9a4761975dc97cae900f9c238ef39ba0f67eb08f6c940e7",
+          "hash": "866eea3a488cf0e594ba89f017224c78eef64268fb11fefabb4eb44c64167316",
           "path": "tests/blender/check_pose_arc_roundtrip.py"
         },
         {
           "exports": [
             "cube"
           ],
-          "hash": "3d4987cc8086e5f8a25584f0d9ac087f8d04ebb2a21c166408344237507ec640",
+          "hash": "e7291ca026103f73374aac84e527c0bbb531ac112ba23c8ab45ce005b128783f",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py"
@@ -1390,7 +1194,7 @@
             "upload_record_branch",
             "upload_record_paths"
           ],
-          "hash": "4fd8cce98cc086f8cc63048c4a14f0fc1eafecda0f0c362fb1382d8760818620",
+          "hash": "319438e432b1ebddef1457c3df2eb077d3f71225383e0acb1e4200db0340ea47",
           "importOrder": [
             "tools/sheet_compose.py",
             "tools/render_turnaround.py",
@@ -1410,29 +1214,29 @@
             {
               "calls": [
                 {
-                  "line": 173,
+                  "line": 174,
                   "name": "SC",
                   "passed": true,
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  }
-                },
-                {
-                  "line": 177,
-                  "name": "clear_font_index",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   }
                 },
                 {
                   "line": 178,
+                  "name": "clear_font_index",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  }
+                },
+                {
+                  "line": 179,
                   "name": "resolve_font_path",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   }
                 },
                 {
-                  "line": 185,
+                  "line": 186,
                   "name": "SC",
                   "passed": true,
                   "target": {
@@ -1440,7 +1244,7 @@
                   }
                 },
                 {
-                  "line": 186,
+                  "line": 187,
                   "name": "clear_font_index",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1455,17 +1259,9 @@
             {
               "calls": [
                 {
-                  "line": 173,
+                  "line": 174,
                   "name": "SC",
                   "passed": true,
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  },
-                  "via": "_permitted_face_present"
-                },
-                {
-                  "line": 177,
-                  "name": "clear_font_index",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   },
@@ -1473,6 +1269,14 @@
                 },
                 {
                   "line": 178,
+                  "name": "clear_font_index",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  },
+                  "via": "_permitted_face_present"
+                },
+                {
+                  "line": 179,
                   "name": "resolve_font_path",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1480,7 +1284,7 @@
                   "via": "_permitted_face_present"
                 },
                 {
-                  "line": 185,
+                  "line": 186,
                   "name": "SC",
                   "passed": true,
                   "target": {
@@ -1489,7 +1293,7 @@
                   "via": "_permitted_face_present"
                 },
                 {
-                  "line": 186,
+                  "line": 187,
                   "name": "clear_font_index",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1505,7 +1309,7 @@
             {
               "calls": [
                 {
-                  "line": 214,
+                  "line": 215,
                   "name": "splitlines",
                   "target": null
                 }
@@ -1518,7 +1322,7 @@
             {
               "calls": [
                 {
-                  "line": 613,
+                  "line": 614,
                   "name": "blender_stubbed",
                   "target": {
                     "file": "tests/blender_stub.py"
@@ -1533,7 +1337,7 @@
             {
               "calls": [
                 {
-                  "line": 613,
+                  "line": 614,
                   "name": "blender_stubbed",
                   "target": {
                     "file": "tests/blender_stub.py"
@@ -1549,7 +1353,7 @@
             {
               "calls": [
                 {
-                  "line": 737,
+                  "line": 738,
                   "name": "setattr",
                   "target": null
                 }
@@ -1562,14 +1366,14 @@
             {
               "calls": [
                 {
-                  "line": 764,
+                  "line": 765,
                   "name": "_font",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   }
                 },
                 {
-                  "line": 737,
+                  "line": 738,
                   "name": "setattr",
                   "target": null,
                   "via": "install_sheet_font_fallback"
@@ -1583,7 +1387,7 @@
             {
               "calls": [
                 {
-                  "line": 781,
+                  "line": 782,
                   "name": "_font",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1598,7 +1402,7 @@
             {
               "calls": [
                 {
-                  "line": 807,
+                  "line": 808,
                   "name": "addinivalue_line",
                   "target": null
                 }
@@ -1611,7 +1415,7 @@
             {
               "calls": [
                 {
-                  "line": 811,
+                  "line": 812,
                   "name": "addoption",
                   "target": null
                 }
@@ -1624,7 +1428,7 @@
             {
               "calls": [
                 {
-                  "line": 877,
+                  "line": 878,
                   "name": "getoption",
                   "target": null
                 }
@@ -1889,7 +1693,7 @@
             "test_the_return_walk_does_not_descend_into_a_nested_def",
             "test_the_success_census_goes_RED_on_a_tool_that_prints_the_wrong_prefix"
           ],
-          "hash": "56e7fe4f359ee315632d45e60d59d389bdd7e34bbc27eb3ff84c1ef536e9d065",
+          "hash": "94e096a5355a097d93e078123a5729fc1f41013c105f6894f2395ca60455dbaa",
           "importOrder": [
             "tests/_census_nodes.py",
             "tools/build_assembly_payload.py",
@@ -3157,7 +2961,7 @@
             "test_write_png_refuses_a_zero_dimension",
             "test_write_png_still_writes_a_real_frame"
           ],
-          "hash": "9f84fc19cfca25038fd0d855249dd25fb01dedba53f1b9b7eb6e28e115e6471d",
+          "hash": "38c88d4c75fe8432200d9c97824276fef844cf2de73213c07825a191eaa46162",
           "importsFiles": [
             "tests/blender_stub.py",
             "tools/armature_core/__init__.py",
@@ -4176,7 +3980,7 @@
             "test_two_receipts_that_disagree_about_the_sampler_are_refused",
             "test_without_the_record_the_assembly_route_is_still_refused"
           ],
-          "hash": "5c242c68269b46438d1c8446179b21f2ed4073abd6313dcfb3660119a583f1d8",
+          "hash": "6be6c7e2c68831dd899a3144948bc73e115e3514b5c96c783abf667cb9f3977f",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -4305,7 +4109,7 @@
             "test_the_record_pins_every_drawing_constant_the_gate_compares",
             "test_the_recorded_digest_is_the_digest_of_the_record_as_written"
           ],
-          "hash": "a6a64f3de642ca599154c818744c8242c66b1bcc2114f5962af9dbde467305d0",
+          "hash": "2df31a357ad885b5e97dba8f6ff8b95a54c2d663ed5b3c6074b2466c95197822",
           "importOrder": [
             "tests/blender_stub.py",
             "tools/armature_core/__init__.py",
@@ -4546,7 +4350,7 @@
             "test_the_verdict_is_quoted_over_the_pairs_it_compared",
             "test_the_verdict_states_the_ages_it_read_and_the_window_it_read_them_against"
           ],
-          "hash": "e42c6875fa583c7431325f738ab5fbc996c94023a178d5f456c45b70a4123477",
+          "hash": "5e48ae59de3f63f4ac1b839ba968e1b8e21894608b8e0fd53bd6254f367348de",
           "importsFiles": [
             "tests/blender_stub.py",
             "tools/armature_core/__init__.py",
@@ -5202,7 +5006,7 @@
             "test_two_receipts_AGREEING_on_attribution_still_pass",
             "test_two_receipts_disagreeing_on_ATTRIBUTION_refuse_rather_than_union"
           ],
-          "hash": "3e2e472e3784b5341967b041cc9307441fdc1bdd9013099f535a16f247f5cdfb",
+          "hash": "e8ca9f80ceed1d4221a0433bdd1dd4439026a18cbfaca9dac9540e07a0a1c085",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -5593,7 +5397,7 @@
             "test_this_runs_OWN_tokened_clip_is_tolerated_and_recorded_as_run_bound",
             "test_with_no_local_path_the_record_says_DECLARED_not_measured"
           ],
-          "hash": "30a49e3a544e3067ca07445120801aef623758acaae4d8c0153b9feb8d5cdc5d",
+          "hash": "0f0dc6cfacfec126a007ef05be3335bcdf76e075b2724ac37eec2d3b0f86b53c",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -6153,7 +5957,7 @@
             "test_the_watermark_line_is_read_off_the_payload_not_off_a_literal",
             "test_two_runs_are_distinguishable_in_a_scrollback"
           ],
-          "hash": "0140df2fb16a5a4edf4c13f2029aeaa30cc4a475e9adb1d880e1e676240bd6fa",
+          "hash": "257430fb54316fe15f915e30322a46181b464906aa26bffe39dbd5af68f1c797",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -6269,7 +6073,7 @@
             "test_the_verdict_quotes_the_oldest_applied_fetch_date",
             "test_the_version_rides_a_refusal_as_well_as_a_receipt"
           ],
-          "hash": "e507b75da542f8435989a14606e24b4c53dc4e6ad007207c0c5d6458b136a916",
+          "hash": "cc80f6684a5982fc6d71a0002ffedbed4283705353cf392630ff95e1fa292019",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/canon.py",
@@ -6689,7 +6493,7 @@
             "test_none_of_the_touched_modules_uses_a_bare_assert",
             "test_the_optimization_actually_took_effect"
           ],
-          "hash": "e9e28f9884d178d8629ba2ef6fae2cecb1bf1a1128ee589329410dad5966319a",
+          "hash": "3628bae80e72673b164929572b89269077954c5cf20eeddc47fc70f1966f487f",
           "importsFiles": [
             "tests/conftest.py"
           ],
@@ -6737,7 +6541,7 @@
             "test_the_bare_call_site_census_can_still_see_one",
             "test_the_optimization_actually_took_effect"
           ],
-          "hash": "7670f61f5c207c07b4d3e38222f76968e87fb650eac5c6abc4fa9d19dbbc8d76",
+          "hash": "6fe4ec0dffe901e06bcb54cd242171e5144276ec2758c9d8a569e0c96025d9ad",
           "importsFiles": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -8281,6 +8085,7 @@
             "test_gate_S_refuses_a_seed_the_committed_list_does_not_carry",
             "test_gate_S_refuses_any_chosen_seed_when_nothing_was_pre_registered",
             "test_main_names_the_file_beside_the_key",
+            "test_main_records_call_time_twin_prompt_json_in_prompt_record",
             "test_missing_twin_prompt_json_raises_typed_payload_error_naming_env_var_and_path",
             "test_omitting_the_seed_builds_on_the_first_registered_seed",
             "test_omitting_the_seed_with_no_registry_names_the_missing_flag",
@@ -8299,7 +8104,7 @@
             "test_the_prompt_and_the_sampler_are_byte_identical_across_the_two_shots",
             "test_the_zero_fallback_is_gone"
           ],
-          "hash": "dce02d4e215c032f2de38ab12d6969df4fed1bf70c783e06eb90c530a8254a39",
+          "hash": "6e67871d17c10f7274f48b24a60aa16d4ec4ac0f6ec7dc056f712c505dccc366",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_animate_payload.py",
@@ -8351,6 +8156,7 @@
             "test_any_class_that_could_drive_the_performer_refuses_the_graph",
             "test_both_i2v_builders_read_the_start_image_block_through_ONE_implementation",
             "test_breaks_verified_differs_is_NOT_in_that_class",
+            "test_build_positive_records_call_time_twin_prompt_json_source",
             "test_build_refuses_a_start_frame_whose_pixels_were_never_read",
             "test_build_refuses_to_emit_a_payload_with_no_resolved_start_frame",
             "test_clip_vision_stays_absent",
@@ -8394,7 +8200,7 @@
             "w1_path",
             "w1_record"
           ],
-          "hash": "972dc2ea9eb7cf2de3c324760d73bb271f5e3f311ed593d5816522d82c7fb722",
+          "hash": "cdefb74061caf077cef6111587908cdad0434cab69c125b7768561f882af1443",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_camera_i2v_payload.py",
@@ -8445,6 +8251,7 @@
             "test_gate_route_refuses_a_graph_carrying_the_excluded_speed_lora",
             "test_gate_s_raises_on_a_seed_the_committed_list_does_not_carry",
             "test_gate_s_raises_when_a_seed_is_varied_with_no_registry_at_all",
+            "test_main_records_call_time_twin_prompt_json_in_prompt_record",
             "test_omitting_the_seed_builds_on_the_first_registered_seed",
             "test_omitting_the_seed_with_no_registry_names_the_missing_flag",
             "test_omitting_the_start_frame_flag_RAISES",
@@ -8465,7 +8272,7 @@
             "test_wiring_clip_vision_refuses_the_graph",
             "test_without_the_table_entry_gate_l_goes_indeterminate_and_raises"
           ],
-          "hash": "e401c035b6778646dca083398e244f45677325f42be93a9e24f35e72e2b655bc",
+          "hash": "85937d8aca5da9767e3af546fb1fad00cc8ba7b3895ae2ff17aa8540e6e111e3",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_i2v_payload.py",
@@ -8474,7 +8281,8 @@
             "tools/armature_core/gates.py",
             "tools/armature_core/route_gates.py",
             "tools/armature_core/pngio.py",
-            "tools/build_camera_i2v_payload.py"
+            "tools/build_camera_i2v_payload.py",
+            "tools/build_animate_payload.py"
           ],
           "importsFiles": [
             "tests/conftest.py",
@@ -8483,6 +8291,7 @@
             "tools/armature_core/gates.py",
             "tools/armature_core/pngio.py",
             "tools/armature_core/route_gates.py",
+            "tools/build_animate_payload.py",
             "tools/build_camera_i2v_payload.py",
             "tools/build_i2v_payload.py"
           ],
@@ -8642,7 +8451,7 @@
             "test_the_shift_formula_is_the_flow_shift",
             "test_the_split_covers_every_step_with_no_gap_and_no_overlap"
           ],
-          "hash": "b42af395fd51bff75ec57bac7e59ee184cb231facd13738ae3d995e212ac45bf",
+          "hash": "6e7f84f886940e3f0cd3a26a8f63636c6b40e5a32878889b8cef14f85327204c",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_t2v_payload.py",
@@ -8687,7 +8496,7 @@
             "test_the_two_pinned_revisions_actually_carry_these_values",
             "test_the_two_profiles_actually_differ_where_the_delta_table_says_they_do"
           ],
-          "hash": "c502d200124042969b7f7774382904fbfd53d4442ba9bff2d84aeff206b7c1a7",
+          "hash": "6286dfe07bfa567f7246b5f28d880316a8e6048e0e0524cb17441aa185ef4c9a",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_t2v_payload.py",
@@ -8951,7 +8760,7 @@
             "test_two_frames_transposed_inside_one_group_raises",
             "test_two_local_frames_uploading_to_one_object_raises"
           ],
-          "hash": "8501b1663c240118c507e6300f8fd95a2f0f7053f3c5995228a416fad77852a0",
+          "hash": "75db8c5336fd59024552941906702763bbbce42b3cf77d68638d8b0965b8cf2f",
           "importsFiles": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -10229,7 +10038,7 @@
             "uses_refs",
             "workflow_files"
           ],
-          "hash": "b2720b7436e2efab29f78536446093b3b9575ce0cd9ac278a45af6ecf3fb06f1",
+          "hash": "6141b611e7163b24d7fbba9e0b123c4fc7196ab540be56c5f362e73197912c56",
           "importsFiles": [
             "tests/conftest.py",
             "tests/test_packaging.py"
@@ -14760,7 +14569,7 @@
             "test_the_pixel_half_sees_the_repeat_the_byte_half_cannot",
             "test_the_segment_medians_expose_a_swing_a_single_median_would_hide"
           ],
-          "hash": "04d2d2bc8325f9e297c3d285699ce307ad47d3f2aa961d92af3d806c40c5d664",
+          "hash": "7703a0ad33c4c76bcafc7c57e2ef292646586b0f4492d28882a41ef9f673b494",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/clipstats.py"
@@ -14811,7 +14620,7 @@
             "test_the_shape_refusal_still_carries_the_mismatch_in_its_evidence",
             "test_the_tool_can_answer_for_its_own_usage"
           ],
-          "hash": "5f089d0a9471f7182ce762f1ac7f13fc13c93bf6ec0bd3db62b061980cf6300f",
+          "hash": "e6d39bec5f1f82b432a6e197d2ddcc4f41f78469b30921fb2333b61df58b25d0",
           "importsFiles": [
             "tests/conftest.py",
             "tools/compare_runs.py"
@@ -14978,7 +14787,7 @@
             "test_the_thresholds_are_the_amendments_and_name_where_they_came_from",
             "test_the_unnumbered_name_refusal_can_see_a_name_it_was_filtering_out"
           ],
-          "hash": "4c5067114fadd25b1ca9fcd1366d67c4a2ff3c954ab15d626b870ac57e3fec25",
+          "hash": "7490a365efdb304f79baafd3f52281c706e6e1b13c2ebe91e53741e171751a3f",
           "importsFiles": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -15650,7 +15459,7 @@
             "test_the_slot_binding_line_says_not_visible",
             "test_the_watermark_line_reports_the_flag_that_was_sent"
           ],
-          "hash": "2c5818e40f42b0fbedcad8a2524947e0358b297b4166bbfcda78109462186041",
+          "hash": "e51bcc47473d78e137b87cee77fd0307f657c4a73adc0862256e80324d53a678",
           "importsFiles": [
             "tools/make_e13_sheet.py"
           ],
@@ -15668,12 +15477,16 @@
             "test_a_stray_png_never_reaches_the_receipts_frame_names",
             "test_an_expected_count_pins_the_population_to_the_spec",
             "test_an_rgba_frame_directory_raises_rather_than_dropping_the_channel",
+            "test_default_imageio_ffmpeg_getter_returns_existing_binary_when_installed",
+            "test_ffmpeg_source_and_from_env_follow_binary_actually_used",
+            "test_receipt_and_gate_record_imageio_ffmpeg_skipped_on_intel_macos",
             "test_receipt_records_which_ffmpeg_source_was_used",
             "test_resolve_ffmpeg_prefers_env_then_imageio_then_path",
+            "test_resolve_ffmpeg_skips_imageio_on_intel_macos_and_keeps_arm64_and_env",
             "test_the_population_is_ordered_by_number_not_by_string",
             "test_the_receipt_states_the_alpha_and_dtype_of_what_it_read"
           ],
-          "hash": "a478bc62884a82db3141ee22a89f9bcf343aab7f3dccea9ac38d314956968739",
+          "hash": "e382ec5b858213b652ece20640fb10517b207dfe1c5631f69202d4ff69e6b830",
           "importsFiles": [
             "tools/encode_control.py"
           ],
@@ -15868,7 +15681,7 @@
             "test_the_video_job_that_never_landed_halts",
             "test_two_orderings_that_agree_do_not_print_fetch_ok"
           ],
-          "hash": "b2e62e6599b5cd650f6537b093eefdc552ff140c406dabee397450b7977fb8ab",
+          "hash": "025be26a61474f073d9d66ba6d093f7d0d0e3d38b0833933623a02e06d6b854f",
           "importOrder": [
             "tests/conftest.py",
             "tools/fetch_t2v_run.py",
@@ -16133,7 +15946,7 @@
             "test_the_decoded_side_is_checked_too",
             "test_uint8_frames_still_pass"
           ],
-          "hash": "477c3761f1e17e70cd18d60ee9d6fe58c1c988b0c014b9eeba436b5c33098bd1",
+          "hash": "01a1df0d2ee695df66392ea65bcf279caf242492a5d829f248938e16240f464f",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/gates.py"
@@ -16648,7 +16461,7 @@
             "test_wan_fun_control_profile_exists_and_binds_the_same_constraints",
             "test_wan_fun_control_rejects_the_same_near_misses_as_vace"
           ],
-          "hash": "ca70de080a7efad3f5de3126e8eb8886cf9a58a12ef154ca3d32602ba4cc484b",
+          "hash": "4a2cf5b553c61524544d03353635b0b7a2d9a1038f9bf7362bf1060089092c63",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -18199,7 +18012,7 @@
             "test_the_stale_target_guard_does_not_test_before_for_truthiness",
             "test_the_subject_arg_refusal_is_in_the_family_so_the_halt_is_refused_not_failed"
           ],
-          "hash": "ef079d70bd17b412a5c47cf4b8559cac3c6b3c1db0fbff40fafea0c783f6b608",
+          "hash": "79365e17e3a6a90d198cd2b0edda8a3388ff6cbc591b2923fd89e000777570e6",
           "importsFiles": [
             "tests/blender_stub.py",
             "tests/test_sheet_sides.py",
@@ -18238,7 +18051,7 @@
             "test_there_is_one_require_shot_fraction_and_three_callers",
             "turn"
           ],
-          "hash": "0e0c19e47cf63d31aa6bdbe668581a421b8d0a94d5708366fbc4768ed3e9c3dc",
+          "hash": "2739cff08ed4d62be3140f50340cd9c9b35a61de041864719c1875dd34ab4c00",
           "importsFiles": [
             "tests/blender_stub.py",
             "tools/armature_core/__init__.py",
@@ -18811,7 +18624,7 @@
             "test_the_voxel_refusal_reaches_the_retopo_halt_line",
             "test_there_is_one_require_openable_and_two_callers"
           ],
-          "hash": "2b02ba5a7cc29e5d8e2992d7f33a66878a2f335f350b032bdb1077fbc7eed81b",
+          "hash": "13b3563b4220f3c28eb7ddabdd71d3a1e1ee30af130c3b6ac1e96523b2b7b19e",
           "importOrder": [
             "tests/blender_stub.py",
             "tools/armature_core/__init__.py",
@@ -18941,7 +18754,7 @@
             "test_the_vacuity_clause_does_not_depend_on_the_ordering_fix",
             "test_the_walk_finds_a_clauseless_raise_when_there_is_one"
           ],
-          "hash": "a95c9140c81a31d93c72e9e898f3f2364006a73d4bedd89255b4f565a27c63c4",
+          "hash": "dde7f40b846af2f20082eeb947cc66f81a3b634ff126ea2552b2d4dd3cb165e8",
           "importOrder": [
             "tests/_census_nodes.py",
             "tests/blender_stub.py",
@@ -19028,7 +18841,7 @@
             "test_the_usage_line_names_all_eight_arguments",
             "tree"
           ],
-          "hash": "653e0f1b0789ed30bd9a6ef771f76a050c085f1284395dee3728b19107a604c0",
+          "hash": "2256b3ae302566de44b51ff0da5972296f0ae7af156bb48e55325594d8cad7ec",
           "importsFiles": [
             "tests/_census_nodes.py",
             "tests/blender_stub.py",
@@ -21325,7 +21138,7 @@
             "test_the_two_frame_size_flags_name_the_route_their_defaults_came_from",
             "test_the_write_refusal_quotes_the_frame_count_the_operator_watched_go_by"
           ],
-          "hash": "e15452e4d3435d720f82694983fbcd3f96e870cd8529e9c81a9ccffe6a0112bf",
+          "hash": "3aa1706fd4fbdefec33c2c47b65ae283e16347fcccfa2f490cc342580ba4641a",
           "importOrder": [
             "tests/_census_nodes.py",
             "tools/encode_control.py",
@@ -21673,7 +21486,7 @@
             "test_the_two_docstrings_name_the_call_sites_the_tree_actually_has",
             "test_twist_is_reported_underdetermined_when_the_limb_is_straight"
           ],
-          "hash": "b5bc7a8d7e4d33b284ee5db7dfb0a48f69393e0dd9112d82239de4945842a08f",
+          "hash": "70c9ecc49913b704b37e9ae1e17a58da2a70abb0cbf2962f18ec21e9510a6d51",
           "importsFiles": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -23679,7 +23492,7 @@
             "test_ruling_l4_unexpected_keyword_raises_structured_measure_weight_gate",
             "test_structured_ruling_required_for_conditional_weights_and_legacy_keyword_refused"
           ],
-          "hash": "6359ffba1bf093638e4fd0a058a1dd37448f131b0844d5dc54a237d53d229ccf",
+          "hash": "94a7917091dee963d9b778773a0cbe16bae7dcf1fd39a31fb270d8612de70204",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/errors.py",
@@ -25206,7 +25019,7 @@
             "test_the_check_prints_a_record_even_when_its_arguments_are_wrong",
             "test_the_evaluated_geometry_sits_on_the_authored_wrist_at_every_sampled_frame"
           ],
-          "hash": "77c97ebc2a2de236ef7d17df707ee47aeca7bed333e79776b5c971390401dd02",
+          "hash": "d8656c9d9df70cd24a226922cb841f1eaf849fb8aa1e5bd13b5e4fdb33cb9f9b",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -25291,15 +25104,14 @@
         },
         {
           "exports": [
-            "is_part_b",
             "scan_lines",
             "scan_tree",
             "test_ci_path_filters_cover_every_guarded_hygiene_file",
             "test_hygiene_scanner_catches_labels_paths_and_name_while_honouring_exclusions",
-            "test_part_a_has_no_internal_labels_local_paths_or_personal_names",
+            "test_whole_repo_has_no_internal_labels_local_paths_or_personal_names",
             "tracked_repo_files"
           ],
-          "hash": "d65f6683d36e8483940b332892217bc014f5a53663b4c3ac584cb6e3d9433f91",
+          "hash": "af3dc549460fa5658ed6aec085c92e831b6ca4d0128a81919ebd6acbc0b39464",
           "importsFiles": [
             "tests/conftest.py",
             "tests/test_ci_workflows.py"
@@ -25388,7 +25200,7 @@
             "test_the_fts_mirror_cites_nothing_the_tables_do_not",
             "test_the_index_carries_every_table_the_pointer_check_walks"
           ],
-          "hash": "d506536078e88656e5268d31e94e9024f0c753a0a5df675b358eb53016fcb2ef",
+          "hash": "176aa011de8f788c022debbe163bbe7d0583e464c619d0c7f81e7b1855998414",
           "names": [
             "tools/armature_index.py"
           ],
@@ -25539,7 +25351,7 @@
             "test_the_widened_population_is_a_superset_of_the_mesh_tool_one",
             "vis"
           ],
-          "hash": "c2ec770caa5c3d69651dfdd92ec2a8c9569170e92470589d5f56282e097888d1",
+          "hash": "8f518443f73fe9349097493595ad5e29be6c8d24d706738c01cbc769df5d9e87",
           "importOrder": [
             "tests/conftest.py",
             "tests/blender_stub.py",
@@ -26331,7 +26143,7 @@
             "test_the_ruling_is_still_recorded_as_a_ruling",
             "test_the_two_variants_are_disposed_of_symmetrically"
           ],
-          "hash": "1e5a95bb69f5d7eb313f0c91f97e0024ee0f98cc18e2ad3670c25dfb1e3c69ce",
+          "hash": "60f53322b9c8093443f1bc4c72ad1e15595dbdf8eef47a9da1e6aad13fe1b276",
           "importsFiles": [
             "tests/blender_stub.py"
           ],
@@ -26654,7 +26466,7 @@
             "test_wan_animate_over_the_trained_horizon_raises",
             "test_widget_selected_depth_node_classes_pass_on_small_and_refuse_on_banned_tiers"
           ],
-          "hash": "9e1711e2240d6a26605993474b40b3a640f7552c637490f763aa181c535d3f31",
+          "hash": "f42906e11d4f789b0eda5f7dc460e0aa21b04ca26b7fc513f86f1ed0f7303ecd",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -26737,7 +26549,7 @@
             "test_the_seeds_spec_population_is_the_eight_committed_specs",
             "test_the_specs_correction_agrees_with_the_tree_it_describes"
           ],
-          "hash": "2eae615cbc4b443b5483a424a4729c44ddacd6dd53a61a418333123deadc1b6a",
+          "hash": "1b54f41fdff0437aa5c1cceeb4adb842d89d141ae11772862287db8f390f471e",
           "importsFiles": [
             "tests/_census_nodes.py"
           ],
@@ -26951,7 +26763,7 @@
             "test_non_finite_direction_refuses_cleanly_without_json_crash",
             "test_non_finite_parallax_and_gric_refuse_with_non_finite_direction"
           ],
-          "hash": "ae4918272150f0d9cd388af147c073cc5d3fb6da6105e3ddf33972f11076ce7d",
+          "hash": "7d5153331af1bc5989f50128accf34d81900a8f55400953a50a4d6ea90500378",
           "importsFiles": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -26976,7 +26788,7 @@
             "test_load_dinov2_state_dict_missing_or_unexpected_keys_refuses",
             "test_weights_not_present_and_dinov2_loader_handoff_refusals"
           ],
-          "hash": "1d5336bcc4514651632e0f9f393947946d369c6fd770d05895ac41b1d6942dac",
+          "hash": "b3522f9ef0a46d92e2bb30676258f0e5058d6e94063f15eefccf4843827f0ae4",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/measure_weights.py",
@@ -27751,7 +27563,7 @@
             "test_the_solve_and_the_pin_are_different_kinds_of_number",
             "test_the_typed_text_is_recovered_from_either_argument_form"
           ],
-          "hash": "1665d05afd8bbfd27fba3c37ec5f325a454b54fd42e48b991336490535bfa188",
+          "hash": "27a0627efb40ba9046c18f2922c4bdad548bb1c97a2ac87fc78b2cba547eb862",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/turnaround.py",
@@ -27919,7 +27731,7 @@
             "test_total_travel_matches_the_derived_stride",
             "test_unknown_axis_raises"
           ],
-          "hash": "addd01dbbd79589c11724a4c40f0078c907ade57f21b3d3f1941341af7338b7f",
+          "hash": "fb56119ba198e2139b6469880d53237b7f65dcd7b99f6c8a9c1e1bef6872d779",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/sitelist.py",
@@ -28308,7 +28120,7 @@
               "line": 1033
             }
           ],
-          "hash": "48d447c913502c861760c84e2bc08ab0a87d8217ff566942f8b6a8b97decfef8",
+          "hash": "256abe2c65cd20b17ec794c9502d489808b116f35396b7f9de913d079388c3ed",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -28599,7 +28411,7 @@
               "line": 1079
             }
           ],
-          "hash": "61240d75de0b00cedb8040d260a26bf60a9f35bd92ddb55240df5dca852f4890",
+          "hash": "14f6e79b5c88bd4084a2f45a905062b15119cf9abad09220990930919569b135",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/canon_census.py",
@@ -29312,7 +29124,7 @@
               "line": 535
             }
           ],
-          "hash": "f6c17ed0b102985ccfbad2ba84c7f3ce1aa8d4d333ae507206d60ca2681571bf",
+          "hash": "72701ac4fb74c6644748a601b11a6fd6d83b698ec967f3f45a7e7a224bffb029",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/armature_core/__init__.py",
@@ -29423,7 +29235,7 @@
               "line": 584
             }
           ],
-          "hash": "cced185fe73fd12ed1be85ae9e63bc7cd00e5930b466ac65e1d24b4ba1200ee3",
+          "hash": "de7f3f1f925c9837c156305abf58525b35398c018ca42d3f7b99e26f1a4cd7f2",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -29461,7 +29273,7 @@
               "line": 414
             }
           ],
-          "hash": "4c77af38e84a718ae2c08c7ffba521dbb540c4f9e1216d5ec21058ec242d1ac9",
+          "hash": "91b7952c0e36205ec0e16328bed05cd6fd5e5a41f0f746e6ddb4d6df3f2c88ec",
           "path": "tools/armature_core/errors.py",
           "sequences": []
         },
@@ -29675,7 +29487,7 @@
               "line": 929
             }
           ],
-          "hash": "0e026862583fcf14b200c775db404435dc9f7363c2b47566f54510ce3c88467e",
+          "hash": "0b67dfb33b9f1390f304b0e5b6001a42c60c0f73fabb3bd112475a7863329d12",
           "importsFiles": [
             "tools/armature_core/errors.py"
           ],
@@ -29842,7 +29654,7 @@
               "line": 1093
             }
           ],
-          "hash": "0653cb24f32e789c48bb33538af4c3d1457a09c6da096adfd2478ff91710abd1",
+          "hash": "c177da277e8bab5e5069c1d408179ae011fd7784540eb0999507bff8d9b82808",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -30906,7 +30718,7 @@
               "line": 818
             }
           ],
-          "hash": "b1dde4e757b13aa8818bb81d1d3678e81a32ca5bdc74bf89bff0c846b672a07a",
+          "hash": "68fde223dd60f3de1b6ff68eb69e5c16606504d016886ebe4014b24899d232a3",
           "importsFiles": [
             "tools/armature_core/errors.py"
           ],
@@ -32101,7 +31913,7 @@
               "line": 4723
             }
           ],
-          "hash": "5c1bf8e3d21b7f44fd01b572c597db2811a31079cad5857f37d46b4787b18d9c",
+          "hash": "edea6e70c8af837ef1f7caecf3dc211bdc3091406496e9c51228cae787d1cd55",
           "importsFiles": [
             "tools/armature_core/canon.py",
             "tools/armature_core/errors.py"
@@ -33274,7 +33086,7 @@
               "line": 2074
             }
           ],
-          "hash": "0a5fea7b8e0844fb29de291d1b4e5a0886ef6da80d9d47cb0570c8ede5463874",
+          "hash": "019d9a758fbba2b01e16e9155bd9a401b5225b76a9252533c2d65777b08677b6",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/framing.py",
@@ -33718,7 +33530,7 @@
               "line": 852
             }
           ],
-          "hash": "37ba024485df1476fba1307c72b59000bec2233fc07a9173b4e4a98309dc0901",
+          "hash": "e9c52c4d87877fa99c13e3b8e70af9b57ae831ed4a92c333d47d53542070df6b",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py"
@@ -33840,7 +33652,7 @@
               "line": 734
             }
           ],
-          "hash": "91115403f0f3792034fff40ef7b9ffe1b4303bd1b6aff9ffe5b4aeb8b0be6b81",
+          "hash": "a661b0edb523b08853653dd8b642b23c5aeb08c4072af7718a4a89430d664a44",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py"
@@ -33869,7 +33681,7 @@
               "line": 144
             }
           ],
-          "hash": "87aef3579c02715f5d1258046b99d72741c89ca3a0718f2e55a13985263ceca9",
+          "hash": "5da6df3dc3a9861667f8507893d94da6a313a133233efe2cc6a8f7aa2a98b1c1",
           "importsFiles": [
             "tools/armature_core/parts.py"
           ],
@@ -34029,7 +33841,7 @@
               "line": 1314
             }
           ],
-          "hash": "e385649b0e2c34c27adbb3a39a12848640bb3944090ad23d770df09c774006e9",
+          "hash": "f0093c5a4fd79426fa3f04100ded9f16dcdab4ebf3925fc4c0bcf6a49f58583a",
           "importOrder": [
             "tools/rig_character.py",
             "tools/lift_solve.py",
@@ -34058,7 +33870,9 @@
         },
         {
           "exports": [
+            "active_identity_clause_source",
             "build",
+            "call_identity_clause",
             "gate_reference_fit",
             "identity_clause",
             "main",
@@ -34132,10 +33946,10 @@
             {
               "in": "_load_twin_prompt_json",
               "kind": "raise",
-              "line": 816
+              "line": 833
             }
           ],
-          "hash": "c41c540e9124b99f9e0d7c0f4f7aad4d67a445e78202371005b571715e4c55a9",
+          "hash": "b66ec684382082f55f44530d849bd8c203703ab7bfbca868c6bddc776501ce0f",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -34305,7 +34119,7 @@
               "line": 1198
             }
           ],
-          "hash": "be3ced9ec4544a6f42c9918ab3fa625924c538e2e40c7f8ca39bc8452c49cb9a",
+          "hash": "390a8e97bf6c74a85467e7936a7b75d040798327529eafd7362f786c03b60500",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/assembly.py",
@@ -34850,7 +34664,7 @@
               "line": 1301
             }
           ],
-          "hash": "96ada240734872161524249477782e91512b7a6a1f04ab83a2be52f8dbb704d3",
+          "hash": "fe43ab654f05921ccd2d515a16f1762dee39862bd438e5c4c4c5fce7c2b3b411",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -35319,7 +35133,7 @@
               "line": 903
             }
           ],
-          "hash": "3eeec20da81b517e03d7cb659c83528bf0b92f61867caf5ba5f00d5bf8696313",
+          "hash": "bdba331e79b7d8b1a6129e6f77c0e7fb9c8130f5f857cad1f5b02fab58c080e7",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -35477,7 +35291,7 @@
               "line": 937
             }
           ],
-          "hash": "cd7a3de7abd7c340ff66bd7f6c9e39ac57f81f85c9280e22ff7f5402c97e71e9",
+          "hash": "2c439bdf4e7775346d927a9a9214215ee7776ed77c0c99cc8893db7bdf1313eb",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -35576,7 +35390,7 @@
               "line": 935
             }
           ],
-          "hash": "c5b04120d3b8f046082c65d3d65eaba5d6370bcb18d336ef618311aa9897e67e",
+          "hash": "90f65ec3692ee73393a56efeb98d6fbb813b881c5d06dfe9f04a6b1c8e0ec565",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/assembly.py",
@@ -35846,7 +35660,7 @@
               "line": 429
             }
           ],
-          "hash": "dd085c080efcc78e3d50ddb633760041ced454a74f660aa103cbca7f8264bb94",
+          "hash": "53360fe17b3aff4465372281bdbe98429a25055e7fccce17516026172ab1fe95",
           "importOrder": [
             "tools/build_cascade_payload.py",
             "tools/build_assembly_payload.py",
@@ -36148,7 +35962,7 @@
               "line": 705
             }
           ],
-          "hash": "ad412361c649a3451a60c238e4f9954a6243093b477830c48938297c09f1affc",
+          "hash": "7bfe0697ce3e5d42e2d2875c77663178de91c17ee24c5adda955ef7d078ec116",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -36196,7 +36010,7 @@
               "line": 581
             }
           ],
-          "hash": "9d76599e17be5aa458ab9618a9128ca0329eed6d7ffb7e5b4753231821943a8c",
+          "hash": "c9cfe3ae07b355aa8546cf70222db46cd7ba1ddd2a38a3e91f9aeb8e6b8ef667",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -36433,7 +36247,7 @@
               "line": 629
             }
           ],
-          "hash": "a4eca618318f5c52556df08aa06538ee1c62b619f734a95b6505c88aec60b7e8",
+          "hash": "50173dad3aee237a6e3ed0a1e3167f5eeea2e56ea728e326883dae0e150425ef",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -36645,7 +36459,7 @@
               "line": 566
             }
           ],
-          "hash": "75b70c27afd2e91c25b45f761bd085d006fb8fe8b36b7965714f7c06855456f3",
+          "hash": "8ac228f43cd0b8a95ce90fc05cddfa918a8cc483992912f1ace73ed46c847710",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/landmarks.py",
@@ -36681,6 +36495,7 @@
             "gate_codec_safe_for_mode",
             "gate_encode_rate",
             "gate_ffmpeg_binary",
+            "imageio_ffmpeg_skipped",
             "load_frames",
             "load_survey_table",
             "main",
@@ -36699,250 +36514,250 @@
             {
               "in": "_default_imageio_ffmpeg",
               "kind": "except",
-              "line": 104
+              "line": 105
             },
             {
               "in": "_resolve_ffmpeg",
               "kind": "except",
-              "line": 116
+              "line": 142
             },
             {
               "in": "run_ffmpeg",
               "kind": "except",
-              "line": 246
+              "line": 294
             },
             {
               "in": "run_ffmpeg",
               "kind": "raise",
-              "line": 251
+              "line": 299
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 286
+              "line": 334
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 295
+              "line": 343
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 304
+              "line": 352
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 313
+              "line": 361
             },
             {
               "in": "read_frames",
               "kind": "raise",
-              "line": 360
+              "line": 408
             },
             {
               "in": "read_frames",
               "kind": "raise",
-              "line": 374
+              "line": 422
             },
             {
               "in": "read_frames",
               "kind": "raise",
-              "line": 398
+              "line": 446
             },
             {
               "in": "gate_encode_rate",
               "kind": "raise",
-              "line": 439
+              "line": 487
             },
             {
               "in": "gate_ffmpeg_binary",
               "kind": "raise",
-              "line": 459
+              "line": 507
             },
             {
               "in": "ffmpeg_version",
               "kind": "except",
-              "line": 487
+              "line": 536
             },
             {
               "in": "ffmpeg_version",
               "kind": "except",
-              "line": 489
+              "line": 538
             },
             {
               "in": "encode",
               "kind": "raise",
-              "line": 500
+              "line": 549
             },
             {
               "in": "encode",
               "kind": "raise",
-              "line": 520
+              "line": 569
             },
             {
               "in": "decode",
               "kind": "raise",
-              "line": 544
+              "line": 593
             },
             {
               "in": "decode",
               "kind": "raise",
-              "line": 554
+              "line": 603
             },
             {
               "in": "decode",
               "kind": "raise",
-              "line": 566
+              "line": 615
             },
             {
               "in": "survey_codecs",
               "kind": "except",
-              "line": 641
+              "line": 690
             },
             {
               "in": "load_survey_table",
               "kind": "except",
-              "line": 658
+              "line": 707
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 659
+              "line": 708
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 665
+              "line": 714
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 671
+              "line": 720
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 679
+              "line": 728
             },
             {
               "in": "codec_for_mode",
               "kind": "raise",
-              "line": 696
+              "line": 745
             },
             {
               "in": "survey_row_for",
               "kind": "raise",
-              "line": 723
+              "line": 772
             },
             {
               "in": "gate_codec_safe_for_mode",
               "kind": "raise",
-              "line": 741
+              "line": 790
             },
             {
               "in": "gate_codec_safe_for_mode",
               "kind": "raise",
-              "line": 749
+              "line": 798
             },
             {
               "in": "read_stage_render_channel_dirs",
               "kind": "raise",
-              "line": 766
+              "line": 815
             },
             {
               "in": "read_stage_render_channel_dirs",
               "kind": "except",
-              "line": 775
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "raise",
-              "line": 776
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "raise",
-              "line": 784
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "raise",
-              "line": 795
-            },
-            {
-              "in": "build_control_pack",
-              "kind": "raise",
               "line": 824
             },
             {
+              "in": "read_stage_render_channel_dirs",
+              "kind": "raise",
+              "line": 825
+            },
+            {
+              "in": "read_stage_render_channel_dirs",
+              "kind": "raise",
+              "line": 833
+            },
+            {
+              "in": "read_stage_render_channel_dirs",
+              "kind": "raise",
+              "line": 844
+            },
+            {
               "in": "build_control_pack",
               "kind": "raise",
-              "line": 830
+              "line": 873
+            },
+            {
+              "in": "build_control_pack",
+              "kind": "raise",
+              "line": 879
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 909
+              "line": 959
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 917
+              "line": 967
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 929
+              "line": 979
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 942
+              "line": 992
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 958
+              "line": 1008
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 983
+              "line": 1033
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 994
+              "line": 1044
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1220
+              "line": 1273
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1226
+              "line": 1279
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1243
+              "line": 1296
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1254
+              "line": 1307
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1266
+              "line": 1319
             }
           ],
-          "hash": "7f25d628e12739496fec62158e4277eba3a2056198956d6bc105fce6e04be074",
+          "hash": "f0db32be31530eff72352002aae3732e283722cf66954bfa65e81084fc7f2de7",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -36964,7 +36779,7 @@
             {
               "calls": [
                 {
-                  "line": 311,
+                  "line": 359,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36979,7 +36794,7 @@
             {
               "calls": [
                 {
-                  "line": 311,
+                  "line": 359,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36987,7 +36802,7 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 388,
+                  "line": 436,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37002,7 +36817,7 @@
             {
               "calls": [
                 {
-                  "line": 311,
+                  "line": 359,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37010,7 +36825,7 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 388,
+                  "line": 436,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37026,7 +36841,7 @@
             {
               "calls": [
                 {
-                  "line": 311,
+                  "line": 359,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37042,7 +36857,7 @@
             {
               "calls": [
                 {
-                  "line": 311,
+                  "line": 359,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37051,7 +36866,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 949,
+                  "line": 999,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37060,7 +36875,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 1011,
+                  "line": 1061,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37068,7 +36883,7 @@
                   "via": "encode_stream_png_sequence"
                 },
                 {
-                  "line": 388,
+                  "line": 436,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37076,7 +36891,7 @@
                   "via": "read_frames"
                 },
                 {
-                  "line": 1080,
+                  "line": 1131,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37092,7 +36907,7 @@
             {
               "calls": [
                 {
-                  "line": 311,
+                  "line": 359,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37100,14 +36915,14 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 949,
+                  "line": 999,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
                   }
                 },
                 {
-                  "line": 1011,
+                  "line": 1061,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37123,7 +36938,7 @@
               "calls": [
                 {
                   "branch": "stream",
-                  "line": 311,
+                  "line": 359,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37132,7 +36947,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 949,
+                  "line": 999,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37141,7 +36956,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 1011,
+                  "line": 1061,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37149,7 +36964,7 @@
                   "via": "encode_stream_png_sequence"
                 },
                 {
-                  "line": 388,
+                  "line": 436,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37157,7 +36972,7 @@
                   "via": "read_frames"
                 },
                 {
-                  "line": 1080,
+                  "line": 1131,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37172,7 +36987,7 @@
             {
               "calls": [
                 {
-                  "line": 311,
+                  "line": 359,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37180,7 +36995,7 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 1291,
+                  "line": 1344,
                   "name": "parse_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37188,7 +37003,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 949,
+                  "line": 999,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37197,7 +37012,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 1011,
+                  "line": 1061,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37206,7 +37021,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 388,
+                  "line": 436,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37215,7 +37030,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 1080,
+                  "line": 1131,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37241,20 +37056,20 @@
             {
               "in": "probe",
               "kind": "raise",
-              "line": 119
+              "line": 120
             },
             {
               "in": "probe",
               "kind": "raise",
-              "line": 133
+              "line": 134
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 172
+              "line": 173
             }
           ],
-          "hash": "947030aeadb7df7fb949aa161659c6f3bc5c81f310242075c8506e12809a4181",
+          "hash": "e8b28d074d6f4f767bede711abaefeef27d6b692fd696df0c934f7cc904e0840",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -37265,21 +37080,21 @@
             {
               "calls": [
                 {
-                  "line": 110,
+                  "line": 111,
                   "name": "gate_ffmpeg_binary",
                   "target": {
                     "file": "tools/encode_control.py"
                   }
                 },
                 {
-                  "line": 112,
+                  "line": 113,
                   "name": "timeout_for_file",
                   "target": {
                     "file": "tools/encode_control.py"
                   }
                 },
                 {
-                  "line": 111,
+                  "line": 112,
                   "name": "run_ffmpeg",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37294,7 +37109,7 @@
             {
               "calls": [
                 {
-                  "line": 110,
+                  "line": 111,
                   "name": "gate_ffmpeg_binary",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37302,7 +37117,7 @@
                   "via": "probe"
                 },
                 {
-                  "line": 112,
+                  "line": 113,
                   "name": "timeout_for_file",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37310,7 +37125,7 @@
                   "via": "probe"
                 },
                 {
-                  "line": 111,
+                  "line": 112,
                   "name": "run_ffmpeg",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37318,28 +37133,28 @@
                   "via": "probe"
                 },
                 {
-                  "line": 169,
+                  "line": 170,
                   "name": "timeout_for_file",
                   "target": {
                     "file": "tools/encode_control.py"
                   }
                 },
                 {
-                  "line": 170,
+                  "line": 171,
                   "name": "decode",
                   "target": {
                     "file": "tools/encode_control.py"
                   }
                 },
                 {
-                  "line": 192,
+                  "line": 193,
                   "name": "timeout_for_file",
                   "target": {
                     "file": "tools/encode_control.py"
                   }
                 },
                 {
-                  "line": 207,
+                  "line": 208,
                   "name": "runtime_provenance",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37354,7 +37169,7 @@
             {
               "calls": [
                 {
-                  "line": 110,
+                  "line": 111,
                   "name": "gate_ffmpeg_binary",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37362,7 +37177,7 @@
                   "via": "probe"
                 },
                 {
-                  "line": 112,
+                  "line": 113,
                   "name": "timeout_for_file",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37370,7 +37185,7 @@
                   "via": "probe"
                 },
                 {
-                  "line": 111,
+                  "line": 112,
                   "name": "run_ffmpeg",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37378,7 +37193,7 @@
                   "via": "probe"
                 },
                 {
-                  "line": 169,
+                  "line": 170,
                   "name": "timeout_for_file",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37386,7 +37201,7 @@
                   "via": "main"
                 },
                 {
-                  "line": 170,
+                  "line": 171,
                   "name": "decode",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37394,7 +37209,7 @@
                   "via": "main"
                 },
                 {
-                  "line": 192,
+                  "line": 193,
                   "name": "timeout_for_file",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37402,7 +37217,7 @@
                   "via": "main"
                 },
                 {
-                  "line": 207,
+                  "line": 208,
                   "name": "runtime_provenance",
                   "target": {
                     "file": "tools/encode_control.py"
@@ -37639,7 +37454,7 @@
               "line": 1387
             }
           ],
-          "hash": "a3ef0c120991fcf84db1ba296836c2c2c25cb0f4fb32709eb66e40ed854b1cdc",
+          "hash": "e40331608a8320e88a1fa9a3bf57c2f5f9f86cc5a36615a27997f8846e05df46",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py"
@@ -37697,7 +37512,7 @@
               "line": 341
             }
           ],
-          "hash": "89f16275cae5823a6941371bb52506229d74d0ef89917f7e6bf905600a350e2d",
+          "hash": "6577d641c3616b786a95671473b135c003f6e913ae629ffa4cde264c55632e87",
           "importOrder": [
             "tools/fetch_run.py",
             "tools/armature_core/__init__.py",
@@ -37737,7 +37552,7 @@
               "line": 300
             }
           ],
-          "hash": "3dc4cec1942c1043d483fb0f4c3b2a3a9726568acb9b9f8aaa25db35a74100ba",
+          "hash": "dceaa6ddb0ac4aa7906c927d5031efddc6774c4faef313f06b2b821dcabf5f37",
           "importOrder": [
             "tools/encode_control.py",
             "tools/armature_core/errors.py",
@@ -37981,7 +37796,7 @@
               "line": 1424
             }
           ],
-          "hash": "42c73f6c49176111a98c26a822afa45f33c5d09843605af6231e712771618297",
+          "hash": "2f4fe286e1c036c3278d31dfa2680b14cbcafa43b6f1227c0d509ee9a6dbc060",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -38475,7 +38290,7 @@
               "line": 532
             }
           ],
-          "hash": "0d2ffa63163b020740395a53f863a298ccfc84e2a79f7deadc0e8d26738f04b9",
+          "hash": "efb115112bc6cb4e2e8a06fe17302828ce38a6ed7ef40261bbe2141f7118ec0e",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -38725,7 +38540,7 @@
               "line": 319
             }
           ],
-          "hash": "290b5b7b7826e5d9ae59c154d8e07efc300546dee093954797a4619bd8149f9c",
+          "hash": "5b10a50419194aff10b3b864c186a1c189d561932d49ed35ac49a29cc8e9ad87",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/sheet_compose.py",
@@ -39434,7 +39249,7 @@
               "line": 760
             }
           ],
-          "hash": "f5b8df6144f0332fcac60e342fb147a1071fce49fe0416ce097fd2b39256a3c6",
+          "hash": "e37ca21c58ab00649b4388c2de95614b850cf74dac26c20d95bf68f5abba775a",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -39811,7 +39626,7 @@
               "line": 506
             }
           ],
-          "hash": "88791fb910f38a90625c6d7937077122b31daa7ca444aec895a3b267938cb988",
+          "hash": "8a869405e0894b550c9220814fe9ce6bf861309a93f216f283e520215fc150a3",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -40118,7 +39933,7 @@
               "line": 647
             }
           ],
-          "hash": "1bb099716e29eedfb08cb9636caf975e397eed90fa91b4fcfdc06895835190b2",
+          "hash": "902d8ab07e0590c2e6c4d65bb4973cea24247f4333ca8fe8885a04a423bb0db8",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -40344,7 +40159,7 @@
               "line": 759
             }
           ],
-          "hash": "700b3323573ac195b7ddd0f2260853590b79c2941f96b6c179f4f7942a502630",
+          "hash": "3a8eb4bb433c7f2d4cf80576a2cf8260ae9d72c8044d8ee4ace5ae6796000627",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -41400,7 +41215,7 @@
               "line": 213
             }
           ],
-          "hash": "50523c17d26590dc266c1d293258fdab47b78a0ca89274f1acfd15294ae5d7da",
+          "hash": "d217af996aae98974f78e37d6ead887d515c9e486c075f79ccd21d5632e0b7aa",
           "importOrder": [
             "tools/encode_control.py",
             "tools/measure_clip.py",
@@ -42001,7 +41816,7 @@
               "line": 622
             }
           ],
-          "hash": "1a9c153302c0f132f9d6b79d2e02597444a69e5ea16bffc51e685e0f7fc887aa",
+          "hash": "de9d55d0795893a72baab8f1e84d3c886c1944c89bcff7dce112d41b8dd8c23a",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -42093,7 +41908,7 @@
               "line": 544
             }
           ],
-          "hash": "0aaa62714f761a952111ed3f1b647a9886ee4c50539e5d1195e34df5a8d3b578",
+          "hash": "388376bfda821901195e932bb187a5864f086788e6ca55fbc50cf6fb58c36894",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -42168,7 +41983,7 @@
               "line": 403
             }
           ],
-          "hash": "175c5877e7661ee6278a63cc1271eded8e887dfd63db084caea5d0f4d256153e",
+          "hash": "43cda3dad710eb30555cd6b008c4b7003867e097517523f57540df30bcea758d",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -42380,7 +42195,7 @@
               "line": 995
             }
           ],
-          "hash": "9c322bbc3a80ea97c8c61b1ec07cbedaf5df1ece46f07a30898d240d628fde51",
+          "hash": "fbcfda6ff8f5fbe944042cc6610e40ca8d022ae375c76da7ce0d2b90d0c12952",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -42673,7 +42488,7 @@
               "line": 1447
             }
           ],
-          "hash": "c8bc29e1d509a36c568d72c52fe02a0fb800a78d8d18a5dc0ab62d87332a5251",
+          "hash": "d6d3bede797686956f329c6ce0fc7944f73b80e1ed691c126bda8953e5e92f5c",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -42827,7 +42642,7 @@
               "line": 1501
             }
           ],
-          "hash": "5e7b1fb798a9201da895ce9401a593c7befeae1f8690d6e66c4c60822c87f4ac",
+          "hash": "e19cbb7660fe586d471857069d350559b9b9eb9f79bb83ddd06690ad2dc92bd0",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -43102,7 +42917,7 @@
               "line": 628
             }
           ],
-          "hash": "97b857e14529124eeeba2a72e393abf5e4de6fda1f72c9cc6f725cd0d1d6a672",
+          "hash": "b0025c9b84279c427b0c81d69dbda8d88cf33750ba39c8e81449a789131b2c10",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -43349,7 +43164,7 @@
               "line": 2396
             }
           ],
-          "hash": "74519d8df3a9537a68c877e78613efc15426134fe373e8a690e36c17291670fc",
+          "hash": "eaaa468ee1a060bc9c23dd7093ef46b9218bcd86b01bfbfeea9366c5b4896688",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/binding.py",
@@ -43446,7 +43261,7 @@
               "line": 807
             }
           ],
-          "hash": "36232e53633429dfb0740f34893a5f583e3a6dcba7796fb86d9dcb486e513cf7",
+          "hash": "f2ea0236f28b8145355af284fb13ceb5d08f66f79a5afbff2ba53600292d08f8",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -43532,7 +43347,7 @@
               "line": 523
             }
           ],
-          "hash": "73ee7fd87b0a35dd9ed80005c40d42afb345985b85a236f778b69ea4b00e5992",
+          "hash": "079eae55f32d5898ba1fbae8ee83b5652a6e2981fe5583bd9200207a444d5e51",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -43624,7 +43439,7 @@
               "line": 824
             }
           ],
-          "hash": "1ec057bb9738e6829cb0be81eed4888607941b077cae37757e2770cdb26e0371",
+          "hash": "616fed58f6e58c45a5b9bfa593631ef04e20ba00e0f6239227328f0e4cd42abd",
           "importOrder": [
             "tools/rig_character.py",
             "tools/rig_parts.py",
@@ -45040,8 +44855,6 @@
             ".github/workflows/**",
             ".gitignore",
             "CHANGELOG.md",
-            "CLAUDE.md",
-            "HANDOFF.md",
             "LICENSE",
             "MANIFEST.in",
             "README.es.md",
@@ -45059,12 +44872,23 @@
             "atlas/**",
             "docs/ROADMAP.md",
             "docs/assets/**",
+            "docs/audit-first-arc.md",
+            "docs/comfy-consult-brief-01.md",
+            "docs/engineering-rules.md",
             "docs/experiments/**",
             "docs/index/**",
             "docs/license-map.md",
             "docs/publishing.md",
+            "docs/random-routes.md",
+            "docs/research-grounding-e08.md",
+            "docs/research-grounding-movement-library.md",
+            "docs/research-grounding-verification-gates.md",
             "docs/research-grounding.md",
             "docs/tools.md",
+            "docs/video-provider-field-notes.md",
+            "docs/wan-video-prompt-guide-notes.md",
+            "docs/wan21-prompt-guide-notes.md",
+            "docs/wan26-image-guide-notes.md",
             "npm/**",
             "pyproject.toml",
             "site/**",
@@ -45082,8 +44906,6 @@
             ".github/workflows/**",
             ".gitignore",
             "CHANGELOG.md",
-            "CLAUDE.md",
-            "HANDOFF.md",
             "LICENSE",
             "MANIFEST.in",
             "README.es.md",
@@ -45101,12 +44923,23 @@
             "atlas/**",
             "docs/ROADMAP.md",
             "docs/assets/**",
+            "docs/audit-first-arc.md",
+            "docs/comfy-consult-brief-01.md",
+            "docs/engineering-rules.md",
             "docs/experiments/**",
             "docs/index/**",
             "docs/license-map.md",
             "docs/publishing.md",
+            "docs/random-routes.md",
+            "docs/research-grounding-e08.md",
+            "docs/research-grounding-movement-library.md",
+            "docs/research-grounding-verification-gates.md",
             "docs/research-grounding.md",
             "docs/tools.md",
+            "docs/video-provider-field-notes.md",
+            "docs/wan-video-prompt-guide-notes.md",
+            "docs/wan21-prompt-guide-notes.md",
+            "docs/wan26-image-guide-notes.md",
             "npm/**",
             "pyproject.toml",
             "site/**",
@@ -45744,8 +45577,8 @@
   ],
   "engine": "1.26.0",
   "generatedFrom": {
-    "commit": "efc656b269c67f9c39a8b40ec2d37ba3143d31cd",
-    "tracked": 566
+    "commit": "9a802d39eebeca670cc76e0a50b95cbd8a1c1ae4",
+    "tracked": 517
   },
   "landings": [
     {
@@ -45987,56 +45820,6 @@
     {
       "readers": [
         {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        },
-        {
-          "by": "docs/index/conventions.json",
-          "call": "literal",
-          "confidence": "text"
-        },
-        {
-          "by": "tests/test_public_hygiene.py",
-          "call": "literal",
-          "confidence": "ast",
-          "fromTests": true
-        }
-      ],
-      "target": "CLAUDE.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        },
-        {
-          "by": "docs/index/conventions.json",
-          "call": "literal",
-          "confidence": "text"
-        },
-        {
-          "by": "tests/test_public_hygiene.py",
-          "call": "literal",
-          "confidence": "ast",
-          "fromTests": true
-        },
-        {
-          "by": "tests/test_record_index_binding.py",
-          "call": "literal",
-          "confidence": "ast",
-          "fromTests": true
-        }
-      ],
-      "target": "HANDOFF.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
           "by": "pyproject.toml",
           "call": "configuration",
           "confidence": "config"
@@ -46196,12 +45979,6 @@
           "call": "literal",
           "confidence": "ast",
           "fromTests": true
-        },
-        {
-          "by": "tests/test_public_hygiene.py",
-          "call": "literal",
-          "confidence": "ast",
-          "fromTests": true
         }
       ],
       "target": "docs",
@@ -46291,496 +46068,23 @@
           "confidence": "text"
         }
       ],
-      "target": "docs/comfy-consult-10-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-10.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-11.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-12-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-3.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-5-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-5.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-6-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-6.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-7-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-7.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-8-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-8.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-9-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/comfy-consult-9.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
       "target": "docs/comfy-consult-brief-01.md",
       "writers": []
     },
     {
       "readers": [
         {
+          "by": "docs/index/armature.db.cert.json",
+          "call": "literal",
+          "confidence": "text"
+        },
+        {
           "by": "docs/index/conventions.json",
           "call": "literal",
           "confidence": "text"
         }
       ],
-      "target": "docs/dispatches",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/F01-the-first-performer.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S01-public-surfaces.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S01-report.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S01-ruling.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S02-closing-ruling.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S02-record-index-extraction.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S02-report.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S02-step2-classification.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S02-step2-ruling.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S02-step3-halt.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S02-step3-ruling.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/dispatches/S03-report.md",
-          "call": "--",
-          "confidence": "text"
-        },
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S03-performer-reference-kit.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S03-predictions.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S03-report.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S03-ruling.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S04-predictions.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S04-report.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S04-ruling.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S04-sprite-shotset.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S05-predictions.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S05-report.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S05-roster-pin.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S05-ruling.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S06-predictions.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S06-repaired-performer-resurvey.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S06-report.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/S06-ruling.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/dispatches/attribution-repair.md",
+      "target": "docs/engineering-rules.md",
       "writers": []
     },
     {
@@ -47674,50 +46978,6 @@
     {
       "readers": [
         {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/grok-consult-1-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/grok-consult-2-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/grok-consult-3-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/index/armature.db.cert.json",
-          "call": "literal",
-          "confidence": "text"
-        }
-      ],
-      "target": "docs/grok-consult-4-brief.md",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
           "by": "docs/index/conventions.json",
           "call": "literal",
           "confidence": "text"
@@ -47998,17 +47258,6 @@
         }
       ],
       "target": "pyproject.toml",
-      "writers": []
-    },
-    {
-      "readers": [
-        {
-          "by": "docs/dispatches/S01-report.md",
-          "call": "--dry-run",
-          "confidence": "text"
-        }
-      ],
-      "target": "site",
       "writers": []
     },
     {

@@ -511,7 +511,7 @@ BOUNDS_FAMILY = tuple(sorted(BOUNDS_FAMILY_INDEX))
 RECORDED_BOUNDS_FAMILY = ("evaluated_geometry_signature", "projected_bbox_px",
                           "world_bounds")
 
-#: Named and dated 2026-09-04. `tools/superseded/` is not a pipeline path: CLAUDE.md keeps
+#: Named and dated 2026-09-04. `tools/superseded/` is not a pipeline path: docs/engineering-rules.md#scope-and-posture keeps
 #: falsified approaches in the tree, runnable, as the record of why they were falsified, and
 #: re-pointing one at a filtered reader would edit a record. Asserted to be a real directory
 #: below, so the exemption cannot outlive what it names.

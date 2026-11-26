@@ -12,7 +12,7 @@ adds failure modes the flat gate cannot describe, and every one of them is silen
   is precisely what S03 measured (round-trip admitted, Gate-ROUTE walked, pre-flight green
   with zero warnings, refused at execution).
 
-Every fixture below asks the question CLAUDE.md requires of a fixture: what would this look
+Every fixture below asks the question docs/engineering-rules.md#fixture-falsification-question requires of a fixture: what would this look
 like if the code were wrong in the specific way this check exists to catch? So the failure
 graphs here are built by mutating a good graph in exactly one place, and each one keeps
 every count that any other check reads.

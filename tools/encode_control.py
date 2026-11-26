@@ -18,7 +18,7 @@ a bridge certified only on depth is not certified for normal, and this tool refu
 let that confusion happen silently: `--survey` reports every candidate encoding against
 *both* a grayscale and a true-RGB probe, and the gate fires on the one actually used.
 
-**Diagnostic and gate are different objects** (CLAUDE.md). `survey_codecs` measures and
+**Diagnostic and gate are different objects** (docs/engineering-rules.md#diagnostics-versus-gates). `survey_codecs` measures and
 returns a table; `gates.gate_r_round_trip` raises. Recommendations
 (`recommended_gray` / `recommended_rgb`) pin the next encode for `--codec=auto` /
 `--codec-from=`; they do not replace Gate R.
@@ -39,6 +39,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -105,30 +106,77 @@ def _default_imageio_ffmpeg():
         return None
 
 
-def _resolve_ffmpeg(env=None, imageio_getter=None, which_fn=None):
-    """Select ffmpeg in precedence order: ARMATURE_FFMPEG > imageio-ffmpeg > PATH."""
+IMAGEIO_FFMPEG_SKIP_MACOS_X86_64 = "nonfree build on macOS x86_64"
+
+
+def _is_intel_macos(sys_platform=None, machine=None):
+    """Return True on Intel macOS (darwin + x86_64/amd64), where 0.6.0's wheel is nonfree."""
+    plat = sys.platform if sys_platform is None else sys_platform
+    arch = (platform.machine() if machine is None else machine).strip().lower()
+    return plat == "darwin" and arch in ("x86_64", "amd64")
+
+
+def _resolve_ffmpeg(
+    env=None,
+    imageio_getter=None,
+    which_fn=None,
+    sys_platform=None,
+    machine=None,
+):
+    """Select ffmpeg in precedence order: ARMATURE_FFMPEG > imageio-ffmpeg > PATH.
+
+    On Intel macOS (darwin / x86_64), imageio-ffmpeg 0.6.0's bundled binary is built with
+    --enable-nonfree, so the imageio-ffmpeg candidate is skipped without invoking it
+    (order becomes ARMATURE_FFMPEG > PATH > none).
+    """
     env_map = os.environ if env is None else env
     if "ARMATURE_FFMPEG" in env_map:
-        return env_map["ARMATURE_FFMPEG"], "env"
-    getter = _default_imageio_ffmpeg if imageio_getter is None else imageio_getter
-    try:
-        pinned = getter()
-    except (ImportError, RuntimeError, OSError):
-        pinned = None
-    if pinned and os.path.isfile(pinned):
-        return pinned, "imageio_ffmpeg"
+        return env_map["ARMATURE_FFMPEG"], "env", None
+    skipped = None
+    if _is_intel_macos(sys_platform=sys_platform, machine=machine):
+        skipped = IMAGEIO_FFMPEG_SKIP_MACOS_X86_64
+    else:
+        getter = _default_imageio_ffmpeg if imageio_getter is None else imageio_getter
+        try:
+            pinned = getter()
+        except (ImportError, RuntimeError, OSError):
+            pinned = None
+        if pinned and os.path.isfile(pinned):
+            return pinned, "imageio_ffmpeg", None
     finder = shutil.which if which_fn is None else which_fn
     found = finder("ffmpeg") or ""
     if found:
-        return found, "path"
-    return "", "none"
+        return found, "path", skipped
+    return "", "none", skipped
+
 
 def ffmpeg_source():
     """Return the active source tag ('env', 'imageio_ffmpeg', 'path', or 'none')."""
-    return "env" if "ARMATURE_FFMPEG" in os.environ else FFMPEG_SOURCE
+    env_val = os.environ.get("ARMATURE_FFMPEG")
+    if env_val and FFMPEG == env_val:
+        return "env"
+    if FFMPEG == _IMPORT_FFMPEG:
+        return FFMPEG_SOURCE
+    if not FFMPEG:
+        return "none"
+    return FFMPEG_SOURCE if FFMPEG_SOURCE != "env" else "path"
 
 
-FFMPEG, FFMPEG_SOURCE = _resolve_ffmpeg()
+def imageio_ffmpeg_skipped():
+    """Return the skip reason when imageio-ffmpeg was bypassed, else None."""
+    if ffmpeg_source() in ("env", "imageio_ffmpeg"):
+        return None
+    return IMAGEIO_FFMPEG_SKIPPED
+
+
+def _ffmpeg_skip_fields():
+    """Optional receipt field recording why imageio-ffmpeg was bypassed."""
+    skipped = imageio_ffmpeg_skipped()
+    return {"imageio_ffmpeg_skipped": skipped} if skipped is not None else {}
+
+
+FFMPEG, FFMPEG_SOURCE, IMAGEIO_FFMPEG_SKIPPED = _resolve_ffmpeg()
+_IMPORT_FFMPEG = FFMPEG
 
 # Candidate bridges, in the order the spec prefers them. `container` matters as much as
 # the codec: FFV1 needs a container that will carry it, and mp4 will not.
@@ -190,7 +238,7 @@ class EncodeFailure(ArmatureError):
 
 
 #: The wall-clock allowance for one ffmpeg call, in three DERIVED pieces rather than one
-#: fixed number: a global constant must not govern a local feature (CLAUDE.md), and the
+#: fixed number: a global constant must not govern a local feature (docs/engineering-rules.md#no-global-constant-for-local-feature), and the
 #: same ceiling cannot honestly bound a header probe of a 39-byte download and a
 #: 500-frame lossless encode. `FFMPEG_STARTUP_S` covers process start, container open and
 #: the stream probe itself; the other two are charged against the structure each call is
@@ -462,8 +510,9 @@ def gate_ffmpeg_binary():
             f"of the losslessness proof run through this one binary",
             {"gate": "ARGS", "andon": "EncodeFailure",
              "clause": "ffmpeg_binary_not_found", "ffmpeg": FFMPEG,
-             "from_env": "ARMATURE_FFMPEG" in os.environ,
-             "env_var": "ARMATURE_FFMPEG"})
+             "from_env": ffmpeg_source() == "env",
+             "env_var": "ARMATURE_FFMPEG",
+             **_ffmpeg_skip_fields()})
     return FFMPEG
 
 
@@ -877,8 +926,9 @@ def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
         "stream": bool(stream),
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
-        "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        "ffmpeg_from_env": ffmpeg_source() == "env",
         "ffmpeg_source": ffmpeg_source(),
+        **_ffmpeg_skip_fields(),
         **runtime_provenance({"numpy": np, "Pillow": Image}),
         "channels": channels,
         "gate_R_all": {
@@ -1039,8 +1089,9 @@ def encode_stream_png_sequence(frames_dir, path, codec, fps=16, invert=False,
             "codec_args": CODECS[codec]["args"],
             "ffmpeg": FFMPEG,
             "ffmpeg_version": ffmpeg_version(),
-            "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+            "ffmpeg_from_env": ffmpeg_source() == "env",
             "ffmpeg_source": ffmpeg_source(),
+            **_ffmpeg_skip_fields(),
             **runtime_provenance({"numpy": np, "Pillow": Image}),
             "video": path,
             "video_sha256": video_sha,
@@ -1105,8 +1156,9 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
         # `measure_cascade_clip`) already recorded it; the one that PRODUCES did not.
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
-        "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        "ffmpeg_from_env": ffmpeg_source() == "env",
         "ffmpeg_source": ffmpeg_source(),
+        **_ffmpeg_skip_fields(),
         # F-2ad4f715: the interpreter and imaging libs beside the ffmpeg key — a receipt
         # that names the encoder but not the Python cannot attribute a re-measured gap.
         **runtime_provenance({"numpy": np, "Pillow": Image}),
@@ -1209,6 +1261,7 @@ def main(argv=None):
             with open(args.survey_out, "w", encoding="utf-8") as fh:
                 json.dump({"ffmpeg": FFMPEG,
                            "ffmpeg_source": ffmpeg_source(),
+                           **_ffmpeg_skip_fields(),
                            "recommended_gray": table["recommended_gray"],
                            "recommended_rgb": table["recommended_rgb"],
                            "survey": rows,

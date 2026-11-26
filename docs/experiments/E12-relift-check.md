@@ -1,7 +1,7 @@
 # E12 — the re-lift check: both E09 pins are what their recorded inputs still produce
 
-**Executor seat, 2026-08-12, branch `E12-run`, before the close-merge.** Owed since the wave-3
-report named it outstanding; run here as the first item of the close, per the Director's order.
+**Executor session, 2026-08-12, branch `E12-run`, before the close-merge.** Owed since the wave-3
+report named it outstanding; run here as the first item of the close, per the maintainer's order.
 **Result: MATCH on both pins. No halt.**
 
 ## The question
@@ -34,7 +34,7 @@ Both re-solves passed their own in-tool gate on the way out — `gate_ARRIVED` m
 `tools/check_relift.py` (new, with `armature_core.glb.compare_signatures` as its bpy-free
 arithmetic and `tests/test_check_relift.py` as its fixtures) compares **per-frame evaluated
 world-space geometry** — what the renderer would actually draw, following the imported action —
-rather than file bytes. CLAUDE.md's law is that a file-hash mismatch is not evidence a render
+rather than file bytes. docs/engineering-rules.md#pixel-comparison-not-file-hash's law is that a file-hash mismatch is not evidence a render
 changed: glTF export can reorder buffers or embed a generator string without a vertex moving.
 
 Per **frame**, not per file, because a lift shares its rest pose with the file it was solved

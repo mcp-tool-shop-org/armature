@@ -1,6 +1,6 @@
 """A3's `reference` profile, checked before a credit is spent on it.
 
-Every check asks CLAUDE.md's question — what would this look like if the code were wrong
+Every check asks docs/engineering-rules.md#fixture-falsification-question's question — what would this look like if the code were wrong
 in the specific way this check exists to catch — against a failure that has already
 happened once. The 2026-08-11 probe ran a trajectory no document could be pointed at, and
 when the donor came back near-still with the feet cropped away, the report could not say

@@ -1,22 +1,22 @@
 # E04 — the between-generation floor: how much does the tracking statistic move when only the seed changes?
 
-**Seat:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
-report** · **Director judges the sheets** · **Credit ceiling: 12 generations (48 credits).**
+**Role:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
+report** · **maintainer judges the sheets** · **Credit ceiling: 12 generations (48 credits).**
 
-**Spend authority:** the Director raised the budget on 2026-08-10 — he granted standing authority to increase spend as needed That removes the scarcity constraint. It does **not** remove the
+**Spend authority:** the maintainer raised the budget on 2026-08-10 — he granted standing authority to increase spend as needed That removes the scarcity constraint. It does **not** remove the
 discipline: a ceiling is stated before the first submission and an arm's cost is weighed against
 its information value, because that reasoning was never about money.
 
 ---
 
-> ## STATUS: ACTIVE — un-deferred by the Director, 2026-08-10
+> ## STATUS: ACTIVE — un-deferred by the maintainer, 2026-08-10
 >
-> **The Director has called E04 on**, and that is his call: credits are his and the deferral was a
-> priority judgement by this seat, never a correctness one. Nothing in this spec changed; the
+> **The maintainer has called E04 on**, and that is his call: credits are his and the deferral was a
+> priority judgement by this session, never a correctness one. Nothing in this spec changed; the
 > reasoning that deferred it is kept below, unedited, because it is still the honest account of why
 > it was not first.
 >
-> ⚠ **Two things this seat must flag before it runs.** (1) **E06 is live in parallel** and both
+> ⚠ **Two things this session must flag before it runs.** (1) **E06 is live in parallel** and both
 > experiments add a gate to `tools/build_payload.py` — E04 adds **Gate S**, E06 adds **Gate V**.
 > That file is a **shared surface this round**; see the paste block. (2) E05 is **WITHDRAWN** — do
 > not run it, and do not take its strength ladder as context for anything here.
@@ -25,7 +25,7 @@ its information value, because that reasoning was never about money.
 >
 > ## (was) DEFERRED 2026-08-10 — not withdrawn, and still correct
 >
-> Deferred by the Director after E03. Nothing in this spec is wrong; it is simply not the next
+> Deferred by the maintainer after E03. Nothing in this spec is wrong; it is simply not the next
 > question. **E03's result was categorical** (85.0 deg against 0.062 deg, a factor of ~1370) and
 > needed no floor to be read, and **[E05](E05-control-strength.md) is categorical too** — *is a
 > character there, is the control still obeyed* — judged by eye.
@@ -108,7 +108,7 @@ possibility rather than forbidding it.
 ## ⛔ There is NO pass condition, deliberately
 
 This experiment measures a quantity; it does not test a hypothesis about one. **Report the
-within-condition spread and the between-condition gap side by side and let the Director's eye
+within-condition spread and the between-condition gap side by side and let the maintainer's eye
 rule.** Inventing a threshold — "the gap counts if it exceeds 2× the spread" — would be exactly
 the recorded error this repo has paid for four times: a pass condition defined as a fraction of a
 quantity not yet measured. **When no calibrated threshold exists, suspend rather than invent one.**
@@ -122,7 +122,7 @@ spread. It may not attach a verdict to that ratio.
 |---|---|---|
 | 1 | E02's A1a/A1b payloads are on disk and re-submittable | **MEASURED** — `outputs/E02/payloads/{A1a,A1b}.json`, read at spec time |
 | 2 | The KSampler seed is the only field that need change, and nothing else is seed-derived | **ASSUMED** — the executor diffs the two payloads and confirms before submitting. If any other field derives from the seed, that is a finding and a halt |
-| 3 | Generation costs 4 credits | **MEASURED** — E02, Director's balance delta 14,284 → 14,280 |
+| 3 | Generation costs 4 credits | **MEASURED** — E02, maintainer's balance delta 14,284 → 14,280 |
 | 4 | Repeat runs at a fixed seed are bit-identical on lossless frames | **MEASURED** — E02 A0, 3/3 |
 | 5 | The tracking statistic has a re-runnable instrument | **MEASURED FALSE — see Commission** |
 | 6 | The existing A1a/A1b runs' lossless frames are still on disk and intact | **ASSUMED** — verify by hash before reusing them as seed 1; if either is gone, generate it and say so |
@@ -202,7 +202,7 @@ E04 runs byte-identical to E02's payloads, so `length` stays **33**. That is req
 measured at a different length is not comparable to the numbers it exists to contextualise.
 
 **But a floor measured at 33 frames is not automatically the floor at 81.** Comfy consult #3
-(`docs/comfy-consult-3.md`, calibrated) puts Wan 2.1 VACE 14B's trained horizon around the
+(`docs/comfy-consult-3.md`, kept privately, calibrated) puts Wan 2.1 VACE 14B's trained horizon around the
 **81-frame class**, so 33 sits well inside it and 81 is the cheapest available length win.
 Temporal coherence is exactly the kind of quantity that can drift with clip length.
 
@@ -215,7 +215,7 @@ the same discipline that made "the floor is a property of the statistic" explici
 
 Predictions with blind/not-blind first, then Gate 0 sheets, then the per-seed statistics as a
 table, then the spread beside the gap, then every gate with a verdict. A gate that did not run is
-written **NOT YET RUN**. **No judgement words.** The Director decides what the numbers mean.
+written **NOT YET RUN**. **No judgement words.** The maintainer decides what the numbers mean.
 
 ## Standards compliance
 
@@ -225,8 +225,8 @@ written **NOT YET RUN**. **No judgement words.** The Director decides what the n
 | ANDON_AUTHORITY | **3** | Gate S raises inside the submitting tool with no skip flag; Gates L/B/C inherited and already firing in E02. |
 | NAMED_COMPENSATORS | **2** | Every local artifact is a new file under `outputs/E04/` (`rm -r` undoes it). **Spent credits have no compensator** — that is why the ceiling is stated before the first submission and Gate C halts. Not 3 because the irreversible action is genuinely irreversible; the bound is the honest treatment. |
 | DECOMPOSE_BY_SECRETS | **3** | Payload construction, submission, fetch, and measurement are separate tools; the commission adds one that hides the statistic's definition behind a file interface. |
-| UNCERTAINTY_GATED_HUMANS | **3** | There is deliberately **no pass condition** — the spread and the gap go to the Director side by side. The escalation is the design, not an afterthought. |
-| EXTERNAL_VERIFIER | **1** | Honestly weak and named rather than inflated: the verifier is the advisor's ruling plus the Director's eye, which is a different *kind* of check rather than a different model family. Unchanged by this experiment; carries the pipeline's standing remediation. |
+| UNCERTAINTY_GATED_HUMANS | **3** | There is deliberately **no pass condition** — the spread and the gap go to the maintainer side by side. The escalation is the design, not an afterthought. |
+| EXTERNAL_VERIFIER | **1** | Honestly weak and named rather than inflated: the verifier is the advisor's ruling plus the maintainer's eye, which is a different *kind* of check rather than a different model family. Unchanged by this experiment; carries the pipeline's standing remediation. |
 
 **15 / 18.** The two sub-3 scores are named with their reasons rather than argued away.
 

@@ -23,7 +23,7 @@ composed from `--out` and `shotspec.frame_names`' fixed `%05d.png` stem, so no
 operator-supplied name component can carry a frame outside the directory the
 compensator names. The GLB and the shot spec are opened read-only.
 
-Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Named because docs/engineering-rules.md#named-compensators's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
 Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
 question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
 the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first

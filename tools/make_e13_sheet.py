@@ -96,7 +96,7 @@ def _fit(img, width):
 def provenance_lines(payload, prompt_id, output_sha, refs, extra=None):
     """Every line derived from the run's own records; `NOT RECORDED` where absent.
 
-    The fallback is the point: CLAUDE.md forbids a report carrying a placeholder shaped
+    The fallback is the point: docs/engineering-rules.md#no-placeholder-evidence forbids a report carrying a placeholder shaped
     like evidence, so a missing field prints as missing rather than as a plausible value.
     """
     def g(d, *path, default="NOT RECORDED"):

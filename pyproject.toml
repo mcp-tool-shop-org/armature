@@ -199,6 +199,10 @@ dev = [
     # requires the same specifier here. Ceiling so release day cannot pick up 84.
     "setuptools>=83.0.0,<85",
 ]
+# Optional bundled FFmpeg binary for control encoding (0.6.0 ships v7.1 on Windows/macOS).
+media = [
+    "imageio-ffmpeg==0.6.0",
+]
 
 [project.urls]
 Homepage = "https://mcp-tool-shop-org.github.io/armature/"

@@ -211,7 +211,7 @@ def gate_order_evidence(ev):
          "boundary_is": (
              "the sign of the comparison, not a magnitude. No calibrated floor for this "
              "ratio has been measured on any provider, and a threshold invented while "
-             "looking at the result it judges is the pass condition CLAUDE.md forbids. "
+             "looking at the result it judges is the pass condition docs/engineering-rules.md#diagnostics-versus-gates forbids. "
              "ratio > 1 is the order rule’s own directional claim; ratio <= 1 "
              "contradicts it; an undefined ratio decides nothing. E09 measured 0.703 vs "
              "5.314 (7.6x) and that magnitude is reported, never graded")}

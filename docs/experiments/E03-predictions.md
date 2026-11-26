@@ -1,7 +1,7 @@
 # E03 — registered predictions
 
 **Registered 2026-08-10, before any submission to any generator.** Committed on its own so
-its timestamp is git's and not a seat's.
+its timestamp is git's and not a session's.
 
 ---
 
@@ -154,4 +154,4 @@ preserve or lose. Nothing in P3 may be read as an identity result.
 - Any ranking of B1 against B3 or against the control on a magnitude. Out of bounds under
   Amendment 1 at one generation per arm.
 - Anything about control strength, cuts, length, reference stacks, or whether any output is
-  *good*. The Director judges the sheet.
+  *good*. The maintainer judges the sheet.

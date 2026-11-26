@@ -1,6 +1,6 @@
-# Wan 2.6 image guide — distilled notes (Director-retrieved DingTalk export)
+# Wan 2.6 image guide — distilled notes (maintainer-retrieved DingTalk export)
 
-**Provenance.** Retrieved by the Director on 2026-08-12 as a Markdown export
+**Provenance.** Retrieved by the maintainer on 2026-08-12 as a Markdown export
 (`Wan 2.6-Image Creation Guide.md`) of the official Wan 2.6 image documentation on
 DingTalk (`alidocs.dingtalk.com`) — the same document family as the still-unfetched
 official **video** prompt guide. This is the **image** sibling: text-to-image plus
@@ -47,7 +47,7 @@ The edit grammar, as the document states it:
   detect/segment.
 
 ## Untested connections to the standing levers (knowledge only; every one needs a spec,
-a licence row, and the Director's word before anything runs)
+a licence row, and the maintainer's word before anything runs)
 
 1. **The scene-bearing start frame** (the camera-tier lever, w3's direct answer). The
    ruled mechanism is the deterministic alpha-law composite — our authored RGBA render
@@ -58,7 +58,7 @@ a licence row, and the Director's word before anything runs)
    the scene of Figure 2") is a **generative** composite — the model repaints the
    character's pixels at the image stage. The alpha law exists because authored pixels
    are the identity anchor. Whether any generative composite is ever admitted for a
-   start frame is the Director's route call, contrastively surfaced, never a default.
+   start frame is the maintainer's route call, contrastively surfaced, never a default.
 3. **Previz → plate:** line-draft rendering rhymes with E06 (reference onto schematic) —
    a staged Blender scene render as the "draft" a real plate is derived from, keeping
    authored geometry in charge of composition. UNTESTED; would need its own arms.

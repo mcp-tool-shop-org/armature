@@ -1,7 +1,7 @@
 # E03 — does the control sequence govern authored motion?
 
-**Seat:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
-report** · **Director judges the sheet** · **Credit ceiling: 4 generations.**
+**Role:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
+report** · **maintainer judges the sheet** · **Credit ceiling: 4 generations.**
 
 E02 answered *does control govern placement at all* — yes — using a static mesh on a camera
 orbit. That was the cheapest possible question and it used the most trivial possible scene.
@@ -100,7 +100,7 @@ per arm reads directly. No repeat runs are needed for the floor.
 ## Review artifacts
 
 **0.5× by default** — 8 fps, same frames — and built from `lossless/`, not from re-encoded
-video. The Director judges at half speed.
+video. The maintainer judges at half speed.
 
 ## Deferred, deliberately
 

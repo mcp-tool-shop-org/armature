@@ -8,7 +8,7 @@
 
 Why this exists as its own step. The cloud does not execute the API graph this repo builds;
 it executes the SAVED graph, after a save->convert round trip that synthesises positions,
-links and slot arrays. That round trip is a place a value can change, and CLAUDE.md's law is
+links and slot arrays. That round trip is a place a value can change, and docs/engineering-rules.md#reproducible-generation-records's law is
 that a `dry_run` PASS does not prove link sanity — so the file that will actually run is
 gated in code, on its own bytes, before anything is submitted.
 

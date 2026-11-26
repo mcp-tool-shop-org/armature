@@ -93,7 +93,7 @@ and free, a handed world holds to the last frame on two seeds (E12), and **ident
 survives a hosted, human-trained tier fed nothing but authored references** (E13) — all
 judged by the maintainer's eye. The founding-arc audit is at
 [docs/audit-first-arc.md](docs/audit-first-arc.md); the posture since 2026-08-12 is a learning
-monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
+monorepo — experiments prove paths, no route is canon by momentum ([docs/engineering-rules.md#scope-and-posture](docs/engineering-rules.md#scope-and-posture)).
 
 | | |
 |---|---|
@@ -159,8 +159,8 @@ and the exact shape of the next work, and the roadmap said it would before any e
 
 ## How this repo works
 
-- [CLAUDE.md](CLAUDE.md) — how to work here: the three roles, the rules each role runs under,
-  and the non-negotiables (the license gate, bounded credits, identity is judged by eye).
+- [docs/engineering-rules.md](docs/engineering-rules.md) — the engineering rules the code enforces (the license gate,
+  bounded credits, gates raising rather than asserting, and visual identity judgement).
 - [docs/ROADMAP.md](docs/ROADMAP.md) — the whole build, session by session, with the drift
   tripwires named in advance.
 - `docs/experiments/` — every non-trivial change runs as a numbered experiment:

@@ -363,7 +363,7 @@ def test_the_height_frac_refusal_reaches_the_halt_line_intact(rsf, capsys):
 @pytest.mark.parametrize("filename", ["render_start_frame.py", "render_turnaround.py"])
 def test_no_bound_added_this_wave_is_spelled_as_an_assert(filename):
     """`PYTHONOPTIMIZE=1` deletes every `assert`. A bound that an environment variable can
-    delete is not a bound — the 87-gates lesson in CLAUDE.md."""
+    delete is not a bound — the 87-gates lesson in docs/engineering-rules.md#gates-raise-inside-the-step."""
     tree = ast.parse(read_source(filename))
     for name in ("parse_args", "main", "require_shot_fraction"):
         try:

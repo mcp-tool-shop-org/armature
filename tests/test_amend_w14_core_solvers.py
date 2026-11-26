@@ -412,7 +412,7 @@ def test_the_banked_source_is_checked_against_the_hash_the_digest_pins(tmp_path,
 
 # ====================================================================== F-c4cf355d
 # Gate TURN's duplicate clause is a byte-hash equality test, and the property it is
-# written to catch is a camera that did not move. CLAUDE.md: "A file-hash mismatch is
+# written to catch is a camera that did not move. docs/engineering-rules.md#pixel-comparison-not-file-hash: "A file-hash mismatch is
 # not evidence a render changed. Compare pixels; reserve byte-hashes for artifacts
 # whose bytes are the contract."
 

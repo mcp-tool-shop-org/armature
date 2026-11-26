@@ -5,7 +5,7 @@
         --subject=PERFORMER --no-canon
            [--seed=2026081201 | --seeds-registry=specs\\E08-seeds.json]
 
-**Built here, never served.** `docs/license-map.md` trap #3 and CLAUDE.md both record the
+**Built here, never served.** `docs/license-map.md` trap #3 and docs/engineering-rules.md#served-templates-and-gate-route both record the
 same measurement, taken twice on 2026-08-11: the served `video_wan2_2_14B_animate` template
 wires two `DWPreprocessor` nodes — the DWPose weights tier, UNVERIFIED and therefore NO — and
 a SAM2 mask path, at its top level. A served template is a reference, never a route. Every
@@ -384,7 +384,7 @@ def gate_reference_fit(fit, path, width=None, height=None):
     constant here — a future fit that claims something else states its own assertion in
     `REFERENCE_FIT_ASSERTS_THE_GENERATION_FRAME` and is checked against that.
 
-    CLAUDE.md names the grey letterbox pads on E08's reference as the standing suspect for
+    docs/engineering-rules.md#reproducible-generation-records names the grey letterbox pads on E08's reference as the standing suspect for
     its washed bands, which makes this the one field in the record most worth measuring
     rather than asserting.
 
@@ -752,7 +752,7 @@ def main(argv=None):
             {"gate": "PAYLOAD", "andon": "PayloadError",
              "clause": "negative_source_not_supplied", "flag": "--negative-source"})
     negative = read_negative(neg_path)
-    ident, ident_original, drops = identity_clause()
+    ident, ident_original, drops, ident_source = call_identity_clause()
     positive = ident + ". " + SCENE_CLAUSE
     # The SHIPPED positive is what the router checks. `--canon-prompt` used to stand in
     # for it while `build()` was handed `positive` regardless.
@@ -766,7 +766,7 @@ def main(argv=None):
     meta["seeds"] = os.path.abspath(a.seeds) if a.seeds else None
     meta["seeds_registry"] = meta["seeds"]
     meta["prompt_record"] = {
-        "identity_clause_source": TWIN_PROMPT_JSON,
+        "identity_clause_source": ident_source,
         "identity_clause_original": ident_original,
         "identity_clause_used": ident,
         "identity_drops": drops,
@@ -804,13 +804,30 @@ def main(argv=None):
     return 0
 
 
+_LAST_LOADED_TWIN_PROMPT_JSON = None
+
+
+def active_identity_clause_source():
+    """Return the resolved path actually loaded by `_load_twin_prompt_json`, or the active env/default path."""
+    if _LAST_LOADED_TWIN_PROMPT_JSON is not None:
+        return _LAST_LOADED_TWIN_PROMPT_JSON
+    return os.path.abspath(os.environ.get("ARMATURE_TWIN_PROMPT_JSON") or TWIN_PROMPT_JSON)
+
+
+def call_identity_clause():
+    """Invoke `identity_clause()` and return `(text, original, log, resolved_source)`."""
+    global _LAST_LOADED_TWIN_PROMPT_JSON
+    _LAST_LOADED_TWIN_PROMPT_JSON = None
+    ident, ident_original, drops = identity_clause()
+    return ident, ident_original, drops, active_identity_clause_source()
+
+
 def _load_twin_prompt_json(path=None):
     """Resolve and load TWIN_PROMPT_JSON, raising PayloadError when absent."""
-    target = (
-        os.environ.get("ARMATURE_TWIN_PROMPT_JSON") or TWIN_PROMPT_JSON
-        if path is None
-        else path
-    )
+    global _LAST_LOADED_TWIN_PROMPT_JSON
+    env_val = os.environ.get("ARMATURE_TWIN_PROMPT_JSON") if path is None else None
+    used_env = bool(env_val)
+    target = env_val if used_env else (TWIN_PROMPT_JSON if path is None else path)
     resolved = os.path.abspath(target)
     if not os.path.isfile(resolved):
         raise PayloadError(
@@ -819,8 +836,9 @@ def _load_twin_prompt_json(path=None):
             {"gate": "PAYLOAD", "andon": "PayloadError",
              "clause": "twin_prompt_json_missing",
              "env_var": "ARMATURE_TWIN_PROMPT_JSON",
-             "from_env": "ARMATURE_TWIN_PROMPT_JSON" in os.environ,
+             "from_env": used_env,
              "path": resolved})
+    _LAST_LOADED_TWIN_PROMPT_JSON = resolved
     with open(resolved, encoding="utf-8") as fh:
         return resolved, json.load(fh)
 
