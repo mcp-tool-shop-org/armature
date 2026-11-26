@@ -71,7 +71,7 @@ npm 包是一个**启动器，而不是一个移植版本**：用第二种语言
 ## 状态：该论点在产品层面进行衡量
 
 成立于 **2026-08-10**。完成了 13 个实验，并且该论点已经从*测试中*发展到**在产品层面上进行衡量**：角色在他的骨骼驱动下在屏幕上跳舞，并且自由地活动；一个手工制作的世界保持到最后一帧，使用了两个种子（E12），并且**身份现在可以在托管的、由人类训练的分层系统中生存，该系统只接收设计好的参考资料**（E13）——所有这些都由维护者来判断。创始阶段的审计报告位于
-[docs/audit-first-arc.md](docs/audit-first-arc.md)；自 2026-08-12 以来的状态是一个学习型的单一代码仓库——实验证明了路径，没有哪条路径会因为惯性而成为规范（[docs/engineering-rules.md](docs/engineering-rules.md)）。
+[docs/audit-first-arc.md](docs/audit-first-arc.md)；自 2026-08-12 以来的状态是一个学习型的单一代码仓库——实验证明了路径，没有哪条路径会因为惯性而成为规范（[docs/engineering-rules.md#scope-and-posture](docs/engineering-rules.md#scope-and-posture)）。
 
 | | |
 |---|---|

@@ -113,7 +113,7 @@ difference.** — Huang et al. 2023/CVPR 2024, *VBench* (arXiv:2311.17982).
 benchmark showing photo-trained recognizers transfer poorly — Zheng et al. 2019,
 *iCartoonFace* (arXiv:1907.13394). *(unverified-groundedness.)*
 → **ArcFace-family metrics cannot gate identity on stylized game art.** This is now written into
-docs/engineering-rules.md as a rule: a diagnostic that returns numbers on a face it cannot find is noise wearing
+docs/engineering-rules.md#diagnostics-versus-gates as a rule: a diagnostic that returns numbers on a face it cannot find is noise wearing
 a unit.
 
 **F13. Multi-shot narrative benchmarks measure character-recurrence gaps up to 48 shots, and

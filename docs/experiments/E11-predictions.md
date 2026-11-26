@@ -9,7 +9,7 @@ rather than the prose.
 What this session **had** seen when these were written:
 
 - **The start frame, at full size, and four 4× crops of it** (head, both hands, feet). Not
-  optional — docs/engineering-rules.md requires looking at an artifact before it uploads, and the whole
+  optional — the internal guide (kept privately) requires looking at an artifact before it uploads, and the whole
   point of Gate WHOLE is that somebody looked. Every prediction below is therefore informed
   by knowing exactly what the model is being handed.
 - **E08's and E10's reports in full**, including their measured outcomes: E08's bar arrived

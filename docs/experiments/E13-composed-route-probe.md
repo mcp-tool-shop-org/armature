@@ -73,7 +73,7 @@ every partner tier carries permanently. The maintainer's ruling remains the gate
 
 **RULED, same day (the maintainer): the CONDITIONAL is accepted — proceed via Comfy.**
 Training use assumed as the industry default; exposure accepted for open-source work;
-**disclosure attached as standing law** (*Per-route disclosure*, docs/engineering-rules.md — this
+**disclosure attached as standing law** (*Per-route disclosure*, docs/engineering-rules.md#per-route-disclosure — this
 spec's route carries its disclosure note at dispatch). **The terms gate is CLEARED**,
 and with the E12 close-merge landed (`5668ea6`), **both dispatch keys are turned:
 E13 is dispatch-ready.** Remaining at dispatch, for the session that runs it: the
@@ -82,7 +82,7 @@ candidate) · the fresh credit re-estimate with exact overrides · the route dis
 note riding the spec per the new law.
 
 **Amendment — 2026-08-13, the route disclosure note** (*Per-route disclosure*,
-docs/engineering-rules.md — the law's first application). Written by the advisor session ahead of the
+docs/engineering-rules.md#per-route-disclosure — the law's first application). Written by the advisor session ahead of the
 Maintainer's word, so the spec the executor branches from is complete; every clause is
 grounded in a fetched document recorded in the [licence map](../license-map.md) (the
 wan2.x partner-tier row; the Services-and-tools rows). The spec is the composed

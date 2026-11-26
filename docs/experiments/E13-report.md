@@ -141,7 +141,7 @@ the mesh's body.
 2. **A baked grey void with no real alpha.** All eight are RGBA in mode, and every one has
    **alpha extrema (255, 255)** — fully opaque everywhere. The background is a flat grey
    baked into the RGB. This is the precise failure the maintainer ruled against on 2026-08-12
-   after the E11 probe's grey studio bled through frame 0, and which docs/engineering-rules.md records as the
+   after the E11 probe's grey studio bled through frame 0, and which docs/engineering-rules.md#alpha-law records as the
    standing suspect for E08's washed bands. An RGBA file whose alpha is flat 255 is a baked
    void wearing an alpha channel; it does not satisfy the authored-RGBA law, and there is no
    deliberate RGB-composite choice to record because there is no alpha to composite from.
@@ -192,7 +192,7 @@ recorded so the work is cheap when it is wanted:
 - Two andon-shaped gaps would need closing before this route could arm, and neither is a
   table row: **`route_gates.SEED_NODES` knows only `KSampler`/`KSamplerAdvanced`**, so on an
   r2v graph `seeds()` returns empty and `gate_s_registration` reports "0 noise-bearing
-  seed(s), all pinned" — a pass having checked nothing, which is the vacuous shape docs/engineering-rules.md
+  seed(s), all pinned" — a pass having checked nothing, which is the vacuous shape docs/engineering-rules.md#gates-raise-inside-the-step
   names. And **Gate L's `wan` rules (dim multiple 16, 4n+1 frames, 81-frame horizon) do not
   describe this tier at all**, which constrains by resolution enum, ratio enum and an integer
   duration in seconds. Both are gates that cannot fail as they stand.

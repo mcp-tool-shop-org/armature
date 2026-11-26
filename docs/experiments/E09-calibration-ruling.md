@@ -78,7 +78,7 @@ falsification and the corrected route.
 gate**: every graph this repo submits passes Gate ROUTE before Gates S and L arm — it walks
 subgraph blueprints, so nothing hides in a wrapper. The served-template pattern is now
 measured twice in one day (the Animate template wires the banned detector tier; the T2V
-template wires the excluded trajectory), so the law lands in docs/engineering-rules.md: **a served template
+template wires the excluded trajectory), so the law lands in docs/engineering-rules.md#served-templates-and-gate-route: **a served template
 is a reference, never a route.**
 
 ## R8 — the clean T2V graph is commissioned

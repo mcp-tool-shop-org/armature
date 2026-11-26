@@ -175,7 +175,7 @@ statistic with no signal to work with is not a weak result, it is not a measurem
 
 ## Ruling 11 — Disposition
 
-**E03 is CLOSED on its narrow question and stays EXPERIMENTING.** Nothing is promoted to docs/engineering-rules.md.
+**E03 is CLOSED on its narrow question and stays EXPERIMENTING.** Nothing is promoted to the internal guide (kept privately).
 Three generations spent, one reserved and unspent, no gate fired. Credits: **12 projected** at
 E02's measured rate; the maintainer's balance is the instrument of record.
 

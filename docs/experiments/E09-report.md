@@ -397,7 +397,7 @@ judges the sheet.
 | **Gate S** | **PASS** — seed list committed at `1017558`, *before* the graph was built. One noise-bearing seed, `20260811`, pinned `fixed`, drawn from the committed list; the low-noise expert's seed is inert (`add_noise=disable`) and is reported rather than demanded |
 | **Gate L** | **PASS on the actual graph** — 832×480×65: 832/16 = 52, 480/16 = 30, 65 = 4·16+1, ≤ 81 |
 | **Gate C** | **PASS** — priced at 0 credits before submission; ceiling 8 not approached |
-| dry-run pre-flight | **PASS**, no warnings — and it did *not* stand in for the in-code checks, per docs/engineering-rules.md |
+| dry-run pre-flight | **PASS**, no warnings — and it did *not* stand in for the in-code checks, per docs/engineering-rules.md#served-templates-and-gate-route |
 | **detection** (B2) | **PASS — a pose on 65 of 65 frames** |
 | **lossless tap** | **PASS** — 65 PNGs straight off the `VAEDecode`, which is what the review was cut from |
 | Gate N / OBJ / SPACE / MOTION_RECORD / ARRIVED | **PASS** — applier on the solved dance, `ARRIVED` max 5.348e-06 against 1.069e-04 |

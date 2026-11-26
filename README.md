@@ -93,7 +93,7 @@ and free, a handed world holds to the last frame on two seeds (E12), and **ident
 survives a hosted, human-trained tier fed nothing but authored references** (E13) — all
 judged by the maintainer's eye. The founding-arc audit is at
 [docs/audit-first-arc.md](docs/audit-first-arc.md); the posture since 2026-08-12 is a learning
-monorepo — experiments prove paths, no route is canon by momentum ([docs/engineering-rules.md](docs/engineering-rules.md)).
+monorepo — experiments prove paths, no route is canon by momentum ([docs/engineering-rules.md#scope-and-posture](docs/engineering-rules.md#scope-and-posture)).
 
 | | |
 |---|---|

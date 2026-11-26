@@ -34,7 +34,7 @@ Both re-solves passed their own in-tool gate on the way out — `gate_ARRIVED` m
 `tools/check_relift.py` (new, with `armature_core.glb.compare_signatures` as its bpy-free
 arithmetic and `tests/test_check_relift.py` as its fixtures) compares **per-frame evaluated
 world-space geometry** — what the renderer would actually draw, following the imported action —
-rather than file bytes. docs/engineering-rules.md's law is that a file-hash mismatch is not evidence a render
+rather than file bytes. docs/engineering-rules.md#pixel-comparison-not-file-hash's law is that a file-hash mismatch is not evidence a render
 changed: glTF export can reorder buffers or embed a generator string without a vertex moving.
 
 Per **frame**, not per file, because a lift shares its rest pose with the file it was solved

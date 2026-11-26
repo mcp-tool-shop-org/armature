@@ -26,7 +26,7 @@ there git-ignored by design, pinned by hash in the report's artifact tables.
 
 ## Laws carried out of E09
 
-The served-template law (in docs/engineering-rules.md, measured twice). Gates that fire on their own
+The served-template law (in docs/engineering-rules.md#served-templates-and-gate-route, measured twice). Gates that fire on their own
 authors are the only gates worth having — the widget-table hole and the negative-prompt
 citation catch were both self-inflicted and self-caught. And look-then-describe, measured
 twice more inside one experiment: the executor's contact-sheet tilt misread, self-caught by

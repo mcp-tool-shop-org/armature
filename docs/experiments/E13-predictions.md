@@ -29,7 +29,7 @@ it is.
 
 The advisor's H-E13a–d were written blind at spec time and are not restated here. Mine differ
 in one deliberate way: each conjunction is split, because a compound clause that comes out
-half-right cannot be scored (docs/engineering-rules.md — predict each clause of a conjunction separately).
+half-right cannot be scored (internal guide, kept privately — predict each clause of a conjunction separately).
 
 | id | clause | prediction | reasoning |
 |---|---|---|---|

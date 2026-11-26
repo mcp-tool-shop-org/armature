@@ -71,7 +71,7 @@ O pacote npm é um **lançador, não uma porta**: reimplementar um limite em uma
 ## Estado: a tese é medida no nível do produto
 
 Fundada em **10 de agosto de 2026**. Treze experimentos foram concluídos e a tese passou de *em teste* para **medida no nível do produto**: o personagem dançou na tela, controlado por seu próprio sistema, e livre; um mundo construído mantém-se até o último quadro em duas amostras (E12), e **a identidade agora sobrevive a uma camada hospedada, treinada por humanos, alimentada apenas com referências autorais** (E13) — tudo avaliado pelo olhar do mantenedor. A auditoria do arco inicial está em
-[docs/audit-first-arc.md](docs/audit-first-arc.md); a postura desde 12 de agosto de 2026 é um monorepositorio de aprendizado — os experimentos comprovam caminhos, nenhum caminho é canônico por impulso ([docs/engineering-rules.md](docs/engineering-rules.md)).
+[docs/audit-first-arc.md](docs/audit-first-arc.md); a postura desde 12 de agosto de 2026 é um monorepositorio de aprendizado — os experimentos comprovam caminhos, nenhum caminho é canônico por impulso ([docs/engineering-rules.md#scope-and-posture](docs/engineering-rules.md#scope-and-posture)).
 
 | | |
 |---|---|

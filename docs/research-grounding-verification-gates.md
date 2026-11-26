@@ -59,7 +59,7 @@ Cartoons to Life: Towards Improved Cartoon Face Detection and Recognition System
 (arXiv:1804.01753). Face detectors trained on photographs often fail to fire at all on
 stylized faces.
 
-> **Implication.** armature's docs/engineering-rules.md already says a diagnostic returning numbers on a face
+> **Implication.** armature's docs/engineering-rules.md#diagnostics-versus-gates already says a diagnostic returning numbers on a face
 > it cannot find is noise wearing a unit. That line now has a citation. Any identity diagnostic
 > quoted here ships with evidence its detector actually fired.
 

@@ -17,7 +17,7 @@ E07-report.md, rounds 1–7 corrected in place · **Status: CLOSED, EXPERIMENTIN
 
 **Disposition: the skeleton is APPROVED (with reservation 1 standing). The binding — arm (d),
 repaired shell + bone heat, weights normalized — is ACCEPTED PROVISIONALLY for E08's purpose,
-under ruling 5.** Quality ledger below; nothing here is promoted to docs/engineering-rules.md.
+under ruling 5.** Quality ledger below; nothing here is promoted to the internal guide (kept privately).
 
 ## The deliverable E08 inherits
 

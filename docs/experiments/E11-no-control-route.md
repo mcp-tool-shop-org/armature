@@ -145,5 +145,5 @@ claimed, the probe remains the baseline, and the target is the shot.
 stays pinned for comparability):** authored character inputs are rendered **RGBA with a
 real alpha**; the submitted RGB composite is a deliberate, recorded choice per route —
 never a baked grey void (the maintainer's ruling after the probe's studio bled through
-frame 0; law in docs/engineering-rules.md). The render and reference-fit tools gain the alpha default on
+frame 0; law in docs/engineering-rules.md#alpha-law). The render and reference-fit tools gain the alpha default on
 their next touch, with tests.

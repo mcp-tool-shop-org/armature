@@ -27,7 +27,16 @@ _TRUSTED = "trusted"
 _DRV_C = "C" + ":"
 _DRV_E = "E" + ":"
 _C_SYSTEM = rf"{_DRV_C}(?:/|\\\\|\\)(?:Windows|Program Files)(?:[/\\\"'`\s]|$)"
-_C_SYNTH = rf"{_DRV_C}(?:/|\\\\|\\)(?:tmp|elsewhere|clips|abs)(?:[/\\\"'`\s]|$)"
+_C_SYNTH = (
+    rf"{_DRV_C}(?:"
+    r"/tmp/(?:out|outdir|nonexistent\.db)"
+    r"|\\\\tmp\\\\outdir(?:\\\\\.\./turn_0\.png)?"
+    r"|/elsewhere/(?:x|v3|v3_full_a\.png)"
+    r"|\\\\elsewhere\\\\turn_0\.png"
+    r"|/clips/walk\.bvh"
+    r"|/abs"
+    r")(?=$|[\"'`\s),\];])"
+)
 _HOME_PFX = "/" + "home/"
 _MAC_PFX = "/" + "Users/"
 _MNT_PFX = "/m" + "nt/"
@@ -49,11 +58,11 @@ RX_PNAME = re.compile(rf"\b{_PNAME}\b", re.I)
 RX_E_BS_LETTER = re.compile(rf"(?<![A-Za-z0-9_]){_DRV_E}(?:\\\\|\\)[A-Za-z]")
 RX_DRIVE_ANY = re.compile(
     rf"(?<![A-Za-z0-9_])(?!{_C_SYSTEM})(?!{_C_SYNTH})"
-    rf"[A-Za-z]:(?:/|\\\\|\\(?!{_NL_ESCAPE_ONLY}|[\"'`]))(?=[A-Za-z0-9_.-])",
+    rf"[A-Za-z]:(?:/|\\\\|\\(?!{_NL_ESCAPE_ONLY}))",
     re.I,
 )
 RX_LPATH_OTHER = re.compile(
-    rf"(?:{_HOME_PFX}|{_MAC_PFX}|{_MNT_PFX}[A-Za-z]/|{re.escape(_MODELS_TAG)})",
+    rf"(?:{_HOME_PFX}|{_MAC_PFX}|{_MNT_PFX}[A-Za-z](?=$|[^A-Za-z0-9_])|{re.escape(_MODELS_TAG)})",
     re.I,
 )
 
@@ -174,6 +183,24 @@ def test_hygiene_scanner_catches_labels_paths_and_name_while_honouring_exclusion
     assert scan_lines("notes/x.md", f"cd {_MNT_PFX}c/{'Us' + 'ers'}/dev")
     assert scan_lines("README.md", f"cd {_HOME_PFX}dev/armature")
     assert scan_lines("README.md", f"{_DRV_C}{_bs}{'Us' + 'ers'}{_bs}dev{_bs}armature")
+    # Bare drive roots (both cases, \ and /)
+    assert scan_lines("notes/x.md", f"{_DRV_E}{_bs}")
+    assert scan_lines("notes/x.md", f"{_DRV_E}/")
+    assert scan_lines("notes/x.md", f"{_drv_e_lo}{_bs}")
+    assert scan_lines("notes/x.md", f"{_drv_d_lo}/")
+    assert scan_lines("notes/x.md", f"{_DRV_C}{_bs}")
+    assert scan_lines("notes/x.md", f"{_DRV_C}/")
+    # /mnt/<letter> without and with trailing slash
+    assert scan_lines("notes/x.md", f"cd {_MNT_PFX}e")
+    assert scan_lines("notes/x.md", f"cd {_MNT_PFX}E/")
+    assert scan_lines("notes/x.md", f"path='{_MNT_PFX}c'")
+    # Narrowed _C_SYNTH: arbitrary siblings and subpaths are caught
+    assert scan_lines("tools/x.py", f"{_DRV_C}{_bs}tmp{_bs}secret")
+    assert scan_lines("tools/x.py", f"{_DRV_C}/tmp/x/y")
+    assert scan_lines("tools/x.py", f"{_DRV_C}/tmp/outdir/sub")
+    assert scan_lines("tools/x.py", f"{_DRV_C}/elsewhere/x/y")
+    assert scan_lines("tools/x.py", f"{_DRV_C}/clips/other.mp4")
+    assert scan_lines("tools/x.py", f"{_DRV_C}/abs/path")
     assert scan_lines("notes/x.md", f"| **Role** ({_PNAME.title()}) |")
     assert scan_lines("notes/x.md", f"{_PAPER_TITLE} by {_LBL_1.title()}")
 
@@ -188,9 +215,16 @@ def test_hygiene_scanner_catches_labels_paths_and_name_while_honouring_exclusion
         'if "else:' + chr(92) + 'n" in src:',
         rf"{_DRV_C}\Program Files\Blender Foundation\Blender 5.2\blender.exe",
         rf"{_DRV_C}\Windows\Fonts\arial.ttf",
+        f"{_DRV_C}/tmp/out",
         f"{_DRV_C}/tmp/outdir",
+        f"{_DRV_C}{_bs}{_bs}tmp{_bs}{_bs}outdir",
+        f"{_DRV_C}{_bs}{_bs}tmp{_bs}{_bs}outdir{_bs}{_bs}../turn_0.png",
+        f"{_DRV_C}/tmp/nonexistent.db",
         f"{_DRV_C}/elsewhere/x",
-        f"{_DRV_C}/clips/sample.mp4",
-        f"{_DRV_C}/abs/path",
+        f"{_DRV_C}/elsewhere/v3",
+        f"{_DRV_C}/elsewhere/v3_full_a.png",
+        f"{_DRV_C}{_bs}{_bs}elsewhere{_bs}{_bs}turn_0.png",
+        f"{_DRV_C}/clips/walk.bvh",
+        f"{_DRV_C}/abs",
     ]
     assert scan_lines("README.es.md", "\n".join(clean_lines)) == []

@@ -4,7 +4,7 @@
 report · **Credit ceiling: ZERO** — E01 spends no cloud credits and submits nothing.
 
 Grounding: [research-grounding.md](../research-grounding.md), cited by finding number.
-Method: [docs/engineering-rules.md](../engineering-rules.md). Arc: [ROADMAP.md](../ROADMAP.md).
+Method: internal guide (kept privately). Arc: [ROADMAP.md](../ROADMAP.md).
 
 ---
 
@@ -28,7 +28,7 @@ precedent to this exporter's exact move.
 So the channel set is **depth + normal + semantic/mask first, skeleton last and optional**. This
 is not a preference; it is the ordering the measurement implies.
 
-## Premises — marked, per docs/engineering-rules.md
+## Premises — marked (internal guide, kept privately)
 
 | # | Premise | Status |
 |---|---|---|
@@ -71,7 +71,7 @@ normalization without re-rendering. Deriving down is free; deriving up is imposs
 
 ## Predictions — register these BEFORE running anything, and state whether each was blind
 
-The executor writes predictions into the report *first*. Per docs/engineering-rules.md, a hypothesis with no
+The executor writes predictions into the report *first*. Per the internal guide (kept privately), a hypothesis with no
 prediction cannot be wrong, and one that cannot be wrong teaches nothing. **facet missed nine
 consecutive arcs on the unit/population family — so for each prediction, write what one of the
 counted thing *is* before writing the number.**
@@ -93,7 +93,7 @@ counted thing *is* before writing the number.**
 ## Gates
 
 Gates **raise inside the tool that performs the write** — no shell chaining, no bare `assert`
-(deletable by `-O`), no skip flag. Per docs/engineering-rules.md, put the andon on the direction the invariant
+(deletable by `-O`), no skip flag. Per docs/engineering-rules.md#gates-raise-inside-the-step, put the andon on the direction the invariant
 does not bound.
 
 - **G1 · ANDON — generator legality.** Width and height divisible by 16; frame count ≡ 1 (mod 4)

@@ -58,14 +58,14 @@ Where enforced: `tools/armature_core/errors.py` (`ArmatureError` `:10`), `tools/
 
 **Diagnostics measure and report quantities without gating; qualitative identity and motion acceptance are decided by eye on clips in motion and full-size per-frame PNGs beside reference and provenance sheets.** Dedicated gates handle refusals, and numeric metrics on a subject require valid detections rather than empty-detection fallback scores.
 
-Where enforced: cited in diagnostics design and tests (`tools/armature_core/shotdiag.py`, `tools/armature_core/framing.py`, `tools/encode_control.py`, `tools/extract_clip_frames.py`).
+Where enforced: cited, not mechanically checked (`tests/test_shotdiag_identity.py:182,291`, `tests/test_shotdiag_camera.py:525,804`, and `tests/test_fetch_t2v_run.py:74` assert non-gating diagnostics and null-on-unfired-detector behaviour on `shotdiag` and `fetch_t2v_run`).
 
 <a id="fixture-falsification-question"></a>
 ## Tests Pose the Falsification Question
 
 **Every test fixture is designed by asking what the check would observe if the code under test were wrong in the exact way the check exists to catch.** Pass conditions must not depend on the artifact or output being judged or pass vacuously on empty inputs.
 
-Where enforced: test suite assertions across `tests/test_gates.py`, `tests/test_gate_r.py`, `tests/test_walk.py`, and peer modules.
+Where enforced: cited, not mechanically checked.
 
 <a id="named-compensators"></a>
 ## Named Compensators

@@ -376,7 +376,7 @@ Scored honestly, including the three I got wrong.
 |---|---|---|
 | S1 | the socket accepts a constructed VIDEO at runtime | **HELD** — both A2 submissions completed |
 | S2 | material class holds, 2 of 2 | **HELD** in every frame looked at |
-| S3 | proportions fail on ≥1 of 2, and on **strictly fewer** seeds than A1 | **UNSCOREABLE as written.** A1 did not visibly fail (R2), so "strictly fewer than A1" has no room below it. The comparison the clause was built to make cannot be made from this evidence, and inventing a rescoring after seeing the outputs would be the retuning docs/engineering-rules.md forbids |
+| S3 | proportions fail on ≥1 of 2, and on **strictly fewer** seeds than A1 | **UNSCOREABLE as written.** A1 did not visibly fail (R2), so "strictly fewer than A1" has no room below it. The comparison the clause was built to make cannot be made from this evidence, and inventing a rescoring after seeing the outputs would be the retuning the internal guide (kept privately) forbids |
 | S4 | the head fails to read as the carved cranium on ≥1 of 2 | **WRONG as written**, same reading as R3 |
 | S5 | worlds differ across seeds | **HELD** |
 | S6 | the source clip's bar **does not** reproduce as A2's world | **HELD** in its literal clause — no crowd, no dance floor. The warm tone is recorded separately in §7 and is not what this clause claimed |

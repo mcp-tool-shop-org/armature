@@ -102,7 +102,7 @@ it — and then declined to settle it. Correct on both counts.
 3. **P4** — unmeasured; A3 is deferred by ruling and is not run.
 
 **E02 does not close until those are ruled.** Merging this branch is bookkeeping, not closure —
-the arc stays **EXPERIMENTING** and nothing in it is promoted to docs/engineering-rules.md.
+the arc stays **EXPERIMENTING** and nothing in it is promoted to the internal guide (kept privately).
 
 ## Ruling 5 — Contamination #4: the files stay untracked, and the disposition is mine
 

@@ -572,7 +572,7 @@ Measured here, with no authority to rule on any of it.
 9. **One error in this session's own drafting, caught before the commit and recorded rather
    than quietly fixed.** The first draft of §2's table carried a camera target and radius
    this session had never read — plausible numbers beside real ones, which is precisely the
-   placeholder-shaped-like-evidence failure docs/engineering-rules.md names. They were replaced with the
+   placeholder-shaped-like-evidence failure docs/engineering-rules.md#no-placeholder-evidence names. They were replaced with the
    values in `start_frame_provenance.json` (target `[-0.0153, -0.0306, -0.0713]`, radius
    2.4808). Nothing else in the report was derived from the wrong pair, and every other
    number in it was read from a file or a tool's own output. The general lesson is the one

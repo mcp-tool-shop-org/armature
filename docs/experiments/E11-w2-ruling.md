@@ -14,7 +14,7 @@ fused two claims and concealed a third: *that the camera tier runs on the weight
 already loads.* That third claim was never stated, never marked measured-or-assumed, and
 never checked — by the advisor who wrote it, or anyone downstream inheriting it as settled.
 The licence row this session landed at consult #7 was for weights **the graph never loaded**.
-One generation bought the lesson. Two laws land in docs/engineering-rules.md:
+One generation bought the lesson. Two laws land (`docs/engineering-rules.md#licence-row-not-wiring-claim` and the internal guide, kept privately):
 
 - **A licence row is not a wiring claim.** Every spec that adds a conditioning node names
   the exact weight files its graph loads, as a marked premise, checked against the builder.

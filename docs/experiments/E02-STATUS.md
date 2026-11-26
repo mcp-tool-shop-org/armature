@@ -14,7 +14,7 @@ not doctrine. Specifically:
 - The **numbers stand** — 4 credits/generation, 32 of 33 frames differing at max delta 71,
   `out = max(src-1, 0)` — because those were measured. What is provisional is what they *mean*
   and what we do about them.
-- **Nothing from E02 is promoted into docs/engineering-rules.md or into a standing law until the arc closes.**
+- **Nothing from E02 is promoted into the internal guide (kept privately) or into a standing law until the arc closes.**
   Two laws did get amended today on evidence that is not E02-specific — `dry_run` proves
   nothing about runnability, and bytes are not content — and those stay, because they were
   earned outside this experiment's open questions.

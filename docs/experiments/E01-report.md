@@ -15,7 +15,7 @@ before any render ran.** The only facts in hand at registration time were the en
 presence checks in §2 — tool versions and the byte sizes of the four subject files. Nothing had
 been imported, rendered or measured.
 
-Per docs/engineering-rules.md, each prediction first states **what one of the counted thing is**, then the
+Per the internal guide (kept privately), each prediction first states **what one of the counted thing is**, then the
 number. Conjunctions are predicted clause by clause before the join.
 
 > **The blindness claim has third-party corroboration, which is better than my word for it.**

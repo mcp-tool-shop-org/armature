@@ -187,7 +187,7 @@ links, control_video fed by the batch, video-bridge and Canny nodes absent). It 
 `dry_run`. **That is not sufficient evidence to spend on**, for two reasons:
 
 1. `dry_run` accepted a `LoadImage` naming a file that does not exist, without a warning —
-   so its silence is weak evidence, exactly as docs/engineering-rules.md warns. Whether `BatchImagesNode`
+   so its silence is weak evidence, exactly as docs/engineering-rules.md#served-templates-and-gate-route warns. Whether `BatchImagesNode`
    truly batches all 33 or silently takes the first can only be settled by execution.
 2. Adopting it replaces `LoadVideo` + `GetVideoComponents` with 34 nodes in **both** graphs.
    The spec pins those graphs by parsed content and rests its PIN_PER_STEP score on them.
@@ -322,7 +322,7 @@ a list of links under a bare `images` key. **The list form passed `dry_run` clea
 That is the **third measured instance in E02** of `dry_run` validating something the real
 path refuses. The first two were a `LoadImage` naming a file that does not exist, accepted
 without a warning. This one is stronger: a structurally invalid graph, validated silently.
-docs/engineering-rules.md already says a `dry_run` PASS does not prove link sanity; E02 now has receipts.
+docs/engineering-rules.md#served-templates-and-gate-route already says a `dry_run` PASS does not prove link sanity; E02 now has receipts.
 
 **Cost of learning it: zero.** The rejection happened at prompt validation, before the
 worker ran, and no GPU-hours bucket appeared. `verify_topology` now rejects the bare-list

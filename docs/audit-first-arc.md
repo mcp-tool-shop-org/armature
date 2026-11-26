@@ -235,7 +235,7 @@ are the anatomy of it, not a substitute for it.
 **His direction going forward is ruled and supersedes §4's renumbering proposal:** the method
 stays **experiments** — aimed at the full pipeline, consulting the Comfy Agent as needed,
 trajectory held true. The SH-series is therefore **DROPPED**; the E-series continues under §5's
-conditions, which stand in full. §5.1's trajectory requirement and the scope block now bind
-mechanically in `docs/engineering-rules.md` (this commit) rather than living as prose here. E07 (the skeleton)
+conditions, which stand in full. §5.1's trajectory requirement (internal guide, kept privately) and the scope block
+(`docs/engineering-rules.md#scope-and-posture`) now bind mechanically (this commit) rather than living as prose here. E07 (the skeleton)
 is the first spec dispatched under them; E08 (the first authored performance of the character)
 follows it and is where credits next flow.

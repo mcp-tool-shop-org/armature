@@ -464,7 +464,7 @@ with the reason — because a falsified approach that leaves the tree becomes do
 tier (2026-08-12). A Trajectory row on every credit-spending spec. Authored image inputs
 carry alpha rather than a baked void. A licence row is not a wiring claim — the graph must
 be shown to load the weights the row names. Binding documents are read from `main` at
-dispatch time. Each is recorded in `docs/engineering-rules.md` (moved from the private guide) next to the measurement that earned it.
+dispatch time. The code-enforced rules are recorded in `docs/engineering-rules.md` (`#per-route-disclosure`, `#alpha-law`, `#licence-row-not-wiring-claim`), while the workflow rules and the measurements behind them are kept privately.
 
 **The public surfaces.** README with its seven translations — landed before this tag was
 cut, per the release-ordering rule that a tag is immutable and stale translations under it
