@@ -177,7 +177,7 @@ def test_hygiene_scanner_catches_labels_paths_and_name_while_honouring_exclusion
     assert scan_lines("tools/x.py", "P = r'Z" + ":\\models\\clip.mp4'")
     assert scan_lines("tools/x.py", f"P = '{_DRV_C}/dev/checkout'")
     assert scan_lines("README.md", f"cd {_HOME_PFX}dev/armature")
-    assert scan_lines("README.md", f"{_DRV_C}\\Users\\dev\\armature")
+    assert scan_lines("README.md", f"{_DRV_C}\\{'Us' + 'ers'}\\dev\\armature")
     assert scan_lines(
         "CLAUDE.md",
         f"| **Role** ({_PNAME.title()}) |",
