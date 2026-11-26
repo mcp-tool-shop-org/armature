@@ -60,8 +60,8 @@ prediction was blind.
 
 ## The rules that keep getting earned
 
-These are the portable ones. The full law book, with each law's earning story, lives in
-[CLAUDE.md](https://github.com/mcp-tool-shop-org/armature/blob/main/CLAUDE.md).
+These are the portable ones. The engineering rules enforced across the codebase live in
+[docs/engineering-rules.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/engineering-rules.md).
 
 **An inherited claim is a hypothesis wearing a fact's clothes.** Checking one costs minutes;
 building on one costs a session. This binds hardest on the premises of your *own* dispatch — the

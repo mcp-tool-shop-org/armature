@@ -1,12 +1,12 @@
 # E14 — closing ruling
 
-**Advisor seat, 2026-08-13.** The report is [E14-report.md](E14-report.md) (branch
-`E14-run` at `6afd17e`; merged at this close). Sheets and clips went to the Director's
-eye before this ruling; the frames named below were re-opened at full size by this seat
+**Advisor session, 2026-08-13.** The report is [E14-report.md](E14-report.md) (branch
+`E14-run` at `6afd17e`; merged at this close). Sheets and clips went to the maintainer's
+eye before this ruling; the frames named below were re-opened at full size by this session
 before being described. Two generations, ceiling exact, zero partner credits, no gate
 fired.
 
-## R1 — Verdicts of record (the Director's eye)
+## R1 — Verdicts of record (the maintainer's eye)
 
 **The style transform held on both arms. The character held on arm T. The character
 failed to hold on arm S** — the figure's right arm morphed seriously through the clip.
@@ -15,7 +15,7 @@ failed to hold on arm S** — the figure's right arm morphed seriously through t
 Two refinements ride the verdict:
 
 - **Crowd morphing appeared on both arms** — a few audience members each. The
-  Director's read: this class is a candidate for prompt and negative-prompt treatment.
+  Maintainer's read: this class is a candidate for prompt and negative-prompt treatment.
   That converges with the record's own promoted lever — E12 R3 named the unscoped
   identity clause as the crowd-converter and promoted the subject-scoped clause,
   untested. The eye and the record point at the same knob; it remains a hypothesis
@@ -27,9 +27,9 @@ Two refinements ride the verdict:
   AND as frames; E14 is now the clean demonstration of that law's necessity.
 
 The executor's f80 observation on T — a dark smear across the head, the face much less
-legible than at f40, wrists tapering — was re-opened and confirmed by this seat. It
+legible than at f40, wrists tapering — was re-opened and confirmed by this session. It
 stands **banked as a frame-level diagnostic** with the tier question (R5) as its named
-candidate; the verdict of record on T's character is the Director's, and it is HOLDS.
+candidate; the verdict of record on T's character is the maintainer's, and it is HOLDS.
 
 ## R2 — The central question resolved: the transfer premise is live
 
@@ -39,10 +39,10 @@ returned a null. The free route's LoRA scene-lever is a measured, working lever,
 at zero partner credits on this graph. Nothing served documents this combination
 (consult #10 Q3); the repo now documents it by measurement.
 
-## R3 — Prediction grading, both seats, against the judge
+## R3 — Prediction grading, both sessions, against the judge
 
-The two-seat blind disagreement is graded on the Director's verdict, not on either
-seat's reading of the frames.
+The two-session blind disagreement is graded on the maintainer's verdict, not on either
+session's reading of the frames.
 
 | clause | spec (H-E14a–d) | executor (P1–P5 + ordering) | graded against the verdict |
 |---|---|---|---|
@@ -53,20 +53,20 @@ seat's reading of the frames.
 | transfer binds | both — HELD | both (T ~75%, S ~65%) — HELD | live on both |
 | T tier artifact | named in advance, unresolved | named in advance, unresolved | stays unresolved and unattributed (R5) |
 
-**The executor's identity call beat the spec's.** The genuine two-seat disagreement the
+**The executor's identity call beat the spec's.** The genuine two-session disagreement the
 handoff flagged is graded: the spec predicted S subtle and identity holding everywhere;
 the executor argued a photo-realism pair pulls on exactly the property the prompt
 defends — the clay — and named S the risk. The verdict lands on the executor's side.
-The spec's H-E14b is this seat's lineage's miss, owned here.
+The spec's H-E14b is this session's lineage's miss, owned here.
 
 **The executor's self-grade is overturned in part.** Report §5 scored its own ordering
 "wrong, plainly" because at f40 S's figure read more cleanly as clay and it was T whose
 face degraded by f80. That grading used the wrong judge: it scored an identity
-prediction against the seat's own frame reading. The frame observations keep their full
+prediction against the session's own frame reading. The frame observations keep their full
 standing as diagnostics — they were accurate, and they are banked — but the grade
 flips: on the question as posed, *which arm risks the character*, the executor's blind
 prediction was right. **New line of law, the complement of "no metric approximates
-identity": no seat's frame-read approximates it either. An identity prediction is
+identity": no session's frame-read approximates it either. An identity prediction is
 graded only by the eye that holds the canon, in either direction, and grading waits
 for the verdict.**
 
@@ -80,7 +80,7 @@ direction.
 ## R4 — The disclosed deviation, ruled
 
 **Facts, verified by diff at ruling time.** Before understanding it had been handed the
-executor seat, the session that ran E14 edited and pushed the binding spec — commit
+executor session, the session that ran E14 edited and pushed the binding spec — commit
 `182a98f`: the supersession banner moved into the candidates table with strikethrough
 markup, the licence cells corrected to the grant-matrix verdicts, the dead-list
 revised (80s_fantasy upgraded to a retrieved kill; SmartphoneSnapshot marked revived),
@@ -90,17 +90,17 @@ byte-identical to what the pre-dispatch amendment (`e213103`) set. The edit made
 spec's head agree with its own binding foot.
 
 **Ruling.** The deviation is **accepted as disclosed**. The content is ratified — it
-was due under the correct-in-place law, and had the advisor seat performed it, it would
-have been ordinary work. The seat violation is recorded without softening: **an
+was due under the correct-in-place law, and had the advisor session performed it, it would
+have been ordinary work. The role violation is recorded without softening: **an
 executor does not edit a binding document, whatever the content's merit.** The
-separation of seats is the repo's method, and its integrity does not depend on the
+separation of sessions is the repo's method, and its integrity does not depend on the
 edit having been harmless.
 
 **The mechanical form, so this cannot recur as improvisation:** an executor who finds
 the binding documents self-contradictory — a head table disagreeing with its own
 amendment — **halts and reports, exactly as with a firing gate.** The advisor corrects
-the document; the executor resumes on the corrected read. And the seat rule beneath
-it: **seat identity is established by the dispatch mechanics, not by a session's
+the document; the executor resumes on the corrected read. And the role rule beneath
+it: **session role is established by the dispatch mechanics, not by a session's
 self-impression.** The session that receives the executor paste block is the executor
 from its first token.
 
@@ -123,7 +123,7 @@ ruling could be short.
    for renderartist.** This rides the free route's per-route disclosure from today.
 3. **Colour pressure at strength 1.0.** The warm push converts whites and drives the
    crowd's conversion visibly by f40. Whether a lower strength keeps the look the
-   Director liked while relaxing the pressure is exactly the follow-on sweep's
+   Maintainer liked while relaxing the pressure is exactly the follow-on sweep's
    question.
 
 ## R6 — Arm S's record
@@ -133,7 +133,7 @@ rendering of all three clips — and **the character failed**: the right arm mor
 motion, the legs fused at f80. Not adopted. The style performance is real enough that a
 **low-strength S probe** stands as a *candidate* follow-on, flagged not scheduled; the
 per-axis failure may or may not be strength-dependent, and nothing runs without the
-Director's word.
+Maintainer's word.
 
 ## R7 — Instruments folded at this close
 
@@ -156,13 +156,13 @@ artifact archive (outputs git-ignored, hash-pinned in the report). The suite is
 re-measured on main at the merge and the measured count rides the merge commit, not
 this ruling.
 
-Standing next, each on the Director's word and none dispatched by this document:
+Standing next, each on the maintainer's word and none dispatched by this document:
 
 1. **The winner's strength sweep** — arm T, strength as the single variable, two seeds
    under the two-seed law, the E14 graph otherwise byte-pinned; carries R5's caveats
    as named premises.
 2. **The subject-scoped prompt probe** (E12 R3's promoted lever) — now with the
-   Director's convergent read that the both-arms crowd morphing looks
+   Maintainer's convergent read that the both-arms crowd morphing looks
    prompt-addressable.
 3. The composed route's three follow-ons (E13-closing R8), unchanged.
 4. **facet's texture-hole repair remains the studio's top priority.** The LoRA lever

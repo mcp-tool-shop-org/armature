@@ -1,7 +1,7 @@
 # E02 — registered predictions
 
 **Registered 2026-08-10, before any submission to any generator.** This file is
-committed on its own so its timestamp is git's and not a seat's. E01's blindness
+committed on its own so its timestamp is git's and not a session's. E01's blindness
 evidence existed only by luck (an advisor error timestamped the executor's file); here
 it is deliberate.
 
@@ -69,7 +69,7 @@ a segmentation or depth estimator, and every candidate is either (a) circular �
 generated luma against the control depth that produced it just reports the arm's own
 input back, or (b) a new dependency with no row in `docs/license-map.md`, which the
 license gate forbids from entering inside an experiment. Per the advisor rule *suspend
-rather than invent a threshold*, this clause is reported as the Director's eye-judgement
+rather than invent a threshold*, this clause is reported as the maintainer's eye-judgement
 on the Gate 0 sheet, numerator and denominator separately, and no number is manufactured
 for it.
 
@@ -183,7 +183,7 @@ Judged by eye on the A1a-vs-A1b sheet, at full size, at the same frame indices:
 
 - **AS WELL** — for at least **28 of 33** frames, A1b's figure occupies the same region of
   frame and shows the same facing as A1a's. That is: the two controlled arms are
-  interchangeable on placement and facing to the Director's eye.
+  interchangeable on placement and facing to the maintainer's eye.
 - **WORSE** — the figure is present and roughly placed, but structure or facing visibly
   degrades on a meaningful number of frames relative to A1a.
 - **NOT AT ALL** — the figure does not track the control's orbit; A1b reads closer to A2

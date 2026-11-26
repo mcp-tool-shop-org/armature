@@ -13,9 +13,9 @@
 > no copying problem to sweep for.
 >
 > Withdrawn rather than re-derived, per the standing law: withdrawing is not choosing a new number,
-> and that is the whole difference. **This seat's error is that the deciding artifact existed and
+> and that is the whole difference. **This session's error is that the deciding artifact existed and
 > was not read before the spec was written** — *enumerate the resource before commissioning one*,
-> which is this repo's most-repeated law and was missed by the seat that keeps citing it.
+> which is this repo's most-repeated law and was missed by the session that keeps citing it.
 >
 > **What survives, demoted to a candidate:** A1a's figure is small and plinth-bound where A2's (no
 > control) is large and dynamic, so control at 1.0 does appear to constrain **composition and
@@ -27,8 +27,8 @@
 ---
 
 
-**Seat:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
-report** · **Director judges the sheet** · **Credit ceiling: 4 generations (16 credits); 3 planned,
+**Role:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
+report** · **maintainer judges the sheet** · **Credit ceiling: 4 generations (16 credits); 3 planned,
 1 reserved for a fired gate.**
 
 ---
@@ -92,7 +92,7 @@ exists where both are acceptable:
 * **fidelity to the control** — is the figure still where the control put it, at the right scale?
 * **painted life** — is there a character there, or a re-drawn depth map?
 
-**The read is the Director's eye on a strength-ladder sheet**, and it is categorical: *at which
+**The read is the maintainer's eye on a strength-ladder sheet**, and it is categorical: *at which
 strength does a character appear, and at which strength does the control stop being obeyed?*
 
 ## ⛔ No pass condition, and no metric may rank the arms
@@ -129,7 +129,7 @@ fraction beside its number, or it is not quoted.
 | 2 | `strength` is a scalar FLOAT on `WanVaceToVideo`, no schedule | **MEASURED** — read from the payload; independently confirmed by Comfy consult #3's socket list, which passed calibration against our own graph |
 | 3 | A1a carries a `reference_image` | **MEASURED** — present in the payload's `WanVaceToVideo` inputs |
 | 4 | `strength` = 1.0 in every armature payload to date | **MEASURED** — all five read |
-| 5 | Generation costs 4 credits | **MEASURED** — E02, Director's balance delta |
+| 5 | Generation costs 4 credits | **MEASURED** — E02, maintainer's balance delta |
 | 6 | A1a's 33 control frames are still resident server-side under their recorded upload names | **ASSUMED** — verify before submitting; re-upload if not, and say so |
 | 7 | Lowering `strength` is a monotone relaxation of control authority | **ASSUMED** — this is the hypothesis, not a fact. If the arms are non-monotone, that is a finding |
 
@@ -156,7 +156,7 @@ sequence itself.
 
 Predictions with blind/not-blind first, then the strength-ladder Gate 0 sheet, then observations per
 arm, then every gate with a verdict. A gate that did not run is written **NOT YET RUN**. **No
-judgement words** — the Director decides whether a character is there.
+judgement words** — the maintainer decides whether a character is there.
 
 ## Standards compliance
 
@@ -166,7 +166,7 @@ judgement words** — the Director decides whether a character is there.
 | ANDON_AUTHORITY | **3** | Gate V raises in the submitting tool with no skip flag; L/B/C inherited and already firing in E02/E03. |
 | NAMED_COMPENSATORS | **2** | Local artifacts are new files under `outputs/E05/` (`rm -r` undoes it). **Spent credits have no compensator**, which is why the ceiling is stated first and Gate C halts. |
 | DECOMPOSE_BY_SECRETS | **3** | Payload build, submit, fetch and sheet-building are separate tools; this experiment adds no new seam. |
-| UNCERTAINTY_GATED_HUMANS | **3** | No pass condition by design; the strength ladder goes to the Director's eye and the ruling waits on it. |
-| EXTERNAL_VERIFIER | **1** | Named rather than inflated: the verifier is the Director's eye plus this seat's ruling — a different *kind* of check, not a different model family. Carries the pipeline's standing remediation. |
+| UNCERTAINTY_GATED_HUMANS | **3** | No pass condition by design; the strength ladder goes to the maintainer's eye and the ruling waits on it. |
+| EXTERNAL_VERIFIER | **1** | Named rather than inflated: the verifier is the maintainer's eye plus this session's ruling — a different *kind* of check, not a different model family. Carries the pipeline's standing remediation. |
 
 **15 / 18.**

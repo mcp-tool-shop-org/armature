@@ -5,7 +5,7 @@
         --subject=PERFORMER --no-canon
 
 Commissioned by ruling R8 after Gate ROUTE refused the served `video_wan2_2_14B_t2v`
-template. **A served template is a reference, never a route** (CLAUDE.md, measured twice on
+template. **A served template is a reference, never a route** (docs/engineering-rules.md#served-templates-and-gate-route, measured twice on
 2026-08-11), so every number below comes from a fetched document, and each one is written
 into the payload with the source it came from.
 
@@ -648,7 +648,7 @@ def main(argv=None):
             "This graph is built in-repo from the mapped pieces. The template the docs "
             "page serves is used as a REFERENCE for documented VALUES and for node "
             "classes; no template file is submitted, and the graph submitted is this one, "
-            "which passes Gate ROUTE. CLAUDE.md: a served template is a reference, never "
+            "which passes Gate ROUTE. docs/engineering-rules.md#served-templates-and-gate-route: a served template is a reference, never "
             "a route. The template revision at `main` is the excluded lightx2v 4-step "
             "variant and is NOT the revision these values come from."),
         "weights": {"unet_high_noise": UNET_HIGH, "unet_low_noise": UNET_LOW,

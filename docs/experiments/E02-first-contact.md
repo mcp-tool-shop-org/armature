@@ -1,7 +1,7 @@
 # E02 — first contact: does a CG control sequence hold a character?
 
-**Seat:** executor · **Spec written:** 2026-08-10, before any submission · **Advisor:** rules
-after the report · **Director:** judges the sheets.
+**Role:** executor · **Spec written:** 2026-08-10, before any submission · **Advisor:** rules
+after the report · **maintainer:** judges the sheets.
 
 **This is the hinge.** If a control sequence rendered from geometry does not hold a character
 through a real video model, the honest outcome is to say so and stop, and the rest of the arc
@@ -117,7 +117,7 @@ Gates raise inside the tool performing the irreversible step. No shell chaining,
   frame count. This gate is the only thing standing there.
 - **Gate 0 — the sheet before the metrics.** No number is quoted anywhere in the report until a
   **control | output | reference | provenance** sheet exists for every arm. facet ran four arms
-  and two gates before building this sheet; when it finally existed the Director read the whole
+  and two gates before building this sheet; when it finally existed the maintainer read the whole
   thesis off one panel.
 
 ## Predictions — register before looking, state whether blind
@@ -143,7 +143,7 @@ values beside their predictions; then every gate with a verdict — a gate that 
 written **NOT YET RUN**, never a plausible identifier with a result beside it.
 
 **No judgement words.** Whether the figure on screen is the right character is canon, and no
-metric approximates it — the Director judges the sheets.
+metric approximates it — the maintainer judges the sheets.
 
 ## Standards compliance
 
@@ -153,7 +153,7 @@ metric approximates it — the Director judges the sheets.
 | ANDON_AUTHORITY | **2** | Gates R, C, L and 0 each halt. Not 3 until one fires on a real defect. |
 | NAMED_COMPENSATORS | **2** | **Spent credits have NO compensator** — stated, not skipped. The bound (Gate C) is the honest treatment of an unrecoverable action. Uploaded assets: `delete_uploaded_control_video`, owner executor. |
 | DECOMPOSE_BY_SECRETS | **2** | Encode/upload, submission, and measurement are separate stages; the graphs are external artifacts pinned by name. |
-| UNCERTAINTY_GATED_HUMANS | **3** | Gate 0 is a human checkpoint by construction — the Director sees the sheet before any metric is read, and P3's pass condition is defined in terms an eye checks rather than a number. |
+| UNCERTAINTY_GATED_HUMANS | **3** | Gate 0 is a human checkpoint by construction — the maintainer sees the sheet before any metric is read, and P3's pass condition is defined in terms an eye checks rather than a number. |
 | EXTERNAL_VERIFIER | **2** | The executor does not grade its own output. A3 is a second implementation checking the first. Not 3 until a different-family check runs on an E02 artifact. |
 
 **13 / 18.** No row below 2; no remediation item required.
@@ -175,6 +175,6 @@ before hashing (canonical key order, whitespace stripped) and compares node ids,
 and widget values — never raw bytes. `modified` is also not a change signal here: it did not
 move when the size did.
 
-**Also measured: bookmarking does not promote a workflow.** After the Director bookmarked both,
+**Also measured: bookmarking does not promote a workflow.** After the maintainer bookmarked both,
 `workflow_id` is still `null` and the paths are still bare filenames rather than `workflows/…`.
 Bookmarking is a UI convenience; the record tier remains unreached and is a manual editor step.

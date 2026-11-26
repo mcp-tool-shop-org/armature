@@ -1,6 +1,6 @@
 # E08 — predictions, registered BLIND before the first submission
 
-**Seat: executor.** Written and committed before `run_saved_workflow` was called on
+**Role: executor.** Written and committed before `run_saved_workflow` was called on
 `armature-e08-probe-animate`, and before any E08 output existed anywhere. Nothing in this
 file was written after looking at a generated frame. The git timestamp on this commit is the
 evidence; the probe's `prompt_id` appears only in the report.
@@ -35,7 +35,7 @@ letterboxed reference; the built and saved graphs; every gate's evidence.
 
 ## H-E08b — identity
 
-*Is it the same character?* **The Director judges; no number here is a prediction of his
+*Is it the same character?* **The maintainer judges; no number here is a prediction of his
 ruling.** What I will predict is the mechanism, because it is checkable:
 
 - **The terracotta material and the bald jointed-mannequin read survive — 70%.**

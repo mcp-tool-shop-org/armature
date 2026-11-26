@@ -172,7 +172,7 @@ def gate_arm_input(arm, value):
 #: disclosure key either. Meanwhile the E14 sibling had been given exactly that surface a
 #: wave earlier (F-92f67091) for a SMALLER obligation — one credits line on one LoRA.
 #:
-#: CLAUDE.md's per-route disclosure ruling (the maintainer, 2026-08-12) was born on THIS route:
+#: docs/engineering-rules.md#per-route-disclosure's per-route disclosure ruling (the maintainer, 2026-08-12) was born on THIS route:
 #: a route that sends assets through a third-party tier documents its data-use posture, its
 #: AI-content disclosure duty and its watermark policy, grounded in the licence map's fetched
 #: documents. The obligations below are the map's words, not this builder's.
@@ -274,7 +274,7 @@ def disclosure(arm, route_ev, watermark_requested):
         "checked_by": ("nothing in code: this tier's obligations bind PUBLISHED FOOTAGE and "
                        "an uploaded asset already sent, neither of which a build-time gate "
                        "can observe. They are DISCLOSED at the moment the spend is authored, "
-                       "which is the whole of what CLAUDE.md's per-route disclosure ruling "
+                       "which is the whole of what docs/engineering-rules.md#per-route-disclosure's per-route disclosure ruling "
                        "asks of this route - stated here rather than left as a silence a "
                        "reader could mistake for a gate"),
     }
@@ -459,7 +459,7 @@ def build_and_write(argv=None):
                 "\n"
                 "WHAT A REFUSAL COSTS: nothing but your time, and that is the point - every gate here runs BEFORE a credit is spent, and spent credits have no compensator.\n"
                 "\n"
-                "WHAT THIS ROUTE COSTS ITS USER: the disclosure lines printed above BUILD_R2V_OK, per CLAUDE.md's per-route disclosure ruling - read them before you submit."))
+                "WHAT THIS ROUTE COSTS ITS USER: the disclosure lines printed above BUILD_R2V_OK, per docs/engineering-rules.md#per-route-disclosure's per-route disclosure ruling - read them before you submit."))
     build_opts = ap.add_argument_group("build")
     output_opts = ap.add_argument_group("output")
 
@@ -605,7 +605,7 @@ def build_and_write(argv=None):
     # The per-route disclosure block (wave 28, F-2dcaf53a), built from the licence map's own
     # row and Gate ROUTE's own receipt. The watermark half is read off the payload THIS build
     # actually sends, never off the literal at the `build()` call — a disclosure that
-    # describes a value the graph does not carry is the wiring claim CLAUDE.md forbids.
+    # describes a value the graph does not carry is the wiring claim docs/engineering-rules.md#licence-row-not-wiring-claim forbids.
     # Built ABOVE the record so the record carries it; printed BELOW, so an operator meets it
     # whether they read stdout or the JSON.
     disclosure_block = disclosure(a.arm, gate_route, node_inputs.get("watermark"))
@@ -637,7 +637,7 @@ def build_and_write(argv=None):
         "node_ids": {"first_image": FIRST_IMAGE_ID, "r2v": R2V_ID, "save": SAVE_ID,
                      "cascade": cascade_ids},
         "gates": gates,
-        # The per-route disclosure CLAUDE.md's ruling requires of a route that rides a
+        # The per-route disclosure docs/engineering-rules.md#per-route-disclosure's ruling requires of a route that rides a
         # third-party tier: the training-use trade, the AI-content disclosure duty on
         # published footage, and what the watermark request does and does not promise. It
         # rides the provenance, and `disclosure_lines` says it out loud below (wave 28,

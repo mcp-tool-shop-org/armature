@@ -1,7 +1,7 @@
 # E07 — the registered site list, and the discrepancy in what "18" denotes
 
 **Registered 2026-08-11, before the first bone is placed and before any measurement of the
-subject mesh was taken.** Committed on its own so its timestamp is git's and not a seat's.
+subject mesh was taken.** Committed on its own so its timestamp is git's and not a session's.
 A site list chosen after seeing what was easy to rig is name-shopping; this one was written
 before the mesh had been imported once.
 
@@ -66,7 +66,7 @@ in the sense that matters (nothing rigs the face). The alternative — registeri
 would leave E07 unable to answer the gap it exists to close, measured by the instrument that
 opened it.
 
-**This is a reconciliation and it is disclosed as one.** The Director may rule it wrong; it is
+**This is a reconciliation and it is disclosed as one.** The maintainer may rule it wrong; it is
 recorded here so the ruling has something to rule on.
 
 ---

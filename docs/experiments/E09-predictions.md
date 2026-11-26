@@ -1,6 +1,6 @@
 # E09 — predictions, registered before the work
 
-**Seat:** executor · **Written:** 2026-08-11, before any solver line was written, before any
+**Role:** executor · **Written:** 2026-08-11, before any solver line was written, before any
 frame was rendered, and before MediaPipe was installed. Committed ahead of every artifact it
 governs, which is the only thing that makes a prediction a prediction.
 
@@ -87,8 +87,8 @@ there. I am not predicting which way that would be "better".
   a larger median magnitude than on the rendered fixture.
 - **H4b — feet are the defect class.** G17 names contact as the dance failure mode; I predict
   the foot-slip diagnostic on the solved dance exceeds the fixture's.
-- **H4c — no threshold is offered.** Whether it is worth a shot is the Director's call at the
-  sheet. Numerator and denominator are reported separately; this seat proposes no pass line.
+- **H4c — no threshold is offered.** Whether it is worth a shot is the maintainer's call at the
+  sheet. Numerator and denominator are reported separately; this session proposes no pass line.
 
 ---
 
@@ -105,7 +105,7 @@ Recorded because it is the useful half.
   both the assumed-convention residual and the best-fit-rotation residual are reported.
 - If the detector locks onto the render's background or a shadow rather than the figure, the
   visibility numbers would look plausible. The gate reports per-landmark presence, and the
-  sheet carries the overlay so the Director can see where the detector thought he was.
+  sheet carries the overlay so the maintainer can see where the detector thought he was.
 
 ---
 
@@ -147,7 +147,7 @@ crediting whichever change I prefer.
   contrast and a more evenly-lit figure. Weak — held at roughly 55 %.
 - **H5e — no quality threshold is offered.** Whether the donor is worth lifting is
   answered by A3's two stated numbers and nothing else; whether the result is worth a shot
-  is the Director's call at the sheet. This seat proposes no additional pass line.
+  is the maintainer's call at the sheet. This session proposes no additional pass line.
 
 ### What would make me wrong in a way I would not notice
 

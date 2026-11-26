@@ -3,7 +3,7 @@
 **Status: HALTED before the first submission. Zero credits spent. Zero generations
 submitted. Zero uploads accepted.**
 
-Executor session, 2026-08-13, worktree `E:\AI\armature-E13`, branch `E13-run`, cut from
+Executor session, 2026-08-13, worktree `<worktree-E13>`, branch `E13-run`, cut from
 `main` at `eb7a0ae`. Spec: [E13-composed-route-probe.md](E13-composed-route-probe.md).
 Predictions committed before any submission: [E13-predictions.md](E13-predictions.md).
 
@@ -20,11 +20,11 @@ anything irreversible.
 
 | check | result |
 |---|---|
-| Worktree exists at `E:\AI\armature-E13`, branch `E13-run` at `eb7a0ae` | present, clean |
+| Worktree exists at `<worktree-E13>`, branch `E13-run` at `eb7a0ae` | present, clean |
 | Branched spec contains both 2026-08-13 amendments (`grep "Amendment — 2026-08-13"` → 2) | **2 hits** — the disclosure note (line 84) and the DISPATCH amendment (line 216) |
-| Binding documents read from `main`, not the worktree | done — and the two were compared. `docs/license-map.md`, `docs/comfy-consult-8.md`, the E13 spec and both E12 reports are **byte-identical between `main` and `E13-run`** (git blob hashes equal; the apparent whole-file `diff` is CRLF in the worktree checkout against LF in the object store) |
-| Terms gate | **CLEARED** at the licence map's wan2.x partner-tier row (Director's CONDITIONAL, 2026-08-12). Not re-litigated |
-| A2 clip sha256 against the pin | **MATCHES** — `b3b43e23f9bc5fb4e173d22815a12eb536e1e456510bf41700fe17e04eb9bd27`, recomputed on `E:\AI\armature-E12\outputs\E12\probe\w3-seed1\w3-seed1.mp4` (1,102,939 bytes). The E12 worktree was read and not written |
+| Binding documents read from `main`, not the worktree | done — and the two were compared. `docs/license-map.md`, `docs/comfy-consult-8.md` (kept privately), the E13 spec and both E12 reports are **byte-identical between `main` and `E13-run`** (git blob hashes equal; the apparent whole-file `diff` is CRLF in the worktree checkout against LF in the object store) |
+| Terms gate | **CLEARED** at the licence map's wan2.x partner-tier row (maintainer's CONDITIONAL, 2026-08-12). Not re-litigated |
+| A2 clip sha256 against the pin | **MATCHES** — `b3b43e23f9bc5fb4e173d22815a12eb536e1e456510bf41700fe17e04eb9bd27`, recomputed on `<worktree-E12>/outputs\E12\probe\w3-seed1\w3-seed1.mp4` (1,102,939 bytes). The E12 worktree was read and not written |
 
 ## 1. The fresh credit re-estimate — the executor's ordered first act
 
@@ -48,7 +48,7 @@ four-submission ceiling binds regardless of what the meter says.
 ## 2. The node contract, re-measured
 
 `Wan2ReferenceVideoApi` was re-measured with `get_node` at the start of this session, because
-it is the contract any graph would be built against and it is a premise of this seat's own
+it is the contract any graph would be built against and it is a premise of this session's own
 dispatch. **It returns byte-consistent with the spec's premise row:** `model.prompt`,
 `model.negative_prompt`, `model.resolution` ∈ {720P, 1080P}, `model.ratio` ∈ {16:9, 9:16,
 1:1, 4:3, 3:4}, `model.duration` INT default 5 (min 2, max 10), `model.reference_images.
@@ -67,7 +67,7 @@ Two properties of that schema matter below and are recorded here rather than in 
 **`model.reference_videos.video1` requires a `VIDEO`, and no route exists to put our clip
 behind one.**
 
-Measured this session, on the Director's pinned clip:
+Measured this session, on the maintainer's pinned clip:
 
 | probe | result |
 |---|---|
@@ -112,10 +112,10 @@ READ-ONLY from facet's tree …) — **MEASURED** (facet canon exists)."*
 
 | location | contents | bearing on A1 |
 |---|---|---|
-| `E:\AI\facet\canon\` | `twin_front.png` (RGB, 752×1024, `a6158790…`) and `twin_back.png` (RGB, `a2be5213…`) — **front and back only**, of a **bearded armoured warrior** | not the A1 set: two views, neither three-quarter nor profile — and **not this character** (below) |
-| whole `E:\AI\facet` tree | 18 PNGs total; the two above are the only ones named for a view | no turnaround set exists in facet's tree |
-| `E:\AI\training\facet_E33\turn_final\` | **8 views, `armfinal_0…7`**, RGBA 352×1024 — the performer mannequin, textured | the only real turnaround of the A2 clip's character; **not in facet's tree**, and defective (below) |
-| `E:\AI\training\facet_E33\turn_clay\`, `turn_clay_300k\` | the same 8 views, untextured grey clay | geometry only — not the character's appearance |
+| `<sibling-facet>/canon\` | `twin_front.png` (RGB, 752×1024, `a6158790…`) and `twin_back.png` (RGB, `a2be5213…`) — **front and back only**, of a **bearded armoured warrior** | not the A1 set: two views, neither three-quarter nor profile — and **not this character** (below) |
+| whole `<sibling-facet>` tree | 18 PNGs total; the two above are the only ones named for a view | no turnaround set exists in facet's tree |
+| `<sibling-training>/facet_E33\turn_final\` | **8 views, `armfinal_0…7`**, RGBA 352×1024 — the performer mannequin, textured | the only real turnaround of the A2 clip's character; **not in facet's tree**, and defective (below) |
+| `<sibling-training>/facet_E33\turn_clay\`, `turn_clay_300k\` | the same 8 views, untextured grey clay | geometry only — not the character's appearance |
 
 **The character mismatch, settled by looking.** I extracted frames 0/30/60/80 from the pinned
 A2 clip. It carries a **wooden/clay jointed lay-figure mannequin** dancing in a bar. facet's
@@ -140,8 +140,8 @@ the mesh's body.
    over the skull, jaw, spine and both hands.
 2. **A baked grey void with no real alpha.** All eight are RGBA in mode, and every one has
    **alpha extrema (255, 255)** — fully opaque everywhere. The background is a flat grey
-   baked into the RGB. This is the precise failure the Director ruled against on 2026-08-12
-   after the E11 probe's grey studio bled through frame 0, and which CLAUDE.md records as the
+   baked into the RGB. This is the precise failure the maintainer ruled against on 2026-08-12
+   after the E11 probe's grey studio bled through frame 0, and which docs/engineering-rules.md records as the
    standing suspect for E08's washed bands. An RGBA file whose alpha is flat 255 is a baked
    void wearing an alpha channel; it does not satisfy the authored-RGBA law, and there is no
    deliberate RGB-composite choice to record because there is no alpha to composite from.
@@ -154,8 +154,8 @@ executor's improvisation.
 
 Enumerated so the advisor rules on measured options rather than on a search:
 
-- **The performer GLBs are on the rig**: `E:\AI\training\facet_E33\performer_300k.glb`
-  (12.75 MB) and `performer_raw.glb` (36.19 MB); `E:\AI\armature-E09\outputs\E09\
+- **The performer GLBs are on the rig**: `<sibling-training>/facet_E33\performer_300k.glb`
+  (12.75 MB) and `performer_raw.glb` (36.19 MB); `<worktree-E09>/outputs\E09\
   b2-a3-lifted\performer_dance_ema.glb` (13.00 MB) is the one E11 begins from.
 - **The renderers exist in-repo**: `tools/stage_render.py` (the control-sequence exporter,
   GLB + shot spec → per-frame channels with a manifest) and `tools/render_performer.py` (a
@@ -173,7 +173,7 @@ Written as gates that have not run, never as a plausible verdict beside an ident
 
 | gate | status |
 |---|---|
-| Terms gate | **CLEARED** — the Director's CONDITIONAL, licence map, 2026-08-12 |
+| Terms gate | **CLEARED** — the maintainer's CONDITIONAL, licence map, 2026-08-12 |
 | Credit-ceiling halt (>900) | **RAN — did not fire.** 424–844 estimated for four |
 | Gate ROUTE | **NOT YET RUN** — no graph was built |
 | Gate S (seed registration) | **NOT YET RUN** — no seeds were minted or registered, because no submission was reached |
@@ -192,7 +192,7 @@ recorded so the work is cheap when it is wanted:
 - Two andon-shaped gaps would need closing before this route could arm, and neither is a
   table row: **`route_gates.SEED_NODES` knows only `KSampler`/`KSamplerAdvanced`**, so on an
   r2v graph `seeds()` returns empty and `gate_s_registration` reports "0 noise-bearing
-  seed(s), all pinned" — a pass having checked nothing, which is the vacuous shape CLAUDE.md
+  seed(s), all pinned" — a pass having checked nothing, which is the vacuous shape docs/engineering-rules.md
   names. And **Gate L's `wan` rules (dim multiple 16, 4n+1 frames, 81-frame horizon) do not
   describe this tier at all**, which constrains by resolution enum, ratio enum and an integer
   duration in seconds. Both are gates that cannot fail as they stand.
@@ -209,7 +209,7 @@ and they persist service-side (E12 w2/w3 §7). Saved cloud workflows delete via 
 UI/API, owner the executor session.
 
 Local artifacts created this session: frame extractions from the A2 clip under the session
-scratchpad only. Nothing was written into `E:\AI\facet`, `E:\AI\training`, or the E12
+scratchpad only. Nothing was written into `<sibling-facet>`, `<sibling-training>`, or the E12
 worktree.
 
 ## 8. What was looked at, at full size
@@ -232,7 +232,7 @@ the route that hold regardless of prompt, seed, or reference choice:
    practice, **stills-only** for us — half its reference contract is behind a bridge that does
    not exist on this API surface.
 2. **The character has no clean, real-alpha turnaround.** The 8-view set that exists is holed
-   on the non-front views and carries the baked grey void the Director ruled out.
+   on the non-front views and carries the baked grey void the maintainer ruled out.
 
 Because A2 is unreachable, **the one-variable comparison the spec was built on — stills versus
 clip, everything else pinned — cannot be run on this tier at all.** That is not a result A1
@@ -255,7 +255,7 @@ rig-local asset gating (the spec's own A1 premise row notes these skip visibly),
 cause was not chased down, because no code changed in this branch and nothing in this run
 depended on those 35. Flagged for the advisor rather than asserted as benign.
 
-## 11. Owed to the Director and the advisor
+## 11. Owed to the maintainer and the advisor
 
 - Whether E13 re-scopes to a stills-only probe (2 submissions), waits for a real-alpha
   turnaround re-render, or is withdrawn from this tier. **The spend decision is his**, and it

@@ -1,6 +1,6 @@
 """The refusals added in the wave-3 core-solvers amend, run under `-O` and PYTHONOPTIMIZE.
 
-CLAUDE.md: *gates raise; they never `assert`* - an `assert` is deleted by `-O` or
+docs/engineering-rules.md#gates-raise-inside-the-step: *gates raise; they never `assert`* - an `assert` is deleted by `-O` or
 `PYTHONOPTIMIZE=1`, and 87 of facet's andons turned out to be removable by an environment
 variable. The assembly and cascade andons already have that probe in their own files
 (`test_assembly.py`, `test_cascade.py`); this covers the ones added elsewhere in the same

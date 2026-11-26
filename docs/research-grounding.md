@@ -1,6 +1,6 @@
 # Research grounding — the founding study-swarm
 
-Run 2026-08-10 by the advisor seat, before any architecture was fixed. Five parallel research
+Run 2026-08-10 by the advisor session, before any architecture was fixed. Five parallel research
 lanes; every finding carries a resolvable identifier. Specs cite these **by number**.
 
 ## Verification record (the gate this passed)
@@ -113,7 +113,7 @@ difference.** — Huang et al. 2023/CVPR 2024, *VBench* (arXiv:2311.17982).
 benchmark showing photo-trained recognizers transfer poorly — Zheng et al. 2019,
 *iCartoonFace* (arXiv:1907.13394). *(unverified-groundedness.)*
 → **ArcFace-family metrics cannot gate identity on stylized game art.** This is now written into
-CLAUDE.md as a rule: a diagnostic that returns numbers on a face it cannot find is noise wearing
+docs/engineering-rules.md as a rule: a diagnostic that returns numbers on a face it cannot find is noise wearing
 a unit.
 
 **F13. Multi-shot narrative benchmarks measure character-recurrence gaps up to 48 shots, and
@@ -148,7 +148,7 @@ extrapolating one direction.** — Wan2.1 FLF2V 2025; Wang et al. 2024, *Framer*
 (arXiv:2410.18978); Wang et al. 2025, *KeyVID* (arXiv:2504.09656). *(unverified-groundedness.)*
 
 **F18. Long-form systems all decompose into shots or keyframe anchors plus assembly, never one
-continuous roll** — StreamingT2V re-anchors each chunk to the first; VideoDirectorGPT plans
+continuous roll** — StreamingT2V re-anchors each chunk to the first; __KEEP_VIDEOMAINTAINERGPT__ plans
 multi-scene before generating; MovieDreamer predicts keyframe anchors then renders; STAGE writes
 a shot-by-shot storyboard and generates between each shot's start/end pair. — Henschel et al.
 2024 (arXiv:2403.14773); Lin et al. 2023 (arXiv:2309.15091); Zhao et al. 2024

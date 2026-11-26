@@ -1,6 +1,6 @@
 """An andon that a caller can disarm by omission (wave-6 core-solvers amend, F-abcb06a8).
 
-CLAUDE.md: a gate lives inside the tool performing the irreversible step and has *no skip
+docs/engineering-rules.md#gates-raise-inside-the-step: a gate lives inside the tool performing the irreversible step and has *no skip
 flag*. An optional keyword IS a skip flag — it just costs one fewer character to use.
 Wave 3 removed exactly this shape from `assembly.gate_batch_topology` by making
 `expected_sources` a required keyword-only argument; this file pins the same removal for
@@ -297,7 +297,7 @@ def _run_probe(tmp_path, *, flag=False, env_var=False):
 )
 def test_every_refusal_added_in_this_amend_survives_optimization(tmp_path, flag, env_var,
                                                                  label):
-    """CLAUDE.md: gates raise, never `assert` — an `assert` is deleted by `-O` or
+    """docs/engineering-rules.md#gates-raise-inside-the-step: gates raise, never `assert` — an `assert` is deleted by `-O` or
     `PYTHONOPTIMIZE=1`, and 87 of facet's andons turned out to be removable by an
     environment variable. Every refusal added in this amend MUTATES the protected thing
     and must still fire with assertions gone."""

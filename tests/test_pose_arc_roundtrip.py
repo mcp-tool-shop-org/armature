@@ -20,7 +20,7 @@ every gate green, and the only instrument that could have said so being a file n
 runs.
 
 The check's contract is now the printed `POSE_ARC <json>` record rather than an exit code
-— CLAUDE.md forbids a shell-chain gate by name, because a chain can walk past a failing
+— docs/engineering-rules.md#gates-raise-inside-the-step forbids a shell-chain gate by name, because a chain can walk past a failing
 exit code. Every test here asserts on that record.
 """
 

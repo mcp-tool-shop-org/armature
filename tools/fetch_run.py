@@ -510,7 +510,7 @@ def timeout_for_jobs(n_jobs):
 
     `CURL_MAX_TIME_S` bounds one request and `DOWNLOAD_THROTTLE` requests run at a time, so
     the worst case is one per-request bound per wave of the throttle, plus the process's own
-    start-up. A global constant must not govern a local feature (CLAUDE.md), and the number
+    start-up. A global constant must not govern a local feature (docs/engineering-rules.md#no-global-constant-for-local-feature), and the number
     printed as `bound=` IS the number passed as `timeout=` — one derivation, so the sentence
     and the enforcement cannot drift.
     """
@@ -577,7 +577,7 @@ def gate_downloader_shell(executable=DOWNLOADER):
 
     The module's stated contract is that a downloader failure is a typed FETCH refusal at
     exit 2, and the most likely environment failure of all — no `pwsh` on `PATH`; the repo
-    requires PowerShell 7.4 in `verify.ps1` and CLAUDE.md, and CI and a fresh clone are not
+    requires PowerShell 7.4 in `verify.ps1` and docs/engineering-rules.md#platform-and-runtime-environment, and CI and a fresh clone are not
     this rig — was the one that was not. This is the crash-where-a-clause-belongs shape wave
     18 closed for `--saved` / `--api` / `--frame` and wave 22 closed for `--dump`; the launch
     was in neither entry's sibling enumeration.
@@ -593,7 +593,7 @@ def gate_downloader_shell(executable=DOWNLOADER):
             f"the downloader {executable!r} is not on PATH, so nothing can be fetched. "
             f"Every clause below the launch decides on the per-job exit record that "
             f"downloader writes, so with no downloader there is no evidence any of them "
-            f"could read; this repo requires PowerShell 7.4 (verify.ps1, CLAUDE.md) and a "
+            f"could read; this repo requires PowerShell 7.4 (verify.ps1, docs/engineering-rules.md#platform-and-runtime-environment) and a "
             f"fresh clone or a CI runner is not this rig",
             {"gate": "FETCH", "andon": "FetchHalt",
              "clause": "downloader_shell_not_found",

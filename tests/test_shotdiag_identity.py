@@ -2,7 +2,7 @@
 
 Loads zero learned models: all embedding tests inject a deterministic numpy patch/CLS
 embedder, and the DINOv2 loader path is tested for its `"weights not present"` refusal,
-its `MeasureWeightGate` handoff, and its missing-runtime refusal (`docs/dispatches/shot-diagnostics-design.md` §5).
+its `MeasureWeightGate` handoff, and its missing-runtime refusal (`docs/dispatches/shot-diagnostics-design.md` §5, kept privately).
 """
 
 import hashlib

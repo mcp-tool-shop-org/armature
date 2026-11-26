@@ -579,7 +579,7 @@ def _repo_root_files_the_suite_reads(root=None, tests_dir=None):
     directory listing, and the literal must be USED as a path rather than merely present
     as a constant.
 
-    Measured 2026-09-04, what the second half removed: `HANDOFF.md` and `README.md` were
+    Measured 2026-09-04, what the second half removed: `HANDOFF.md` (kept privately) and `README.md` were
     in the old population through `tests/test_record_index_binding.py:105/119`, where they
     are payload strings inside a FAKE record — no test opens either file. `README.md` also
     reaches the workflows' paths filters on its own; nothing about this shrink removes a
@@ -617,7 +617,7 @@ def trigger_population():
 
 #: Re-derived on 2026-09-04 (wave 10, F-3a455e7d). Equality, so a new composite action or a
 #: new repo-root file the suite starts READING joins the requirement on the day it lands.
-#: `HANDOFF.md` and `README.md` left at this re-derivation: both were admitted by the old
+#: `HANDOFF.md` (kept privately) and `README.md` left at this re-derivation: both were admitted by the old
 #: constant-only walk through `tests/test_record_index_binding.py:105/119`, where they are
 #: payload strings inside a FAKE record — no test opens either file, so neither is a file
 #: "the suite guards". `README.md` still matches both workflows' path filters on its own.
@@ -630,7 +630,7 @@ RECORDED_TRIGGER_POPULATION = [
     # composite action called by ci.yml and release.yml (F-60ab1bd7); this census saw it
     # appear, which is the direction it exists for. `npm-clean-room` joined at wave 10 the
     # same way (F-3729edd4) — the npm package's half of that leg — and the census saw it too.
-    # WAVE-10 MERGE (coordinator, 2026-09-04): tests' derivation dropped HANDOFF.md and README.md
+    # WAVE-10 MERGE (coordinator, 2026-09-04): tests' derivation dropped HANDOFF.md (kept privately) and README.md
     # (they entered through a fake record's payload strings, not a path-consuming call).
     ".github/actions/clean-room/action.yml", ".github/actions/npm-clean-room/action.yml",
     ".github/actions/sheet-fonts/action.yml",
@@ -2856,7 +2856,7 @@ GUARDED_TODAY = [
     # Joined at wave 10 (core-gates): `tests/test_route_gates.py` reads the licence map's
     # table rows to check that `RULED_COMPONENTS` — which calls itself a MIRROR of that
     # document — carries a row for every kill the map records. The licence gate is a
-    # CLAUDE.md non-negotiable, so a re-fetch that adds or retires a kill is exactly the
+    # docs/engineering-rules.md#licence-gate non-negotiable, so a re-fetch that adds or retires a kill is exactly the
     # change CI must run on. ⚠ SEAM, routed to ci-packaging: ci.yml's `push` and
     # `pull_request` filters carry `docs/experiments/**` and `docs/index/**` and DO NOT
     # cover this file, so `test_ci_runs_on_every_file_the_suite_guards` names it until the

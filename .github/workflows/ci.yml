@@ -2,7 +2,7 @@
 # pushes"), workflow_dispatch fallback, and the required concurrency block.
 #
 # Pages deployment is NO LONGER an open question — it was ruled and it lives in
-# pages.yml. See docs/dispatches/S01-ruling.md §2 for the measurement (71 of 71
+# pages.yml. See `docs/dispatches/S01-ruling.md` §2 (kept privately) for the measurement (71 of 71
 # deploying repos in this org use a workflow build) and why a third workflow
 # file is correct here despite the two-file cap.
 #
@@ -65,10 +65,10 @@ on:
       # .gitignore each have a test file of their own and matched nothing at all.
       - "verify.ps1"
       - ".gitignore"
-      # Named by tests/test_record_index_binding.py's fixtures: the record index binds
-      # these two documents, so a rename or a move is a change the suite has an opinion
-      # about and CI must run on.
-      - "HANDOFF.md"
+      # Named by tests/test_record_index_binding.py / the record index: the record index
+      # binds these documents, so a rename or edit is a change the suite has an opinion about
+      # and CI must run on.
+      - "docs/engineering-rules.md"
       - "README.md"
       - "specs/**"
       - "docs/experiments/**"
@@ -77,12 +77,10 @@ on:
       # is written against, and the suite now OPENS it by path: core-gates' licence-table
       # census parses its rows and resolves the Commercial column against
       # `RULED_COMPONENTS`. A re-fetch that adds or retires a kill is exactly the change CI
-      # must run on — the licence gate is a CLAUDE.md non-negotiable, and a guard that does
+      # must run on — the licence gate is a docs/engineering-rules.md#licence-gate non-negotiable, and a guard that does
       # not run on the change it guards is the shape this filter list exists to close.
       - "docs/license-map.md"
-      # The two documents the suite reads that live one directory DOWN. The census above
-      # keys on `git ls-files -- :(top)` -- repo-ROOT tracked files -- so nothing under a
-      # subdirectory could ever enter it, and these two were consumed and triggered nothing.
+      # The documents under `docs/` read by the suite or guarded by whole-repo hygiene.
       #
       # `docs/research-grounding.md`: `tests/test_openpose_convention.py` asserts the document
       # still carries F20's limbSeq verbatim, so editing it turns CI red. It matched no filter
@@ -100,7 +98,6 @@ on:
       - "docs/assets/**"
       - ".github/dependabot.yml"
       - "CHANGELOG.md"
-      - "CLAUDE.md"
       - "README.es.md"
       - "README.fr.md"
       - "README.hi.md"
@@ -112,8 +109,18 @@ on:
       - "SECURITY.md"
       - "SHIP_GATE.md"
       - "docs/ROADMAP.md"
+      - "docs/audit-first-arc.md"
+      - "docs/comfy-consult-brief-01.md"
       - "docs/publishing.md"
+      - "docs/random-routes.md"
+      - "docs/research-grounding-e08.md"
+      - "docs/research-grounding-movement-library.md"
+      - "docs/research-grounding-verification-gates.md"
       - "docs/tools.md"
+      - "docs/video-provider-field-notes.md"
+      - "docs/wan-video-prompt-guide-notes.md"
+      - "docs/wan21-prompt-guide-notes.md"
+      - "docs/wan26-image-guide-notes.md"
   pull_request:
     paths:
       - "site/**"
@@ -157,7 +164,7 @@ on:
       # Named by tests/test_record_index_binding.py's fixtures: the record index binds
       # these two documents, so a rename or a move is a change the suite has an opinion
       # about and CI must run on.
-      - "HANDOFF.md"
+      - "docs/engineering-rules.md"
       - "README.md"
       - "specs/**"
       - "docs/experiments/**"
@@ -166,12 +173,10 @@ on:
       # is written against, and the suite now OPENS it by path: core-gates' licence-table
       # census parses its rows and resolves the Commercial column against
       # `RULED_COMPONENTS`. A re-fetch that adds or retires a kill is exactly the change CI
-      # must run on — the licence gate is a CLAUDE.md non-negotiable, and a guard that does
+      # must run on — the licence gate is a docs/engineering-rules.md#licence-gate non-negotiable, and a guard that does
       # not run on the change it guards is the shape this filter list exists to close.
       - "docs/license-map.md"
-      # The two documents the suite reads that live one directory DOWN. The census above
-      # keys on `git ls-files -- :(top)` -- repo-ROOT tracked files -- so nothing under a
-      # subdirectory could ever enter it, and these two were consumed and triggered nothing.
+      # The documents under `docs/` read by the suite or guarded by whole-repo hygiene.
       #
       # `docs/research-grounding.md`: `tests/test_openpose_convention.py` asserts the document
       # still carries F20's limbSeq verbatim, so editing it turns CI red. It matched no filter
@@ -189,7 +194,6 @@ on:
       - "docs/assets/**"
       - ".github/dependabot.yml"
       - "CHANGELOG.md"
-      - "CLAUDE.md"
       - "README.es.md"
       - "README.fr.md"
       - "README.hi.md"
@@ -201,8 +205,18 @@ on:
       - "SECURITY.md"
       - "SHIP_GATE.md"
       - "docs/ROADMAP.md"
+      - "docs/audit-first-arc.md"
+      - "docs/comfy-consult-brief-01.md"
       - "docs/publishing.md"
+      - "docs/random-routes.md"
+      - "docs/research-grounding-e08.md"
+      - "docs/research-grounding-movement-library.md"
+      - "docs/research-grounding-verification-gates.md"
       - "docs/tools.md"
+      - "docs/video-provider-field-notes.md"
+      - "docs/wan-video-prompt-guide-notes.md"
+      - "docs/wan21-prompt-guide-notes.md"
+      - "docs/wan26-image-guide-notes.md"
   workflow_dispatch:
 
 concurrency:
@@ -361,7 +375,7 @@ jobs:
       # nothing else here would have noticed the sdist regressing. The specifier is the
       # clean-room action's, character for character; a test holds every copy to one string.
       - name: install test dependencies
-        run: python -m pip install --upgrade pip numpy pillow pytest opencv-python-headless==5.0.0.93 matplotlib==3.11.2 "build>=1.5,<2" "requests>=2.32,<3" "coverage>=7.6,<8"
+        run: python -m pip install --upgrade pip numpy pillow pytest opencv-python-headless==5.0.0.93 matplotlib==3.11.2 "build>=1.5,<2" "requests>=2.32,<3" "coverage>=7.6,<8" "imageio-ffmpeg==0.6.0"
 
       # Python dependency audit on the environment that mirrors `[project] dependencies` /
       # the `[dev]` pins just installed. site/'s `npm audit --audit-level=high` is the npm

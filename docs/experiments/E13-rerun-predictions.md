@@ -14,15 +14,15 @@ prediction.
 turnaround kit, not one frame of the A2 clip, not one survey sheet. Every composite,
 every upload and every sheet in this run comes after this file is committed.
 
-**I am not blind to other seats' written descriptions of the inputs.** Before writing
+**I am not blind to other sessions' written descriptions of the inputs.** Before writing
 this I read, in full: the S03 report (which lists per-view patch locations, the
 interior-mean darkness of the new set against the old, the alpha extrema, and the
 coherence look), the S03 ruling, the E13 halt report, and the E13 halt ruling. So the
 predictions below about *reference defects* — R4 especially — are informed by another
-seat's prose, not by foresight and not by my own eye. Marked where it matters.
+session's prose, not by foresight and not by my own eye. Marked where it matters.
 
 **Blind with respect to every output of this route.** No `wan2.7-r2v` generation exists
-anywhere in this repo's record; no seat has seen one. Nothing on the output side of this
+anywhere in this repo's record; no session has seen one. Nothing on the output side of this
 run has been seen by anyone.
 
 **Two measurements already taken before this file, because the dispatch ordered them
@@ -97,7 +97,7 @@ carries a non-human stylized identity from four authored stills — the stronges
 available to the composed route. If R1 holds while R2 and R3 fail, the tier carries
 *material* but not *character*: a much weaker claim, and one that looks nearly identical
 to the strong one on a contact sheet. That is why the sheets are read at full size and
-why the verdict is the Director's eye rather than any number in the report.
+why the verdict is the maintainer's eye rather than any number in the report.
 
 **S3 against R2 is the arm comparison** — reference modality is the one variable, and
 that clause is the whole reason two arms exist. If the probe fails and E13 runs

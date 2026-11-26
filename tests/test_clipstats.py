@@ -2,7 +2,7 @@
 
     what value does this take when the arm does nothing, and when it works perfectly?
 
-The law is CLAUDE.md's — grade an arm only on what it can move — and the fixture that
+The law is docs/engineering-rules.md#grade-arm-on-what-it-moves's — grade an arm only on what it can move — and the fixture that
 matters most here is `test_a_moving_subject_does_not_move_the_horizon`, because that is the
 entire claim that makes `horizon_row` a camera measurement rather than a fourth way of
 noticing that something in the picture changed.
@@ -88,7 +88,7 @@ def test_distinct_frames_counts_a_clip_that_froze_as_one():
 def test_the_byte_count_cannot_fail_on_a_decoded_clip_and_the_pixel_count_can():
     """F-4ba279bf, wave 25 — the reason the pixel half exists.
 
-    CLAUDE.md: "A file-hash mismatch is not evidence a render changed. Compare pixels;
+    docs/engineering-rules.md#pixel-comparison-not-file-hash: "A file-hash mismatch is not evidence a render changed. Compare pixels;
     reserve byte-hashes for artifacts whose bytes are the contract." Here the bytes are not
     the contract, the pictures are.
 

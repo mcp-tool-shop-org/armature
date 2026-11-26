@@ -26,7 +26,7 @@ Two things this refuses to emit a payload without:
 * **Gate L** (`g1_generator_legality`) is called here, in the function that builds the
   thing that gets submitted — not chained behind a shell `&&`, which can walk past a
   failing exit code. Illegal frames never reach the wire.
-* **Link topology is verified in code.** CLAUDE.md is explicit that a `dry_run` PASS does
+* **Link topology is verified in code.** docs/engineering-rules.md#served-templates-and-gate-route is explicit that a `dry_run` PASS does
   not prove link sanity, and E02 measured why: `dry_run` accepted a `LoadImage` naming a
   file that does not exist, without a warning.
 

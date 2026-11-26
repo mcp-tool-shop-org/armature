@@ -1179,7 +1179,7 @@ def main():
     scene.collection.objects.link(cam)
     scene.camera = cam
 
-    # THE ALPHA LAW (CLAUDE.md, the maintainer's ruling 2026-08-12). `film_transparent`
+    # THE ALPHA LAW (docs/engineering-rules.md#alpha-law, the maintainer's ruling 2026-08-12). `film_transparent`
     # makes the WORLD background alpha 0 while the subject's own geometry stays opaque,
     # so what becomes transparent is exactly the void the law is about and nothing else.
     # There is no composite here on purpose: this tool's deliverable IS the RGBA master,

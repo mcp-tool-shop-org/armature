@@ -1,7 +1,7 @@
 """Exception types for the exporter.
 
 Every gate raises one of these. **None of them is an AssertionError**, and none of
-them is produced by an `assert` statement — CLAUDE.md: an `assert` is deleted by
+them is produced by an `assert` statement — docs/engineering-rules.md#gates-raise-inside-the-step: an `assert` is deleted by
 `-O` or `PYTHONOPTIMIZE=1`, and 87 of facet's ANDONs turned out to be removable by
 an environment variable. A `raise` is not.
 """

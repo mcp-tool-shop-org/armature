@@ -1,6 +1,6 @@
 # E11 — report: the GLB hands the model one frame, and the model keeps him and replaces the world
 
-**Seat: executor**, branch `E11-nocontrol`, worktree `E:\AI\armature-E11`, from `main` at
+**Role: executor**, branch `E11-nocontrol`, worktree `<worktree-E11>`, from `main` at
 `309664a`. **One generation** (`prompt_id` `ecedbe1c-8658-4119-8151-cfa693db1c50`, seed
 `2026081231`). Reserve seeds `2026081232` and `2026081233` **unspent**. **No gate fired.**
 
@@ -12,7 +12,7 @@
 > is changed or superseded by that run**; the reserve count above is (one spent, one left).
 
 This report carries measurements, gate states and predictions against outcomes. It contains
-no judgement of whether the footage is good; the Director's eye is the verifier of record
+no judgement of whether the footage is good; the maintainer's eye is the verifier of record
 and the advisor rules on what the measurements mean.
 
 **Look first:** the two-pipeline sheet this experiment exists for —
@@ -21,7 +21,7 @@ probe, same prompt, both 65 frames at their own native 16 fps so neither arm is 
 retimed. Then `outputs/E11/sheets/E11-gate0.png` at full size, then the 0.50× / 8 fps clip
 from `lossless/`, then the face and hand strips.
 
-**The two things this seat can state without judging them.** With no driving signal, no
+**The two things this session can state without judging them.** With no driving signal, no
 reference image and no clip-vision embedding, the figure's identity features — the bald
 head, the drawn brow, eye, nose and mouth, the mitten hands, the visible ball joints —
 **are present in every frame inspected at full size, including the last.** And the world
@@ -53,7 +53,7 @@ property of the route; it is one observation.
 `tools/render_start_frame.py` + `armature_core/startframe.py`, tests riding the commit.
 
 **What was rendered.** Frame 0 of the E09 A3 baseline dance — the same instant E08's clip
-begins at — from `E:\AI\armature-E09\outputs\E09\b2-a3-lifted\performer_dance_ema.glb`,
+begins at — from `<worktree-E09>/outputs\E09\b2-a3-lifted\performer_dance_ema.glb`,
 sha256 `cd4e2f6ee85ef536130cebe27fe2282f1bb1eba02a6c410d999e4f2351ea0c17`, which **matches
 the value E09 recorded and E08 re-verified**. The pose was chosen for comparability before
 anything was rendered, and was not swapped after looking at it.
@@ -241,7 +241,7 @@ parameterised test asserting that none of those eight literals can appear.
 **Gate B, stated for what it proves here.** On the driven route Gate B guards a 65-frame
 pack. Here the uploaded artifact is one image, and it is the *entire* image conditioning of
 the generation — so the check is narrower and more load-bearing at once: the bytes the model
-saw at frame 0 are this seat's rendered bytes, as evidence rather than as an assertion.
+saw at frame 0 are this session's rendered bytes, as evidence rather than as an assertion.
 
 **One capture is weaker than it looks, disclosed.** The saved projection was captured by
 **transcribing `get_saved_workflow`'s result into a file**, not by a byte-stream download —
@@ -311,7 +311,7 @@ numpy's throughout, on both arms.
 E08's — that is the scene being replaced — and its remaining three quarters are **quieter
 than E08's**: 0.175 / 0.994 / 0.074 against 0.953 / 0.856 / 0.092. Set beside E10's median
 of 9.05 on the driven route, E11's 0.210 over the whole clip is two orders of magnitude
-smaller. This seat measured that; it does not claim a cause.
+smaller. This session measured that; it does not claim a cause.
 
 ### The camera diagnostic, and what it can and cannot separate
 
@@ -402,7 +402,7 @@ persist as pale streaks on the torso and arms through f64.
 ## 9. Predictions versus outcomes
 
 Registered blind at `fefab12`, committed before the submission and before any E11 output
-existed. Blindness is disclosed in the predictions file itself: this seat had seen the start
+existed. Blindness is disclosed in the predictions file itself: this session had seen the start
 frame at full size (the law requires looking before an upload) and both prior reports with
 their outcomes, and had seen no E11 output of any kind.
 
@@ -410,7 +410,7 @@ their outcomes, and had seen no E11 output of any kind.
 |---|---|---|
 | **a1** terracotta / bald jointed-mannequin read survives to the final frame — 70 % | survives | **SPLIT, and predicted as one clause.** The bald jointed-mannequin read survives plainly; the *terracotta* hue reads paler and glazier from f32. Two properties in one clause — the same error E08's report made at the elbows and knees, one level finer than it was applied. |
 | **a2** no visible drift in the first 16 frames — 80 % | none | **HIT.** Head, face, mitten hands and ball joints all present through f16. |
-| **a3** visible drift somewhere in the clip — 65 % | drift | **MISS.** Under the definition registered before the fact, no named feature was absent or replaced while it remained in frame. The definition is also **partly untestable in the last quarter**, because the push-in removed two of the four named features from the frame — a collision the definition did not anticipate and this seat did not foresee. |
+| **a3** visible drift somewhere in the clip — 65 % | drift | **MISS.** Under the definition registered before the fact, no named feature was absent or replaced while it remained in frame. The definition is also **partly untestable in the last quarter**, because the push-in removed two of the four named features from the frame — a collision the definition did not anticipate and this session did not foresee. |
 | **a4** the face still reads as a face at the final frame — 50 % | maybe | **HIT.** Brow, eye, nose and mouth at f64 at 3×. |
 | **a5** knee and hip ball joints survive to the final frame — 60 % | survive | **NOT TESTABLE at the final frame** — cropped out. Present at f48, the last frame in which they are in frame. |
 | **a6** no frame resolves fingers — 85 % | none | **HIT** across the crops inspected. |
@@ -438,7 +438,7 @@ an I2V generation begins from its start frame *literally*, so a prompt asking fo
 an image of a grey studio is asking the model to replace what it can see, and that this
 would cost the scene clause heavily. The premise is right and the conclusion was backwards:
 **the start frame anchored the subject and was discarded as a constraint on the world inside
-about eight frames.** The two things this seat weighted are the two that inverted — I
+about eight frames.** The two things this session weighted are the two that inverted — I
 predicted the character would be the fragile part and the room the sticky part, and the run
 did the opposite on both.
 
@@ -525,7 +525,7 @@ and some tests require what is in it — E10's caveat, carried.
 | uploaded start frame `adcab015…dedc3e9dd.png` | delete server-side (Comfy Cloud inputs) | **present; owner executor** |
 | saved cloud workflow `armature-E11-probe-i2v` (`cc9aca96-f3b3-4154-9c33-9b6c36c1af09`) | delete server-side | present; owner executor |
 | downloaded outputs under `outputs/E11/` | delete the directories | written; owner executor |
-| the temporary baseline worktree `E:\AI\armature-E11-mainbase` | `git worktree remove --force` | **already removed** |
+| the temporary baseline worktree `<worktree-E11-mainbase>` | `git worktree remove --force` | **already removed** |
 | worktree + branch `E11-nocontrol` | `git worktree remove` + branch delete | owner advisor, after the ruling |
 
 **Every uploaded artifact is listed above with its named undo.** One upload, one saved
@@ -569,13 +569,13 @@ Measured here, with no authority to rule on any of it.
    why: transcription, not a byte-stream download.
 8. **E08's frame-delta median is 3.95 under one convention and 3.917 under another.** Both
    are computed in §7 so a fourth report does not re-derive it.
-9. **One error in this seat's own drafting, caught before the commit and recorded rather
+9. **One error in this session's own drafting, caught before the commit and recorded rather
    than quietly fixed.** The first draft of §2's table carried a camera target and radius
-   this seat had never read — plausible numbers beside real ones, which is precisely the
-   placeholder-shaped-like-evidence failure CLAUDE.md names. They were replaced with the
+   this session had never read — plausible numbers beside real ones, which is precisely the
+   placeholder-shaped-like-evidence failure docs/engineering-rules.md names. They were replaced with the
    values in `start_frame_provenance.json` (target `[-0.0153, -0.0306, -0.0713]`, radius
    2.4808). Nothing else in the report was derived from the wrong pair, and every other
    number in it was read from a file or a tool's own output. The general lesson is the one
    the repo already carries: a table is where invented values look most like measured ones.
 
-The Director judges identity and motion, on the two-pipeline sheet at true tempo.
+The maintainer judges identity and motion, on the two-pipeline sheet at true tempo.

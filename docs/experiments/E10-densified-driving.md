@@ -1,15 +1,15 @@
 # E10 — densified driving: the same dance, more in-betweens
 
-**Seat: executor (run on Opus) · new branch `E10-density` from `main`, fresh worktree
-`E:\AI\armature-E10`** · **Ceiling: ≤ 2 generations** (1 probe + 1 reserve on a named
+**Role: executor (run on Opus) · new branch `E10-density` from `main`, fresh worktree
+`<worktree-E10>`** · **Ceiling: ≤ 2 generations** (1 probe + 1 reserve on a named
 cause); the route bills GPU-hours (`estimate_credits` re-confirmed 0 before submission);
 both meters reported. **Spec written 2026-08-12 by the advisor, before the work, at the
-Director's direction: densify the in-betweens with proper rotation interpolation and drive
+Maintainer's direction: densify the in-betweens with proper rotation interpolation and drive
 81-frame sticks.**
 
 ## Trajectory
 
-The Director's eye named the first shot's motion choppy. The motion is 3D and ours, so the
+The maintainer's eye named the first shot's motion choppy. The motion is 3D and ours, so the
 cheapest lever is upstream of the model: give it denser driving. This experiment measures
 that one lever — it teaches whether driving density moves painted smoothness, which prices
 every future shot's stick budget, and it exercises the movement-library format (a motion
@@ -62,7 +62,7 @@ red on a graph with no latent and no supplied frame values.
 - **H-E10a (the driving signal):** the densified sticks measure smoother — per-keypoint
   second-difference drops vs the 65-frame sticks (the diagnostic that makes attribution
   causal rather than vibes). Executor predicts the drop blind.
-- **H-E10b (the painted result):** chop visibly reduced at the Director's eye, judged on
+- **H-E10b (the painted result):** chop visibly reduced at the maintainer's eye, judged on
   true-tempo A/B clips. No threshold invented; his eye rules.
 - **H-E10c (tempo):** the E10 clip's dance duration matches E08's within one frame at true
   tempo — densification did not slow the performance.
@@ -80,12 +80,12 @@ pattern) · ceiling by generation count · watchdog before local renders. A fire
 
 ## Deliverables and the report
 
-The A/B the Director judges: **true-tempo encodes side by side** — E08's painted probe vs
+The A/B the maintainer judges: **true-tempo encodes side by side** — E08's painted probe vs
 E10's — plus the standard 0.5× / 8 fps review pair from lossless, the Gate 0 sheet
 (previz | sticks | painted | reference, provenance block), stills at arms mid-swing where
 chop lived. Report `docs/experiments/E10-report.md`: the stick-level smoothness numbers
 (H-E10a) beside the eye's verdict space, both meters, gate states, predictions vs outcomes
-with blindness disclosed. The advisor rules; the Director judges the motion.
+with blindness disclosed. The advisor rules; the maintainer judges the motion.
 
 ## Out of scope
 
@@ -101,7 +101,7 @@ pad A/B · aspect / figure size · the reference set · anything touching identi
 | NAMED_COMPENSATORS | 2 | uploads deletable server-side; bounded spend; worktree/branch table as E08's |
 | DECOMPOSE_BY_SECRETS | 2 | resampler = pure module apart from render/encode shells |
 | UNCERTAINTY_GATED_HUMANS | 2 | blind H-degrees; H-E10d names the null outcome as a priced result |
-| EXTERNAL_VERIFIER | 2 | analytic slerp tests + the Director's eye on true-tempo A/B; the executor judges nothing |
+| EXTERNAL_VERIFIER | 2 | analytic slerp tests + the maintainer's eye on true-tempo A/B; the executor judges nothing |
 
 ## Amendments
 

@@ -46,24 +46,47 @@
   ],
   "changes": {
     "fileCounts": {
-      "added": 0,
-      "changed": 1,
+      "added": 1,
+      "changed": 208,
       "moved": 0,
-      "parts": 1,
-      "removed": 0
+      "parts": 7,
+      "removed": 50
     },
     "items": [
       {
+        "kind": "door",
+        "sentence": "ci's pull request trigger now also names `docs/audit-first-arc.md`, `docs/comfy-consult-brief-01.md`, `docs/engineering-rules.md`, `docs/random-routes.md`, `docs/research-grounding-e08.md`, `docs/research-grounding-movement-library.md`, `docs/research-grounding-verification-gates.md`, `docs/video-provider-field-notes.md`, `docs/wan-video-prompt-guide-notes.md`, `docs/wan21-prompt-guide-notes.md` and `docs/wan26-image-guide-notes.md` and no longer names `CLAUDE.md` and `HANDOFF.md`.",
+        "subjects": [
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "kind": "door",
+        "sentence": "ci's push trigger now also names `docs/audit-first-arc.md`, `docs/comfy-consult-brief-01.md`, `docs/engineering-rules.md`, `docs/random-routes.md`, `docs/research-grounding-e08.md`, `docs/research-grounding-movement-library.md`, `docs/research-grounding-verification-gates.md`, `docs/video-provider-field-notes.md`, `docs/wan-video-prompt-guide-notes.md`, `docs/wan21-prompt-guide-notes.md` and `docs/wan26-image-guide-notes.md` and no longer names `CLAUDE.md` and `HANDOFF.md`.",
+        "subjects": [
+          ".github/workflows/ci.yml"
+        ]
+      },
+      {
+        "kind": "landing",
+        "sentence": "docs/engineering-rules.md is now read by docs/index/armature.db.cert.json and docs/index/conventions.json.",
+        "subjects": [
+          "docs/engineering-rules.md",
+          "docs/index/armature.db.cert.json",
+          "docs/index/conventions.json"
+        ]
+      },
+      {
         "kind": "counts",
-        "sentence": "Nothing structural changed since 2026-11-26; 1 file changed content.",
+        "sentence": "1 file added, 50 removed and 208 changed content, across 7 parts.",
         "subjects": []
       }
     ],
     "since": {
-      "commit": "6994e0c0df04692d03c91f336f7db14a9aece89d",
-      "generatedAt": "2026-11-26T01:13:28.233Z"
+      "commit": "efc656b269c67f9c39a8b40ec2d37ba3143d31cd",
+      "generatedAt": "2026-11-26T01:46:07.586Z"
     },
-    "unchanged": true
+    "unchanged": false
   },
   "changesTogether": [
     {
@@ -143,10 +166,10 @@
     }
   ],
   "changesTogetherNote": [
-    "Window: 180 days; a pair counts from 10 shared commits, since 103 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
+    "Window: 180 days; a pair counts from 10 shared commits, since 102 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do."
   ],
   "changesTogetherWithTests": 0,
-  "commit": "efc656b269c67f9c39a8b40ec2d37ba3143d31cd",
+  "commit": "3a3fd4bd94fb62ba521d2a59686445c94a951f15",
   "defaultBranch": "main",
   "derived": "8 parts, mostly Python (327 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.",
   "doors": [
@@ -195,8 +218,8 @@
       "sends": [],
       "stages": [],
       "triggers": [
-        "on a pull request touching 37 paths",
-        "on a push touching 37 paths",
+        "on a pull request touching 46 paths",
+        "on a push touching 46 paths",
         "or by hand"
       ]
     },
@@ -334,7 +357,7 @@
   ],
   "engine": "1.26.0",
   "generated": [],
-  "generatedAt": "2026-11-26T01:46:07.586Z",
+  "generatedAt": "2026-11-26T03:57:47.750Z",
   "limits": [
     "43 imports could not be resolved: `tests/blender/test_check_pack.py` imports `conftest`, which is no module on its import path and no declared dependency; `tests/blender_stub.py` imports a path built at run time; `tests/conftest.py` imports a path built at run time; and 40 more.",
     "118 writes and 75 reads use paths built at run time and are not named here.",

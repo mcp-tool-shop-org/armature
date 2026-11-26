@@ -5,7 +5,7 @@
 Separate **rigid parts** articulating at the sculpted ball joints, each parented to its bone.
 **No armature modifier, no vertex weights, no deformation anywhere.** Commissioned after both
 deforming arms failed at the maintainer's eye — ruled a hard fail — on the ranked
-recommendation of Comfy Agent consult #5 (`docs/comfy-consult-5.md`), whose atlas-survives
+recommendation of Comfy Agent consult #5 (`docs/comfy-consult-5.md`, kept privately), whose atlas-survives
 promise the advisor calibrated on this exact performer before any of this was scripted:
 298,366 of 298,366 far-from-cut faces came through a full-mesh bisect with **byte-identical
 UVs**, 0 changed and 0 missing.
@@ -39,7 +39,7 @@ GLB -- so `--name` goes through `armature_core.parts.single_path_segment`, the t
 one bound on a pasted name, exactly as `preview_glb --name` does. The source GLB is
 opened read-only.
 
-Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Named because docs/engineering-rules.md#named-compensators's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
 Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
 question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
 the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
@@ -599,7 +599,7 @@ def main():
 
     manifest = {
         "tool": "rig_parts", "tool_version": TOOL_VERSION, "arm": "c — rigid parts",
-        "commissioned_by": "Comfy Agent consult #5 (docs/comfy-consult-5.md), ranked first",
+        "commissioned_by": "Comfy Agent consult #5 (`docs/comfy-consult-5.md`, kept privately), ranked first",
         "calibration_cited": ("full-mesh bisect on this performer: 298,366 of 298,366 "
                               "far-from-cut faces byte-identical UVs, 0 changed, 0 missing; "
                               "1,590 cut-band faces split to 1,980 with interpolated UVs"),

@@ -1,6 +1,6 @@
 # E04 — predictions, registered before the first submission
 
-**Seat:** executor · **Registered:** 2026-08-10 · **Blind status: see below, and it is not a
+**Role:** executor · **Registered:** 2026-08-10 · **Blind status: see below, and it is not a
 clean yes.** · Committed to git before any new generation was submitted; the commit
 timestamp is what makes this a prediction rather than a description.
 
@@ -152,7 +152,7 @@ no mechanism for would be noise wearing a prediction's clothes.
 |---|---|
 | planned | **10 generations** — 5 new seeds × 2 conditions |
 | reused, costing nothing | **2** — A0r1 (C-bright seed 1) and A1b (C-dark seed 1), both already on disk and hash-verified |
-| **projected cost** | **40 credits** (premise 3: 4 credits per generation, MEASURED in E02 from the Director's balance delta 14,284 → 14,280) |
+| **projected cost** | **40 credits** (premise 3: 4 credits per generation, MEASURED in E02 from the maintainer's balance delta 14,284 → 14,280) |
 | **ceiling** | **12 generations / 48 credits** — 2 held in reserve for a fired gate |
 | Gate C | halts if any submission would take the count past 12 |
 

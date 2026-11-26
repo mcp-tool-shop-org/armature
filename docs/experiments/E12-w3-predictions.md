@@ -1,10 +1,10 @@
 # E12 wave 3 — predictions, registered before submission
 
-**Executor seat, 2026-08-12, branch `E12-run`. Committed BEFORE `submit_workflow` is called
+**Executor session, 2026-08-12, branch `E12-run`. Committed BEFORE `submit_workflow` is called
 on any wave-3 graph.**
 
 **Blindness, disclosed.** Blind with respect to **every wave-3 generation** — none exists.
-**Not** blind with respect to: wave 2's two clips, which this seat measured and looked at at
+**Not** blind with respect to: wave 2's two clips, which this session measured and looked at at
 full size; the advisor's H-E12b, sealed in the spec (*deformation REDUCED · hands still
 fail*); or the catalog's recommendation, re-read today. This is the weakest blindness of any
 prediction set in this experiment, because wave 3 is a re-run of a clip I have already seen
@@ -32,7 +32,7 @@ negative: byte-pinned to wave 2.
 
 b1/b2 sit near a coin-flip on purpose. cfg 6.0 is a *stronger* guidance term, and stronger
 guidance is as capable of hardening a deformity as of removing it; `uni_pc` at 20 steps is
-the catalog's pairing for that cfg, not an independent quality lever. This seat does not have
+the catalog's pairing for that cfg, not an independent quality lever. This session does not have
 a mechanism that predicts reduction, only a catalog recommendation — and the whole point of
 the rung is that a recommendation is not a measurement.
 
@@ -58,7 +58,7 @@ wave changes nothing about the conditioning image.
 | q5 | horizon detector still returns 0/81 — the instrument, not the camera | 85 % |
 | q6 | frame-delta median moves by less than 1.0 against wave 2's 4.454 / 3.947 | 50 % |
 
-## What would make this seat wrong in an interesting way
+## What would make this session wrong in an interesting way
 
 If deformation is visibly reduced on both seeds, the catalog's recommendation was worth more
 than a wave of held trajectory and the arc's five-generation habit of holding wave 1's numbers
@@ -68,5 +68,5 @@ useful and equally a full success. If nothing visibly changes, the honest report
 rung cost two generations to close a premise that never mattered, and that is worth knowing
 before it is carried into every future shot.
 
-**A negative result is a full success. This seat will not tune toward a number, and there are
+**A negative result is a full success. This session will not tune toward a number, and there are
 no re-runs: a gate that fires ends the wave where it stands.**

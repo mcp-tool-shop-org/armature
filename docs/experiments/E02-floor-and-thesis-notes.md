@@ -39,7 +39,7 @@ cheaper and stronger than the spec assumed. The early/late split remains mandato
 read off a **video**, and is moot on `lossless/`.
 
 Their P1 missed too — registered 0 bit-identical pairs, measured 3 — and they say so plainly.
-Two seats predicted nondeterminism and the machine was deterministic.
+Two sessions predicted nondeterminism and the machine was deterministic.
 
 ## 2. A2 — the null is not empty, and that is the most useful result so far
 
@@ -102,7 +102,7 @@ which is correct and is the right instinct.
 
 **Admitted as a reported diagnostic; it gates nothing and decides nothing.** It has the one
 property this repo demands of a metric — it takes clearly different values when the thing is
-present and absent — but it has not been validated against an artifact the Director rejected,
+present and absent — but it has not been validated against an artifact the maintainer rejected,
 which is the bar for promotion. Report it; never accept an arm on it.
 
 ## 6. My own instrument, caught and dropped
@@ -118,6 +118,6 @@ than dress it in a broken number.
 
 - **6 of 12 generations spent.** Floor: zero. Gates L, B, C, 0: passed. Gate R: N/A, retained.
 - **Unrun: A1b (polarity, P2) and A3 (Fun-Control cross-check, P4).**
-- **P3 — whether the character is in the same place at the same time — is the Director's**, on
+- **P3 — whether the character is in the same place at the same time — is the maintainer's**, on
   the panel at full size. My reading is that A1a holds placement and timing and A2 does not, but
   the panel is his to judge and the eye is the verifier of record here.

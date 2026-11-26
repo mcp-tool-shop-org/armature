@@ -1,9 +1,9 @@
 # E14 — the LoRA scene lever: the bake-off (spec)
 
-**Status:** SPEC + DISPATCH-READY — written 2026-08-13 on the Director's word (the
+**Status:** SPEC + DISPATCH-READY — written 2026-08-13 on the maintainer's word (the
 LoRA lever named by him; shape 1, the bake-off, picked by him from the contrastive
 fork). **Route:** the free route at its E12 baseline. **Branch/worktree:** `E14-run`
-at `E:\AI\armature-E14`. **Zero partner credits** — the free route is GPU-hour
+at `<worktree-E14>`. **Zero partner credits** — the free route is GPU-hour
 metered; any partner-credit estimate above 0 halts.
 
 | Trajectory | A style LoRA is a scene-defining lever the studio does not have to hand-build: if a served adapter can re-author the look of a held world without dissolving the character, the scope gains art-directed footage at zero marginal authoring cost — and the measurement bounds the studio's future canon-trained video LoRA (the long-game version of the same lever, custom path recorded open in consult #10 R5). A null is a full result: it prices the lever honestly. |
@@ -13,7 +13,7 @@ metered; any partner-credit estimate above 0 halts.
 
 On the free route's proven baseline — a handed world that holds, at 6.0 / uni_pc —
 what does one style LoRA at its trained strength do to **the world** (the scene it
-defines), **the subject** (identity at the Director's eye), and **the camera hold**
+defines), **the subject** (identity at the maintainer's eye), and **the camera hold**
 beneath both?
 
 ## Candidates and the licence gate (already run — 2026-08-13 fetch pass)
@@ -29,10 +29,10 @@ left the running pair and S entered it. Do not read the stable count as a stable
 > page-rendering — an instrument the same-day API grant-matrix pass proved weaker, in
 > both directions. Read the amendment before wiring anything.
 
-| arm | LoRA (served filename) | look (per the Director's memo, corrected) | licence |
+| arm | LoRA (served filename) | look (per the maintainer's memo, corrected) | licence |
 |---|---|---|---|
 | **T** — runs | `wan22-14b-t2v-technically_color.safetensors` | three-strip Technicolor: saturated primaries, deep blacks, high-contrast studio key | ⚑ **corrected — not "Apache-2.0"**: that badge was the base model's. The creator's grant matrix is `["RentCivit","Rent","Image"]` with `allowNoCredit: false` → **YES, and published footage credits renderartist** |
-| ~~**C**~~ — **WITHDRAWN, never ran** | ~~`wan22-candid_photography.safetensors`~~ | ~~street-photography framing, unposed behavior, natural ambient light~~ | ⚑ **the "Apache-2.0, fetched" in this row was this seat's fetch error** — again the base model's badge, not the LoRA's grant. The matrix is `["RentCivit"]` alone: both rights this route needs are withheld. **NO** |
+| ~~**C**~~ — **WITHDRAWN, never ran** | ~~`wan22-candid_photography.safetensors`~~ | ~~street-photography framing, unposed behavior, natural ambient light~~ | ⚑ **the "Apache-2.0, fetched" in this row was this session's fetch error** — again the base model's badge, not the LoRA's grant. The matrix is `["RentCivit"]` alone: both rights this route needs are withheld. **NO** |
 | **S** — runs (entered by the amendment) | the SmartphoneSnapshot v3 **pair**, tier-matched: `WAN2.2-HighNoise_…_v3_….safetensors.safetensors` → high-noise expert · `WAN2.2-LowNoise_…_v3_….safetensors` → low-noise expert | candid mobile-camera realism | `["Image","RentCivit","Rent","Sell"]`, `allowNoCredit: true` — the most permissive grant in the field |
 
 Dead at the gate, recorded not waved: the instareal pair (the Instara licence bans use
@@ -40,7 +40,7 @@ on any generation service — the route itself is the banned act) · ~~80s_fanta
 (no licence displayed; Wan versions are T2I)~~ ⚑ **upgraded from an absence to a
 retrieved kill:** the grant matrix withholds `Rent` — third-party generation-service
 use, which is exactly this route. Still dead, now on its own document · ~~SmartphoneSnapshot
-v3 (origin terms unretrieved)~~ ⚑ **REVIVED — the terms were retrieved on the Director's
+v3 (origin terms unretrieved)~~ ⚑ **REVIVED — the terms were retrieved on the maintainer's
 ask; it is arm S above** · vintage_film_grain (source unlocated) · dark_ghibli (excluded
 before any fetch — the no-anime law). Any revival enters through a fresh document only —
 as S's did, and as 80s_fantasy's could not.
@@ -48,12 +48,12 @@ as S's did, and as 80s_fantasy's could not.
 ## Design — the bake-off, not the sweep
 
 Each arm = **the byte-pinned E12 wave-3 graph + the arm's LoRA, nothing else moved.**
-The comparison reference is the **existing E12 wave-3 seed-1 record** (the Director's
+The comparison reference is the **existing E12 wave-3 seed-1 record** (the maintainer's
 ruled-strongest result) — no baseline re-generation. Two generations total.
 
 - Seed **2026081233** (E12's seed 1), explicit, Gate-S registered. **One seed, and the
   two-seed scene law is not violated because the bake-off claims no property:** its
-  outputs are candidates for the Director's eye, and whichever look he picks earns the
+  outputs are candidates for the maintainer's eye, and whichever look he picks earns the
   property-grade follow-on (the strength sweep, two seeds, its own spec).
 - Strength **1.0** both arms (the trained behavior; consult #10: served default 1).
 - **Wiring convention, pinned:** the single served file loads via `LoraLoaderModelOnly`
@@ -103,7 +103,7 @@ finding for that arm only).
 
 Per arm, before any number: a **baseline (E12 w3 s1 frame) | arm output | reference |
 provenance** sheet, frames where structure is hardest (the figure, the crowd, the
-bar's fixtures), clips in motion AND as frames. **The Director's eye rules three
+bar's fixtures), clips in motion AND as frames. **The maintainer's eye rules three
 things separately: the scene the LoRA defines, whether the subject is still his
 character, and whether the camera hold survived.** Single-run comparison: no numeric
 claims ride it (no noise floor on this tier); `measure_clip` diagnostics ride the
@@ -115,10 +115,10 @@ the world.
 
 | id | clause | prediction |
 |---|---|---|
-| H-E14a | each arm produces a Director-legible look transform at 1.0 | T: YES, strongly legible; ~~C~~ **→ S** (transferred by the amendment, still blind — no E14 artifact exists): YES but subtle — candid-phone realism is closer to the baseline's look than Technicolor is |
+| H-E14a | each arm produces a maintainer-legible look transform at 1.0 | T: YES, strongly legible; ~~C~~ **→ S** (transferred by the amendment, still blind — no E14 artifact exists): YES but subtle — candid-phone realism is closer to the baseline's look than Technicolor is |
 | H-E14b | the subject reads as the same character at his eye | holds on **both** arms — but with visible re-styling pressure on at least one (the unscoped-lever lesson, E12 R3); the crowd re-styles before the subject does |
 | H-E14c | the Static camera hold survives | YES, both arms |
-| H-E14d | the transfer premise binds at all (visible LoRA effect on derivative weights) | YES on both — a null on either would be the tier/derivative-mismatch finding, and it is the prediction this seat is least certain of |
+| H-E14d | the transfer premise binds at all (visible LoRA effect on derivative weights) | YES on both — a null on either would be the tier/derivative-mismatch finding, and it is the prediction this session is least certain of |
 
 ## Per-route disclosure (measurement addendum)
 
@@ -143,17 +143,17 @@ reviving gate-dead candidates (fresh documents only).
 | ANDON_AUTHORITY | 3 | LEDGER/ROUTE/PAIR/S/L/B plus the credit halt, all raising in-tool; arms independent so one andon cannot silently kill the other |
 | NAMED_COMPENSATORS | 2 | no uploads (the start image is already hosted); saved workflows listed with deletes per convention; GPU-hour spend has no compensator — the two-generation ceiling is the honest treatment |
 | DECOMPOSE_BY_SECRETS | 3 | one variable per arm (LoRA identity), strength and seed frozen; the sweep is deliberately a separate future spec |
-| UNCERTAINTY_GATED_HUMANS | 3 | the licence gate ran before the spec; the Director picked the shape contrastively; his eye is the sole verdict on all three judged axes |
+| UNCERTAINTY_GATED_HUMANS | 3 | the licence gate ran before the spec; the maintainer picked the shape contrastively; his eye is the sole verdict on all three judged axes |
 | EXTERNAL_VERIFIER | 2 | no model grades its own output; the standing human verifier rules; pixel-level Gate B decode-checks ride each arm |
 
 ## Amendment — 2026-08-13: the arms reshuffle on the sharper instrument (pre-dispatch)
 
-On the Director's ask to revive two gate-dead candidates, the fetch pass re-ran through
+On the maintainer's ask to revive two gate-dead candidates, the fetch pass re-ran through
 CivitAI's **structured API grant matrix** — a sharper instrument than page rendering —
 and the field reshuffled before anything ran. Corrections in the licence map, same day,
 owned there; the operative changes to this spec:
 
-- **Arm C (candid_photography) is WITHDRAWN — its YES was this seat's fetch error.**
+- **Arm C (candid_photography) is WITHDRAWN — its YES was this session's fetch error.**
   The API grant is `["RentCivit"]` alone: no image-commercial right, no
   third-party-service right. The page's "Apache 2.0" was the base model's badge. The
   arm never ran; nothing to unwind.
@@ -164,7 +164,7 @@ owned there; the operative changes to this spec:
   wiring: one loader per expert, tier-matched — **a crossed pair (HIGH on low or LOW on
   high) is the named Gate-PAIR-class wiring error and the ledger record must make the
   attachment visible.** Grant `["Image","RentCivit","Rent","Sell"]`, no-credit allowed.
-  Look (the Director's memo): candid mobile-camera realism.
+  Look (the maintainer's memo): candid mobile-camera realism.
 - **Arm T stands** (technically_color, single file on both experts) **with one added
   obligation:** the creator's grant requires credit (`allowNoCredit: false`) — published
   footage from arm T carries a credits-line for renderartist, recorded in the

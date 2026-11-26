@@ -638,7 +638,7 @@ def test_omitting_the_seed_with_no_registry_names_the_missing_flag():
 # appeared in no comparison and in no problems.append condition, so the sha256 of the
 # re-authored start frame — the single load-bearing control input of an i2v route, and the
 # artifact the alpha ruling governs — was an optional operator-typed string riding the
-# record unverified, reading as null when omitted. CLAUDE.md requires every generation to
+# record unverified, reading as null when omitted. docs/engineering-rules.md#reproducible-generation-records requires every generation to
 # record control-input hashes.
 
 
@@ -928,3 +928,20 @@ def test_the_reader_still_declines_to_GUESS_and_the_RESOLVER_is_what_refuses(tmp
     junk = tmp_path / "x.png"
     junk.write_bytes(b"this is not a png" * 4)
     assert B.png_header(str(junk)) is None
+
+
+def test_build_positive_records_call_time_twin_prompt_json_source(tmp_path, monkeypatch):
+    """Part 6: carried_verbatim['source'] records the path actually loaded, not import-time TWIN_PROMPT_JSON."""
+    import json
+    import build_animate_payload as E08
+
+    call_time_json = tmp_path / "call_time_twin.json"
+    call_time_json.write_text(
+        json.dumps({"_entry_verbatim": "A sculpted clay performer, plain pale grey background, soft studio light."}),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(E08, "TWIN_PROMPT_JSON", str(tmp_path / "import_time_other.json"))
+    monkeypatch.setenv("ARMATURE_TWIN_PROMPT_JSON", str(call_time_json))
+
+    _positive, log = B.build_prompt()
+    assert log["carried_verbatim"]["source"] == os.path.abspath(str(call_time_json))

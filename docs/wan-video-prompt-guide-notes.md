@@ -1,10 +1,10 @@
 # Wan video prompt guide — distilled notes (official-docs translation)
 
-**Provenance.** Retrieved by the Director on 2026-08-12 as `Wan_AI_Prompt_Guide_EN.md`,
+**Provenance.** Retrieved by the maintainer on 2026-08-12 as `Wan_AI_Prompt_Guide_EN.md`,
 self-described "Translated and compiled from official DingTalk Alidocs developer
 documentation for Wan AI." Form: a compact translation/compilation — undated, no
 byline — the closest document to the official video prompt guide this repo has held;
-the raw DingTalk original stays reachable via the Director's proven export path if
+the raw DingTalk original stays reachable via the maintainer's proven export path if
 byte-fidelity ever matters. This closes the admin-shelf item. It supersedes
 `docs/wan21-prompt-guide-notes.md` as the primary video-prompting reference; the 2.1
 rendition is kept for its fuller camera/atmosphere/style vocabulary.
@@ -51,7 +51,7 @@ rhymes with consult #7's narration shelf (beats → camera → chaining →
 area-scheduling). Which of our runnable models honor timeline blocks is a catalog
 question for the consult channel before any spec leans on this syntax.
 
-## Wan 2.6+ reference-video mode — flagged for the Director
+## Wan 2.6+ reference-video mode — flagged for the maintainer
 
 `@Character` identity tags lock a pre-uploaded character reference or digital actor
 into the generation (max two characters; quoted dialogue after a tag invokes lip-sync

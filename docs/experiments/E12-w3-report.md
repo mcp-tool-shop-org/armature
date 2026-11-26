@@ -1,6 +1,6 @@
 # E12 wave 3 — report: the catalog settings held the figure and cost the crowd
 
-**Executor seat, 2026-08-12, branch `E12-run`.** The settings rung: arm A2w, same start frame,
+**Executor session, 2026-08-12, branch `E12-run`.** The settings rung: arm A2w, same start frame,
 same two seeds, **cfg 3.5 → 6.0 and `sampler_name` euler → `uni_pc`, nothing else moved.**
 **Two generations spent; 4 of 6. A1w's two remain unspent.** No gate fired.
 
@@ -18,7 +18,7 @@ settings, side by side at full size.
 
 ## 1. Exactly two fields moved, proven by diff
 
-Per the Director's instruction, field-by-field against the wave-2 graphs. **Both seeds, seven
+Per the maintainer's instruction, field-by-field against the wave-2 graphs. **Both seeds, seven
 differing fields each:**
 
 | node | field | wave 2 | wave 3 |
@@ -94,15 +94,15 @@ present at f80.
 
 Every persistence number moved the same way: **roughly double the per-frame change, and a
 markedly lower correlation to frame 0.** Read plainly, the wave-3 clips move more and end further
-from where they started. This seat does **not** read that as "worse" — the figure is visibly
+from where they started. This session does **not** read that as "worse" — the figure is visibly
 better preserved in the same clips — and offers it as the measured shape of the trade, for the
-Director's eye to rule on. The horizon detector returned 0/81 again on both, as predicted; it
+Maintainer's eye to rule on. The horizon detector returned 0/81 again on both, as predicted; it
 remains a detector limit on a plate with no authored seam.
 
 ## 6. Predictions versus outcomes
 
 Registered blind at `docs/experiments/E12-w3-predictions.md`, committed before submission, with the
-weakest blindness in the experiment disclosed there: a re-run of clips this seat had already seen.
+weakest blindness in the experiment disclosed there: a re-run of clips this session had already seen.
 
 | # | claim | degree | outcome |
 |---|---|---|---|
@@ -120,12 +120,12 @@ weakest blindness in the experiment disclosed there: a re-run of clips this seat
 | q5 | horizon still 0/81 | 85 % | **HIT** |
 | q6 | frame-delta median moves < 1.0 | 50 % | **MISS** — it roughly doubled on both seeds |
 
-**b1/b2/b4 were coin-flips and all three landed on the catalog's side.** This seat wrote that it
+**b1/b2/b4 were coin-flips and all three landed on the catalog's side.** This session wrote that it
 had "no mechanism that predicts reduction, only a catalog recommendation," and the recommendation
 was right where the held trajectory was not. **The ASSUMED premise carried since E11 wave 3 —
 that wave 1's cfg/sampler transfer to the Fun-Camera weights — resolves against the assumption.**
 
-The w2 miss is the more useful one: this seat predicted the world was insulated from a sampler
+The w2 miss is the more useful one: this session predicted the world was insulated from a sampler
 change and it was not. *The room* was insulated; *the people in it* were not, because the lever
 that preserved the subject also pushed the subject's description onto everything else.
 
@@ -135,7 +135,7 @@ that preserved the subject also pushed the subject's description onto everything
 |---|---|
 | `estimate_credits` | **0** |
 | generations spent | **4 of 6** (wave 2 ×2, wave 3 ×2). A1w's two unspent |
-| remaining | **2**, unallocated — the Director's |
+| remaining | **2**, unallocated — the maintainer's |
 | suite | **962 passed, 48 skipped** |
 
 **Uploads and cloud artifacts, with their deletes.**
@@ -155,8 +155,8 @@ outstanding.
 ## 9. Open, for the ruling
 
 1. **The settings premise is resolved against the held trajectory**, on two seeds, at one
-   comparison. Whether 6.0/uni_pc becomes the arc's default is the Director's call, not this
-   seat's — and if it does, every earlier number in the arc was measured on the other setting.
+   comparison. Whether 6.0/uni_pc becomes the arc's default is the maintainer's call, not this
+   session's — and if it does, every earlier number in the arc was measured on the other setting.
 2. **The identity clause is unscoped.** The crowd-to-mannequin conversion is a prompt-scope
    problem the higher cfg exposed rather than created. A prompt that bounds the identity clause to
    the subject is the obvious next lever, and it is **out of E12's scope** — prompt changes are

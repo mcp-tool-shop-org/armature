@@ -1,6 +1,6 @@
 # E11 wave 2 — blind predictions, registered before the first submission
 
-**Executor seat, 2026-08-12, on branch `E11-nocontrol`.** Committed BEFORE
+**Executor session, 2026-08-12, on branch `E11-nocontrol`.** Committed BEFORE
 `submit_workflow` is called on the wave-2 graph. Nothing of wave 2 has been generated: the
 graph is built, gated and saved, and no job exists.
 
@@ -10,14 +10,14 @@ graph is built, gated and saved, and no job exists.
 writing; there is nothing to have peeked at.
 
 **NOT blind with respect to wave 1**, and that matters for reading these numbers. Before
-writing them this seat had read `E11-report.md` and `E11-probe-ruling.md` in full, and had
+writing them this session had read `E11-report.md` and `E11-probe-ruling.md` in full, and had
 looked at wave 1's start frame and its frame 64 at full size. Every degree below is
 therefore an informed prior conditioned on wave 1, not a naive one — which makes a MISS more
 informative than usual, since the prior had the sibling run to lean on.
 
 ## The two levers, and why nothing below may be attributed to either alone
 
-Wave 2 is a **composed** wave by the Director's direction: the camera embedding and the
+Wave 2 is a **composed** wave by the maintainer's direction: the camera embedding and the
 prompt surgery move together. These predictions are about OUTCOMES, not about which lever
 produced them. No clause below should be read as evidence for the camera embedding or for
 the prompt in isolation, and the report will not read them that way.
@@ -60,7 +60,7 @@ e1–e3 are deliberately low for a wave whose whole point is holding the camera:
 instrument needs a surviving room, and h1 below says the room probably does not survive. e4
 and e6 are the clauses that actually test the lever.
 
-## H-E11f — motion character (the Director's diagnosis under test)
+## H-E11f — motion character (the maintainer's diagnosis under test)
 
 His wave-1 reading was **drunken wobble, not a dance**, and his diagnosis was that the bar
 language pulled the performance toward it. The prompt surgery is that diagnosis operationalised.
@@ -70,9 +70,9 @@ language pulled the performance toward it. The prompt surgery is that diagnosis 
 | f1 | median per-frame delta exceeds wave 1's 5.282 | median over 64 adjacent-frame pairs, 0–255 mean abs | **60 %** |
 | f2 | 65 of 65 frames distinct | count | **90 %** |
 | f3 | at least one frame shows both arms above shoulder height | one frame, binary, read at full size | **45 %** |
-| f4 | the Director calls the motion a dance rather than a wobble | **his eye — this seat does not judge it** | **45 %** |
+| f4 | the maintainer calls the motion a dance rather than a wobble | **his eye — this session does not judge it** | **45 %** |
 
-f4 is recorded as a degree only so the seat is on the record with a number it can be wrong
+f4 is recorded as a degree only so the session is on the record with a number it can be wrong
 about. **The verdict is his and no measurement here substitutes for it.**
 
 ## H-E11g — the hands (genuinely uncertain, and the prior says so)
@@ -85,7 +85,7 @@ geometry that has none.
 
 | # | claim | unit | degree |
 |---|---|---|---|
-| g1 | hands read as clearly better than wave 1's claw at full size | two crops, this seat's description only — the Director judges | **20 %** |
+| g1 | hands read as clearly better than wave 1's claw at full size | two crops, this session's description only — the maintainer judges | **20 %** |
 | g2 | hands read as clearly worse than wave 1's | same | **35 %** |
 | g3 | at least one frame shows a hand with separated fingers | one frame, binary, full size | **15 %** |
 

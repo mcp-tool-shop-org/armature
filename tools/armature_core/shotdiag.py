@@ -1,9 +1,9 @@
 """Shot diagnostics: Tier A two-view camera error and masked subject identity.
 
-Both instruments here are **diagnostics** (`CLAUDE.md`):
+Both instruments here are **diagnostics** (`docs/engineering-rules.md#diagnostics-versus-gates`):
 - Camera error is printed first in every report and carries no pass/fail threshold;
   `followed` reads `"NO THRESHOLD — CALIBRATION NOT YET RUN"` until calibration runs on
-  the F0, N and G populations (`docs/dispatches/shot-diagnostics-design.md` §2.5).
+  the F0, N and G populations (`docs/dispatches/shot-diagnostics-design.md` §2.5, kept privately).
 - Masked identity rides under the camera block, never without it, and **gates nothing**.
   This module defines **no `GateFailure` subclass** (`ShotDiagError` is a plain input/shape
   refusal with `gate: None`). Weight licence checks live in `armature_core.measure_weights`

@@ -12,7 +12,7 @@ Runs `armature_core.shotdiag` over a directory of numerically named lossless `NN
 frames (the `VAEDecode` tap — never a re-encoded video) and writes one JSON record with the
 `camera` block first and the optional `identity` block after it.
 
-**Rulings implemented (`docs/dispatches/shot-diagnostics-design.md`):**
+**Rulings implemented (`docs/dispatches/shot-diagnostics-design.md`, kept privately):**
 - **Camera error is REPORT ONLY (D1).** Printed first in every report with no pass/fail and
   no threshold; `followed` reads `"NO THRESHOLD — CALIBRATION NOT YET RUN"` until calibration
   runs on the F0, N and G populations.

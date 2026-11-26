@@ -18,7 +18,7 @@ a bridge certified only on depth is not certified for normal, and this tool refu
 let that confusion happen silently: `--survey` reports every candidate encoding against
 *both* a grayscale and a true-RGB probe, and the gate fires on the one actually used.
 
-**Diagnostic and gate are different objects** (CLAUDE.md). `survey_codecs` measures and
+**Diagnostic and gate are different objects** (docs/engineering-rules.md#diagnostics-versus-gates). `survey_codecs` measures and
 returns a table; `gates.gate_r_round_trip` raises. Recommendations
 (`recommended_gray` / `recommended_rgb`) pin the next encode for `--codec=auto` /
 `--codec-from=`; they do not replace Gate R.
@@ -125,10 +125,18 @@ def _resolve_ffmpeg(env=None, imageio_getter=None, which_fn=None):
 
 def ffmpeg_source():
     """Return the active source tag ('env', 'imageio_ffmpeg', 'path', or 'none')."""
-    return "env" if "ARMATURE_FFMPEG" in os.environ else FFMPEG_SOURCE
+    env_val = os.environ.get("ARMATURE_FFMPEG")
+    if env_val and FFMPEG == env_val:
+        return "env"
+    if FFMPEG == _IMPORT_FFMPEG:
+        return FFMPEG_SOURCE
+    if not FFMPEG:
+        return "none"
+    return FFMPEG_SOURCE if FFMPEG_SOURCE != "env" else "path"
 
 
 FFMPEG, FFMPEG_SOURCE = _resolve_ffmpeg()
+_IMPORT_FFMPEG = FFMPEG
 
 # Candidate bridges, in the order the spec prefers them. `container` matters as much as
 # the codec: FFV1 needs a container that will carry it, and mp4 will not.
@@ -190,7 +198,7 @@ class EncodeFailure(ArmatureError):
 
 
 #: The wall-clock allowance for one ffmpeg call, in three DERIVED pieces rather than one
-#: fixed number: a global constant must not govern a local feature (CLAUDE.md), and the
+#: fixed number: a global constant must not govern a local feature (docs/engineering-rules.md#no-global-constant-for-local-feature), and the
 #: same ceiling cannot honestly bound a header probe of a 39-byte download and a
 #: 500-frame lossless encode. `FFMPEG_STARTUP_S` covers process start, container open and
 #: the stream probe itself; the other two are charged against the structure each call is
@@ -462,7 +470,7 @@ def gate_ffmpeg_binary():
             f"of the losslessness proof run through this one binary",
             {"gate": "ARGS", "andon": "EncodeFailure",
              "clause": "ffmpeg_binary_not_found", "ffmpeg": FFMPEG,
-             "from_env": "ARMATURE_FFMPEG" in os.environ,
+             "from_env": ffmpeg_source() == "env",
              "env_var": "ARMATURE_FFMPEG"})
     return FFMPEG
 
@@ -877,7 +885,7 @@ def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
         "stream": bool(stream),
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
-        "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        "ffmpeg_from_env": ffmpeg_source() == "env",
         "ffmpeg_source": ffmpeg_source(),
         **runtime_provenance({"numpy": np, "Pillow": Image}),
         "channels": channels,
@@ -1039,7 +1047,7 @@ def encode_stream_png_sequence(frames_dir, path, codec, fps=16, invert=False,
             "codec_args": CODECS[codec]["args"],
             "ffmpeg": FFMPEG,
             "ffmpeg_version": ffmpeg_version(),
-            "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+            "ffmpeg_from_env": ffmpeg_source() == "env",
             "ffmpeg_source": ffmpeg_source(),
             **runtime_provenance({"numpy": np, "Pillow": Image}),
             "video": path,
@@ -1105,7 +1113,7 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
         # `measure_cascade_clip`) already recorded it; the one that PRODUCES did not.
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
-        "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        "ffmpeg_from_env": ffmpeg_source() == "env",
         "ffmpeg_source": ffmpeg_source(),
         # F-2ad4f715: the interpreter and imaging libs beside the ffmpeg key — a receipt
         # that names the encoder but not the Python cannot attribute a re-measured gap.

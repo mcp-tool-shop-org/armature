@@ -6,7 +6,7 @@
         --seeds=specs/E09-A3-seeds.json [--record=<payload-record.json>] \\
         [--ledger=<path>] --dry-run
 
-Placement (b) from docs/grok-consult-1-brief.md. Build-time gates alone are not enough:
+Placement (b) from `docs/grok-consult-1-brief.md` (kept privately). Build-time gates alone are not enough:
 a hand-edited or stale graph can still be submitted outside every Gate ROUTE/S/L this
 repo already enforces. This tool refuses unless the admission record's digests match the
 files on disk, re-runs verify + Gate S (+ Gate L via verify) inside THIS process, counts

@@ -1,7 +1,7 @@
 """Synthetic CPU tests for `MeasureWeightGate` (`L1`–`L3`, `M1`, and mirror invariants).
 
 Tests run with stdlib + synthetic byte files only; no model or weight is downloaded or loaded
-(`docs/dispatches/shot-diagnostics-design.md` §4.3, §5).
+(`docs/dispatches/shot-diagnostics-design.md` §4.3, §5, kept privately).
 """
 
 import builtins

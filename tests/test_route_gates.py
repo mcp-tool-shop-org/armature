@@ -821,7 +821,7 @@ def test_a_checked_seed_clause_still_says_so():
 # --- `allow` may wave a methodology ruling, never a licence one (F-9602ad65) ------
 
 def test_allow_cannot_wave_a_non_commercial_weight():
-    """CLAUDE.md's non-negotiable: no non-commercially-licensed weight anywhere in the
+    """docs/engineering-rules.md#licence-gate's non-negotiable: no non-commercially-licensed weight anywhere in the
     pipeline, including experiments. One keyword argument used to move causvid (CC-BY-NC)
     through with a verdict that said nothing about it."""
     g = graph(top=CLEAN_TOP + [loader(9, "Wan21_CausVid_14B_T2V_lora_rank32.safetensors",
@@ -1774,7 +1774,7 @@ def test_the_int_cases_every_builder_supplies_today_still_pass():
 # only one is machine-read.
 #
 # What is recorded here rather than ruled: adding ALLOWED rows for base weights is a
-# LICENCE judgement about which map row governs which served filename, and CLAUDE.md puts
+# LICENCE judgement about which map row governs which served filename, and docs/engineering-rules.md#licence-gate puts
 # that in "a license check recorded in the spec that introduces it". docs/license-map.md
 # is the coordinator's and read-only from this domain. So this census states what IS true
 # of the mirror today, and goes red the moment the map gains a kill the table does not

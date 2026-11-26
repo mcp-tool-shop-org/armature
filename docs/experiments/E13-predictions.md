@@ -8,7 +8,7 @@ route deserves a prediction committed while its outcome was still unavailable.
 ## Blindness, stated exactly
 
 **Blind with respect to every E13 artifact.** No E13 generation exists, none was submitted,
-and no output of this route has been seen by this seat.
+and no output of this route has been seen by this session.
 
 **Not blind with respect to the inputs.** When these were written I had already looked, at
 full size, at: the A2 reference clip's frames (0/30/60/80), facet's `twin_front.png` /
@@ -29,7 +29,7 @@ it is.
 
 The advisor's H-E13a–d were written blind at spec time and are not restated here. Mine differ
 in one deliberate way: each conjunction is split, because a compound clause that comes out
-half-right cannot be scored (CLAUDE.md — predict each clause of a conjunction separately).
+half-right cannot be scored (docs/engineering-rules.md — predict each clause of a conjunction separately).
 
 | id | clause | prediction | reasoning |
 |---|---|---|---|
@@ -46,4 +46,4 @@ P2 and P3 are the load-bearing pair. If both hold, the tier carries a non-human 
 identity from stills alone — the result the composed route would be adopted on. If P1 holds
 while P2 and P3 fail, the tier carries *material* but not *character*, which is a much weaker
 product claim. Those two outcomes look similar on a contact sheet and separate at the
-Director's zoom, which is where they belong.
+Maintainer's zoom, which is where they belong.

@@ -71,7 +71,7 @@ Il pacchetto npm è un **lanciatore, non una porta**: reimplementare una soglia 
 
 ## Stato: la tesi viene valutata a livello del prodotto
 
-Fondato il **10-08-2026**. Tredici esperimenti sono stati completati e la tesi è passata dallo stato di *in fase di test* a **misurata a livello di prodotto**: il personaggio ha eseguito una danza sullo schermo, guidato dal suo sistema di animazione e libero; un mondo creato manualmente si mantiene fino all'ultimo fotogramma su due configurazioni (E12) e **l'identità ora sopravvive in un ambiente ospitato, addestrato da esseri umani, alimentato solo con riferimenti creati dall'autore** (E13); tutto è valutato dallo sguardo del manutentore. L'audit dell'arco di fondazione è disponibile all'indirizzo [docs/audit-first-arc.md](docs/audit-first-arc.md); l'approccio a partire dal 2026-08-12 è un monorepository per l'apprendimento: gli esperimenti dimostrano i percorsi; nessun percorso è canonico per inerzia (CLAUDE.md).
+Fondato il **10-08-2026**. Tredici esperimenti sono stati completati e la tesi è passata dallo stato di *in fase di test* a **misurata a livello di prodotto**: il personaggio ha eseguito una danza sullo schermo, guidato dal suo sistema di animazione e libero; un mondo creato manualmente si mantiene fino all'ultimo fotogramma su due configurazioni (E12) e **l'identità ora sopravvive in un ambiente ospitato, addestrato da esseri umani, alimentato solo con riferimenti creati dall'autore** (E13); tutto è valutato dallo sguardo del manutentore. L'audit dell'arco di fondazione è disponibile all'indirizzo [docs/audit-first-arc.md](docs/audit-first-arc.md); l'approccio a partire dal 2026-08-12 è un monorepository per l'apprendimento: gli esperimenti dimostrano i percorsi; nessun percorso è canonico per inerzia ([docs/engineering-rules.md](docs/engineering-rules.md)).
 
 | | |
 |---|---|
@@ -111,7 +111,7 @@ Una risposta negativa rimane un successo completo qui: il fallimento di E11 ha p
 
 ## Come funziona questo repository
 
-- [CLAUDE.md](CLAUDE.md) — come lavorare qui: i tre ruoli, le regole a cui è soggetto ogni ruolo e gli aspetti non negoziabili (il gate della licenza, crediti limitati, l'identità viene valutata visivamente).
+- [docs/engineering-rules.md](docs/engineering-rules.md) — le regole di ingegneria che il codice fa rispettare (il gate della licenza, crediti limitati, gate che sollevano eccezioni anziché usare `assert`, e l'identità valutata visivamente).
 - [docs/ROADMAP.md](docs/ROADMAP.md) — l'intero processo di sviluppo, sessione per sessione, con i punti critici identificati in anticipo.
 - `docs/experiments/` — ogni modifica significativa viene eseguita come un esperimento numerato:
 **specifiche prima del lavoro → report dopo → valutazione finale dell'esperto.**

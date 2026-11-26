@@ -1,14 +1,14 @@
 # E09 — report: the clean chain, calibrated to the point where it stopped
 
-**Seat:** executor · **Run:** 2026-08-11 · **Worktree** `E:\AI\armature-E09`, branch
+**Role:** executor · **Run:** 2026-08-11 · **Worktree** `<worktree-E09>`, branch
 `E09-run` · **Spec:** [E09-clean-chain-calibration.md](E09-clean-chain-calibration.md) ·
 **Predictions registered before the work:** [E09-predictions.md](E09-predictions.md),
 commit `e7b4db5`, ahead of every artifact below.
 
-**Credits spent: 0 of the ceiling of 8. Nothing was submitted to Comfy Cloud by this seat.**
+**Credits spent: 0 of the ceiling of 8. Nothing was submitted to Comfy Cloud by this session.**
 Stage A and Stage B1 ran in full. **Stage B2 halted before its first submission on a gate
 that fired with evidence.** Measurements only below; no judgement words, and no verdict on
-whether any of it is good — that is the Director's at the sheets.
+whether any of it is good — that is the maintainer's at the sheets.
 
 ---
 
@@ -17,7 +17,7 @@ whether any of it is good — that is the Director's at the sheets.
 | meter | reading |
 |---|---|
 | **Credits** | **0.** No `submit_workflow`, `run_template` or `run_saved_workflow` call was made. Every Comfy Cloud call this session was read-only: `list_saved_workflows`, `get_saved_workflow`, `search_templates`, `get_template`, `get_template_schema`, `get_usage_report`, `get_queue`. Account queue read `{running: 0, pending: 0}` at halt; no `prompt_id` exists on disk or in this transcript. |
-| **GPU-hours (cloud)** | **0 attributable to this seat** — no cloud job ran. The workspace invoice line for 2026-08-11 reads $3.636 of *GPU Hours Product* for the whole account across all sessions; none of it is this seat's, and it is quoted only so the number is not mistaken for zero account-wide. |
+| **GPU-hours (cloud)** | **0 attributable to this session** — no cloud job ran. The workspace invoice line for 2026-08-11 reads $3.636 of *GPU Hours Product* for the whole account across all sessions; none of it is this session's, and it is quoted only so the number is not mistaken for zero account-wide. |
 | **GPU (local)** | Four headless Blender passes on the RTX 5090: the walk authoring, and three 65-frame render passes (source 1080p, the empty plate, the lifted 1080p). Wall clock is in each provenance sidecar's `elapsed_s`. The VRAM watchdog was verified alive before the first one and reported `kill@ VRAM 31200 MiB / RAM 90% / temp 87C`. |
 
 ## 2. Gate states
@@ -44,7 +44,7 @@ whether any of it is good — that is the Director's at the sheets.
 
 ## 3. Environment, pinned
 
-`E:\AI\armature\.venv` — Python **3.14.5**, `mediapipe` **1.0.0**, `numpy` **2.5.2**,
+`.venv` — Python **3.14.5**, `mediapipe` **1.0.0**, `numpy` **2.5.2**,
 `pillow` **12.3.0**, `pytest` 9.1.1. `trellis2-env` was not touched.
 
 Detector model: **`pose_landmarker_heavy.task`**, fetched from the **versioned** asset path
@@ -251,7 +251,7 @@ camera for the sheet.
 `outputs/E09/sheets/E09-B1-lift.png` (sha256 `9c74074d86ebbd28…`) — **source | what the
 detector saw | the rig performing the solved lift**, frames 0/16/32/48/64, cropped to the
 union of the subject's own pixels measured against the empty plate. Full 1920×1080 frames
-stay on disk uncropped for the Director's zoom. Built before any number in §5.3 was
+stay on disk uncropped for the maintainer's zoom. Built before any number in §5.3 was
 written into this report.
 
 ---
@@ -289,12 +289,12 @@ Gate L was run standalone and the spec's requested shape is legal: **832×480×6
 = 52, 480/16 = 30, 65 = 4·16+1, ≤ 81 trained horizon. The shape is fine; there is no served
 route on which it can be set.
 
-### 6.3 Why this seat stopped rather than building one
+### 6.3 Why this session stopped rather than building one
 
 Reaching the spec's B2 from here means deleting two LoRA loaders and rewiring around them,
 moving the samplers off the 4-step/cfg-1 trajectory, defeating `randomize` and pinning a
 seed, and re-pointing the frame-count computation. That is **rebuilding the route, not
-running it** — and this repo halted E08 twice, at real cost, on exactly the shape of a seat
+running it** — and this repo halted E08 twice, at real cost, on exactly the shape of a session
 re-cutting a route under itself. The executor rules say stop at every gate and never
 improvise past one; the advisor rules on what a fired gate means.
 
@@ -360,8 +360,8 @@ hashes above.
 |---|---|---|
 | cloud credits | none exists | **nothing spent** |
 | uploads to Comfy Cloud | delete server-side | **none made** |
-| venv `E:\AI\armature\.venv` | `Remove-Item -Recurse` | created; owner executor |
-| detector model at `E:\AI-Models\mediapipe\` | delete the file | downloaded, 30.7 MB |
+| venv `.venv` | `Remove-Item -Recurse` | created; owner executor |
+| detector model at `<models-dir>/mediapipe/` | delete the file | downloaded, 30.7 MB |
 | `outputs/E09/` | delete the directory | written; owner executor |
 | worktree + branch `E09-run` | `git worktree remove` + branch delete | owner advisor, after the ruling |
 
@@ -373,10 +373,10 @@ written into facet's or E07's trees.
 
 # Part 2 — Stage B2, run under amendment A2
 
-**Appended 2026-08-11 by the same executor seat, after
+**Appended 2026-08-11 by the same executor session, after
 [E09-calibration-ruling.md](E09-calibration-ruling.md).** Stages A and B1 above stand as
 ruled; the B2 halt was upheld and B2 re-scoped to the clean in-repo graph commissioned by
-R8. **One probe generation ran.** Measurements only; no judgement words. The Director
+R8. **One probe generation ran.** Measurements only; no judgement words. The maintainer
 judges the sheet.
 
 ## 10. The meters, part 2
@@ -397,7 +397,7 @@ judges the sheet.
 | **Gate S** | **PASS** — seed list committed at `1017558`, *before* the graph was built. One noise-bearing seed, `20260811`, pinned `fixed`, drawn from the committed list; the low-noise expert's seed is inert (`add_noise=disable`) and is reported rather than demanded |
 | **Gate L** | **PASS on the actual graph** — 832×480×65: 832/16 = 52, 480/16 = 30, 65 = 4·16+1, ≤ 81 |
 | **Gate C** | **PASS** — priced at 0 credits before submission; ceiling 8 not approached |
-| dry-run pre-flight | **PASS**, no warnings — and it did *not* stand in for the in-code checks, per CLAUDE.md |
+| dry-run pre-flight | **PASS**, no warnings — and it did *not* stand in for the in-code checks, per docs/engineering-rules.md |
 | **detection** (B2) | **PASS — a pose on 65 of 65 frames** |
 | **lossless tap** | **PASS** — 65 PNGs straight off the `VAEDecode`, which is what the review was cut from |
 | Gate N / OBJ / SPACE / MOTION_RECORD / ARRIVED | **PASS** — applier on the solved dance, `ARRIVED` max 5.348e-06 against 1.069e-04 |
@@ -536,7 +536,7 @@ built before any number above was written into this report.
 
 The source column is shown **uncropped at 832×480** and the reason is recorded on the sheet
 itself: a generated clip has no empty plate to difference against, and cropping to the
-detector's own landmarks would let the instrument on trial choose what the Director sees.
+detector's own landmarks would let the instrument on trial choose what the maintainer sees.
 The lifted column is cropped against its own empty plate.
 
 Review materials, from `lossless/` and nothing else:
@@ -559,7 +559,7 @@ Registered blind at `e7b4db5`, before any B2 work.
 |---|---|---|---|
 | **H4a** — frame-to-frame solved-rotation change larger on the generated clip than on the rendered fixture | B2 > B1 | B2 **0.539°** vs B1 **16.69°** — B2 is **31× smaller** | **MISS, and reversed.** The prediction assumed a generated dance would move at least as much as the authored walk. The measured confound is in the source itself: mean consecutive-frame pixel difference 0.703/255, i.e. the dancer is nearly static, so there is little motion for jitter to ride on |
 | **H4b** — the foot-slip diagnostic on the solved dance exceeds the fixture's | B2 > B1 | max per-contact slip B2 **0.0442** vs B1 **0.3370**; numerator 0.2483 vs 3.8515 | **MISS on the stated comparison.** Feet were the defect class, but for a reason the prediction did not name: they were **never observed at all** — outside the image on 100 % of frames — so the foot landmarks are extrapolations, not slippage |
-| **H4c** — no threshold offered; numerator and denominator reported separately; worth-a-shot is the Director's call | — | held throughout | **HELD** |
+| **H4c** — no threshold offered; numerator and denominator reported separately; worth-a-shot is the maintainer's call | — | held throughout | **HELD** |
 
 Three of the six blind clauses across H2/H3/H4 have now missed, and every one of them
 missed on *which thing would be weak* rather than on magnitude.
@@ -591,7 +591,7 @@ Suite after B2: **442 passed, 35 skipped.**
 | the probe generation | **none exists** — spent GPU-hours have no undo | one generation, reserve unspent |
 | saved cloud workflow `armature-E09-B2-t2v-clean` | delete server-side | present; owner executor |
 | downloaded outputs under `outputs/E09/b2-*` | delete the directories | written; owner executor |
-| `E:\AI-Models\mediapipe\pose_landmarker_heavy.task` | delete the file | unchanged from part 1 |
+| `<models-dir>/mediapipe/pose_landmarker_heavy.task` | delete the file | unchanged from part 1 |
 | worktree + branch `E09-run` | `git worktree remove` + branch delete | owner advisor, after the ruling |
 
 No uploads were made (the graph is text-to-video and takes no input files). No publishes,
@@ -601,7 +601,7 @@ no releases, no external posts, no writes to the memory store.
 
 # ADDENDUM — Stage B2 under amendment A3, 2026-08-12
 
-Executor seat, `E09-run`. One generation. Every number below was measured before it was
+Executor session, `E09-run`. One generation. Every number below was measured before it was
 written, and every artifact named was opened at full size before it was described.
 
 ## 20. The meters, part 3
@@ -611,7 +611,7 @@ written, and every artifact named was opened at full size before it was describe
 | generations this resumption | **1 of the 2 A3 allows**; the reserve seed `2026081202` is unspent |
 | paid API credits | **0** — the graph loads only OSS weights and calls no partner node |
 | GPU-hours, before submission | `GPU Hours Product` bucket for 2026-08-12 UTC read **$0.354051** |
-| GPU-hours, after | **NOT YET SETTLED.** The usage report re-queried after the run returned the same bucket value; the invoice had not updated inside the session. The delta must be read later against the pre-run figure recorded above, and this seat does not quote a number it did not see move |
+| GPU-hours, after | **NOT YET SETTLED.** The usage report re-queried after the run returned the same bucket value; the invoice had not updated inside the session. The delta must be read later against the pre-run figure recorded above, and this session does not quote a number it did not see move |
 | Gate C (ceiling 8 credits) | not approached — nothing billed to credits |
 
 ## 21. Gate states, part 3
@@ -639,7 +639,7 @@ Wan's own repository carries **no ComfyUI numbers at all**. Its README line 41 d
 the page that does: "Wan2.2 has been integrated into ComfyUI ([CN] | [EN])", pointing at
 `docs.comfy.org/tutorials/video/wan/wan2_2`. That page states no numbers in prose either —
 it serves a workflow file. So the documented ComfyUI trajectory is the one that file
-carries, by the model authors' own pointer rather than by this seat's choice of a
+carries, by the model authors' own pointer rather than by this session's choice of a
 convenient source.
 
 The file at `main` is **not** that trajectory: it now carries only the lightx2v 4-step
@@ -672,7 +672,7 @@ diagnostic, not as a gate, because the document governs.
 
 ### A correction, caught by a check before a credit was spent
 
-This seat wrote that both pinned revisions carry the same negative prompt. **That was
+This session wrote that both pinned revisions carry the same negative prompt. **That was
 false**, and the test written to verify the citation against the banked bytes failed on it.
 Measured: `5d6089c4250f` reproduces Wan's `shared_config.sample_neg_prompt` byte-for-byte;
 `dcc00d29d79d` **appends two tokens** to it (nudity / NSFW terms). The two pins agree on
@@ -697,7 +697,7 @@ would have failed this clip. A3 defines it on the mean; the mean is what was app
 distribution is recorded here so nobody reads "passed" as "moves comfortably."
 
 The framing clause reversed the probe completely, and the landmarks were **observed rather
-than extrapolated** — the failure mode this seat wrote down in advance as the one it might
+than extrapolated** — the failure mode this session wrote down in advance as the one it might
 not notice:
 
 | | probe | A3 |
@@ -761,7 +761,7 @@ For comparison, the **source** dancer's shoulder-to-hip line sits a median 4.06 
 image-vertical (p90 13.45 deg). The axis convention remains **ASSUMED** (§15.6) — a
 generated clip carries no camera record — and this is what that assumption costs here.
 
-*Sheets locate; full size decides.* This seat read the tile wrong and the full frame
+*Sheets locate; full size decides.* This session read the tile wrong and the full frame
 right, which is the entire reason the rule exists.
 
 ## 26. The sheet and the review materials
@@ -849,7 +849,7 @@ Suite after A3: **480 passed, 35 skipped** (was 442/35).
 
 Two checks fired on their own authors before any credit was spent, which is the only
 reason they are worth having: the saved-file round trip halted on a node class missing from
-its own widget table, and the citation check falsified this seat's claim about the negative
+its own widget table, and the citation check falsified this session's claim about the negative
 prompt.
 
 ## 29. Compensators, part 3
@@ -866,7 +866,7 @@ releases, no external posts, no writes to the memory store.
 
 ## 30. For the advisor
 
-Four items this seat measured but has no authority to rule on:
+Four items this session measured but has no authority to rule on:
 
 1. **The licence map has no row for `Comfy-Org/workflow_templates`** (MIT). It was cited as
    documentation for numeric settings, not loaded as a dependency and not copied as code,

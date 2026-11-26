@@ -53,7 +53,7 @@ and its gates have been reported — not when it feels finished.
 
 | # | Role | Session | Produces | Ends when |
 |---|---|---|---|---|
-| **A0** | advisor | Foundation | repo footing, `CLAUDE.md`, this roadmap, `docs/license-map.md` v1, E01 spec + paste block | E01 is startable without another round trip |
+| **A0** | advisor | Foundation | repo footing, core engineering rules (`docs/engineering-rules.md`), this roadmap, `docs/license-map.md` v1, E01 spec + paste block | E01 is startable without another round trip |
 | **E01** | executor | The exporter | `tools/stage_render.py` + shot-spec format + tests + anchor | the anchor reproduces and every gate has a verdict |
 | **R01** | advisor | Ruling on E01 | ruling doc; roadmap corrections | the record is folded and E02's spec is on screen |
 | **E02** | executor | First contact | provider noise floor + first control probe + the Gate-0 sheet | the sheet is on the maintainer's screen |
@@ -184,7 +184,7 @@ Phase E, the planned work closest to the product — never ran; control strength
 been varied. The measurements bought are real and stand (see the audit §3); the framing failure
 is the audit's subject: every instrument bounded validity and nothing bounded value.
 
-**What governs from here:** the scope block at the top of [CLAUDE.md](../CLAUDE.md) — armature
+**What governs from here:** the scope block at the top of [docs/engineering-rules.md](engineering-rules.md#scope-and-posture) — armature
 is image-to-video with a GLB instead of an image, in the maintainer's words — and the
 **Trajectory row** every credit-spending spec must carry. The E-series continues, aimed at the
 full pipeline. The line as of this writing: **F01/E33** (the first performer, built fresh

@@ -235,7 +235,7 @@ def test_the_partial_andon_survives_python_optimize(tmp_path):
 # pair and an 8px-vs-16px pair each raised `CompareError` instead of returning a report. The
 # only two values those fields could ever take were 0 and 0 — sitting beside
 # `frames_compared: N` and reading as a measurement that the two runs named the same frames
-# and had comparable shapes. CLAUDE.md names the class twice over: a report may not contain
+# and had comparable shapes. docs/engineering-rules.md#no-placeholder-evidence names the class twice over: a report may not contain
 # a placeholder shaped like evidence, and a check that cannot fail is not a check.
 
 

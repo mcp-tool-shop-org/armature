@@ -1,10 +1,10 @@
 # E01 — the control-sequence exporter
 
-**Seat:** executor · **Spec written:** 2026-08-10, before any code · **Advisor:** rules after the
+**Role:** executor · **Spec written:** 2026-08-10, before any code · **Advisor:** rules after the
 report · **Credit ceiling: ZERO** — E01 spends no cloud credits and submits nothing.
 
 Grounding: [research-grounding.md](../research-grounding.md), cited by finding number.
-Method: [CLAUDE.md](../../CLAUDE.md). Arc: [ROADMAP.md](../ROADMAP.md).
+Method: [docs/engineering-rules.md](../engineering-rules.md). Arc: [ROADMAP.md](../ROADMAP.md).
 
 ---
 
@@ -28,12 +28,12 @@ precedent to this exporter's exact move.
 So the channel set is **depth + normal + semantic/mask first, skeleton last and optional**. This
 is not a preference; it is the ordering the measurement implies.
 
-## Premises — marked, per CLAUDE.md
+## Premises — marked, per docs/engineering-rules.md
 
 | # | Premise | Status |
 |---|---|---|
 | 1 | Blender 5.2 is present at the recorded path and runs headless | **MEASURED** (facet ran 12 headless invocations) |
-| 2 | GLB character assets exist on this rig | **MEASURED** — enumerated 2026-08-10; 15+ found under `E:\AI\training` |
+| 2 | GLB character assets exist on this rig | **MEASURED** — enumerated 2026-08-10; 15+ found under `<sibling-training>` |
 | 3 | Some of those GLBs carry a usable armature | **ASSUMED** — filenames say `_rigged`, contents unverified. **P2 measures it.** |
 | 4 | ControlNet-family depth is near-bright, per-frame normalized, 8-bit | **RETRIEVED** (F19) — from a model card, not tested here |
 | 5 | OpenPose-18 uses a 19-pair 1-indexed `limbSeq` | **VERIFIED AT SOURCE** (F20) — `util.py` fetched and read at ruling time |
@@ -71,7 +71,7 @@ normalization without re-rendering. Deriving down is free; deriving up is imposs
 
 ## Predictions — register these BEFORE running anything, and state whether each was blind
 
-The executor writes predictions into the report *first*. Per CLAUDE.md, a hypothesis with no
+The executor writes predictions into the report *first*. Per docs/engineering-rules.md, a hypothesis with no
 prediction cannot be wrong, and one that cannot be wrong teaches nothing. **facet missed nine
 consecutive arcs on the unit/population family — so for each prediction, write what one of the
 counted thing *is* before writing the number.**
@@ -88,12 +88,12 @@ counted thing *is* before writing the number.**
   camera** re-maps the depth range every frame — the same surface changes brightness as the scene
   depth range changes. Predict: over an orbit, what is the mean absolute per-pixel depth
   difference on **static geometry** between per-frame and per-shot normalization? Report both;
-  **do not choose between them.** The choice is E02's, with the Director's eye on the result.
+  **do not choose between them.** The choice is E02's, with the maintainer's eye on the result.
 
 ## Gates
 
 Gates **raise inside the tool that performs the write** — no shell chaining, no bare `assert`
-(deletable by `-O`), no skip flag. Per CLAUDE.md, put the andon on the direction the invariant
+(deletable by `-O`), no skip flag. Per docs/engineering-rules.md, put the andon on the direction the invariant
 does not bound.
 
 - **G1 · ANDON — generator legality.** Width and height divisible by 16; frame count ≡ 1 (mod 4)
@@ -141,13 +141,13 @@ must not be tested with fixtures that move the thing being measured.
 
 Enumerated on this rig 2026-08-10. Use **one primary** and keep the others for P2's count:
 
-- `E:\AI\training\facet_next\E14_strokes\run\final\longsword_hero.glb` — a facet-finished asset,
+- `<sibling-training>/facet_next\E14_strokes\run\final\longsword_hero.glb` — a facet-finished asset,
   the natural primary (armature is downstream of facet).
-- `E:\AI\training\_p0_packs_modernize\_mesh_line\blackguard\blackguard_rigged.glb` and
+- `<sibling-training>/_p0_packs_modernize\_mesh_line\blackguard\blackguard_rigged.glb` and
   `blackguard_unirig_rigged.glb` — the rigging candidates for P2.
-- `E:\AI\training\_p0_packs_modernize\_mesh_line\swordsman\swordsman_apose1_trellis_rigged.glb`.
+- `<sibling-training>/_p0_packs_modernize\_mesh_line\swordsman\swordsman_apose1_trellis_rigged.glb`.
 
-**These are read-only.** Never write into `E:\AI\training`; it is not in git and has no revert.
+**These are read-only.** Never write into `<sibling-training>`; it is not in git and has no revert.
 
 ## Out of scope
 
@@ -159,7 +159,7 @@ Named explicitly so the session ends where it should:
 - **Identity, references, prompts** — Phase E.
 - **Multi-shot and assembly** — Phase F.
 - **The MCP/CLI surface** — P01. A working script beats a polished interface here.
-- **Choosing the normalization.** P3 reports both; the Director rules.
+- **Choosing the normalization.** P3 reports both; the maintainer rules.
 
 ## License checks this experiment introduces
 
@@ -179,7 +179,7 @@ Named explicitly so the session ends where it should:
 | NAMED_COMPENSATORS | **2** | E01's only world-touching act is writing a new output directory. **Compensator: `delete_output_dir`** — remove the run directory; owner: executor. Source assets are opened read-only and never modified, so there is nothing else to undo. No skip claimed. |
 | DECOMPOSE_BY_SECRETS | **2** | Scene construction, per-channel rendering, and the spec/manifest schema are separate modules: channel formats change often, scene assembly rarely. |
 | UNCERTAINTY_GATED_HUMANS | **2** | P3 is an explicit uncertainty-gated checkpoint — the executor reports both normalizations contrastively ("you may expect per-frame because the convention says so; here is what it costs on static geometry") and does not choose. |
-| EXTERNAL_VERIFIER | **2** | The executor does not grade its own output; the advisor rules and the Director judges. G5 verifies against a **retrieved source file**, not model memory. Not 3 until a different-family check runs on an E01 artifact. |
+| EXTERNAL_VERIFIER | **2** | The executor does not grade its own output; the advisor rules and the maintainer judges. G5 verifies against a **retrieved source file**, not model memory. Not 3 until a different-family check runs on an E01 artifact. |
 
 **Total 12/18.** Every row is a 2 with a named path to 3; none is below 2, so no remediation item
 is required. The 3s here would be earned by gates firing on real defects, which cannot be
@@ -191,4 +191,4 @@ The report carries, in this order: the registered predictions with blind/not-bli
 measured values beside them; every gate with a verdict (a gate that did not run is written
 **NOT YET RUN**, never a plausible-looking result); P3's two normalizations reported separately
 with a difference image; and the manifest of what was produced. **No judgment words** — the
-Director decides whether the output is good.
+Maintainer decides whether the output is good.

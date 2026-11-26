@@ -1,9 +1,9 @@
 # E09 — closing ruling: the clean chain is the studio's baseline
 
-**E09 is CLOSED. Advisor ruling 2026-08-12; the Director approved the baseline by eye the
+**E09 is CLOSED. Advisor ruling 2026-08-12; the maintainer approved the baseline by eye the
 same day** — the lifted review clip and the Gate 0 sheet, judged at his zoom; his eye is the
 verifier of record and it has ruled. Merged to `main` at `3728a59` (8,964 insertions: the
-chain's tooling, its tests, and the full report). The worktree `E:\AI\armature-E09` is
+chain's tooling, its tests, and the full report). The worktree `<worktree-E09>` is
 **retained** — the outputs (sheets, lossless frames, review clips, the lifted GLB) live
 there git-ignored by design, pinned by hash in the report's artifact tables.
 
@@ -26,14 +26,14 @@ there git-ignored by design, pinned by hash in the report's artifact tables.
 
 ## Laws carried out of E09
 
-The served-template law (in CLAUDE.md, measured twice). Gates that fire on their own
+The served-template law (in docs/engineering-rules.md, measured twice). Gates that fire on their own
 authors are the only gates worth having — the widget-table hole and the negative-prompt
 citation catch were both self-inflicted and self-caught. And look-then-describe, measured
 twice more inside one experiment: the executor's contact-sheet tilt misread, self-caught by
 measuring then looking at full size; the advisor's probe narration, corrected the harder
 way. The record keeps both.
 
-## The movement library — direction recorded (the Director, 2026-08-12)
+## The movement library — direction recorded (the maintainer, 2026-08-12)
 
 A library of performances for the character, grown over time. Two admission paths, one
 gate:

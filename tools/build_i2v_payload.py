@@ -243,7 +243,7 @@ def parse_args(argv=None):
     # named no local artifact for it at all — only `server_name`, a server-side
     # content-addressed name living in a separate uploads file, plus a prose `fit` string
     # about an image this tool never opened. Every `sha256` in this module was over a
-    # STRING or the graph. CLAUDE.md: "Every generation records model id + version, the
+    # STRING or the graph. docs/engineering-rules.md#reproducible-generation-records: "Every generation records model id + version, the
     # full payload, the seed, and control-input hashes." The sibling
     # `build_camera_i2v_payload` grew these two flags in wave 8 (F-d342f393) for the same
     # artifact on the same class of route; they are CARRIED here, and so is its
@@ -906,7 +906,7 @@ def main(argv=None):
             {"gate": "PAYLOAD", "andon": "PayloadError",
              "clause": "negative_source_not_supplied", "flag": "--negative-source"})
     negative = E08.read_negative(a.negative_source)
-    ident, ident_original, drops = E08.identity_clause()
+    ident, ident_original, drops, ident_source = E08.call_identity_clause()
     positive = ident + ". " + E08.SCENE_CLAUSE
     # The SHIPPED positive is what the router checks; `--canon-prompt` is compared
     # against it rather than substituted for it.
@@ -922,7 +922,7 @@ def main(argv=None):
     meta["gate_PIN"] = gate_pin
     meta["gate_CANON"] = canon_ev
     meta["prompt_record"] = {
-        "identity_clause_source": E08.TWIN_PROMPT_JSON,
+        "identity_clause_source": ident_source,
         "identity_clause_original": ident_original,
         "identity_clause_used": ident,
         "identity_drops": drops,

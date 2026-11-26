@@ -17,7 +17,7 @@ Two censuses live here, and both exist because the wave-8 versions keyed on the 
   clause. Measured as subprocesses on an 81-entry padded map: `--fps=0`, `--fps=-5` and
   `--fps=999` each built the graph, passed all five gates including Gate ROUTE, and printed
   `BUILD_CASCADE_OK`. A tool that records a generator constraint and does not enforce it is
-  the shape CLAUDE.md's "generation frames must be generator-legal" rule exists to prevent.
+  the shape docs/engineering-rules.md#generator-legal-frames's "generation frames must be generator-legal" rule exists to prevent.
 
 **The walk both censuses use is NON-DESCENDING** (F-c236304b, corrected 2026-09-04 after
 instruments measured the same class in the other direction). `ast.walk(main_node)` descends

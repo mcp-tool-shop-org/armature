@@ -1,13 +1,13 @@
 # E09 — the clean chain, calibrated: generated motion onto his bones, measured before the shot
 
-**Seat:** executor (run on Opus) · **Spec written:** 2026-08-11 by the advisor, before the work ·
-**Advisor rules after the report** · **Director judges every sheet** · **Credit ceiling: 8
+**Role:** executor (run on Opus) · **Spec written:** 2026-08-11 by the advisor, before the work ·
+**Advisor rules after the report** · **maintainer judges every sheet** · **Credit ceiling: 8
 (2 generations × the measured 4/generation) — Stage B2 only; Stages A and B1 spend nothing.**
-Worktree: `E:\AI\armature-E09`, branch `E09-run`.
+Worktree: `<worktree-E09>`, branch `E09-run`.
 
 ## Trajectory
 
-SLOT 1 of the confirmed two-slot route. The Director picked the **self-hosted clean chain** —
+SLOT 1 of the confirmed two-slot route. The maintainer picked the **self-hosted clean chain** —
 a Wan T2V performance clip, a MediaPipe lift, and our own solver landing the motion on the
 performer's rig — over any hosted vendor contract: everything in the studio's hands, built at
 marathon pace. This experiment builds the chain's one missing tool (the solver) and measures
@@ -26,7 +26,7 @@ shot?** Three clauses, predicted and read separately:
    ones. Conditional on the detector firing on a stylized mannequin at all — either outcome
    is a full result.
 3. **The chain works on its true population** — a generated human dance clip, lifted and
-   solved onto his rig, reads as the dance at the Director's eye.
+   solved onto his rig, reads as the dance at the maintainer's eye.
 
 ## Research grounding (cited by G-number → [research-grounding-e08.md](../research-grounding-e08.md))
 
@@ -79,24 +79,24 @@ spent only on a defect with a named cause.
   first frame runs, and discloses that it was blind.
 - **H3 (B2):** the lifted dance lands with visible jitter and foot noise (G4: no published
   jitter metric; G17: dance stresses contact) — degree measured; worth-a-shot is the
-  Director's call at the sheet, not a threshold this spec invents (suspend rather than
+  Maintainer's call at the sheet, not a threshold this spec invents (suspend rather than
   invent: numerator and denominator reported separately).
 
 ## Premises — marked
 
 | # | premise | status |
 |---|---|---|
-| 1 | The rigged performer: `E:\AI\armature-E07\outputs\E07\rig-repaired\performer_auto.glb`, sha256 `7f56c9ac…2a24` | **MEASURED** — re-verify the hash before use; copy in, never edit the E07 worktree |
+| 1 | The rigged performer: `<worktree-E07>/outputs\E07\rig-repaired\performer_auto.glb`, sha256 `7f56c9ac…2a24` | **MEASURED** — re-verify the hash before use; copy in, never edit the E07 worktree |
 | 2 | Banked walk tooling at `E08-run` @ `8399d5a` | **MEASURED** — branch verified this session; checkout paths named above |
 | 3 | MediaPipe licence — repo, package (v1.0.0), and the models' own card all Apache-2.0 | **MEASURED 2026-08-11** — three fetched documents, rows in the licence map; pin installed versions in the report; a version bump re-fetches the card |
 | 4 | The 33-landmark → 22-bone mapping is definable without finger bones | **ASSUMED** — the mapping table is part of the Stage A commission; recorded in code |
-| 5 | 4 credits/generation planning number | **MEASURED** (E02 balance delta) — the Director's balance is the meter; GPU-hours metered separately and reported |
+| 5 | 4 credits/generation planning number | **MEASURED** (E02 balance delta) — the maintainer's balance is the meter; GPU-hours metered separately and reported |
 | 6 | The E02 A2 no-control payload shape serves the T2V clip | **ASSUMED** — verify the saved graph and link topology in code before submission; a `dry_run` PASS proves nothing |
 | 7 | World landmarks are hip-origin; depth is non-metric | **MEASURED** (vendor docs + model card) — root motion out of scope for the dance; recorded |
 
 ## Environment
 
-This experiment gives armature **its own venv**: `E:\AI\armature\.venv` (Python 3.11+),
+This experiment gives armature **its own venv**: `.venv` (Python 3.11+),
 `pip install mediapipe==1.0.0` (pinned; exact resolved versions in the report).
 `trellis2-env` is not touched. VRAM watchdog verified before any render; Blender headless
 via PowerShell only; scripts create their own output directories; `outputs/` stays out of
@@ -128,10 +128,10 @@ skeleton v2 / fingers.
 | NAMED_COMPENSATORS | **2** | Table below — no skip |
 | DECOMPOSE_BY_SECRETS | **2** | The solver is a pure no-bpy module apart from the render/applier tooling; the mapping table is data, not code paths |
 | UNCERTAINTY_GATED_HUMANS | **2** | Blind predictions disclosed; H3 suspends rather than invents a threshold; halts surface contrastively |
-| EXTERNAL_VERIFIER | **2** | Stage A is graded by mathematics (round-trip), not by any model; B2 is graded by the Director's eye with diagnostics beside it; the executor judges nothing |
+| EXTERNAL_VERIFIER | **2** | Stage A is graded by mathematics (round-trip), not by any model; B2 is graded by the maintainer's eye with diagnostics beside it; the executor judges nothing |
 
 **Compensators:** cloud credits spent (Stage B2) — no undo; bounded at 8 and itemized,
-owner = the advisor via Gate C. Venv creation — `Remove-Item -Recurse E:\AI\armature\.venv`,
+owner = the advisor via Gate C. Venv creation — `Remove-Item -Recurse .venv`,
 owner = executor. Worktree/branch — `git worktree remove` + branch delete after the advisor
 merges or discards, owner = advisor. Uploads to Comfy Cloud — deletable server-side,
 owner = executor, listed in the report. No publishes, no releases, no external posts.
@@ -140,7 +140,7 @@ owner = executor, listed in the report. No publishes, no releases, no external p
 
 `docs/experiments/E09-report.md`: measurements only, no judgement words; every gate's state
 (`NOT YET RUN` where true); both meters (credits, GPU-hours); the Gate 0 sheet path;
-predictions vs outcomes with blindness disclosed. The advisor rules after; the Director's
+predictions vs outcomes with blindness disclosed. The advisor rules after; the maintainer's
 eye decides what the numbers cannot.
 
 ## Amendments
@@ -165,7 +165,7 @@ from a committed Gate S list, `EmptyHunyuanLatentVideo` at 832×480×65. Admissi
 `save_workflow`, submit the saved file verbatim. Ceiling unchanged: 8 credits, one probe
 first.
 
-**A3 — 2026-08-12 (advisor, at the Director's direction: finish E09 as the baseline).**
+**A3 — 2026-08-12 (advisor, at the maintainer's direction: finish E09 as the baseline).**
 The 2026-08-11 B2 probe is ruled **failed, cause unlocated** — a near-still donor
 (first-to-last mean pixel difference 11/255, arm drift only) with the feet cropped out
 despite the prompt's full-body clauses. Stage B2 resumes:
@@ -176,17 +176,17 @@ despite the prompt's full-body clauses. Stage B2 resumes:
    split and its unsourced euler/simple pair are the suspects under test and are not
    reused. Prompt strengthened for large full-body motion and explicit head-to-feet
    framing. This run is simultaneously the graph-fault diagnostic and the donor re-roll;
-   both named causes stand, and the direction to proceed is the Director's.
+   both named causes stand, and the direction to proceed is the maintainer's.
 2. **Donor acceptance gate (new; runs before any lift).** Mean consecutive-frame pixel
    difference ≥ 2.0/255 across the clip AND ankle landmarks inside the image on ≥ 80% of
    frames — both quantities the probe already measures. A donor failing this gate never
    reaches the lift; it is a recorded take, not a baseline.
 3. Donor passes → lift → solve → apply → the three-panel sheet and review clip at the
-   Director's standards → the B2 addendum appended to the report → **E09 closes as the
+   Maintainer's standards → the B2 addendum appended to the report → **E09 closes as the
    baseline** for the variable experiments the posture calls for.
 4. Diagnostic donor fails the gate too → **halt**: the graph-motion question becomes its
    own experiment, and the baseline donor comes from a licence-cleared external source
-   instead (a stock clip under a fetched licence row, or footage the Director shoots and
+   instead (a stock clip under a fetched licence row, or footage the maintainer shoots and
    owns outright) — advisor fetch and ruling before use.
 
 Bound: ≤ 2 further generations this resumption (the route bills GPU-hours; the probe
@@ -195,7 +195,7 @@ billed 0 credits — both meters reported).
 **A4 — 2026-08-12 (advisor, at the A3 ruling):** forward amendment to the donor acceptance
 gate — from the next experiment on, the motion clause requires **mean ≥ 2.0/255 AND median
 ≥ 2.0/255** consecutive-frame difference. A3's donor passed the clause as written at its
-time (mean 2.0176, median 1.9355 — recorded); no retroactive judgement. Purpose on the record, ruled by the Director
+time (mean 2.0176, median 1.9355 — recorded); no retroactive judgement. Purpose on the record, ruled by the maintainer
 2026-08-12: **every pipeline licence-friendly end to end, so the studio's art can be
 published** — which is why the donor-sourcing order runs owned-generation first, fetched
-licence second, Director-owned footage always available.
+licence second, maintainer-owned footage always available.

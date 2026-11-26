@@ -39,7 +39,7 @@ exported GLB -- so `--name` goes through `armature_core.parts.single_path_segmen
 the tree's one bound on a pasted name, exactly as `preview_glb --name` does. The
 subject GLB is opened read-only.
 
-Named because CLAUDE.md's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
+Named because docs/engineering-rules.md#named-compensators's workflow standard 3 (NAMED_COMPENSATORS -- Sagas,
 Garcia-Molina & Salem, SIGMOD 1987) takes NO skip, and because the ordering makes the
 question ordinary rather than exotic: `_census_nodes.refusal_and_write_lines`, run over
 the 21 Blender-side tools, finds 15 modules with at least one refusal BELOW the first
@@ -473,7 +473,7 @@ def gate_glb_written(path, *, result, before, what="the exported GLB"):
     # it never overwrote. It rides the evidence rather than raising because one existing
     # fixture deliberately snapshots `<path>.absent` to obtain an `existed: False` record,
     # and that fixture is another domain's to move; a diagnostic and a gate are different
-    # objects (CLAUDE.md).
+    # objects (docs/engineering-rules.md#diagnostics-versus-gates).
     ev["snapshot_is_of_this_path"] = (before.get("path") == p)
     # CLAUSE 1 - the operator's own verdict, which this gate named and never read. The
     # shape is `rig_bake.py`'s `if 'FINISHED' not in result` on `bpy.ops.object.bake`.

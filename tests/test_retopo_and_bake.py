@@ -286,7 +286,7 @@ QUOTED_RULING = ("Dir" + "ector" + " 2026-08-11: 'it's not fit for the pipeline"
 
 
 def test_no_tool_writes_a_quoted_ruling_sentence_into_an_artifact():
-    """CLAUDE.md's portable core: public surfaces carry decisions and facts in neutral
+    """docs/engineering-rules.md#neutral-public-prose's portable core: public surfaces carry decisions and facts in neutral
     prose, never quotations from chat. The string was copied into every
     `retopo_manifest.json` the tool wrote and into anything quoting one."""
     import os

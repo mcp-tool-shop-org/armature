@@ -559,3 +559,49 @@ def test_both_i2v_builders_declare_the_same_two_start_frame_flags():
         family.append((name, {"--start-frame", "--start-frame-sha256"} <= flags))
     assert family == [("build_i2v_payload.py", True),
                       ("build_camera_i2v_payload.py", True)], family
+
+
+def test_main_records_call_time_twin_prompt_json_in_prompt_record(tmp_path, monkeypatch):
+    """Part 6: prompt_record['identity_clause_source'] records call-time ARMATURE_TWIN_PROMPT_JSON."""
+    import build_animate_payload as E08
+
+    call_time_json = tmp_path / "call_time_twin.json"
+    call_time_json.write_text(
+        json.dumps({"_entry_verbatim": "A sculpted clay performer, plain pale grey background, soft studio light."}),
+        encoding="utf-8",
+    )
+    neg = tmp_path / "wan_config.py"
+    neg.write_text('sample_neg_prompt = "blurry, low quality"\n', encoding="utf-8")
+    uploads = tmp_path / "uploads.json"
+    uploads.write_text(json.dumps({"start_frame": "start.png"}), encoding="utf-8")
+    start = _authored_start_frame(tmp_path, "start.png", (B.WIDTH, B.HEIGHT))
+
+    monkeypatch.setattr(E08, "TWIN_PROMPT_JSON", str(tmp_path / "import_time_other.json"))
+    monkeypatch.setenv("ARMATURE_TWIN_PROMPT_JSON", str(call_time_json))
+    monkeypatch.setattr(B, "canon_spend", lambda *a, **k: {"verdict": "PASS", "subject": "PERFORMER"})
+    monkeypatch.setattr(B, "canon_line", lambda ev: "[canon] test")
+    ident, _, _ = E08.identity_clause()
+    e08_rec = tmp_path / "E08-record.json"
+    e08_rec.write_text(
+        json.dumps({
+            "experiment": "E08",
+            "seed": 2026081211,
+            "positive": ident + ". " + E08.SCENE_CLAUSE,
+            "negative": E08.read_negative(str(neg)),
+        }),
+        encoding="utf-8",
+    )
+    out = tmp_path / "out_i2v"
+    rc = B.main([
+        f"--uploads={uploads}",
+        f"--out={out}",
+        f"--negative-source={neg}",
+        f"--e08-record={e08_rec}",
+        f"--start-frame={start}",
+        f"--seeds={os.path.join(REPO, 'specs', 'E11-seeds.json')}",
+        "--subject=PERFORMER",
+        "--no-canon",
+    ])
+    assert rc == 0
+    rec = json.loads((out / "E11-probe-payload-record.json").read_text(encoding="utf-8"))
+    assert rec["prompt_record"]["identity_clause_source"] == os.path.abspath(str(call_time_json))

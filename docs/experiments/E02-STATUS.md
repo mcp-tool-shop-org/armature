@@ -3,7 +3,7 @@
 
 # E02 — status: EXPERIMENTING. Nothing here is settled.
 
-**Director, 2026-08-10: _"Let's not write anything in stone just yet, as we're experimenting."_**
+**Maintainer, 2026-08-10: _"Let's not write anything in stone just yet, as we're experimenting."_**
 
 That governs how the E02 documents are read. They record **measurements and working decisions**,
 not doctrine. Specifically:
@@ -14,12 +14,12 @@ not doctrine. Specifically:
 - The **numbers stand** — 4 credits/generation, 32 of 33 frames differing at max delta 71,
   `out = max(src-1, 0)` — because those were measured. What is provisional is what they *mean*
   and what we do about them.
-- **Nothing from E02 is promoted into CLAUDE.md or into a standing law until the arc closes.**
+- **Nothing from E02 is promoted into docs/engineering-rules.md or into a standing law until the arc closes.**
   Two laws did get amended today on evidence that is not E02-specific — `dry_run` proves
   nothing about runnability, and bytes are not content — and those stay, because they were
   earned outside this experiment's open questions.
 
-The Gate 0 sheet for A1a has been seen by the Director and read as looking right, with the
+The Gate 0 sheet for A1a has been seen by the maintainer and read as looking right, with the
 explicit caveat that **A2 has not run**, so it is a demonstration and not yet evidence.
 
 **Next, and it is four generations / ~16 credits inside a 12-generation ceiling:**

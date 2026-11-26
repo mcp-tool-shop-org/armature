@@ -112,6 +112,7 @@ SKIP_LEVER_VOCABULARY = (
     "ARMATURE_RECORD_INDEX",
     "ARMATURE_TWIN_PROMPT_JSON",
     "ARMATURE_E09_PROVENANCE",
+    "imageio-ffmpeg",
     "bash",
     "node",
     "record-index",

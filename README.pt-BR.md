@@ -71,7 +71,7 @@ O pacote npm é um **lançador, não uma porta**: reimplementar um limite em uma
 ## Estado: a tese é medida no nível do produto
 
 Fundada em **10 de agosto de 2026**. Treze experimentos foram concluídos e a tese passou de *em teste* para **medida no nível do produto**: o personagem dançou na tela, controlado por seu próprio sistema, e livre; um mundo construído mantém-se até o último quadro em duas amostras (E12), e **a identidade agora sobrevive a uma camada hospedada, treinada por humanos, alimentada apenas com referências autorais** (E13) — tudo avaliado pelo olhar do mantenedor. A auditoria do arco inicial está em
-[docs/audit-first-arc.md](docs/audit-first-arc.md); a postura desde 12 de agosto de 2026 é um monorepositorio de aprendizado — os experimentos comprovam caminhos, nenhum caminho é canônico por impulso (CLAUDE.md).
+[docs/audit-first-arc.md](docs/audit-first-arc.md); a postura desde 12 de agosto de 2026 é um monorepositorio de aprendizado — os experimentos comprovam caminhos, nenhum caminho é canônico por impulso ([docs/engineering-rules.md](docs/engineering-rules.md)).
 
 | | |
 |---|---|
@@ -114,8 +114,8 @@ a forma exata do próximo trabalho, e o roteiro dizia que isso aconteceria antes
 
 ## Como este repositório funciona
 
-- [CLAUDE.md](CLAUDE.md) — como trabalhar aqui: os três papéis, as regras sob as quais cada um opera e
-os pontos não negociáveis (o "gate" da licença, créditos limitados, a identidade é avaliada visualmente).
+- [docs/engineering-rules.md](docs/engineering-rules.md) — as regras de engenharia que o código faz cumprir (o "gate" da licença,
+créditos limitados, verificações que lançam exceções em vez de `assert`, e a identidade avaliada visualmente).
 - [docs/ROADMAP.md](docs/ROADMAP.md) — todo o processo de construção, sessão por sessão, com os gatilhos de desvio nomeados antecipadamente.
 - `docs/experiments/` — cada alteração não trivial é executada como um experimento numerado:
 **especificação antes do trabalho → relatório após → decisão final do consultor.**

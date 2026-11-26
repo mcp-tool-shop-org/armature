@@ -1,6 +1,6 @@
 # Video-provider field notes — Kling · MiniMax H3 · Seedance (lead sheet)
 
-**Provenance.** Retrieved by the Director on 2026-08-12 as
+**Provenance.** Retrieved by the maintainer on 2026-08-12 as
 `Video_AI_Provider_Guides_Comprehensive.md` — an **AI-consolidated aggregation** citing
 third-party blogs, vendor marketing pages, one news outlet, a YouTube video and an
 Instagram reel. **Source tier: LEAD SHEET.** Nothing in it is a document for the
@@ -51,14 +51,14 @@ Version branching: 1.5/2.5 tuned for humans/faces/cloth, 2.0 for environments an
 mechanics. **2026 guardrails (news-sourced, Deadline): real-face uploads blocked;
 Hollywood-IP prompts refused; C2PA metadata and permanent AI labels baked into every
 output.** The C2PA point is load-bearing for published studio art if Seedance is ever
-considered — a Director-level consideration recorded now so it is not discovered at a
+considered — a maintainer-level consideration recorded now so it is not discovered at a
 spec. Third-party hosting pricing quoted up to $0.682/s at 1080p (fal.ai, lead tier).
 
 ## What this feeds, and what it does not
 
 - **The three blocked map rows gain fresh fetch targets** (recorded here, rows
   unchanged): kling.ai blog/terms · hailuoai.video · the Deadline Seedance piece ·
-  minimax.io/blog/minimax-h3. The Director's browser-export path remains the cure for
+  minimax.io/blog/minimax-h3. The maintainer's browser-export path remains the cure for
   JS-walled pages.
 - **E13 peer context:** if the composed route ever graduates past its probe, H3-r2v
   and Seedance-r2v are the measured-on-catalog peers, and H3's `@`-anchor grammar is

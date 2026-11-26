@@ -1,6 +1,6 @@
 """Tests for the gait model — E08's commission.
 
-Every fixture below was written by asking the question CLAUDE.md demands: *what would
+Every fixture below was written by asking the question docs/engineering-rules.md#fixture-falsification-question demands: *what would
 this look like if the code were wrong in the specific way this check exists to catch?*
 Two of them (`test_forward_travel_is_not_a_dialled_in_constant`, `test_knee_never_bends_forward`)
 answer that with a **deliberately broken gait built in the test**, because a threshold
@@ -444,7 +444,7 @@ def test_the_refused_values_are_exactly_the_ones_that_break_that_invariant(sf):
 #
 # Both hold at 0.5 and NOWHERE ELSE, because the contralateral leg is offset by the
 # literal 0.5 (`_leg_state((u_L + 0.5) % 1.0, p.stance_frac)`) while the stance/swing
-# split was the parameter — a global constant governing a local feature, which CLAUDE.md
+# split was the parameter — a global constant governing a local feature, which docs/engineering-rules.md#no-global-constant-for-local-feature
 # forbids by name. Measured here over 2000 samples of one cycle: at 0.40, 19.95% of the
 # cycle has NO foot planted, and the forward integrator carries hip travel through it
 # against a leg that is in the air; at 0.60, 20% has BOTH planted, a state `build_gait`
@@ -703,7 +703,7 @@ def test_the_height_span_is_measured_over_a_complete_table(performer):
 # broken armature modifier leaves the bones perfect and the body behind; a one-frame
 # rest-pose comparison cannot fail in that direction, and nothing reported the degradation.
 #
-# CLAUDE.md: a global constant must not govern a local feature. The schedule is derived
+# docs/engineering-rules.md#no-global-constant-for-local-feature: a global constant must not govern a local feature. The schedule is derived
 # from the gait's own length.
 
 import blender_stub

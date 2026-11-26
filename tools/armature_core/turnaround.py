@@ -681,7 +681,7 @@ def gate_set_distinct(view_records, expected):
     360, an int/float division that collapses the step — or a camera that moves a
     hundredth of a degree per view, writes eight files with eight DIFFERENT digests, and
     the gate returned its strongest verdict, "8 distinct views, as many as were asked
-    for", on a set that is visually one view eight times. CLAUDE.md rules on exactly this
+    for", on a set that is visually one view eight times. docs/engineering-rules.md#pixel-comparison-not-file-hash rules on exactly this
     direction: "A file-hash mismatch is not evidence a render changed. Compare pixels;
     reserve byte-hashes for artifacts whose bytes are the contract." Here the bytes are
     not the contract — the pictures are.

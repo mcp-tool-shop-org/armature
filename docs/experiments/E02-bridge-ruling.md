@@ -90,7 +90,7 @@ far too small to act on.
 consumer, or an arm that compares brightness across runs rather than structure within one — the
 ramp run becomes necessary and this ruling does not cover it.
 
-## 3. Gate C — the observation is the Director's, not the executor's
+## 3. Gate C — the observation is the maintainer's, not the executor's
 
 The executor did the right thing three times over: it refused to invent a figure, refused to
 estimate from an adjacent day (a per-day total with an unknown run count is not this run's
@@ -102,7 +102,7 @@ lag rather than a free run.
 excludes by design; the invoice surface lags and carries no 2026-08-10 bucket; and no
 cost, credit or duration field exists on the job record. There is no programmatic surface.
 
-**So it routes to the Director:** one look at Comfy Cloud's billing page for job
+**So it routes to the maintainer:** one look at Comfy Cloud's billing page for job
 `382dbb1f-57e6-47b2-a80b-2e675b35db11` yields a real number, and the 12-generation projection
 follows from it in one multiplication. That is a thirty-second human action producing a measured
 value, which beats any amount of cleverness on our side.
@@ -154,7 +154,7 @@ before the worker ran — which is the second time today a halt has been cheaper
 
 ## 7. What the next session does
 
-1. **Wait on Gate C** — the Director's billing observation. No generation until it lands.
+1. **Wait on Gate C** — the maintainer's billing observation. No generation until it lands.
 2. Then the arithmetic against the 12-generation ceiling, and if it clears, **A0's three
    identical submissions** — the noise floor, which everything else is read against.
 3. The −1 is settled; do not re-open it without an absolute-level consumer.

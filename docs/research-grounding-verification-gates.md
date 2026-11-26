@@ -1,6 +1,6 @@
 # Research grounding — verification gates, abstention, and the identity line
 
-**Study-swarm, 2026-08-17, armature advisor seat.** Fired on the Director's ruling that the
+**Study-swarm, 2026-08-17, armature advisor session.** Fired on the maintainer's ruling that the
 atom / identity distinction holds, which unlocked a pixel-gate path this studio had never
 inventoried. Four parallel research agents; findings gated through an external citation
 verifier before anything below became load-bearing.
@@ -8,7 +8,7 @@ verifier before anything below became load-bearing.
 ## ⚑ Verification status — read this before trusting any finding
 
 Every citation ran through `prism verify --type citations`, caller family `anthropic`,
-verifier `mistral-small:24b` via local Ollama — a **different model family from the seat that
+verifier `mistral-small:24b` via local Ollama — a **different model family from the session that
 commissioned the research**, with the commissioning reasoning stripped.
 
 **Result: 21 citations, all 21 existence-`resolved`, 14 `supported`, 7 `not_addressed`,
@@ -39,7 +39,7 @@ single citation:**
 *family-different* property holds here (anthropic caller, local verifier) but the **pinning
 does not**. Do not quote this run as a pinned-verifier result.
 
-## A. The atom / identity line — the Director's ruling, and what evidence says
+## A. The atom / identity line — the maintainer's ruling, and what evidence says
 
 **A1 · `supported`. Identity encoders mistake a palette change for identity drift.** StyleID:
 A Perception-Aware Dataset and Metric for Stylization-Agnostic Facial Identity Recognition
@@ -47,11 +47,11 @@ A Perception-Aware Dataset and Metric for Stylization-Agnostic Facial Identity R
 texture/colour change with identity drift.
 
 > **Design implication, and it is the strongest result of this swarm.** On the same afternoon,
-> independently, a build seat found `prompt-craft`'s repair router substring-matching atom ids
+> independently, a build session found `prompt-craft`'s repair router substring-matching atom ids
 > against `("face", "sigil", "identity", "insignia", "palette")` and sending any match to
 > identity-plate repair. A **palette** atom was being routed as a likeness miss. The literature
-> and our own code produced the same confusion, and neither seat knew about the other. The
-> Director's ruling held in the contract and was collapsing in the router; the router is fixed
+> and our own code produced the same confusion, and neither session knew about the other. The
+> maintainer's ruling held in the contract and was collapsing in the router; the router is fixed
 > and pinned by test.
 
 **A2 · `supported`. A detector that cannot find the face still returns a number.** Bringing
@@ -59,7 +59,7 @@ Cartoons to Life: Towards Improved Cartoon Face Detection and Recognition System
 (arXiv:1804.01753). Face detectors trained on photographs often fail to fire at all on
 stylized faces.
 
-> **Implication.** armature's CLAUDE.md already says a diagnostic returning numbers on a face
+> **Implication.** armature's docs/engineering-rules.md already says a diagnostic returning numbers on a face
 > it cannot find is noise wearing a unit. That line now has a citation. Any identity diagnostic
 > quoted here ships with evidence its detector actually fired.
 
@@ -69,7 +69,7 @@ and gaze rather than identity.** Meta-LoRA (arXiv:2503.22352).
 **A4 · No source found.** No paper tests the attribute-vs-identity separation as a hypothesis.
 The research agent said so plainly rather than assembling one from adjacent work.
 
-> **Implication, stated so nobody overclaims later.** The Director's ruling is a **design
+> **Implication, stated so nobody overclaims later.** The maintainer's ruling is a **design
 > decision supported by adjacent failure evidence, not a cited empirical separation.** It does
 > not need a paper to be binding. It does need us not to claim literature backing we do not
 > have — the precise failure a sibling repo already committed on a public surface.

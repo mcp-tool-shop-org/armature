@@ -212,7 +212,7 @@ class RenderGate(GateFailure):
 
 
 #: The generator's frame rule for this model family. Both dimensions of `WIDTH, HEIGHT`
-#: above are divisible by 16, and CLAUDE.md's environment block states the constraint as a
+#: above are divisible by 16, and docs/engineering-rules.md#generator-legal-frames's environment block states the constraint as a
 #: standing one: "Every video model constrains resolution and frame count (divisibility
 #: rules, fixed buckets, frame-count forms) ... record the constraint per model in the spec
 #: that first uses it." This is that constraint, in the tool whose output IS the
@@ -1181,7 +1181,7 @@ def main():
                 "with --hdri the suns are omitted and the environment texture lights "
                 "the plate")},
         "alpha": {
-            "law": ("CLAUDE.md, the maintainer's ruling 2026-08-12 — authored image inputs "
+            "law": ("docs/engineering-rules.md#alpha-law, the maintainer's ruling 2026-08-12 — authored image inputs "
                     "carry alpha, never a baked void"),
             "authored_master": {"path": first["rgba_path"],
                                 "sha256": _sha256(first["rgba_path"]),

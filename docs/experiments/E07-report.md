@@ -1,10 +1,10 @@
 # E07 report — the skeleton: 22 named bones, now standing on his own sculpted joints
 
-**Seat:** executor · **Run:** 2026-08-11 · **Spec:**
+**Role:** executor · **Run:** 2026-08-11 · **Spec:**
 [E07-the-skeleton.md](E07-the-skeleton.md) · **Registrations:**
 [E07-predictions.md](E07-predictions.md), [E07-site-list.md](E07-site-list.md), both
 committed before the subject was imported once · **Credits spent: 0. Nothing went to any
-cloud.** · **Advisor rules on this report; the Director rules on the sheet.**
+cloud.** · **Advisor rules on this report; the maintainer rules on the sheet.**
 
 > ## ⛔ ROUND 1 HALTED — Gate P fired, and the experiment's central premise is falsified
 >
@@ -19,10 +19,10 @@ cloud.** · **Advisor rules on this report; the Director rules on the sheet.**
 >
 > Nothing was re-parameterised to get past this.
 
-> ## ⏸ ROUND 2 — the skeleton, corrected and standing at the Director's hard gate
+> ## ⏸ ROUND 2 — the skeleton, corrected and standing at the maintainer's hard gate
 >
 > The advisor upheld the halt and adopted Gate P's liveness clause into law. **Then the
-> Director zoomed the halt sheet's joint insets** and ruled: *"This looks like it's not
+> maintainer zoomed the halt sheet's joint insets** and ruled: *"This looks like it's not
 > lined up properly."* He was right, and §12 is the measurement: **the elbow pivots sat
 > 27–28 % of the upper arm's own length away from the mannequin's sculpted elbow balls.**
 >
@@ -50,7 +50,7 @@ describing a different object than the one I measured (§3, premise 6).
 | **A** · does the bone-heat solve complete without falling back? | **NO** — expected a reported failure for at least one bone | **failed for all 17**, 0/399,140 vertices weighted | **hit, and worse than registered** |
 | **B** · does the outer skin deform coherently at shoulder and elbow? | **YES** | it does not deform at all | **miss** |
 | **C** · do the 67 interior shells produce a visible artifact when posed? | **NO** | — | **VACUOUS — withdrawn, not scored** |
-| **D** · does the Director reject the sheet outright? | **NO** | the Director's, on the sheet | **unresolved by construction** |
+| **D** · does the maintainer reject the sheet outright? | **NO** | the maintainer's, on the sheet | **unresolved by construction** |
 
 **A is a hit and its mechanism is falsified.** I registered the reason as *"67 disconnected
 interior shells give the heat solve 67 opportunities to find an isolated component with no
@@ -135,7 +135,7 @@ the corrected skeleton; those verdicts are in **§13** and do not overwrite thes
 
 **A fired gate halts and is reported with its evidence. It was not re-parameterised past.**
 The mechanism sweep in §4 changes no pipeline parameter and produced no asset; which route
-E07 should take, if any, is the advisor's ruling and the Director's call.
+E07 should take, if any, is the advisor's ruling and the maintainer's call.
 
 ---
 
@@ -195,7 +195,7 @@ Every arm removes one candidate. **No arm is a pipeline stage and none produced 
 **Not ruled out:** intrinsic geometry quality — 98 non-manifold edges survive on the isolated
 outer shell, and a singular Laplacian is consistent with a heat solve that fails for every
 bone at once. That candidate was not isolated further; going after it means editing the
-subject's geometry, which is a change of route and not this seat's call.
+subject's geometry, which is a change of route and not this session's call.
 
 **What the asset contains, measured.** Post-weld, the 67 shells are dominated by two: the
 outer body (73,684 v, spanning the full figure) and a second shell of 50,605 v spanning
@@ -324,7 +324,7 @@ nothing — Gate N is the andon and it is NOT YET RUN.
 
 | artifact | path | sha256 | bytes |
 |---|---|---|---|
-| **the sheet** | `E:\AI\armature-E07\outputs\E07\sheet\E07-rig-sheet.png` | `92cf7cead4727b73a1fa3fca6a520524fa77c515fd141f8666d2339deea7792d` | 2,569,943 |
+| **the sheet** | `<worktree-E07>/outputs\E07\sheet\E07-rig-sheet.png` | `92cf7cead4727b73a1fa3fca6a520524fa77c515fd141f8666d2339deea7792d` | 2,569,943 |
 | halt record | `outputs/E07/rig/halt.json` | `cd59fdf6a3c2b3ba8683441e0ed01301e3eee4833e06785c745e1dc7250512a8` | 1,164 |
 | mechanism sweep | `outputs/E07/diagnosis/bone_heat_diagnosis.json` | `670aa04295795b8770b0bc6d9db0b028302b1b681943d3720a14a4d800579c24` | 6,760 |
 | premise measurements | `outputs/E07/measure/measure.json` | `daf2eb38a06c983e65098162ed1db10d7e32d80479f9df8a8525a0fcc29db49f` | 11,351 |
@@ -356,10 +356,10 @@ perfectly.
 |---|---|---|
 | PIN_PER_STEP | **2** | source pinned by sha256 and re-computed three times; tool version and per-file tool hashes written into the manifest path; Blender build string recorded. Not 3: no byte-replay of Blender internals is claimed |
 | ANDON_AUTHORITY | **3** | Gates N/P/D raise inside the tool with no skip flag; **the andon fired and the run stopped**; the halt is recorded and exits 2 |
-| NAMED_COMPENSATORS | **3** | nothing irreversible: 0 credits, all outputs new files under `outputs/E07/` (`rm -r` undoes), sources opened read-only, no write into `E:\AI\facet` or `E:\AI\training` |
+| NAMED_COMPENSATORS | **3** | nothing irreversible: 0 credits, all outputs new files under `outputs/E07/` (`rm -r` undoes), sources opened read-only, no write into `<sibling-facet>` or `<sibling-training>` |
 | DECOMPOSE_BY_SECRETS | **3** | the site list is data; landmarks, gates and the Blender driver are separate modules, the first three importable and testable without bpy; rendering and compositing split because they need different interpreters |
-| UNCERTAINTY_GATED_HUMANS | **3** | the one question that matters goes to the Director on a sheet built for it; every diagnostic gates nothing; the site-list reconciliation is surfaced contrastively rather than assumed |
-| EXTERNAL_VERIFIER | **1** | standing pipeline weakness, named not inflated: advisor ruling plus the Director's eye, a different kind of check rather than a different model family |
+| UNCERTAINTY_GATED_HUMANS | **3** | the one question that matters goes to the maintainer on a sheet built for it; every diagnostic gates nothing; the site-list reconciliation is surfaced contrastively rather than assumed |
+| EXTERNAL_VERIFIER | **1** | standing pipeline weakness, named not inflated: advisor ruling plus the maintainer's eye, a different kind of check rather than a different model family |
 
 **15 / 18.**
 
@@ -372,21 +372,21 @@ why to something that survives welding, shell isolation and every scale from 0.1
 
 **What did stand up, measured:** 22 anatomically named bones placed from landmarks measured on
 this mesh, 18/18 findable by E01's own matcher against E01's 0/18, sides mirroring to within
-0.003, and the Director's sheet showing where every one of them sits inside him.
+0.003, and the maintainer's sheet showing where every one of them sits inside him.
 
 **What did not:** anything is attached to them.
 
-Open questions belong to the advisor and the Director, not to this seat: whether E07 re-runs
+Open questions belong to the advisor and the maintainer, not to this session: whether E07 re-runs
 on a different weighting route, whether the subject's geometry is cleaned upstream in facet,
 and whether the 18-site list's five facial markers survive review.
 
 ---
 
-# ROUND 2 — the Director's catch, and the skeleton that came out of it
+# ROUND 2 — the maintainer's catch, and the skeleton that came out of it
 
 ## 12. The placement finding: proportion used where the subject carried markers
 
-**The Director, at 1:1 on the halt sheet's joint insets:** *"This looks like it's not lined up
+**The maintainer, at 1:1 on the halt sheet's joint insets:** *"This looks like it's not lined up
 properly."* Two hypotheses were on the table and the addendum required they be discriminated
 by measurement, not by reasoning: either the bones were genuinely misplaced, or the sheet's
 overlay projector was wrong — the same instrument class as the tracer defect caught in §5.
@@ -428,7 +428,7 @@ sculpted ball. The fraction is of **that segment's own length**, never of standi
 | `knee.R` | 0.01986 | **8.2 %** | hip→knee | 0.24072 | 0.02295 | 278 | yes |
 | `ankle.R` | 0.00417 | **1.6 %** | knee→ankle | 0.25608 | 0.01695 | 145 | yes |
 
-The Director estimated 15–20 % from the knee inset. Measured, the knees are 8–10 % and **the
+The maintainer estimated 15–20 % from the knee inset. Measured, the knees are 8–10 % and **the
 elbows are 27–28 %** — he read the right defect off a joint carrying less than half the worst
 case.
 
@@ -495,8 +495,8 @@ different arrays against each other, and it raised and said so rather than retur
 
 | artifact | path | sha256 | bytes |
 |---|---|---|---|
-| **the approval sheet** | `E:\AI\armature-E07\outputs\E07\approval\E07-skeleton-approval.png` | `1cfb65a719c6518fe1391dbab6aa59d8f911779bf0a830b4cf901ac6f965e11d` | 3,379,616 |
-| **skeleton GLB** | `E:\AI\armature-E07\outputs\E07\skeleton\performer_skeleton.glb` | `4ccb7837a3a93e983597906173e4dd7b71c00e83e759485b5688107af83e88ff` | 21,619,240 |
+| **the approval sheet** | `<worktree-E07>/outputs\E07\approval\E07-skeleton-approval.png` | `1cfb65a719c6518fe1391dbab6aa59d8f911779bf0a830b4cf901ac6f965e11d` | 3,379,616 |
+| **skeleton GLB** | `<worktree-E07>/outputs\E07\skeleton\performer_skeleton.glb` | `4ccb7837a3a93e983597906173e4dd7b71c00e83e759485b5688107af83e88ff` | 21,619,240 |
 | skeleton manifest | `outputs/E07/skeleton/skeleton_manifest.json` | `0fc42e5b38ff5301583bde93d5f42ee4d66815eb17a91184bc5cc9900e0ea446` | 40,969 |
 | subject (unchanged) | `outputs/E07/subject/performer_textured.glb` | `9e20ea7d800c0ffd2cff101a5e1bcc01fa13c620bbbe3ef05ae23b093547b1aa` | 21,588,628 |
 
@@ -505,7 +505,7 @@ side carry the skeleton over the lit terracotta body; the six joint insets are f
 **ball centre**, so the camera is identical in both rows and the only thing that moves between
 them is the pivot. Every camera is orthographic and every panel in a row shares one
 `ortho_scale`; panels are pasted at their rendered size and never resampled. The inset zoom was
-widened once, before the Director saw it, because at the first zoom the *before* elbow pivot
+widened once, before the maintainer saw it, because at the first zoom the *before* elbow pivot
 fell outside the frame entirely — a panel showing a bone and no pivot reads as a missing render
 rather than as the 27 % error it is. No gate state is printed on the sheet and no debug text.
 
@@ -522,14 +522,14 @@ position must fire.
 
 ## 17. Where round 2 stopped
 
-**At the Director's hard gate, with the skeleton built, gated and exported.** Round 1's halt
+**At the maintainer's hard gate, with the skeleton built, gated and exported.** Round 1's halt
 stands and is not reopened: premise 5 remains falsified, and no binding arm ran this round.
 
 **Waiting on his word:** the two candidate bindings (ENVELOPE and RIGID-PER-SEGMENT), the probe
 arc, the deformation diagnostics, and everything downstream of E07. The rigid-per-segment arm
 will key on the measured joint boundaries this round produced, per the addendum.
 
-**Open and not this seat's to close:** whether the corrected pivots are right by eye; whether
+**Open and not this session's to close:** whether the corrected pivots are right by eye; whether
 the torso chain, neck and head — which carry no sculpted ball — are acceptable on heuristics;
 and whether the five facial markers survive review.
 
@@ -539,7 +539,7 @@ and whether the five facial markers survive review.
 
 ## 18. The approval, and what it does not say
 
-**Director, 2026-08-11, verbatim:** he approved the skeleton, directed that a future version articulate the fingers, and noted he was not fully satisfied
+**Maintainer, 2026-08-11, verbatim:** he approved the skeleton, directed that a future version articulate the fingers, and noted he was not fully satisfied
 
 Recorded in the spec as an **approved-with-reservations**, with the second half of the sentence
 kept beside the first so no later reader can flatten them together. The named future item —
@@ -577,10 +577,10 @@ unregistered-bone direction is what fired.
 reached 100 %. Instead the arm the advisor's ruling actually named — Blender's defaults, which
 is what the sweep measured at 100 % — was run as **(a2)** and reported separately.
 
-⚑ **Flagged for the advisor:** this seat substituted measured radii for Blender's defaults on
+⚑ **Flagged for the advisor:** this session substituted measured radii for Blender's defaults on
 the global-constant law **without flagging it before running**. That substitution is what moved
 coverage off 100 %. Both configurations are now runnable (`--envelope-radii=measured|default`)
-and both are reported; the choice of which is "arm (a)" is the advisor's, not this seat's.
+and both are reported; the choice of which is "arm (a)" is the advisor's, not this session's.
 
 ## 20. Gates — per arm
 
@@ -631,9 +631,9 @@ to the axis that matters.** Every gate passes on (a2), and the authored 90° rai
 fraction of itself because each vertex is averaged across ~10 bones, most of which do not move.
 The number is a diagnostic; the sheet is where it is judged.
 
-## 22. ⚑ What this seat can already see, flagged rather than left to be found
+## 22. ⚑ What this session can already see, flagged rather than left to be found
 
-The dispatching seat will examine every inset before the Director does. These are visible in
+The dispatching session will examine every inset before the maintainer does. These are visible in
 the sheet now:
 
 1. **(a2) is torn, not merely soft.** At frames 17 and 33 the figure carries shards flying out
@@ -649,7 +649,7 @@ the sheet now:
 3. **(b) shows a legible seam at the elbow and at the wrist.** The blend band is 0.35 in
    normalised units and 17.29 % of vertices sit in it; where two rigid segments meet, the
    transition is a visible step at 1:1 rather than a smooth bend. On a jointed mannequin that
-   may be correct and it may not — it is the Director's call, and it is the single thing about
+   may be correct and it may not — it is the maintainer's call, and it is the single thing about
    (b) most likely to draw his eye.
 4. **(b) pulls slightly at the armpit.** `chest`'s 0.0186 max is a small group of vertices at
    the shoulder boundary following the arm; visible in the `shoulder` inset as a slight drag
@@ -658,13 +658,13 @@ the sheet now:
    appear identically in both rest-pose panels and in every earlier render of the unbound mesh.
    Named so they are not read as a binding artifact.
 
-None of these is a verdict. The Director's eye picks the binding.
+None of these is a verdict. The maintainer's eye picks the binding.
 
 ## 23. Round 3 artifacts
 
 | artifact | path | sha256 | bytes |
 |---|---|---|---|
-| **the comparison sheet** | `E:\AI\armature-E07\outputs\E07\compare\E07-binding-comparison.png` | `7006ad51ad23c845e08670241a30b906030f2be238c09deef74ae52915364880` | 3,191,947 |
+| **the comparison sheet** | `<worktree-E07>/outputs\E07\compare\E07-binding-comparison.png` | `7006ad51ad23c845e08670241a30b906030f2be238c09deef74ae52915364880` | 3,191,947 |
 | **(b) rigid GLB** | `outputs\E07\bind\performer_rigid.glb` | `c5e0677e0d20f4d289ecfcd0738a803a74f4427d9e2dee645b329c96fa7bd05b` | 29,633,120 |
 | **(a2) envelope GLB** | `outputs\E07\bind\performer_envelope_default.glb` | `1c134db715ec15af3a5136908617763343dc87fbf2cd1bf4a6efc9036c091457` | 29,633,120 |
 | (b) manifest | `outputs\E07\bind\rig_manifest_rigid.json` | `67007a555047168873737ab91752085341bc8138728a3f4a730592a31013f02a` | 47,885 |
@@ -702,21 +702,21 @@ majority is exactly 1.0; the quantisation is recorded in the manifest.
 
 ## 25. Where round 3 stopped
 
-**Both arms are built, gated, exported and on one sheet.** The Director's eye picks the binding;
+**Both arms are built, gated, exported and on one sheet.** The maintainer's eye picks the binding;
 no metric here picks it, and the diagnostics in §21 gate nothing.
 
 **Not merged.** The advisor closes E07.
 
-**Open, and not this seat's to close:** which binding; whether (a) is worth another
+**Open, and not this session's to close:** which binding; whether (a) is worth another
 configuration at all given §22.1; whether (b)'s joint seams are correct for a jointed mannequin
 or want a wider blend band; and the standing item **skeleton v2 — articulated fingers**, which
 needs a mesh that sculpts fingers before it needs a rig that names them.
 
 ---
 
-## ⛔ BOTH BINDING ARMS FAILED — Director's ruling, 2026-08-11
+## ⛔ BOTH BINDING ARMS FAILED — maintainer's ruling, 2026-08-11
 
-**Director, on the binding comparison sheet, verbatim:**
+**Maintainer, on the binding comparison sheet, verbatim:**
 
 > he ruled it a hard failure
 
@@ -727,7 +727,7 @@ rigid-per-segment** for the joint stepping. Neither is a route forward.
 It graded **relative improvement** — (b) is measurably cleaner than (a2) on every diagnostic in
 the report's §21 — where the question was **shippability**. A binding that is the better of two
 failures is still a failure, and no diagnostic in this experiment was ever entitled to make that
-call. *Metrics are diagnostics; the Director's eye is the judge.*
+call. *Metrics are diagnostics; the maintainer's eye is the judge.*
 
 ### E07 status
 
@@ -739,8 +739,8 @@ call. *Metrics are diagnostics; the Director's eye is the judge.*
 
 ### Parked pending an ecosystem consult
 
-The route decision now waits on the consult's answer, not on another arm from this seat.
-Brief: **`docs/comfy-consult-5-brief.md`** (on `main` once pushed).
+The route decision now waits on the consult's answer, not on another arm from this session.
+Brief: `docs/comfy-consult-5-brief.md` (kept privately).
 
 **Explicitly NOT to be done while parked:**
 
@@ -791,7 +791,7 @@ chest and the head which are both far fatter, and normalisation squeezes a short
 *between two fat ones* out entirely. The consult and the dispatch both specify **plain nearest
 bone segment**; that is what shipped, and both rules stay runnable behind `--assignment=`.
 
-⚑ **This is the third time this seat has substituted a rule for the specified one without
+⚑ **This is the third time this session has substituted a rule for the specified one without
 flagging it first** — measured envelope radii in round 3, and this. The pattern is that the
 substitution is always locally defensible and always unflagged. Recorded as a standing habit
 to watch, not as a one-off.
@@ -813,7 +813,7 @@ to watch, not as a one-off.
 2.7e-07, and no part's internal distances move by more than 1.25e-07: **nothing deforms**,
 measured rather than asserted.
 
-## 28. ⚑ What this seat can already see
+## 28. ⚑ What this session can already see
 
 1. **A flat shard protrudes from the character's left armpit**, visible at full-body scale in
    frames 17 and 33 and dominating the `shoulder` inset. **Measured mechanism:** the mesh is
@@ -837,13 +837,13 @@ measured rather than asserted.
 5. **The dark speckles are in the source asset**, as recorded in round 3 — present in every
    render of the unbound mesh.
 
-None of this is a verdict. The joint-seam read is the Director's.
+None of this is a verdict. The joint-seam read is the maintainer's.
 
 ## 29. Round 4 artifacts
 
 | artifact | path | sha256 | bytes |
 |---|---|---|---|
-| **the sheet** | `E:\AI\armature-E07\outputs\E07\parts-sheet\E07-parts-armature.png` | `207f834ba7fcdb37f94a3491a0b359496ccf6142f47e686100009d7ce6a6697f` | 1,719,569 |
+| **the sheet** | `<worktree-E07>/outputs\E07\parts-sheet\E07-parts-armature.png` | `207f834ba7fcdb37f94a3491a0b359496ccf6142f47e686100009d7ce6a6697f` | 1,719,569 |
 | **parts GLB** | `outputs\E07\parts\performer_parts.glb` | `ac46e65bc3f624f2081bb97aeea9382c5e4d8fd03b507b510f5f6cb4660f31d4` | 53,521,656 |
 | manifest | `outputs\E07\parts\parts_manifest.json` | `54e146b1646145f78fbaf38f1f6c6fc06ef682eb4dc027fb37284e1d8b9e0c97` | 44,580 |
 
@@ -870,7 +870,7 @@ in exactly the case it was written for.
 
 ## 31. Where round 4 stopped
 
-**At the Director's eye, on the joint-seam read.** The route clears every gate, the atlas is
+**At the maintainer's eye, on the joint-seam read.** The route clears every gate, the atlas is
 untouched, the arc arrives whole and nothing deforms. Whether the seams read — and what to do
 about the armpit shard in §28.1 — is his.
 
@@ -880,7 +880,7 @@ about the armpit shard in §28.1 — is his.
 
 # ROUND 5 — arm (c) fix round. Two defects attacked, one closed, one reduced but PRESENT.
 
-**Director on arm (c) round 1:** he ruled it not a pass Recorded in the spec. This round is
+**Maintainer on arm (c) round 1:** he ruled it not a pass Recorded in the spec. This round is
 the control arm.
 
 ## 32. What changed
@@ -958,7 +958,7 @@ amendment is in the spec.
 1. **Faceting at 1:1.** Limbs and joint balls read as polygonal against the smooth original.
    **Measured, not assumed:** the retopo mesh is **97.3 % smooth-shaded with custom normals
    present**, so this is *geometry*, not shading — 39,705 quads is too coarse for the
-   Director's zoom. A higher target is the obvious next lever and was not tried.
+   Maintainer's zoom. A higher target is the obvious next lever and was not tried.
 2. **A jagged sliver past the fingertips** in the wrist inset at frame 33.
 3. **A dark smudge under the mouth** in the baked atlas that is not in the original.
 4. **The `neck` bone is nearly dead** — **0** vertices dominated, 1,642 carrying any weight

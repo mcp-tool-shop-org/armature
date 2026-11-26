@@ -1,6 +1,6 @@
 # E03 — report: does the control sequence govern authored motion?
 
-**Seat:** executor · **Written:** 2026-08-10, after the runs · Spec:
+**Role:** executor · **Written:** 2026-08-10, after the runs · Spec:
 [E03-authored-motion.md](E03-authored-motion.md) (with Amendment 1) · Predictions:
 [E03-predictions.md](E03-predictions.md), committed `44c0641` at
 `2026-08-10T20:18:48-04:00`, **before any submission**.
@@ -202,7 +202,7 @@ standing person, arms at their sides, no arm raise.
 | **G6** — subject motion (new) | **PASS** on the animated control (33/33 distinct signatures); **N/A** on the static control, where a constant subject is correct |
 | **Gate B** — batch intact | **PASS (33 of 33)** on B1 and B3; **N/A** for B2, which has no batch |
 | **Gate R** — round trip | **N/A for this route** — no codec in the path; retained with its 18 tests |
-| **Gate C** — credit bound | **3 generations submitted.** Projected **12 credits** at E02's measured 4/generation, against a 4-generation ceiling. **The fourth was not spent.** The actual figure is **NOT OBSERVABLE** through any programmatic surface — E02 measured that `estimate_credits` returns 0 for open weights and the invoice lags with no bucket for the day. 12 is a projection, not a measurement; the Director's balance read is the instrument. |
+| **Gate C** — credit bound | **3 generations submitted.** Projected **12 credits** at E02's measured 4/generation, against a 4-generation ceiling. **The fourth was not spent.** The actual figure is **NOT OBSERVABLE** through any programmatic surface — E02 measured that `estimate_credits` returns 0 for open weights and the invoice lags with no bucket for the day. 12 is a projection, not a measurement; the maintainer's balance read is the instrument. |
 | **Gate 0** — the sheet before the metric | **BUILT** for all three arms, plus the discriminator panel |
 
 **Bridge fidelity**, re-measured on this experiment: `out = max(src − 1, 0)`, 33 of 33
@@ -249,6 +249,6 @@ submitted payload sha256; both reproduce exactly after the refactor that added E
 
 - No arm is ranked against another on any magnitude.
 - Nothing here is an identity result; the subject has none.
-- Nothing here is a judgement of whether any output is good. **The Director judges the
+- Nothing here is a judgement of whether any output is good. **The maintainer judges the
   sheets**, at full size and at 0.5×.
 - The question of *how much* the model may add on top of authored motion is untouched.

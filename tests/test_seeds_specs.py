@@ -3,7 +3,7 @@
 Wave 3, F-dbc4ed63. Six of the eight `specs/*seeds.json` files carried a `ceiling` key
 (E08, E10, E11, E12, E13, E14) and `specs/E09-seeds.json` and `specs/E09-A3-seeds.json`
 carried none. Where present the value was free prose ("SIX submissions total, amended
-4 -> 6 by ..."), and no tool under `tools/` read the key. CLAUDE.md makes the credit
+4 -> 6 by ..."), and no tool under `tools/` read the key. docs/engineering-rules.md#credit-ceilings-and-seeds makes the credit
 ceiling a per-spec obligation and records that spent credits have no compensator, so the
 one unrecoverable resource in this repo was bounded by a string nothing could parse.
 

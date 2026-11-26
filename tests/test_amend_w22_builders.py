@@ -1491,7 +1491,7 @@ def test_the_paid_node_gate_returns_a_verdict_about_partner_nodes_and_says_so(tm
 # comparison. So the record could state 'letterbox' over a plate that was never fitted.
 # The sibling precedent is in this domain and ARMED: `build_i2v_payload` raises
 # `fit_disagrees_with_the_file` when the declared fit contradicts the file it measured
-# (wave 14, F-e17613c2). CLAUDE.md names the grey letterbox pads on E08's reference as the
+# (wave 14, F-e17613c2). docs/engineering-rules.md#reproducible-generation-records names the grey letterbox pads on E08's reference as the
 # standing suspect for its washed bands, which makes this the one field in the record most
 # worth measuring rather than asserting.
 #

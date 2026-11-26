@@ -401,7 +401,7 @@ def g2_completeness(run_dir, expected, frame_count):
 #: be rendered, submitted and receipted with G4 green. The spec now refuses the key.
 G4_TOLERANCE_PX = 2
 
-#: Why this number is global where CLAUDE.md warns against a global constant governing a
+#: Why this number is global where docs/engineering-rules.md#no-global-constant-for-local-feature warns against a global constant governing a
 #: local feature: the quantity it bounds is not a property of the structure. The
 #: projected bbox is every mesh vertex pushed through the camera matrix and clipped to
 #: the frame, so for a polygonal mesh it IS the expected silhouette bbox exactly, and the

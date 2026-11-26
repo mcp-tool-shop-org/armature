@@ -1,6 +1,6 @@
 # E11 wave 3 — blind predictions, registered before the first submission
 
-**Executor seat, 2026-08-12, branch `E11-nocontrol`.** Committed BEFORE `submit_workflow` is
+**Executor session, 2026-08-12, branch `E11-nocontrol`.** Committed BEFORE `submit_workflow` is
 called on the wave-3 graph. Nothing of wave 3 has been generated: the start frame is
 rendered, the graph is built, gated and saved, and no job exists.
 
@@ -9,7 +9,7 @@ rendered, the graph is built, gated and saved, and no job exists.
 **Blind with respect to wave 3 — completely.** No wave-3 generation exists at the time of
 writing.
 
-**NOT blind with respect to waves 1 and 2.** Before writing these degrees this seat had read
+**NOT blind with respect to waves 1 and 2.** Before writing these degrees this session had read
 both reports and the w2 ruling, and had looked at full size at: wave 1's start frame and its
 f0/f64; wave 2's f0–f4, f8, f32, f64 and its 3× head/hand zooms; and wave 3's own re-authored
 start frame and RGBA master. So these are informed priors, not naive ones.
@@ -66,7 +66,7 @@ result is *good*.
 j4 and j5 remain the clauses that actually test the lever; j1–j3 are hostage to whether the
 room survives.
 
-## H-E11k — motion character (the Director's diagnosis, first actual test)
+## H-E11k — motion character (the maintainer's diagnosis, first actual test)
 
 The prompt surgery rides unchanged from wave 2 and has **never been tested** — wave 2's
 frames had no subject to judge it on. This is its first measurement.
@@ -76,7 +76,7 @@ frames had no subject to judge it on. This is its first measurement.
 | k1 | frame-delta median exceeds wave 1's 5.282 | median over 80 adjacent pairs (⚠ different resolution) | **55 %** |
 | k2 | 81 of 81 frames distinct | count | **90 %** |
 | k3 | at least one frame shows both arms above shoulder height | binary, full size | **55 %** |
-| k4 | the Director calls the motion a dance rather than a wobble | **his eye — this seat does not judge it** | **45 %** |
+| k4 | the maintainer calls the motion a dance rather than a wobble | **his eye — this session does not judge it** | **45 %** |
 
 ## H-E11m — the hands
 

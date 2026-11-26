@@ -1,7 +1,7 @@
 """The sheet's provenance clause — E13's re-arm.
 
 The sheet is read before any number is quoted, so the thing worth testing is not that it
-draws pixels but that its provenance band cannot lie. CLAUDE.md: **a report may not contain
+draws pixels but that its provenance band cannot lie. docs/engineering-rules.md#no-placeholder-evidence: **a report may not contain
 a placeholder shaped like evidence.** A missing field must print as missing, never as a
 plausible value, and the slot-binding line must keep saying NOT VISIBLE.
 """

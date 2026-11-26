@@ -469,7 +469,7 @@ def test_an_empty_mesh_is_not_a_closed_manifold(repair, monkeypatch):
     """MEASURED on `e8263a3` by evaluating `closed_manifold`'s expression on the zero-count
     dict: `True`. Gate REPAIR's `if not final["closed_manifold"]` therefore PASSED a mesh
     deleted entirely, and total deletion was caught one clause LOWER by the face budget —
-    the second gate carrying the first gate's load, which CLAUDE.md rules against.
+    the second gate carrying the first gate's load, which docs/engineering-rules.md#gates-raise-inside-the-step rules against.
     """
     _with_bmesh(monkeypatch, repair, _FakeBMesh(faces=0, verts=0, edges=0))
     stats = repair.manifold_stats(_FakeObject())

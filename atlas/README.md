@@ -1,18 +1,21 @@
 # armature: how it works
 
-Mapped at 2026-11-26 from commit efc656b by Atlas 1.26.0.
+Mapped at 2026-11-26 from commit 3a3fd4b by Atlas 1.26.0.
 
 ## What this is
 
 8 parts, mostly Python (327 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.
 
-## What changed since 2026-11-26 (6994e0c)
+## What changed since 2026-11-26 (efc656b)
 
-Nothing structural changed since 2026-11-26; 1 file changed content.
+- ci's pull request trigger now also names `docs/audit-first-arc.md`, `docs/comfy-consult-brief-01.md`, `docs/engineering-rules.md`, `docs/random-routes.md`, `docs/research-grounding-e08.md`, `docs/research-grounding-movement-library.md`, `docs/research-grounding-verification-gates.md`, `docs/video-provider-field-notes.md`, `docs/wan-video-prompt-guide-notes.md`, `docs/wan21-prompt-guide-notes.md` and `docs/wan26-image-guide-notes.md` and no longer names `CLAUDE.md` and `HANDOFF.md`.
+- ci's push trigger now also names `docs/audit-first-arc.md`, `docs/comfy-consult-brief-01.md`, `docs/engineering-rules.md`, `docs/random-routes.md`, `docs/research-grounding-e08.md`, `docs/research-grounding-movement-library.md`, `docs/research-grounding-verification-gates.md`, `docs/video-provider-field-notes.md`, `docs/wan-video-prompt-guide-notes.md`, `docs/wan21-prompt-guide-notes.md` and `docs/wan26-image-guide-notes.md` and no longer names `CLAUDE.md` and `HANDOFF.md`.
+- docs/engineering-rules.md is now read by docs/index/armature.db.cert.json and docs/index/conventions.json.
+- 1 file added, 50 removed and 208 changed content, across 7 parts.
 
 ## What comes in
 
-1. **ci.** On a pull request touching 37 paths; on a push touching 37 paths; or by hand. Runs npm/bin/armature.mjs, tests/, tools/armature_core/cli.py and 3 more; checks tools/.
+1. **ci.** On a pull request touching 46 paths; on a push touching 46 paths; or by hand. Runs npm/bin/armature.mjs, tests/, tools/armature_core/cli.py and 3 more; checks tools/.
 2. **release.** When a release is published; or by hand. Runs tools/armature_core/cli.py and tests/; checks tools/.
 3. **pages.** On a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
 4. **armature** (a command people run, from npm/package.json). Runs npm/bin/armature.mjs.
@@ -59,7 +62,7 @@ ci writes nothing this map can see.
 - **tools/preview_walk.py** and **tools/render_performer.py** changed together in 16 of 22 commits, inside the tools part.
 - **tools/rig_bake.py** and **tools/rig_repair.py** changed together in 13 of 19 commits, inside the tools part.
 
-Window: 180 days; a pair counts from 10 shared commits, since 103 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
+Window: 180 days; a pair counts from 10 shared commits, since 102 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
 
 ## What no test touches
 

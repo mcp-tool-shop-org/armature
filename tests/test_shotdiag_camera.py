@@ -1,7 +1,7 @@
 """Synthetic CPU tests for Tier A shot camera diagnostics (`C1`–`C12` + `measure_shot` CLI).
 
 Every test runs on CPU with deterministic geometric or procedural planar-homography image
-fixtures and zero learned weights (`docs/dispatches/shot-diagnostics-design.md` §5).
+fixtures and zero learned weights (`docs/dispatches/shot-diagnostics-design.md` §5, kept privately).
 """
 
 import json

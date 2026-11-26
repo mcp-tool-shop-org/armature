@@ -1,11 +1,11 @@
 # E14 — report: two style LoRAs on the held world, and they fail in different places
 
-**Executor seat, 2026-08-13, branch `E14-run`.** Two arms, **two generations, the ceiling
+**Executor session, 2026-08-13, branch `E14-run`.** Two arms, **two generations, the ceiling
 reached exactly**. No re-runs. No gate fired. Predictions committed before the first
 submission ([E14-predictions.md](E14-predictions.md), commit `05a27fb`).
 
 **No judgement of quality is offered or implied.** Everything below is described. The
-Director's eye rules the scene, the identity and the camera hold, separately.
+Maintainer's eye rules the scene, the identity and the camera hold, separately.
 
 **Look first:** `outputs/E14/sheets/E14-bakeoff-sheet.png` — baseline, arm T and arm S at
 f0/f20/f40/f60/f80 with the reference plate, at full size.
@@ -122,8 +122,8 @@ the spec says they ride the report.
 
 ## 5. My predictions against what came back
 
-Scored factually. **Ruling on what any of it means is the advisor's and the Director's, not
-this seat's.**
+Scored factually. **Ruling on what any of it means is the advisor's and the maintainer's, not
+this session's.**
 
 | id | predicted | observed |
 |---|---|---|
@@ -170,12 +170,12 @@ better.
 
 ## 8. Disclosure — an executor deviation, owned
 
-Before this seat understood it had been handed the executor role, it **edited and pushed the
+Before this session understood it had been handed the executor role, it **edited and pushed the
 binding spec** (`182a98f`): the head candidates table, the dead-list, and two premise rows.
 No experimental variable moved — arms, seed, strength, gates, graph and ceiling are all as
 the pre-dispatch amendment set them at `e213103` — and the edits made the head table agree
 with the amendment it had been contradicting. **It was still not an executor's call.** It is
-recorded here rather than quietly left in the history, and it is the Director's to rule on.
+recorded here rather than quietly left in the history, and it is the maintainer's to rule on.
 
 ## 9. Per-route disclosure
 

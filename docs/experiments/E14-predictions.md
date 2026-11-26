@@ -1,6 +1,6 @@
 # E14 — the executor's predictions, committed BEFORE the first submission
 
-**Executor seat, 2026-08-13, branch `E14-run`.** Written and committed **before any E14
+**Executor session, 2026-08-13, branch `E14-run`.** Written and committed **before any E14
 graph was built or submitted**, and before any E14 artifact exists.
 
 **Blindness disclosed.** These are blind in the only sense available: no E14 output exists
@@ -9,7 +9,7 @@ first, as the dispatch requires. Where I agree I say so; where I disagree with t
 advisor's blind prediction I say that too, because a prediction that only ever echoes the
 spec cannot be scored against it.
 
-The Director judges. Nothing below is a quality claim, and no word here rules on an output.
+The maintainer judges. Nothing below is a quality claim, and no word here rules on an output.
 
 ## What the arms are
 
@@ -27,8 +27,8 @@ not a typo in this document.
 
 | id | clause | my prediction | confidence |
 |---|---|---|---|
-| **P1** | arm T produces a look transform legible to the Director | **YES, strongly.** The terracotta reads more saturated and pushed toward orange-red; the bar's warm key separates harder from its shadows; blacks deepen | high |
-| **P2** | arm S produces a look transform legible to the Director | **YES, and I predict it is NOT the subtler of the two** | medium |
+| **P1** | arm T produces a look transform legible to the maintainer | **YES, strongly.** The terracotta reads more saturated and pushed toward orange-red; the bar's warm key separates harder from its shadows; blacks deepen | high |
+| **P2** | arm S produces a look transform legible to the maintainer | **YES, and I predict it is NOT the subtler of the two** | medium |
 | **P3** | the Static camera hold survives | **YES on both.** The camera rides a separate conditioning channel (`WanCameraEmbedding` → `WanCameraImageToVideo`); a LoRA patches denoiser weights. Different channels | high |
 | **P4** | the transfer premise binds (visible effect on Fun-Camera derivative weights) | **YES on both.** Fun-Camera is a fine-tune of the same Wan 2.2 14B architecture, so rank-decomposed deltas still land on tensors that exist | T ~75%, S ~65% |
 | **P5** | arm T shows a tier-mismatch artifact | **UNRESOLVED, named in advance.** T's origin is a HN/LN pair; the Cloud serves one file of unknown tier, loaded on BOTH experts. One of T's two attachments is necessarily tier-mismatched | — |

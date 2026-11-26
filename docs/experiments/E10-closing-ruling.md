@@ -1,6 +1,6 @@
 # E10 — closing ruling: density adopted, on E08's shoulders
 
-**E10 is CLOSED. The Director's eye ruled the true-tempo A/B on 2026-08-12,** and his
+**E10 is CLOSED. The maintainer's eye ruled the true-tempo A/B on 2026-08-12,** and his
 verdicts land as decision content:
 
 1. **E10 wins the A/B.** Tempo good, not perfect. Standing direction recorded: **the more
@@ -25,5 +25,5 @@ two seeds — folded at the probe ruling, and E11 is read under it from birth); 
 label instrument law; the hold-frame law; the A/B builder's neither-arm-resampled rule.
 
 `E10-density` merges to `main` at close. Suite at close: 656 passed / 46 skipped, verified
-by the ruling seat's own run. **Next: E11 — the no-control route — whose dispatch hold is
+by the ruling session's own run. **Next: E11 — the no-control route — whose dispatch hold is
 released by this close.**

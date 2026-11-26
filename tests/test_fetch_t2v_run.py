@@ -12,7 +12,7 @@ The second defect is in the same file's downloader: `curl.exe -sSL -o $x.out $x.
 value read straight out of an operator-pasted dump in OPTION position with no `--`
 terminator, and the sibling `fetch_run.py` had one.
 
-Every fixture here asks CLAUDE.md's question of a fixture — what would this look like if
+Every fixture here asks docs/engineering-rules.md#fixture-falsification-question's question of a fixture — what would this look like if
 the code were wrong in the specific way this check exists to catch — so the ratios below
 are E09's own measured numbers on one side and their degenerate cases on the other.
 """
@@ -74,7 +74,7 @@ def test_an_undefined_ratio_halts_rather_than_reporting_null():
 def test_the_boundary_is_the_sign_of_the_comparison_not_an_invented_floor():
     """No calibrated floor for this ratio has been measured on any provider, so the gate
     may not carry a magnitude: a pass condition invented while looking at the results it
-    judges is the thing CLAUDE.md forbids. Just above 1 passes; just below refuses."""
+    judges is the thing docs/engineering-rules.md#diagnostics-versus-gates forbids. Just above 1 passes; just below refuses."""
     assert T.gate_order_evidence(_ev(1.0, 1.0001))["ratio"] > 1.0
     with pytest.raises(T.FetchHalt,
                        match=r"\[FETCH\] FETCH_ORDER_UNVOUCHED: differencing the"):

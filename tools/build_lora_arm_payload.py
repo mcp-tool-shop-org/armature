@@ -17,7 +17,7 @@ Both orders type-check: `LoraLoaderModelOnly` takes MODEL and returns MODEL, and
 `ModelSamplingSD3`. Picking by taste would be inheriting a claim.
 
 Measured 2026-08-13 off the served `video_wan2_2_14B_t2v` template — read as a REFERENCE,
-never as a route (CLAUDE.md), by walking its subgraph blueprint's MODEL links:
+never as a route (docs/engineering-rules.md#served-templates-and-gate-route), by walking its subgraph blueprint's MODEL links:
 
     UNETLoader(75, high) -> LoraLoaderModelOnly(83, lightx2v high) -> ModelSamplingSD3(82) -> KSamplerAdvanced(81)
     UNETLoader(76, low)  -> LoraLoaderModelOnly(85, lightx2v low)  -> ModelSamplingSD3(86) -> KSamplerAdvanced(78)
@@ -805,7 +805,7 @@ def conditional_attribution(graph):
 def disclosure(arm, attribution, route_ev):
     """The per-route disclosure block: what a user of THIS arm's footage is exposed to.
 
-    CLAUDE.md's per-route disclosure ruling (the maintainer, 2026-08-12) requires a route that
+    docs/engineering-rules.md#per-route-disclosure's per-route disclosure ruling (the maintainer, 2026-08-12) requires a route that
     sends assets through a third-party tier to document what its user is exposed to, and its
     licence rule states that a CONDITIONAL grant is a maintainer decision surfaced
     contrastively, never silently accepted. Wave 14, F-92f67091: this arm's obligation lived

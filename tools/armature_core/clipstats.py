@@ -377,7 +377,7 @@ def distinct_frames(frames):
     **The byte count's failing direction is unreachable on this function's real input**
     (F-4ba279bf, wave 25). `n_distinct` is a count of sha256 digests and its docstring used
     to say "A clip that froze reads 1", which is true only of a clip that froze
-    byte-for-byte. CLAUDE.md rules on this direction: "A file-hash mismatch is not evidence
+    byte-for-byte. docs/engineering-rules.md#pixel-comparison-not-file-hash rules on this direction: "A file-hash mismatch is not evidence
     a render changed. Compare pixels; reserve byte-hashes for artifacts whose bytes are the
     contract." Here the bytes are not the contract — the pictures are.
 

@@ -49,7 +49,7 @@ Why the batch topology gets its own gate
 list mis-binds — but it is measured on the batch as SAVED OFF the node at run time, which
 needs a submission. This one is structural and runs before any submission: `n` dotted slot
 keys, each bound to a distinct `LoadImage`. E02 measured the failure mode it exists for and
-CLAUDE.md records the receipt: a bare `images` list VALIDATED under `dry_run` with zero
+docs/engineering-rules.md#served-templates-and-gate-route records the receipt: a bare `images` list VALIDATED under `dry_run` with zero
 warnings and was refused only by a real submission. A `dry_run` PASS does not prove link
 sanity, so the link topology is checked in code.
 """
@@ -139,7 +139,7 @@ MEASURED_FREE_CLASSES = {
 
 
 #: The window a recorded `api_node: false` reading stays CURRENT for, in days. The same
-#: number `docs/license-map.md` rows age at under CLAUDE.md ("entries older than 90 days
+#: number `docs/license-map.md` rows age at under docs/engineering-rules.md#licence-gate ("entries older than 90 days
 #: are advisory until re-fetched"), for the same reason: a partner tier can reclassify a
 #: node, and a measurement is a statement about the day it was taken.
 MEASUREMENT_WINDOW_DAYS = 90

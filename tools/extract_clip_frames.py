@@ -3,7 +3,7 @@
 
     <venv-python> tools\\extract_clip_frames.py --clip=<mp4> --out=<dir> [--label=A1-seed1]
 
-CLAUDE.md: **video is judged in motion AND as frames.** A clip that reads well at speed can
+docs/engineering-rules.md#diagnostics-versus-gates: **video is judged in motion AND as frames.** A clip that reads well at speed can
 carry a melted hand in every frame, so the frames have to exist as files before anything is
 judged or sheeted. This writes them losslessly and records what the container actually said
 rather than what the request asked for — a 720P request and a 1280x720 stream are two

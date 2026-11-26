@@ -15,7 +15,7 @@ wraps mod 256 (a depth level of 40000 becomes 64) rather than raising. The recei
 recorded the sha256 of the ALREADY-coerced array, so neither is visible afterwards, and
 Gate R compares the coerced frames against the decode so it cannot fire on either.
 
-The fixtures ask CLAUDE.md's question of a fixture — what would this look like if the code
+The fixtures ask docs/engineering-rules.md#fixture-falsification-question's question of a fixture — what would this look like if the code
 were wrong in the way the check exists to catch? — so every one of them is an input that
 produced a *plausible* wrong answer before, not an input that crashed.
 """
@@ -264,3 +264,40 @@ def test_receipt_records_which_ffmpeg_source_was_used(tmp_path, monkeypatch):
     r_env = EC.build(str(d), str(tmp_path / "out2" / "c.mkv"), "ffv1-gbrp")
     assert r_env["ffmpeg_source"] == "env"
     assert r_env["ffmpeg_from_env"] is True
+
+
+def test_ffmpeg_source_and_from_env_follow_binary_actually_used(tmp_path, monkeypatch):
+    """Part 6: ffmpeg_source() and from_env must reflect whether FFMPEG used the env value."""
+    _stub_bridge(monkeypatch)
+    monkeypatch.setattr(EC, "ffmpeg_version", lambda: "ffmpeg version test")
+    d = _frames_dir(tmp_path, n=2)
+
+    pinned = str(tmp_path / "pinned.exe")
+    env_other = str(tmp_path / "env-other.exe")
+    monkeypatch.setattr(EC, "_IMPORT_FFMPEG", pinned)
+    monkeypatch.setattr(EC, "FFMPEG", pinned)
+    monkeypatch.setattr(EC, "FFMPEG_SOURCE", "imageio_ffmpeg")
+    monkeypatch.setenv("ARMATURE_FFMPEG", env_other)
+
+    assert EC.ffmpeg_source() == "imageio_ffmpeg"
+    r_pinned = EC.build(str(d), str(tmp_path / "out3" / "c.mkv"), "ffv1-gbrp")
+    assert r_pinned["ffmpeg_source"] == "imageio_ffmpeg"
+    assert r_pinned["ffmpeg_from_env"] is False
+
+    missing = str(tmp_path / "missing-nonenv.exe")
+    monkeypatch.setattr(EC, "FFMPEG", missing)
+    with pytest.raises(EC.EncodeFailure) as exc:
+        EC.gate_ffmpeg_binary()
+    assert exc.value.evidence["from_env"] is False
+
+
+def test_default_imageio_ffmpeg_getter_returns_existing_binary_when_installed():
+    """Part 6: exercise the real _default_imageio_ffmpeg getter when media extra is present."""
+    import importlib.util
+
+    if importlib.util.find_spec("imageio_ffmpeg") is None:
+        pytest.skip("optional extra armature-studio[media] (imageio-ffmpeg==0.6.0) is not installed")
+    exe = EC._default_imageio_ffmpeg()
+    assert isinstance(exe, str) and exe
+    assert os.path.isfile(exe), f"imageio-ffmpeg getter returned missing binary path: {exe}"
+    assert "ffmpeg" in os.path.basename(exe).lower()

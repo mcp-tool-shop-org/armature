@@ -1,10 +1,10 @@
-# E11 — closing ruling: wave 3 is a hard fail at the Director's eye, and the experiment closes
+# E11 — closing ruling: wave 3 is a hard fail at the maintainer's eye, and the experiment closes
 
-**E11 is CLOSED. The Director's verdict on wave 3, 2026-08-12, recorded as rendered: a hard
+**E11 is CLOSED. The maintainer's verdict on wave 3, 2026-08-12, recorded as rendered: a hard
 fail.** Much worse than wave 1 as a shot — the bar is gone (the frame is the authored
 white-and-brown void, held faithfully), the legs read fine enough, and the arms blur and
 deform through the turns. The verdict is the judgment of record, and this ruling does not
-grade the shot as relative improvement — that error is in the seat error table already, and
+grade the shot as relative improvement — that error is in the session error table already, and
 it is not repeated here. **Wave 3 fails as a shot, full stop.**
 
 ## What the verdict teaches, said plainly
@@ -14,7 +14,7 @@ camera tier held exactly what it was handed, and it was handed a void.** Wave 1'
 tier invented a bar and lost the camera; wave 3's control tier held the camera and
 faithfully preserved a world that was never worth holding — because the start frame's world
 was the previz plate, not a scene. "World-as-authored" requires **authoring a world.** My
-wave-3 ruling framed the persistence finding with a win's tone; the Director's eye read the
+wave-3 ruling framed the persistence finding with a win's tone; the maintainer's eye read the
 same fact as the shot losing its bar. Metrics are diagnostics; his eye is the judge; the
 framing slant is owned here.
 
@@ -32,7 +32,7 @@ framing slant is owned here.
    variable, same fresh ceiling.
 
 Both levers together are two generations. Whether either runs, and under what experiment
-number, is the Director's word.
+number, is the maintainer's word.
 
 ## The clause verdicts, for the record
 
@@ -58,4 +58,4 @@ listed last deliberately.
 route's honest state after three waves: identity holds unanchored (wave 1, his eye); the
 free tier paints worlds but wanders (wave 1); the camera tier obeys but must be handed a
 world (wave 3); arms/hands need the sampler correction measured and the hand geometry
-built. The skeletal route stands parked and unaffected. The next word is the Director's.
+built. The skeletal route stands parked and unaffected. The next word is the maintainer's.

@@ -1,11 +1,11 @@
 # E06 — does a reference image put a character onto a schematic control?
 
-**Seat:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
-report** · **Director judges the sheet** · **Credit ceiling: 3 generations (12 credits); 2 planned,
+**Role:** executor · **Spec written:** 2026-08-10, before any work · **Advisor rules after the
+report** · **maintainer judges the sheet** · **Credit ceiling: 3 generations (12 credits); 2 planned,
 1 reserved for a fired gate.**
 
 *Revised 2026-08-10 before dispatch: an earlier draft of this file was written and never issued to a
-seat. It required a new gate in `tools/build_payload.py`; enumeration of that file showed the gate
+session. It required a new gate in `tools/build_payload.py`; enumeration of that file showed the gate
 it needed **already exists**. Nothing was run under the earlier draft and no credits were spent.*
 
 ---
@@ -98,7 +98,7 @@ On the Gate 0 sheet, in this order:
 
 1. **Is there a painted character at all**, or a re-drawn diagram?
 2. **Does it perform?** The control's arm rises 0° → 90° across the 33 frames. Does the output's?
-3. **Is it the same man as the reference?** ⚠ **Canon, and the Director's alone.** No metric here
+3. **Is it the same man as the reference?** ⚠ **Canon, and the maintainer's alone.** No metric here
    approximates it — this repo has learned that twice. Identity diagnostics ride as diagnostics and
    **gate nothing**.
 
@@ -135,11 +135,11 @@ eye on the sheet**, not by that classifier.
 | 5 | E02's reference plate is still resident server-side under its recorded name | **ASSUMED** — verify; re-upload and say so if not |
 | 6 | E03's 33 posearc frames are still resident server-side | **ASSUMED** — same |
 | 7 | Adding a reference does not loosen control authority over position | **ASSUMED** — this is P3's question, not a fact |
-| 8 | Generation costs 4 credits | **MEASURED** — E02, Director's balance delta |
+| 8 | Generation costs 4 credits | **MEASURED** — E02, maintainer's balance delta |
 
-## ⚠ Concurrency — another seat is live in the same file
+## ⚠ Concurrency — another session is live in the same file
 
-**An E04 seat is running in `E:/AI/armature-E04`** and is adding a gate to `tools/build_payload.py`,
+**An E04 session is running in `<worktree-E04>`** and is adding a gate to `tools/build_payload.py`,
 in the submission path. E06 touches the `EXPERIMENTS` table in the same file.
 
 * **Rebase on `origin/main` before editing that file**, and again before committing.
@@ -148,16 +148,16 @@ in the submission path. E06 touches the `EXPERIMENTS` table in the same file.
 * **The regression net is real, not hope:** `tests/test_build_payload.py` pins E02's payload bytes,
   so a merge that corrupts the builder fails the suite before it can spend a credit. Run it after
   any rebase.
-* **You work only in `E:/AI/armature-E06`.** Never write into another seat's tree — not a file, not
+* **You work only in `<worktree-E06>`.** Never write into another session's tree — not a file, not
   a commit. **If files appear in your tree that you did not write: report them, do not commit them,
   do not delete them.**
-* **Count surfaces and any pinned number two seats both move are the advisor's to reconcile.** Name
+* **Count surfaces and any pinned number two sessions both move are the advisor's to reconcile.** Name
   the collision; touch nothing.
 
 ## Out of scope
 
 Control strength · control modality (segmentation, canny, normals — recorded in
-`docs/comfy-consult-3.md`, not tested here) · rigging itself · frame counts other than 33 ·
+`docs/comfy-consult-3.md` (kept privately), not tested here) · rigging itself · frame counts other than 33 ·
 `control_masks` · any new model, node, LoRA or preprocessor, so **this spec introduces no licence
 rows**.
 
@@ -165,7 +165,7 @@ rows**.
 
 Predictions with blind/not-blind first, then the Gate 0 sheet, then observations per arm against
 predictions, then every gate with a verdict. A gate that did not run is written **NOT YET RUN**.
-**No judgement words.** Whether it is the same man is the Director's call and no sentence in the
+**No judgement words.** Whether it is the same man is the maintainer's call and no sentence in the
 report may pre-empt it. **A negative result is a full success.**
 
 ## Standards compliance
@@ -176,7 +176,7 @@ report may pre-empt it. **A negative result is a full success.**
 | ANDON_AUTHORITY | **3** | `expects_reference` raises on this experiment's own variable and is already under test; L/B/C inherited and already firing across E02 and E03. **No new gate commissioned** — the one needed already existed. |
 | NAMED_COMPENSATORS | **2** | Local artifacts are new files under `outputs/E06/` (`rm -r` undoes it). **Spent credits have no compensator** — hence a ceiling stated before the first submission and a halting Gate C. |
 | DECOMPOSE_BY_SECRETS | **3** | Build, submit, fetch and sheet-building stay separate tools; this experiment adds a config entry and no new seam. |
-| UNCERTAINTY_GATED_HUMANS | **3** | No pass condition by design; the identity question is routed to the Director explicitly and no metric may pre-empt it. |
-| EXTERNAL_VERIFIER | **1** | Named rather than inflated — the verifier is the Director's eye plus this seat's ruling, a different *kind* of check rather than a different model family. Carries the pipeline's standing remediation. |
+| UNCERTAINTY_GATED_HUMANS | **3** | No pass condition by design; the identity question is routed to the maintainer explicitly and no metric may pre-empt it. |
+| EXTERNAL_VERIFIER | **1** | Named rather than inflated — the verifier is the maintainer's eye plus this session's ruling, a different *kind* of check rather than a different model family. Carries the pipeline's standing remediation. |
 
 **15 / 18.**

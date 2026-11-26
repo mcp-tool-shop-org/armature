@@ -159,7 +159,7 @@ Named because each is a plausible-sounding drift that would eat the project:
 
 The canonical copies of everything summarized here live in the repo:
 [README](https://github.com/mcp-tool-shop-org/armature/blob/main/README.md) ·
-[CLAUDE.md](https://github.com/mcp-tool-shop-org/armature/blob/main/CLAUDE.md) ·
+[engineering rules](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/engineering-rules.md) ·
 [the audit](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/audit-first-arc.md) ·
 [license map](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/license-map.md) ·
 [roadmap](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/ROADMAP.md).

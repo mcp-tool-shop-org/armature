@@ -64,7 +64,7 @@ two axes; this is a blade. P2's "no armature" result and the whole shape of the 
 follow from it, and the executor inherited my reading until the contact sheet showed a sword.
 
 **The mechanism, and it is the one this lineage keeps recording.** The spec's premise table
-marked premise 2 **MEASURED** — "enumerated 2026-08-10; 15+ found under `E:\AI\training`". What
+marked premise 2 **MEASURED** — "enumerated 2026-08-10; 15+ found under `<sibling-training>`". What
 I actually measured was that *files exist*. I never opened one. That is precisely
 *a real population whose members you never checked for the property*: the population was real,
 every member was real, and the property I needed — **is this a character** — was never checked
@@ -85,8 +85,8 @@ frozen config, a directory listing — and each time the proxy was one command a
 measurement tested **the property the spec depends on**, not merely the existence of the thing.
 Where the spec depends on *what an asset is*, the premise line carries the measurement that
 opened it. The executor's own P2 miss has the same shape — taking `_rigged` in a filename as
-evidence of a rig — so this is not a seat-specific failure; it is what filenames do to both
-seats.
+evidence of a rig — so this is not a session-specific failure; it is what filenames do to both
+sessions.
 
 ## 4. The finding that changes the roadmap: the pose channel is blocked on assets, not code
 
@@ -121,7 +121,7 @@ ones the evidence favours anyway. The gap is real and it is not on the critical 
 ## 6. The blindness corroboration — produced by my own error
 
 The executor's predictions are timestamped in git at **15:14:22**; its first measurement ran at
-**15:32:49**. Neither timestamp is a seat's to author, so blindness does not rest on anyone's
+**15:32:49**. Neither timestamp is a session's to author, so blindness does not rest on anyone's
 word.
 
 That evidence exists **because I swept the executor's in-progress report into an S01 commit with
@@ -130,7 +130,7 @@ happened to create independent provenance in another. Worth noting precisely so 
 mistakes it for a designed control — it was luck, and the honest record is what made the luck
 legible.
 
-## 7. And I did it again — second cross-seat contamination, different mechanism
+## 7. And I did it again — second cross-session contamination, different mechanism
 
 At ruling time the branch `E01-control-sequence-exporter` pointed at **my logo/favicon commit**,
 not the executor's. The executor left HEAD checked out on its branch; I ran `git commit` in that
@@ -142,11 +142,11 @@ onto `main` as `e8a94c6`, and `E01-control-sequence-exporter` was reset to its o
 `de4f73d`. The branch now differs from main by E01's files alone.
 
 Two contaminations in one day from one root cause — **acting in a shared repo without checking
-what the other seat has left there.** The first correction covered staging (`git add -A`); it
+what the other session has left there.** The first correction covered staging (`git add -A`); it
 did not cover the branch pointer. The rule is now the general one: **check `git rev-parse
---abbrev-ref HEAD` and stage by explicit path, every time, while another seat is live.**
+--abbrev-ref HEAD` and stage by explicit path, every time, while another session is live.**
 
-## 8. Awaiting the Director
+## 8. Awaiting the maintainer
 
 Nothing here is pushed. What needs his eye rather than a measurement: the six-channel contact
 sheets for both subjects, and whether the character arm — measured on a tool that only ever

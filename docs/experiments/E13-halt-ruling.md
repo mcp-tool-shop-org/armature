@@ -2,7 +2,7 @@
 
 **Advisor ruling, 2026-08-13, on the executor's halt report (branch `E13-run` @ `da2849e`,
 unmerged — it stays unmerged until E13 closes or is withdrawn; this ruling lands on `main`
-and cites it).** Zero credits spent, zero generations, zero uploads accepted. The Director
+and cites it).** Zero credits spent, zero generations, zero uploads accepted. The maintainer
 has not yet picked the path forward; R7 frames that decision and this ruling holds it open.
 
 ## R1 — The halt is correct, and the discipline held
@@ -24,7 +24,7 @@ the posture the repo pays for, executed clean.
 The executor re-measured E02's wall today — the same `validation.input` error_type on
 both containers, `LoadVideo`'s option list empty, and no URL- or path-based loader
 among 124 VIDEO-output classes. That enumeration covered *loaders*. Measured at ruling
-time by this seat, same day: **the catalog serves a constructor** — core `CreateVideo`
+time by this session, same day: **the catalog serves a constructor** — core `CreateVideo`
 ("Create a video from images"), `images` IMAGE + `fps` FLOAT (1–120, default 30),
 optional audio and bit_depth, → VIDEO; `api_node: false`, so it executes as ordinary
 workflow compute, not a partner call. The rescue shape E02 pioneered for an IMAGE
@@ -41,7 +41,7 @@ never executed); upload practicality at 81 content-addressed frames. The r2v nod
 `output_node: false` (executor's observation) stands with it — the graph supplies its own
 save class. All of this is catalog-and-typing evidence, zero credits spent obtaining it.
 
-## R3 — Finding 2 ruled: the A1 premise failed on a row nobody wrote, and the miss is this seat's
+## R3 — Finding 2 ruled: the A1 premise failed on a row nobody wrote, and the miss is this session's
 
 The spec's A1 row — "facet's canonical turnaround renders — MEASURED (facet canon
 exists)" — was measured for **existence**, not for **subject**. The dispatch amendment
@@ -54,7 +54,7 @@ frames extracted, everything looked at full size.
 an identity probe whose arms disagree about the identity has no experiment left in it.
 The repo already holds "predict each clause of a conjunction separately"; this ruling
 adds the reciprocal: **a premise table that names two inputs carries a row for their
-coherence.** Owned by the advisor seat: the dispatch checklist verified the clip's hash
+coherence.** Owned by the advisor session: the dispatch checklist verified the clip's hash
 and never asked whose face was in it. E13's premise table gains the coherence row
 retroactively by this ruling; every future multi-reference spec carries one from birth.
 
@@ -64,7 +64,7 @@ The 8-view set the executor located (`turn_final/`, with `turn_clay/` and the sh
 beside it) fails twice:
 
 1. **Flat-255 alpha over a baked grey void, all eight views** — the authored-RGBA law
-   violation (the Director's ruling, 2026-08-12; the same disease standing suspect for
+   violation (the maintainer's ruling, 2026-08-12; the same disease standing suspect for
    E08's washed bands). Armature-side, and fixable: the performer GLBs and
    `stage_render.py` are on the rig; a re-render authors true alpha.
 2. **White texture-projection holes on six of eight views** — worst on exactly the
@@ -99,7 +99,7 @@ full-size look.
 - The re-estimate receipt (106–211/generation, this path) rides the credits ledger as
   the tier's first live pricing signal.
 
-## R7 — The decision before the Director, framed with this seat's recommendation
+## R7 — The decision before the maintainer, framed with this session's recommendation
 
 1. **HOLD E13 behind asset repair** — re-render the performer turnaround RGBA-true in
    armature (wanted independently of E13: the flat-alpha set violates a standing ruling

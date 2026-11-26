@@ -136,7 +136,7 @@ def test_subject_help_says_what_omitting_it_does():
 
 
 def test_no_canon_help_says_what_it_turns_off_and_when_it_is_refused():
-    """(c). The flag that BYPASSES the gate CLAUDE.md places inside the irreversible write
+    """(c). The flag that BYPASSES the gate docs/engineering-rules.md#gates-raise-inside-the-step places inside the irreversible write
     described itself as a "census-backed escape" and never said what it switches off."""
     text = _spend_help()["--no-canon"]
     assert "BYPASS" in text and "Gate CANON" in text
@@ -517,7 +517,7 @@ def test_every_ruled_component_row_carries_a_fetch_date():
 
 def test_the_rows_with_no_source_are_the_ones_the_map_records_as_unretrieved():
     """`source` is `None` — never a plausible-looking URL — exactly where the map itself
-    records a non-retrieval. A placeholder shaped like evidence is the thing CLAUDE.md
+    records a non-retrieval. A placeholder shaped like evidence is the thing docs/engineering-rules.md#no-placeholder-evidence
     forbids, so the absence is asserted rather than filled."""
     unsourced = sorted(k for k, v in R.RULED_COMPONENTS.items() if not v.get("source"))
     assert unsourced == ["causvid", "dwpose", "vintage_film_grain"], unsourced

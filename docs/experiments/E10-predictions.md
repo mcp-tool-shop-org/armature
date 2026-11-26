@@ -1,10 +1,10 @@
 # E10 — predictions, registered before the measurement and before the submission
 
-**Seat: executor**, branch `E10-density`, worktree `E:\AI\armature-E10`. Written before the
+**Role: executor**, branch `E10-density`, worktree `<worktree-E10>`. Written before the
 smoothness diagnostic was computed and before any E10 graph was submitted. The commit that
 carries this file is the timestamp.
 
-## What this seat had already seen when writing these numbers — disclosed, because it
+## What this session had already seen when writing these numbers — disclosed, because it
 ## bounds how blind "blind" is
 
 Blind to: **every second-difference number**, in either unit, for either sequence. No
@@ -22,7 +22,7 @@ Blind to every painted E10 output — nothing has been submitted.
 - the projected body span: E10 min 246.67 / median 254.80 / max 302.89 px against E08's
   246.67 / 254.80 / 307.20. The max is lower because the source frame carrying the widest
   pose is not one of the 17 the new sampling lands on.
-- the E08 report's own outcomes, including that this seat's E08 predecessor under-predicted
+- the E08 report's own outcomes, including that this session's E08 predecessor under-predicted
   every identity and scene clause.
 
 ## The arithmetic these predictions are reasoned from — stated so a wrong prediction can be
@@ -52,7 +52,7 @@ acceleration in wall-clock time is a property of the performance, not of the sam
 | every one of the 20 body keypoints drops on the per-frame median (none rises) | all 20 | **70 %** |
 | the per-**second** (px/s²) median is approximately unchanged | ratio in **[0.85, 1.15]** | **60 %** |
 
-The last row is the one this seat expects to be most informative: if it holds, the honest
+The last row is the one this session expects to be most informative: if it holds, the honest
 statement is that densification did not smooth the performance, it **re-sampled the same
 performance in smaller steps** — which is a claim about what the model is shown, not about
 the motion.
@@ -61,7 +61,7 @@ the motion.
 
 | clause | prediction | degree |
 |---|---|---|
-| the Director reads the E10 clip as visibly smoother than E08's at true tempo | yes | **45 %** |
+| the maintainer reads the E10 clip as visibly smoother than E08's at true tempo | yes | **45 %** |
 | some visible difference in motion texture, direction unspecified | yes | **70 %** |
 
 45 %, not higher, because the driving delta falls by about a third while the chop may be
@@ -87,7 +87,7 @@ built at the other convention (81/19.94) or that the encode stage rounds the rat
 
 ## The rest of the shot, predicted clause by clause
 
-E08's seat recorded that it under-predicted every identity and scene clause; these are
+E08's session recorded that it under-predicted every identity and scene clause; these are
 corrected upward for that, and the correction is stated so the adjustment is visible.
 
 | clause | prediction | degree |

@@ -1,11 +1,11 @@
 # E07 closing ruling — the skeleton stands, the binding is provisional, and seven rounds bought five laws
 
-**Seat:** advisor · **Ruled:** 2026-08-11 · **Spec:**
+**Role:** advisor · **Ruled:** 2026-08-11 · **Spec:**
 [E07-the-skeleton.md](E07-the-skeleton.md) (with Amendments 1–4 in place) · **Reports:**
 E07-report.md, rounds 1–7 corrected in place · **Status: CLOSED, EXPERIMENTING** ·
 **Credits: 0 spent across all seven rounds.**
 
-## The Director's rulings, in order
+## The maintainer's rulings, in order
 
 1. Skeleton: he approved the skeleton, directed that a future version articulate the fingers, and noted he was not fully satisfied
 2. Bindings (a) envelope and (b) rigid-per-segment: he ruled it a hard failure
@@ -17,12 +17,12 @@ E07-report.md, rounds 1–7 corrected in place · **Status: CLOSED, EXPERIMENTIN
 
 **Disposition: the skeleton is APPROVED (with reservation 1 standing). The binding — arm (d),
 repaired shell + bone heat, weights normalized — is ACCEPTED PROVISIONALLY for E08's purpose,
-under ruling 5.** Quality ledger below; nothing here is promoted to CLAUDE.md.
+under ruling 5.** Quality ledger below; nothing here is promoted to docs/engineering-rules.md.
 
 ## The deliverable E08 inherits
 
 ```
-rigged GLB   E:\AI\armature-E07\outputs\E07\rig-repaired\performer_auto.glb
+rigged GLB   <worktree-E07>/outputs\E07\rig-repaired\performer_auto.glb
 sha256       7f56c9ac101218db78c10aa5764b9a72a7d8b6f4b539f035b7739351ed6e2a24
              12,961,704 bytes · 114,610 verts / 147,020 faces · one shell · original atlas
              (no unwrap, no bake) · 22 named bones on measured ball centers · weights
@@ -50,15 +50,15 @@ repaired     ...\repaired\performer_repaired.glb (unrigged shell, 8221900e…) +
 3. **Bone heat is all-or-nothing against manifoldness** — and the importer's UV-seam split is
    sufficient to break it. `rig_character` welds on import unconditionally.
 4. **A global deviation statistic cannot see a face.** Local features need local measurement
-   or the Director's zoom — the voxel route shipped three "excellent" deviation numbers around
+   or the maintainer's zoom — the voxel route shipped three "excellent" deviation numbers around
    a ruined mouth.
-5. **The gate protects the pipeline, not the rig** (licence, Director's ruling 4): a canonical
-   route stage cannot ride a proprietary paid addon regardless of seat ownership. Recorded in
+5. **The gate protects the pipeline, not the rig** (licence, maintainer's ruling 4): a canonical
+   route stage cannot ride a proprietary paid addon regardless of session ownership. Recorded in
    the licence map's retopo section with the advisor's wrong YES corrected in place.
 
-**Also on the record:** the seat's three unflagged substitutions (a standing habit, twice
+**Also on the record:** the session's three unflagged substitutions (a standing habit, twice
 caught by its own gates); the export OBJ gate (no unregistered object ships — the "stray
-Icosphere" was Blender's importer's hidden collection, proven not the seat's); labels on
+Icosphere" was Blender's importer's hidden collection, proven not the session's); labels on
 sheets are derived from the mesh, never hand-written, after round 6 mislabelled its own
 artifact.
 
@@ -68,7 +68,7 @@ ear-rim notches + nose speck (the 593 repaired faces — consider steering repai
 from face features, or a texture touch-up) · armpit/thigh-root bone-heat creases · the elbow
 ball softening under bend (smooth skinning vs the mechanical ball read — a character
 question) · the weak `neck` bone · **the atlas holes** (the E33 brush pass never ran — the
-"tiny triangle artifacts" the Director flagged are unfilled texels, in every render since
+"tiny triangle artifacts" the maintainer flagged are unfilled texels, in every render since
 the twins) · the wood-grain finish note · **skeleton v2: articulated fingers** (needs an
 F-series hand-mesh iteration first).
 
@@ -77,5 +77,5 @@ F-series hand-mesh iteration first).
 A facet-line character can be given a named-bone skeleton on its own sculpted joint markers
 and a live, normalized, isolated smooth-skin binding — at zero credits, entirely local,
 entirely commercially clean — sufficient to author performances for control rendering. The
-quality bar for footage is the Director's, his ruling 5 stands, and E08 is where the
+quality bar for footage is the maintainer's, his ruling 5 stands, and E08 is where the
 deliverable meets the model.

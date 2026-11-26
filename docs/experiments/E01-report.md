@@ -1,8 +1,8 @@
 # E01 — report
 
-**Seat:** executor · **Spec:** [E01-control-sequence-exporter.md](E01-control-sequence-exporter.md)
+**Role:** executor · **Spec:** [E01-control-sequence-exporter.md](E01-control-sequence-exporter.md)
 · **Credits spent: 0** (nothing was submitted to any provider) · **Advisor rules after the
-Director has seen this.**
+Maintainer has seen this.**
 
 This report states measurements. It does not decide what they mean.
 
@@ -15,13 +15,13 @@ before any render ran.** The only facts in hand at registration time were the en
 presence checks in §2 — tool versions and the byte sizes of the four subject files. Nothing had
 been imported, rendered or measured.
 
-Per CLAUDE.md, each prediction first states **what one of the counted thing is**, then the
+Per docs/engineering-rules.md, each prediction first states **what one of the counted thing is**, then the
 number. Conjunctions are predicted clause by clause before the join.
 
 > **The blindness claim has third-party corroboration, which is better than my word for it.**
 > A parallel S01 advisor session swept this file into commit `fc2f2c2` with `git add -A` while
 > I was still writing — an error it recorded against itself in `6fb9925`. The useful side
-> effect is a timestamp neither seat controls: **the predictions below entered git at
+> effect is a timestamp neither session controls: **the predictions below entered git at
 > 15:14:22**, byte-identical to what is here now, and **my first measurement of anything —
 > `outputs/E01/p2/p2_armatures.json` — was written at 15:32:49**, eighteen minutes later. The
 > first render (`runA`) landed at 15:34:49. No prediction below was edited after any
@@ -125,11 +125,11 @@ in the torso rather than spread uniformly across its range.
 | | |
 |---|---|
 | Blender | 5.2.0 LTS, build `fbe6228777e7`, 2026-07-14, bundled Python 3.13.13 / numpy 2.3.4 |
-| test python | `E:\AI-Models\trellis2-env` — 3.13.13, numpy 2.4.6, Pillow 12.2.0, pytest 9.1.1 |
+| test python | `<local-env>` — 3.13.13, numpy 2.4.6, Pillow 12.2.0, pytest 9.1.1 |
 | VRAM watchdog | alive at session start, restarted to a fresh heartbeat; kill@ 31200 MiB / RAM 90% / 87 °C |
 | GPU work | Blender EEVEE renders only. No model weights of any kind were loaded in any process. |
 | **credits spent** | **0.** Nothing was submitted to any provider; no cloud tool was called. |
-| writes to `E:\AI\training` | **none.** The only files modified there in the session window are the watchdog's own `_watchdog_HEARTBEAT` and `_watchdog_log.csv`, which the watchdog writes. Every subject was opened read-only. |
+| writes to `<sibling-training>` | **none.** The only files modified there in the session window are the watchdog's own `_watchdog_HEARTBEAT` and `_watchdog_log.csv`, which the watchdog writes. Every subject was opened read-only. |
 
 ## 3. Predictions beside measurements
 
@@ -193,7 +193,7 @@ quality was deliberately kept out of this count and is untouched by it.
 ### P3 — reported for two subjects, and **not chosen between**.
 
 **Both normalizations are emitted side by side** as `depth_perframe/` and `depth_pershot/`. There
-is no `depth/` directory: naming one would be choosing, and the choice is the Director's.
+is no `depth/` directory: naming one would be choosing, and the choice is the maintainer's.
 
 | | registered | **sword** (`longsword_hero`) | **character** (`blackguard_unirig`) |
 |---|---|---|---|
@@ -334,11 +334,11 @@ recorded per frame in every manifest.
 spec and raised `KeyError` from the middle of the render loop on a raw one. It now fills defaults
 first — the only step that precedes G1, and it touches no filesystem.
 
-**Two seats were live in this working tree at once.** The S01 advisor session's `git add -A`
+**Two sessions were live in this working tree at once.** The S01 advisor session's `git add -A`
 swept this report into `fc2f2c2` mid-write, and recorded the error against itself in `6fb9925`.
 Nothing was lost — main's copy is byte-identical to §1 as it stands — and the accident produced
 the timestamp evidence quoted at the top of §1. Noted here from the executor side because the
-collision is a property of the *tree*, not of either seat: this branch is based on `8666d9b`,
+collision is a property of the *tree*, not of either session: this branch is based on `8666d9b`,
 which already contains that snapshot, so the report's history reads continuously rather than as
 two competing files.
 
@@ -390,7 +390,7 @@ be a check that cannot fail.
 owner = the executor session that made the run. It refuses any directory without the
 `.armature_run` marker this tool writes.
 
-## 9. Artifacts for the Director
+## 9. Artifacts for the maintainer
 
 Sheets — **control channels beside their provenance**, every tile at native 512×768 with no
 resampling:

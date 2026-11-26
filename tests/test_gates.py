@@ -1,6 +1,6 @@
 """Gate unit tests.
 
-Every one of these asks the question CLAUDE.md asks of a fixture: *what would this
+Every one of these asks the question docs/engineering-rules.md#fixture-falsification-question asks of a fixture: *what would this
 look like if the code were wrong in the specific way this check exists to catch?*
 """
 

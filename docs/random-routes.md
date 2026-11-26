@@ -1,6 +1,6 @@
 # Random routes — kept alive on purpose
 
-**Director's call, 2026-08-10:** he chose to keep FLF2V as a random route rather than abandon it entirely
+**Maintainer's call, 2026-08-10:** he chose to keep FLF2V as a random route rather than abandon it entirely
 
 ## What a random route is, and why the repo has this file
 
@@ -38,7 +38,7 @@ solving a problem your control already solves."* I ruled it near-closed on that 
 
 **That reasoning is sound about the dense-control arm and wrong about the tool.** It grades FLF2V
 on how well it duplicates the thing we already built, which is the *shrinking* family: judging a
-capability by our current test design rather than by what it is. The Director stopped it.
+capability by our current test design rather than by what it is. The maintainer stopped it.
 
 ### What it actually is, stated properly
 
@@ -73,7 +73,7 @@ identity **and** motion character, alone, exactly where we have the least eviden
 the thing any FLF2V experiment must measure first, and it is why this route does not go near the
 main pipeline until it has been.
 
-The Director's "tame it with a structured prompt" is the right instinct and names the right lever:
+The maintainer's "tame it with a structured prompt" is the right instinct and names the right lever:
 if the model owns the interior, the interior is governed by language and reference rather than by
 geometry. **Structured prompting is the control surface of this route.**
 
@@ -84,7 +84,7 @@ geometry. **Structured prompting is the control surface of this route.**
    discriminator, and it gates everything else about combining them.
 2. **Standalone, with authored endpoints:** does the model produce plausible motion between two
    authored poses at all?
-3. **Does the man survive the interior?** The identity question above — judged by the Director's
+3. **Does the man survive the interior?** The identity question above — judged by the maintainer's
    eye, never by a metric.
 4. **What does structured prompting actually move** — motion character, timing, both, neither?
 

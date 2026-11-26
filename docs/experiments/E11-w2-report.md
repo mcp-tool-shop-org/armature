@@ -1,12 +1,12 @@
 # E11 wave 2 — report: the camera embedding ran on weights that were never trained to take one
 
-**Executor seat, 2026-08-12, branch `E11-nocontrol`.** Wave 2 of the no-control route: the
-composed wave the Director picked — camera embedding plus prompt surgery, one generation,
+**Executor session, 2026-08-12, branch `E11-nocontrol`.** Wave 2 of the no-control route: the
+composed wave the maintainer picked — camera embedding plus prompt surgery, one generation,
 seed 2026081232 drawn from the registered reserves.
 
 **No judgement of quality is offered or implied anywhere in this document.** The advisor
-rules; the Director judges. What follows is what was built, what gates said, what came back,
-and what this seat looked at.
+rules; the maintainer judges. What follows is what was built, what gates said, what came back,
+and what this session looked at.
 
 ---
 
@@ -23,8 +23,8 @@ Wan 2.2 I2V experts.** The camera tier has its own weights —
 `wan2.2_fun_camera_{high,low}_noise_14B_fp8_scaled.safetensors`, served in the same catalog
 — and this graph loaded `wan2.2_i2v_{high,low}_noise_14B_fp8_scaled.safetensors` instead.
 
-**This seat spent one generation and stopped.** The remaining reserve is unspent. Whether it
-is spent on a corrected run is the Director's call and the advisor's ruling, not this seat's.
+**This session spent one generation and stopped.** The remaining reserve is unspent. Whether it
+is spent on a corrected run is the maintainer's call and the advisor's ruling, not this session's.
 
 ---
 
@@ -209,7 +209,7 @@ holds.
 Wan2.2-Animate-14B. **It carries no Fun-Camera row.** The wave-2 dispatch's phrase "weights
 mapped Apache (consult #7 ruling)" refers to a row the map does not contain.
 
-Retrieved by this seat, 2026-08-12, zero spend:
+Retrieved by this session, 2026-08-12, zero spend:
 
 | component | licence | commercial | source | notes |
 |---|---|---|---|---|
@@ -221,7 +221,7 @@ This route runs 65 frames at 832×480. Whether that matters is not something thi
 answer.
 
 Writing the map row is the advisor's; nothing has been added to `docs/license-map.md` by
-this seat.
+this session.
 
 ## 8. Predictions versus outcomes
 
@@ -246,7 +246,7 @@ world but no world at all.
 | f1 | frame-delta median above 5.282 | 60 % | **MISS numerically** (4.549) **and unreadable** — it measures noise jitter. |
 | f2 | 65/65 distinct | 90 % | **HIT** (65/65) **and unreadable** — noise is distinct frame to frame. |
 | f3 | a frame with both arms above shoulder height | 45 % | **MISS.** No arms after f1. |
-| f4 | the Director calls the motion a dance | 45 % | **not applicable** — there is no motion to call. His verdict is not sought on this clip. |
+| f4 | the maintainer calls the motion a dance | 45 % | **not applicable** — there is no motion to call. His verdict is not sought on this clip. |
 | g1 | hands clearly better than wave 1's claw | 20 % | **UNREADABLE.** No hands after f1. |
 | g2 | hands clearly worse | 35 % | **UNREADABLE.** |
 | g3 | a frame with separated fingers | 15 % | **MISS.** |
@@ -276,7 +276,7 @@ tested on weights that can receive it.**
 | `prompt_id` | `514a4a57-5b8d-4de7-9f18-a0d12367795e` |
 | job status | `completed` / `succeeded`, no warnings |
 
-## 10. What this seat did not do
+## 10. What this session did not do
 
 - **Did not spend the remaining reserve.** A weights mismatch is a named cause and the spec
   authorises the second reserve on one — but a corrected run changes the model, which is a
@@ -316,4 +316,4 @@ subject after one frame.
 
 Whether the next step is the corrected camera run on the Fun-Camera experts, a return to the
 wave-1 route with the prompt surgery alone (which would isolate the prompt lever the camera
-run confounded), or something else, is not this seat's to choose.
+run confounded), or something else, is not this session's to choose.

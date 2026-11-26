@@ -420,3 +420,54 @@ def test_missing_twin_prompt_json_raises_typed_payload_error_naming_env_var_and_
     assert exc_env.value.evidence["clause"] == "twin_prompt_json_missing"
     assert exc_env.value.evidence["from_env"] is True
     assert exc_env.value.evidence["path"] == os.path.abspath(str(missing_env))
+
+    # Explicit path while env var is also set: from_env must be False because explicit path was used.
+    with pytest.raises(BAP.PayloadError) as exc_override:
+        BAP.identity_clause(str(missing_explicit))
+    assert exc_override.value.evidence["from_env"] is False
+
+    # Empty env var falls back to import-time TWIN_PROMPT_JSON: from_env must be False.
+    monkeypatch.setenv("ARMATURE_TWIN_PROMPT_JSON", "")
+    monkeypatch.setattr(BAP, "TWIN_PROMPT_JSON", str(missing_explicit))
+    with pytest.raises(BAP.PayloadError) as exc_empty:
+        BAP.identity_clause()
+    assert exc_empty.value.evidence["from_env"] is False
+    assert exc_empty.value.evidence["path"] == os.path.abspath(str(missing_explicit))
+
+
+def test_main_records_call_time_twin_prompt_json_in_prompt_record(tmp_path, monkeypatch):
+    """Part 6: prompt_record['identity_clause_source'] reflects call-time ARMATURE_TWIN_PROMPT_JSON."""
+    import json
+    import os
+    from conftest import REPO
+
+    call_time_json = tmp_path / "call_time_twin.json"
+    call_time_json.write_text(
+        json.dumps({"_entry_verbatim": "A sculpted clay performer, plain pale grey background, soft studio light."}),
+        encoding="utf-8",
+    )
+    neg = tmp_path / "wan_config.py"
+    neg.write_text('sample_neg_prompt = "blurry, low quality"\n', encoding="utf-8")
+    uploads = tmp_path / "uploads.json"
+    uploads.write_text(
+        json.dumps({"reference": "ref.png", "pose_pack": "pack.png", "pose_frames": 65}),
+        encoding="utf-8",
+    )
+    out = tmp_path / "out_animate"
+
+    monkeypatch.setattr(BAP, "TWIN_PROMPT_JSON", str(tmp_path / "import_time_other.json"))
+    monkeypatch.setenv("ARMATURE_TWIN_PROMPT_JSON", str(call_time_json))
+    monkeypatch.setattr(BAP, "canon_spend", lambda *a, **k: {"verdict": "PASS", "subject": "PERFORMER"})
+    monkeypatch.setattr(BAP, "canon_line", lambda ev: "[canon] test")
+    rc = BAP.main([
+        f"--uploads={uploads}",
+        f"--out={out}",
+        f"--negative-source={neg}",
+        "--seed=2026081211",
+        f"--seeds={os.path.join(REPO, 'specs', 'E08-seeds.json')}",
+        "--subject=PERFORMER",
+        "--no-canon",
+    ])
+    assert rc == 0
+    rec = json.loads((out / "E08-probe-payload-record.json").read_text(encoding="utf-8"))
+    assert rec["prompt_record"]["identity_clause_source"] == os.path.abspath(str(call_time_json))
