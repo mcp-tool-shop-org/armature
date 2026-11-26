@@ -6,15 +6,15 @@
                                      --out=<sheet.png> [--frames=0,8,16,24]
 
 Gate 0: **no number is quoted for an arm until this sheet exists for it.** facet ran four
-arms and two gates before building this panel, and when it finally existed the Director
+arms and two gates before building this panel, and when it finally existed the maintainer
 read the whole thesis off one screen. The columns are fixed by the spec — control, output,
 reference, provenance — because the failure it prevents is quoting a metric about an
 artifact nobody has looked at.
 
 The sheet computes nothing. It aligns the control frame that drove a generation with the
 frame that came out of it, at the same frame index, and prints the provenance beside them.
-Whether the figure is the right character is canon and the Director's; whether it is in the
-right place is his eye on this panel.
+Whether the figure is the right character is canon and the maintainer's; whether it is in the
+right place is checked by eye on this panel.
 
 Sheets locate; full size decides. Every tile is native resolution — frames go on the
 sheet at their own size, no resampling — so what is on the sheet is what is in the file.

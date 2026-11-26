@@ -114,7 +114,7 @@ CLAY_CONSUMERS = (
 
 @pytest.mark.parametrize("filename", CLAY_CONSUMERS)
 def test_clay_stills_name_the_shared_plate(filename):
-    """Director-facing stills reference CLAY_STUDIO_LINEAR, not a lone 0.72 / 0.30 literal."""
+    """Maintainer-facing stills reference CLAY_STUDIO_LINEAR, not a lone 0.72 / 0.30 literal."""
     src = read_source(filename)
     assert "CLAY_STUDIO_LINEAR" in src, filename
     assert "(0.72, 0.72, 0.73" not in src, filename

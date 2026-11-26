@@ -911,7 +911,7 @@ def test_a_class_raised_from_exactly_one_site_is_deliberately_not_policed():
     `81d6c07` with this test's own expression: 22 single-site unpoliced classes, 21 of them
     family classes defined under `tools/**`. Five waves of refusal work moved it and the
     sentence did not, in the one file where the wave-16 merge conflict was resolved by union
-    plus measurement — so a seat reading this to size the next union would have started from
+    plus measurement — so a session reading this to size the next union would have started from
     the wrong number, which is the shape that put a 72 in a message asserting 69. Both counts
     are DERIVED below now rather than written in prose, so the sentence cannot fork from the
     assertion again; the 2026-09-04 figures stay as history, labelled as history.
@@ -2569,6 +2569,7 @@ RECORDED_CLAUSES = [
     'trap_codec_requires_allow_trap',
     'trunk_column_too_short',
     'trunk_holds_no_clusters',
+    'twin_prompt_json_missing',
     'twist_datum_collapsed',
     'two_answers',
     'two_frames_share_one_server_name',

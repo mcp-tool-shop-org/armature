@@ -70,35 +70,35 @@ npm 包是一个**启动器，而不是一个移植版本**：用第二种语言
 
 ## 状态：该论点在产品层面进行衡量
 
-成立于 **2026-08-10**。完成了 13 个实验，并且该论点已经从*测试中*发展到**在产品层面上进行衡量**：角色在他的骨骼驱动下在屏幕上跳舞，并且自由地活动；一个手工制作的世界保持到最后一帧，使用了两个种子（E12），并且**身份现在可以在托管的、由人类训练的分层系统中生存，该系统只接收设计好的参考资料**（E13）——所有这些都由导演来判断。创始阶段的审计报告位于
+成立于 **2026-08-10**。完成了 13 个实验，并且该论点已经从*测试中*发展到**在产品层面上进行衡量**：角色在他的骨骼驱动下在屏幕上跳舞，并且自由地活动；一个手工制作的世界保持到最后一帧，使用了两个种子（E12），并且**身份现在可以在托管的、由人类训练的分层系统中生存，该系统只接收设计好的参考资料**（E13）——所有这些都由维护者来判断。创始阶段的审计报告位于
 [docs/audit-first-arc.md](docs/audit-first-arc.md)；自 2026-08-12 以来的状态是一个学习型的单一代码仓库——实验证明了路径，没有哪条路径会因为惯性而成为规范（CLAUDE.md）。
 
 | | |
 |---|---|
-| 实验 | **E01–E14 closed** (E05 withdrawn on a falsified premise) — the control arc (E01–E06) · rig repair + skeleton approval (E07) · **the first painted shot** (E08) · the clean-chain baseline (E09) · densified driving adopted (E10) · the no-control route, three waves to an instructive hard fail (E11) · **the free route gains a world** and the 6.0 / uni_pc baseline (E12) · **the composed route answers its question** (E13 — dispatched, halted at zero spend, repaired by a support arc, re-armed, run, and closed inside one date: identity holds at the Director's eye; reference grounds steer model-decided worlds) · **the LoRA scene-lever priced live** (E14 — the bake-off: both style LoRAs bind on the derivative weights; the character holds on `technically_color` and fails on the photo-real pair; the winner carries an unresolvable served-file tier and a credit obligation, both recorded) |
+| 实验 | **E01–E14 closed** (E05 withdrawn on a falsified premise) — the control arc (E01–E06) · rig repair + skeleton approval (E07) · **the first painted shot** (E08) · the clean-chain baseline (E09) · densified driving adopted (E10) · the no-control route, three waves to an instructive hard fail (E11) · **the free route gains a world** and the 6.0 / uni_pc baseline (E12) · **the composed route answers its question** (E13 — dispatched, halted at zero spend, repaired by a support arc, re-armed, run, and closed inside one date: identity holds at the maintainer's eye; reference grounds steer model-decided worlds) · **the LoRA scene-lever priced live** (E14 — the bake-off: both style LoRAs bind on the derivative weights; the character holds on `technically_color` and fails on the photo-real pair; the winner carries an unresolvable served-file tier and a credit obligation, both recorded) |
 | 路线 | **三种，已衡量**——**驱动路线**（渲染骨骼 AAPose 贴纸 → 动画；在镜头层面得到证明，暂停，并且可以用于其重新启动）；**自由路线**（使用 GLB 设计的起始帧 → 相机层位于 6.0 / uni_pc 基线；身份保持未锚定状态，一个手工制作的世界保持两个种子，并且 LoRA 场景杠杆被实时衡量——E14）；**组合路线**（将设计好的参考资料输入到托管的身份锁定层中——由 E13 完成：身份锁定的、模型决定的电影拍摄，世界由参考资料所包含的内容进行指导；其规范中有披露说明）。 |
 | 花费 | 创始阶段有 22 个测试，每个测试花费 4 个积分；E08–E12 阶段的实际花费为 **0 积分**（GPU 小时计费），低于每个实验设定的上限；**E13 的四个生成是该代码仓库中第一个合作伙伴积分支出，并且在他们之前声明的 424-844 范围内**；E14 的两个生成实际花费了 **0 个合作伙伴积分**，达到其两个生成的上限。 |
-| 许可地图 | 每个采用的依赖项都包含一个**检索到的许可文档**；未验证的内容被视为“无”；通过第三方层进行的路线还包含**每条路线的披露说明**（由导演于 2026-08-12 决定）；该门户网站的既定目的是发布工作室的艺术作品。 |
+| 许可地图 | 每个采用的依赖项都包含一个**检索到的许可文档**；未验证的内容被视为“无”；通过第三方层进行的路线还包含**每条路线的披露说明**（由维护者于 2026-08-12 决定）；该门户网站的既定目的是发布工作室的艺术作品。 |
 | 支出门控 | **CANON 门控** 拒绝提交的付费内容，该内容的标题无法与机器可读的规范对应——表面是行，空占位符是**孔，而不是缺失**，并且会检查两个方向（提示涵盖了规范；提示中的所有内容*都是*规范）。它在创建输出目录**之前**触发，位于七个有效负载构建器中的每一个内部，因为此仓库负责的不可逆步骤是写入有效负载。逃避机制是基于普查的：如果某个主题*具有*规范，则拒绝 `--no-canon`，而不是接受——并且自从第一次健康检查通过后，它会在每次支出时**发出明确的信号**：每个构建器都会打印 `[canon] ARMED: <subject>`，并且在普查逃避时打印 `[canon] UNGATED: <subject> — <the census row's reason>`，因此，构建日志可以区分已批准的孔和规范从未写入的主题；并记录结果，记录在 `gates.CANON` 下，因此，没有任何记录可以留下规范是否已激活或逃避的问题未得到解答。 |
 | 测试 | **8051 在测试环境中通过**（59 次跳过，于 2026-09-07 测量，在修复了“feature-execute”引脚问题后——v0.4.0 版本为 7538，Stage D 之后为 7811），在记录了 STATUS 的测试中，在 `-O` 下表现一致；CI 测试了测试程序能够真实地执行哪些操作——测试环境中的本地资源**明显跳过**。 |
 | 状态 | **v0.5.0**——对 Stage D 进行了视觉优化，并在 v0.4.0 健康运行的基础上添加了一个新功能。授权的仓库提交者（`build_submit_payload.py`，模拟运行），安装了 CLI `canon` / `verify` / `spec` / `donor`，进行了 8051 次测试。不是 1.0.0 版本：填充问题仍然存在。 |
 
 ### 正在衡量的内容（当前的阶段）
 
-- **身份一致性**——通过驱动（E08：在整个镜头中，面部看起来像双胞胎）*并且*不锚定（E11 wave 1：最后一帧的每个特征都没有参考、没有剪辑视角、没有驱动信号）。导演的观察是记录的最终裁决。
+- **身份一致性**——通过驱动（E08：在整个镜头中，面部看起来像双胞胎）*并且*不锚定（E11 wave 1：最后一帧的每个特征都没有参考、没有剪辑视角、没有驱动信号）。维护者的观察是记录的最终裁决。
 - **相机严格遵循指令，精确控制到单个像素**（相机层权重，E11 wave 3），并且在没有指令的情况下进行调整（E11 wave 1）。
 - **密度影响信号，而非性能**（E10）——重采样使步骤平滑了41%，性能提升了8.6%；尽管如此，仍然通过视觉判断采用：更高的帧率看起来更好。
 - **许可证问题不是线路连接问题**（E11 wave 2）——一个映射的Apache模型和一个从未加载它的图表，每次都产生65帧噪声，并且所有门控信号均为绿色。现在存在“门控对”功能。
 - **场景构图具有种子敏感性**（E10 / E11）——相同的文本重新构建了整个世界，跨越不同的种子。**一个场景声明需要两个种子才能成为其属性。**
 - **一个稳定的世界得以保留**（E12）——起始帧中的真实房间在相机层上的两个种子上保留到最后一帧，并且通过场差将一个变量属性分配给起始图像。相同的层在一个预览空白中保留了一个空白（E11 wave 3）：世界是创作出来的，然后被保存下来。
 - **目录的6.0 / uni_pc 是相机层的基准**（E12）——继承的3.5 / euler 前提落到了它自己的等级：在目录设置中，相同的种子既失去了头部又长出了肢体，使得图像保持到f80。代价是明确的——更强的附着力将**未限定身份条款**应用于两个种子上的人群；以主题为范围的提示是主要的控制因素。
-- **身份在一个仅接收授权参考输入的托管层中得以保留**（E13）——在wan2.7的参考视频中，双臂、两个种子，程式化的木制表演者通过一个经过人工训练的模型呈现出相同的角色，这符合导演的期望。在两个座位上进行的三个盲测预测该层会覆盖非人类结构；但没有一个预测是正确的——对这些模型的一种单向悲观情绪现在被记录下来作为校准原则。
+- **身份在一个仅接收授权参考输入的托管层中得以保留**（E13）——在wan2.7的参考视频中，双臂、两个种子，程式化的木制表演者通过一个经过人工训练的模型呈现出相同的角色，这符合维护者的期望。在两个会话中进行的三个盲测预测该层会覆盖非人类结构；但没有一个预测是正确的——对这些模型的一种单向悲观情绪现在被记录下来作为校准原则。
 - **参考依据引导模型决定的世界，并控制该层上的种子混乱**（E13）——灰色板产生了灰色的工作室，一段温暖的酒吧片段产生了一个温暖的内部空间，并且两个种子的结果一致。机制归因（板材溢出与工作室默认值）在四个世代中可以清晰地观察；一种基于属性的声明遵循两个种子的规则，并在一个设计好的后续步骤中进行。
 - **构建的视频到达视频接口**（E13）——没有上传路径用于剪辑片段，但 81 个授权帧在图表中组装在一起 (`CreateVideo`)，并被接受到参考视频接口。原则上，平台上所有 VIDEO 类型的输入都可以从授权帧中访问。
 
 ### 不符合要求的是什么
 
-- **高速运动的手臂和手**。在两个种子和两种设置下，仍然无法达到 f80（E12）。控制因素被重新设定为**首先考虑呈现效果**——腕部和相机布景，来自导演对 GLB 的诊断（爪子是一种投影伪像，而不是网格损坏），并且以网格修复作为最后的手段，而不是第一步。
+- **高速运动的手臂和手**。在两个种子和两种设置下，仍然无法达到 f80（E12）。控制因素被重新设定为**首先考虑呈现效果**——腕部和相机布景，来自维护者对 GLB 的诊断（爪子是一种投影伪像，而不是网格损坏），并且以网格修复作为最后的手段，而不是第一步。
 - **摄影世界中的相机声明**。在所有四个 E12 剪辑中，0/81 个地平线检测结果表明，检测器需要一个该世界没有的缝隙——在提交之前进行注册盲测，并且从未转换为相机结果。在真实房间上读取任何相机编号之前，应该有一个**无缝的相机工具**。
 - **叙事层**（请参考#7）：节拍端点、每个片段的提示、视频时间区域条件、相机嵌入——已采用，并在需要时获得许可，但未经测试。
 
@@ -106,7 +106,7 @@ npm 包是一个**启动器，而不是一个移植版本**：用第二种语言
 
 ## 这个仓库的工作方式
 
-- [CLAUDE.md](CLAUDE.md)——如何在这里工作：三个角色、每个座位遵循的规则以及不可谈判的内容（许可证门控信号、有限的积分、身份由视觉判断）。
+- [CLAUDE.md](CLAUDE.md)——如何在这里工作：三个角色、每个角色遵循的规则以及不可谈判的内容（许可证门控信号、有限的积分、身份由视觉判断）。
 - [docs/ROADMAP.md](docs/ROADMAP.md)——整个构建过程，按会话划分，并提前命名了漂移触发点。
 - `docs/experiments/`——每个非平凡的更改都以编号实验的形式运行：**先进行规范说明，然后进行工作 → 完成报告 → 最后由顾问做出裁决。**
 - `docs/license-map.md`——经过验证的商业用途地图。没有任何内容可以在没有检索到许可证文档的情况下进入流水线。
@@ -140,10 +140,10 @@ pwsh -NoProfile -File .\verify.ps1                  # tests, tests under -O, pac
 ### 运行测试套件
 
 ```
-E:\AI\armature\.venv\Scripts\python.exe -m pytest -q            # from the repo root, on the repo venv — never the system Python
+.venv\Scripts\python.exe -m pytest -q                           # from the repo root, on the repo venv — never the system Python
 ```
 
-三个环境控制杆，都是可选的：`PYTHONPATH=E:/AI/record-index`（索引测试导入的同级工作副本；如果没有它，这些测试会因名称而跳过）、`ARMATURE_BLENDER`（驱动 Blender 的测试运行的 Blender 可执行文件；如果没有它，或者不在此构建环境中，这些测试会明显跳过）和 `ARMATURE_GIT`（打包测试调用的 git）。CI 的确切配方是 `python-tests` 任务，位于 `.github/workflows/ci.yml` 中；`verify.ps1` 运行相同的测试套件两次（一次在 `-O` 下），然后运行打包构建。
+三个环境控制杆，都是可选的：`PYTHONPATH=<repo>/../record-index`（索引测试导入的同级工作副本；如果没有它，这些测试会因名称而跳过）、`ARMATURE_BLENDER`（驱动 Blender 的测试运行的 Blender 可执行文件；如果没有它，或者不在此构建环境中，这些测试会明显跳过）和 `ARMATURE_GIT`（打包测试调用的 git）。CI 的确切配方是 `python-tests` 任务，位于 `.github/workflows/ci.yml` 中；`verify.ps1` 运行相同的测试套件两次（一次在 `-O` 下），然后运行打包构建。
 
 种子规范的 `ceiling` 块包含绑定数字——`submissions`，每个分支或每个波次的拆分，`counted_in`、`note`。其背后的更正历史记录位于 [specs/ceiling-why-machine-readable.md](specs/ceiling-why-machine-readable.md)（于 2026-09-06 移动到此处，此前有八个相同的规范内副本；`specs/*.json` 从 80,321 字节减少到 45,585 字节）。
 
@@ -161,11 +161,11 @@ E:\AI\armature\.venv\Scripts\python.exe -m pytest -q            # from the repo 
 
 **绝不允许使用任何非商业模型，包括实验中使用的模型。** CC-BY-NC、仅供研究和仅供学术用途的许可协议均被明确禁止。如果结论是基于一个被禁止的模型得出的，那么这个结论就必须被抛弃，因此它一开始就不应该存在。
 
-**指标用于诊断；最终由主管进行判断。** 屏幕上显示的图像是否与原始角色相同，才是衡量标准，没有任何指标可以近似地达到这一点。每个生成实验都会在引用任何数据之前，先构建一个“控制 | 输出 | 参考 | 出处”表格。
+**指标用于诊断；最终由维护者进行判断。** 屏幕上显示的图像是否与原始角色相同，才是衡量标准，没有任何指标可以近似地达到这一点。每个生成实验都会在引用任何数据之前，先构建一个“控制 | 输出 | 参考 | 出处”表格。
 
 **云端积分在使用前会被限制。** 已使用的积分无法撤销，因此每个配置都预先规定了每个分支的上限。
 
-**路径会显示与之相关的内容（主管裁定，2026-08-12）。** 任何通过第三方渠道进行的流程，都会记录其提供商的数据使用和训练策略、人工智能内容披露义务以及水印政策，这些都基于许可地图中获取的文档。完全本地化的流程会声明没有任何数据会离开系统。如果缺少披露说明，则该流程不完整——首次应用将遵循 E13 的规范。
+**路径会显示与之相关的内容（维护者裁定，2026-08-12）。** 任何通过第三方渠道进行的流程，都会记录其提供商的数据使用和训练策略、人工智能内容披露义务以及水印政策，这些都基于许可地图中获取的文档。完全本地化的流程会声明没有任何数据会离开系统。如果缺少披露说明，则该流程不完整——首次应用将遵循 E13 的规范。
 
 ## 信任和威胁模型
 

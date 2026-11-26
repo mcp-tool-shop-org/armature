@@ -1,11 +1,11 @@
 #!/usr/bin/env python
-"""make_sheet — the panel the Director reads the run off.
+"""make_sheet — the panel the maintainer reads the run off.
 
     <venv-python> tools/make_sheet.py --run=<run dir> --out=<sheet.png> [--frames=0,8,16,24]
     <venv-python> tools/make_sheet.py --dailies-manifest=<run.json>
 
 facet ran four arms and two gates before building its comparison sheet, and when the
-sheet finally existed the Director read the whole thesis off one panel. E01 generates
+sheet finally existed the maintainer read the whole thesis off one panel. E01 generates
 nothing, so there is no *output* or *reference* column yet — what exists is the
 **control** stack and its **provenance**, and those are what this lays out.
 

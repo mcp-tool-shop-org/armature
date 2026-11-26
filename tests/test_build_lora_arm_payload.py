@@ -585,7 +585,7 @@ def test_every_builder_puts_its_graph_through_the_licence_census():
 
 
 # ================================ wave 12: the CONDITIONAL licence row, credited from the ROW
-# The coordinator's ruling of 2026-09-04 (delegated by the Director): `docs/license-map.md:77`
+# The coordinator's ruling of 2026-09-04 (delegated by the maintainer): `docs/license-map.md:77`
 # rules `wan22-14b-t2v-technically_color.safetensors` "YES — credit required" (CivitAI grant
 # `allowCommercialUse [RentCivit, Rent, Image]`, `allowNoCredit: false`, creator renderartist,
 # fetched 2026-08-13), while `route_gates.RULED_COMPONENTS` mirrored it as an unconditional

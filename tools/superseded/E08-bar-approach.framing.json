@@ -45,5 +45,5 @@
     "frame_0": 0.35920208672496967,
     "frame_last": 0.6610270804312288
   },
-  "motion": "E:\\AI\\armature-E08\\outputs\\E08\\walk\\performer_walk.motion.json"
+  "motion": "outputs/E08/walk/performer_walk.motion.json"
 }

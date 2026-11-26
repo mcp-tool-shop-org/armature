@@ -48,7 +48,7 @@ import rig_character as rc                                            # noqa: E4
 from armature_core import blender_scene, parts                        # noqa: E402
 from armature_core.errors import GateFailure                          # noqa: E402
 
-#: Bake resolution. The Director's deliverable atlas.
+#: Bake resolution. The maintainer's deliverable atlas.
 ATLAS = 4096
 #: Cage extrusion as a multiple of the MEASURED stage-1 deviation between the two surfaces.
 CAGE_PER_DEVIATION = 3.0

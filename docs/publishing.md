@@ -14,7 +14,7 @@ abandoned `1.0.0-alpha4`), which is why the PyPI project carries the `-studio` s
 
 ## ⚠ PyPI Trusted Publishing — the config the CI must match
 
-Registered on PyPI 2026-08-10 as a **pending publisher**:
+Registered on PyPI 2026-08-10 as a **pending Trusted Publisher**:
 
 | Field | Value |
 |---|---|

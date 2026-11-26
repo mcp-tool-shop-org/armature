@@ -4,7 +4,7 @@ What goes in front of a hosted identity-lock tier is the whole experiment's inpu
 three ways of getting it wrong leave no trace anywhere downstream:
 
 * a view that is not the pinned file — every hash in the report is somebody else's;
-* a master with no real alpha — the baked grey void the Director ruled against, which
+* a master with no real alpha — the baked grey void the maintainer rejected, which
   produces a perfectly ordinary-looking plate;
 * a fully transparent master — a legal PNG of nothing, with a plausible hash.
 

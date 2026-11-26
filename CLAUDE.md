@@ -65,7 +65,7 @@ governs until a measurement *here* overturns it.
 
 | role | does | must not |
 |---|---|---|
-| **Director** (Mike) | sets direction; judges every artifact by eye | — |
+| **The maintainer** | sets direction; judges every artifact by eye | — |
 | **Advisor** | writes specs, rules on reports, folds findings into the repo | execute, or grade its own rulings |
 | **Executor** | runs the spec, measures, reports evidence | decide what results *mean*, or judge quality |
 

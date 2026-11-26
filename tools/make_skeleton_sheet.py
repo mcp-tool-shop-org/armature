@@ -1,10 +1,10 @@
-"""make_skeleton_sheet — the Director's skeleton-approval sheet.
+"""make_skeleton_sheet — the maintainer's skeleton-approval sheet.
 
     blender -b --factory-startup -P tools\\make_skeleton_sheet.py -- --glb=<subject.glb> --out=<dir>
     <venv-python> tools\\sheet_compose.py <dir>\\panels.json
 
 Built for the judgement it exists to serve: **is every pivot on its sculpted ball?** The
-Director caught the first skeleton at 1:1 — he saw it was not lined up properly —
+maintainer caught the first skeleton alignment issue at 1:1 —
 so the joint insets are framed on the **ball centre**, identical camera before and after, and
 rendered at native size so the two rows are the same zoom he was looking at.
 
@@ -19,7 +19,7 @@ No gate state is printed on this sheet, and no debug text.
 Compensator (NAMED_COMPENSATORS)
 
 The only world-touching act is writing the rendered panels under `--out/frames` and
-one `panels.json` under `--out` -- the sheet the Director approves the skeleton at.
+one `panels.json` under `--out` -- the sheet the maintainer approves the skeleton at.
 Compensator: delete `--out`; owner: the executor session. Every path it writes is
 composed from `--out` and a fixed literal, so no operator-supplied name component can
 carry a panel outside the directory the compensator names. The GLB is opened
@@ -195,7 +195,7 @@ def parse_args():
         prog=HELP_PROG, description=HELP_DESCRIPTION,
         formatter_class=argparse.RawDescriptionHelpFormatter)
     p.add_argument("--glb", required=True,
-                   help="the skeleton GLB the Director is approving -- the insets are "
+                   help="the skeleton GLB the maintainer is approving -- the insets are "
                         "framed on its BALL CENTRES, before and after, same camera. "
                         "Read only")
     p.add_argument("--out", required=True,
@@ -333,7 +333,7 @@ def shoot(scene, path, transparent):
     #
     # The comment below states the premise itself -- the existence and size clauses are
     # properties a PREVIOUS run's file at the same path satisfies -- and no clause
-    # measured the target before the write, on the artefact the Director approves the
+    # measured the target before the write, on the artefact the maintainer approves the
     # skeleton at. Consequence stays bounded as the ground row framed it: no realistic
     # FINISHED-without-write was constructed on this rig. The home is ADOPTED, not
     # respelled.
@@ -360,7 +360,7 @@ def shoot(scene, path, transparent):
     # function discarded it, and no code path in this tool ever opened a rendered file
     # again -- so `panels.json` was a manifest of paths that may not exist, printed
     # under a success sentinel, and a stale file left at the path by an earlier run put
-    # the previous run's panel into the sheet the Director is asked to approve. The
+    # the previous run's panel into the sheet the maintainer is asked to approve. The
     # shape is `preview_walk.py:196-206`'s, carried here rather than reinvented.
     if not os.path.isfile(path) or os.path.getsize(path) == 0:
         raise SkeletonSheetGate(
@@ -406,7 +406,7 @@ def main():
 
     source = rig_character.world_verts(mesh_obj)
     # SIBLING CARRIED under F-6a9a0f72 (wave 14). Gate SCALE: `measure_joint_balls` DIVIDES
-    # by this diagonal, and this is the sheet the Director approves the skeleton on.
+    # by this diagonal, and this is the sheet the maintainer approves the skeleton on.
     diagonal, lo, hi = rig_character.subject_scale(source, "make_skeleton_sheet")
     height = float(hi[2] - lo[2])
     centre = Vector(((lo + hi) / 2.0).tolist())
@@ -428,7 +428,7 @@ def main():
     engine = light_the_scene(scene)
     # F-244b2ad5: the subject-ambiguity `raise` above and `light_the_scene` (which raises
     # through a helper) both fire before any pixel exists. The directory is created HERE so
-    # a halt does not leave an empty one behind — this is the sheet the Director approves
+    # a halt does not leave an empty one behind — this is the sheet the maintainer approves
     # the skeleton on, and an empty `frames/` beside no sheet is the most misreadable
     # residue of the eleven. Corrected shape carried from `render_performer.py:319`.
     os.makedirs(frames, exist_ok=True)

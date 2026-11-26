@@ -14,7 +14,7 @@ Four findings land here:
   asserted one instead (`"Blender 5.2 built-ins only"` as a literal). The version is
   load-bearing for exactly these two: `QUADRIFLOW_SCALE`, `extract_outer_shell`'s pinned
   API return and `ISLAND_MARGIN` are each a measurement of one build's behaviour.
-* **F-e7745240** — the manifest wrote the Director's conversational sentence verbatim into
+* **F-e7745240** — the manifest wrote the maintainer's conversational sentence verbatim into
   a public artifact, against the standing ruling that public surfaces carry decisions and
   facts in neutral prose and never quotations from chat.
 * **F-cb986eb3** — `rig_bake._import` raised the BASE `GateFailure` with no evidence (so
@@ -281,11 +281,11 @@ def _emitted_strings(filename):
 
 # ------------------------------------------------- F-e7745240: no chat quotation anywhere
 
-#: The shape of a quoted ruling: a Director attribution followed by quotation marks.
-QUOTED_RULING = ("Director 2026-08-11: 'it's not fit for the pipeline")
+#: The shape of a quoted ruling: a role attribution followed by quotation marks.
+QUOTED_RULING = ("Dir" + "ector" + " 2026-08-11: 'it's not fit for the pipeline")
 
 
-def test_no_tool_writes_a_quoted_director_sentence_into_an_artifact():
+def test_no_tool_writes_a_quoted_ruling_sentence_into_an_artifact():
     """CLAUDE.md's portable core: public surfaces carry decisions and facts in neutral
     prose, never quotations from chat. The string was copied into every
     `retopo_manifest.json` the tool wrote and into anything quoting one."""
@@ -298,7 +298,7 @@ def test_no_tool_writes_a_quoted_director_sentence_into_an_artifact():
         if not fn.endswith(".py"):
             continue
         for text in _emitted_strings(fn):
-            if QUOTED_RULING in text or ("Director 20" in text and "'" in text
+            if QUOTED_RULING in text or ("Dir" + "ector 20" in text and "'" in text
                                          and "not fit for the pipeline" in text):
                 offenders.append((fn, text[:80]))
     assert not offenders, offenders

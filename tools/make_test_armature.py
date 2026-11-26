@@ -25,7 +25,7 @@ Three properties it has that an authored character cannot:
 ⚠ WHAT THIS SUBJECT IS NOT. It carries no identity. There is no face, no costume, nothing a
 reference image could preserve or lose. It can measure whether **structure** is obeyed and it
 can say nothing whatever about whether a character survived — that question needs the
-blackguard, and the Director has ruled on that subject separately. Do not read an identity
+blackguard, and the maintainer has decided on that subject separately. Do not read an identity
 result off this mesh.
 
 Scale matches the blackguard (~1.0 unit tall) so framing and camera fit are comparable

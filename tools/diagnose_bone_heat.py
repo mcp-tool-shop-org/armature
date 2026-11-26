@@ -12,7 +12,7 @@ This file is the sweep that narrows the mechanism, kept in the repo because a fi
 recipe does not reproduce is not a finding. **It is a diagnostic and it is not a pipeline
 stage.** Nothing here produces a rigged asset, and no arm of it is a route past the gate —
 which of these routes, if any, E07 should have taken is the advisor's ruling and the
-Director's call, not this tool's.
+maintainer's call, not this tool's.
 
 Each arm removes one candidate mechanism:
 

@@ -327,7 +327,7 @@ def facing(verts, z_ankle, height, z_ground):
 
     No threshold is invented: both clauses are comparisons between measured quantities. A
     thin-but-nonzero foot margin with an agreeing or noisy head is reported rather than
-    refused, and `foot_margin_fraction` rides the record for the Director's eye.
+    refused, and `foot_margin_fraction` rides the record for the maintainer's eye.
     """
     verts = np.asarray(verts, dtype=np.float64)
     foot = verts[verts[:, 2] < z_ground + 0.03 * height]

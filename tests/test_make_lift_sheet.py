@@ -86,7 +86,7 @@ def test_end_to_end_the_sidecar_records_what_the_cameras_were_or_says_so(
 # from 1 would put lifted 001 beside source 000 under the label `frame 000`, the sheet
 # would exit 0 with MAKE_LIFT_SHEET_OK, and the sidecar records `frames: idx` and the three
 # directory paths — never the resolved per-column filenames — so the mis-pairing would
-# leave no trace on the artifact the Director is asked to read the lift result off.
+# leave no trace on the artifact the maintainer is asked to read the lift result off.
 #
 # The fixtures below fix all three: distinct directory numbering, a distinct colour per
 # frame per column, and `frame` keys on the detection rows.

@@ -94,7 +94,7 @@ def test_a_directory_with_no_numbered_frames_raises(tmp_path):
 
 
 def test_an_rgba_frame_directory_raises_rather_than_dropping_the_channel(tmp_path):
-    """The Director's alpha law: the RGB composite a route submits is a deliberate,
+    """The maintainer's alpha law: the RGB composite a route submits is a deliberate,
     recorded choice. Dropping the 4th channel makes it an accidental one."""
     d = tmp_path / "f"
     d.mkdir()
@@ -210,3 +210,57 @@ def test_a_partial_trailing_frame_is_refused_rather_than_dropped(tmp_path, monke
         EC.decode("nowhere.mkv", 4, 4)
     assert e.value.evidence["stride"] == 48
     assert e.value.evidence["n_bytes"] == 55
+
+
+def test_resolve_ffmpeg_prefers_env_then_imageio_then_path(tmp_path, monkeypatch):
+    """Item 4: without ARMATURE_FFMPEG, prefer pinned imageio-ffmpeg over PATH ffmpeg."""
+    pinned = tmp_path / "pinned-ffmpeg.exe"
+    pinned.write_bytes(b"stub")
+    on_path = str(tmp_path / "path-ffmpeg.exe")
+
+    assert EC._resolve_ffmpeg(
+        env={"ARMATURE_FFMPEG": "/custom/ffmpeg"},
+        imageio_getter=lambda: str(pinned),
+        which_fn=lambda _n: on_path,
+    ) == ("/custom/ffmpeg", "env")
+
+    assert EC._resolve_ffmpeg(
+        env={},
+        imageio_getter=lambda: str(pinned),
+        which_fn=lambda _n: on_path,
+    ) == (str(pinned), "imageio_ffmpeg")
+
+    def _missing_mod():
+        raise ImportError("no imageio_ffmpeg")
+
+    assert EC._resolve_ffmpeg(
+        env={},
+        imageio_getter=_missing_mod,
+        which_fn=lambda _n: on_path,
+    ) == (on_path, "path")
+
+    assert EC._resolve_ffmpeg(
+        env={},
+        imageio_getter=lambda: str(tmp_path / "absent.exe"),
+        which_fn=lambda _n: "",
+    ) == ("", "none")
+
+
+def test_receipt_records_which_ffmpeg_source_was_used(tmp_path, monkeypatch):
+    """Item 4: receipt carries ffmpeg_source matching env / imageio_ffmpeg / path."""
+    _stub_bridge(monkeypatch)
+    monkeypatch.setattr(EC, "ffmpeg_version", lambda: "ffmpeg version test")
+    d = _frames_dir(tmp_path, n=2)
+
+    monkeypatch.delenv("ARMATURE_FFMPEG", raising=False)
+    monkeypatch.setattr(EC, "FFMPEG", str(tmp_path / "pinned.exe"))
+    monkeypatch.setattr(EC, "FFMPEG_SOURCE", "imageio_ffmpeg")
+    r_pinned = EC.build(str(d), str(tmp_path / "out1" / "c.mkv"), "ffv1-gbrp")
+    assert r_pinned["ffmpeg_source"] == "imageio_ffmpeg"
+    assert r_pinned["ffmpeg_from_env"] is False
+
+    monkeypatch.setenv("ARMATURE_FFMPEG", str(tmp_path / "override.exe"))
+    monkeypatch.setattr(EC, "FFMPEG", str(tmp_path / "override.exe"))
+    r_env = EC.build(str(d), str(tmp_path / "out2" / "c.mkv"), "ffv1-gbrp")
+    assert r_env["ffmpeg_source"] == "env"
+    assert r_env["ffmpeg_from_env"] is True

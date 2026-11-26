@@ -21,7 +21,7 @@ nothing resolves the error names every directory and every face it tried.
 **Which faces, and their licences.** The requested face is tried first (a system font already
 installed on the machine — using one is not redistributing it). The fallbacks are
 `LiberationSans` (SIL OFL 1.1) and `NotoSans` (SIL OFL 1.1), and nothing else: DejaVu is
-present on most Linux boxes but its licence document could not be fetched from this seat, and
+present on most Linux boxes but its licence document could not be fetched from this environment, and
 under this repo's licence gate a licence that cannot be retrieved is treated as NO. It is
 therefore named in the refusal rather than quietly used. No font binary is committed to the
 repo — big binaries stay out of git, and a bundled face would need a licence-map row of its

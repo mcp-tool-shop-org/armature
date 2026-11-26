@@ -28,7 +28,7 @@ the frames shown — found by differencing against the render's empty plate, so 
 the render and not from the detector whose work is on trial. Every tile uses the same box.
 
 Sheets locate; full size decides. The crop is recorded in the sidecar, and the uncropped
-frames stay on disk at 1920x1080 for the Director's zoom.
+frames stay on disk at 1920x1080 for full zoom.
 
 **The three columns are PAIRED, not zipped (measured 2026-09-03).** The source listing,
 the lifted listing and the detection rows were three independent populations indexed by the
@@ -195,7 +195,7 @@ def main(argv=None):
                     help="show the source column at full frame. Use when the source is a "
                          "GENERATED clip: there is no empty plate to difference against, "
                          "and cropping to the detector's own landmarks would let the "
-                         "instrument on trial choose what the Director gets to see.")
+                         "instrument on trial choose what the maintainer gets to see.")
     ap.add_argument("--labels", default=None,
                     help="three comma-separated column headings")
     ap.add_argument("--source-camera", default=None,

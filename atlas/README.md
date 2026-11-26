@@ -1,18 +1,18 @@
 # armature: how it works
 
-Mapped at 2026-11-12 from commit 52f4011 by Atlas 1.26.0.
+Mapped at 2026-11-26 from commit efc656b by Atlas 1.26.0.
 
 ## What this is
 
-8 parts, mostly Python (320 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.
+8 parts, mostly Python (327 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.
 
-## What changed since 2026-11-11 (fee4f74)
+## What changed since 2026-11-26 (6994e0c)
 
-Nothing structural changed since 2026-11-11; 3 files changed content.
+Nothing structural changed since 2026-11-26; 1 file changed content.
 
 ## What comes in
 
-1. **ci.** On a pull request touching 21 paths; on a push touching 21 paths; or by hand. Runs npm/bin/armature.mjs, tests/, tools/armature_core/cli.py and 3 more; checks tools/.
+1. **ci.** On a pull request touching 37 paths; on a push touching 37 paths; or by hand. Runs npm/bin/armature.mjs, tests/, tools/armature_core/cli.py and 3 more; checks tools/.
 2. **release.** When a release is published; or by hand. Runs tools/armature_core/cli.py and tests/; checks tools/.
 3. **pages.** On a push to main touching 2 paths; or by hand. Runs site/astro.config.mjs and site/src/.
 4. **armature** (a command people run, from npm/package.json). Runs npm/bin/armature.mjs.
@@ -59,7 +59,7 @@ ci writes nothing this map can see.
 - **tools/preview_walk.py** and **tools/render_performer.py** changed together in 16 of 22 commits, inside the tools part.
 - **tools/rig_bake.py** and **tools/rig_repair.py** changed together in 13 of 19 commits, inside the tools part.
 
-Window: 180 days; a pair counts from 10 shared commits, since 102 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
+Window: 180 days; a pair counts from 10 shared commits, since 103 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
 
 ## What no test touches
 
@@ -81,7 +81,7 @@ Nothing in this repository writes to a tracked place this map can see.
 
 ## Hand-authored
 
-People write .github/, docs/, the repository root, site/ and specs/; 116 writes with paths built at run time may land here.
+People write .github/, docs/, the repository root, site/ and specs/; 118 writes with paths built at run time may land here.
 
 ## Where to start
 
@@ -94,8 +94,8 @@ Beside the path, tools/armature_core/cli.py also calls tools/armature_core/parts
 ## What this map cannot see
 
 - 43 imports could not be resolved: `tests/blender/test_check_pack.py` imports `conftest`, which is no module on its import path and no declared dependency; `tests/blender_stub.py` imports a path built at run time; `tests/conftest.py` imports a path built at run time; and 40 more.
-- 116 writes and 75 reads use paths built at run time and are not named here.
-- 80 writes and 156 reads go to a path their caller passes, not to this repository.
+- 118 writes and 75 reads use paths built at run time and are not named here.
+- 80 writes and 162 reads go to a path their caller passes, not to this repository.
 - 3 writes go to the directory the command is run in, not to this repository.
 - 3 commands are built at run time and not followed.
 

@@ -759,7 +759,7 @@ def test_a_missing_glb_does_not_delete_the_exit_code(filename, tmp_path):
         pytest.skip(pending)
     code, escaped = _run(filename, "crash", tmp_path,
                          argv=["blender", "-b", "-P", filename, "--",
-                               "--glb=E:/no/such/file/at/all.glb",
+                               "--glb=no/such/file/at/all.glb",
                                "--out=" + str(tmp_path / "out")])
     assert escaped is None, f"{filename}: {escaped!r} escaped the handler; blender exits 0"
     assert code == 1, f"{filename}: exit code {code!r}, contract says 1 for a crash"
@@ -1265,7 +1265,7 @@ def _sibling_repo_absent(filename):
     if module is None or importlib.util.find_spec(module) is not None:
         return None
     return (f"{filename} imports `{module}`, a sibling working copy that is not a dependency of this venv "
-            f"(PYTHONPATH=E:/AI/record-index on the rig; absent here) — the same skip "
+            f"(PYTHONPATH=<repo>/../record-index on the rig; absent here) — the same skip "
             f"`tests/test_record_index_binding.py` records for the same reason")
 
 #: DERIVED 2026-09-05 by `[f for f in cpython_tools() if halt_handler(f)]`. Equality, so a

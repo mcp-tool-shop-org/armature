@@ -44,7 +44,7 @@ Every tool under `tools/` answers for itself: `python tools/<name>.py --help` pr
 | `make_pick_sheet.py` | make_pick_sheet — Gate PLATE's instrument: candidate plates, side by side, for the eye. |
 | `make_plate.py` | make_plate — turn a picked still into the plate that stands behind the performer. |
 | `make_review_clip.py` | make_review_clip — the motion review, and the stills where structure is hardest. |
-| `make_sheet.py` | make_sheet — the panel the Director reads the run off. |
+| `make_sheet.py` | make_sheet — the panel the maintainer reads the run off. |
 | `make_shotset_sheet.py` | make_shotset_sheet — the ortho shot-set as a sheet, and beside its perspective sibling. |
 | `make_startframe_sheet.py` | make_startframe_sheet — Gate 0 for a route whose only conditioning is one image. |
 | `make_thesis_sheet.py` | make_thesis_sheet — control vs controlled-output vs no-control-output, one panel. |
@@ -73,10 +73,10 @@ Every tool under `tools/` answers for itself: `python tools/<name>.py --help` pr
 | `check_relift.py` | check_relift — is a re-solved lift the same performance as the pinned one? |
 | `diagnose_bone_heat.py` | diagnose_bone_heat — why `ARMATURE_AUTO` produced no weights on the E07 subject. |
 | `lift_solve.py` | lift_solve — key a solved lift onto the performer's rig and write a GLB. |
-| `make_binding_sheet.py` | make_binding_sheet — arm (a) beside arm (b), for the Director's eye to pick the binding. |
+| `make_binding_sheet.py` | make_binding_sheet — arm (a) beside arm (b), for the maintainer's eye to pick the binding. |
 | `make_parts_sheet.py` | make_parts_sheet — the dailies sheet for E07 arm (c), the rigid-parts armature. |
 | `make_rig_sheet.py` | The arm (d) comparison sheet — a SKINNED figure, judged beside the mesh it replaced. |
-| `make_skeleton_sheet.py` | make_skeleton_sheet — the Director's skeleton-approval sheet. |
+| `make_skeleton_sheet.py` | make_skeleton_sheet — the maintainer's skeleton-approval sheet. |
 | `make_test_armature.py` | Generate the wire-armature test subject — the instrument, not a character. |
 | `preview_glb.py` | Headless GLB preview: import, measure, render 2 full views + 2 head crops. |
 | `preview_walk.py` | preview_walk — a shaded pass at the shot camera, so the walk can be LOOKED at. |

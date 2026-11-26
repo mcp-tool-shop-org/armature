@@ -845,7 +845,7 @@ def download(manifest_path, exits_path=None, record_urls=True):
     # Wave 16, the readability half of F-dc32fa9d. The absent-code branch used to be
     # spelled `raise ValueError("no exit was recorded")` INSIDE this function's own `try`,
     # caught two lines down by the same handler that catches a `code` that will not parse.
-    # It never left the loop and it was never a refusal - three jury seats read it as an
+    # It never left the loop and it was never a refusal - three reviewers read it as an
     # untyped refusal in a file where every refusal is a typed `FetchHalt`, which is the
     # whole reason it is written as a predicate now. The behaviour is unchanged and the
     # test below pins that: absent, blank and unparseable codes are all `unrecorded`.

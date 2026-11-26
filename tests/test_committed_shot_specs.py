@@ -90,12 +90,12 @@ def test_every_committed_shot_spec_pins_its_assets_bytes(path):
     """A recipe that does not name the bytes it ran on is not a recipe.
 
     `E03-posearc.json` and `E03-static.json` name an asset at
-    `E:\\AI\\armature-E03\\outputs\\E03\\subject\\wire_t030_armraise.glb`, a path that does
+    `<worktree>/outputs\\E03\\subject\\wire_t030_armraise.glb`, a path that does
     not exist on this rig — the repo moved and the spec's path did not. A same-named file
     sits at `outputs/E03/subject/wire_t030_armraise.glb` inside this repo, but `outputs/`
     is gitignored and nothing establishes it is the artifact those runs used, so no hash is
     written here. Pinning one would be inventing a fact about a file the spec does not
-    name. The path and the hash are one decision and it is the Director's; until he makes
+    name. The path and the hash are one decision and it is the maintainer's; until decided
     it, those two specs are refused at load by the tightened contract and this check says
     so out loud rather than passing.
 

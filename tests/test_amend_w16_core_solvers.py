@@ -1154,7 +1154,7 @@ def test_the_optimization_actually_took_effect_for_the_wave_16_probe(tmp_path):
 # them `test_gates.py`'s anchor into `stage_render`'s argv parser, `test_render_visibility`'s
 # into `preview_walk` and `render_performer`, and three in `test_ci_workflows.py` naming one
 # line of `test_packaging.py`. This is the tests half of the wave-16 seam in
-# which 27 deleted constructors moved 57 prose citations across three trees; a seat opening
+# which 27 deleted constructors moved 57 prose citations across three trees; a session opening
 # a cited line to check a claim read a blank line, and the repo's law — every `file:line`
 # opened before it is trusted — had no mechanism behind it in the directory that cites most.
 #
@@ -1546,7 +1546,7 @@ def test_the_ci_packaging_citation_population_is_not_empty():
 
 
 def test_no_citation_in_ci_packagings_files_opens_a_blank_line_or_a_missing_file():
-    """The property. A seat opening a cited line to check a claim must find what was named.
+    """The property. A session opening a cited line to check a claim must find what was named.
 
     Eight of these were stale when the census was written, five of them made stale by the two
     waves that came immediately before. All eight were re-anchored on a step name, a leg name
@@ -1588,7 +1588,7 @@ def test_the_tests_citation_population_is_not_empty():
 
 
 def test_no_citation_in_tests_opens_a_blank_line_or_runs_past_the_end():
-    """The property. A seat opening a cited line to check a claim must find code there.
+    """The property. A session opening a cited line to check a claim must find code there.
 
     Every stale citation is either RE-ANCHORED on the symbol that holds it, or recorded in
     `TESTS_STALE_ANCHORS_RECORDED` with the reason — which for most of them is that the

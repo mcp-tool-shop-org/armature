@@ -3,7 +3,7 @@
   "name": "E01-anchor-blackguard",
   "generator": "wan-vace",
   "asset": {
-    "path": "E:\\AI\\training\\_p0_packs_modernize\\_mesh_line\\blackguard\\blackguard_unirig_rigged.glb",
+    "path": "../training/_p0_packs_modernize/_mesh_line/blackguard/blackguard_unirig_rigged.glb",
     "sha256": "404e84453e15c8259ca68d2005163f707364be45db5d2cb1c8e1db701ddb47a8",
     "note": "read-only. Added by E01's executor after measuring that the spec's named primary (longsword_hero.glb) is a weapon prop, not a character. P3 on a blade is not P3 on a figure, so both are reported. Every other field is identical to E01-anchor.json so the subject is the only thing that varies."
   },

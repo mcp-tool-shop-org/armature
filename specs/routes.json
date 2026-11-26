@@ -1,7 +1,7 @@
 {
   "catalog": "armature spend-path route index",
   "updated": "2026-09-07",
-  "note": "Machine-readable operator index: experiment → builder → seeds → admission defaults → fetch profile → control_spec. Narrative lives in docs/experiments/; this file is what a seat lists before spending. Wave 35 F-fb6e1577 / F-dfbc5d79; wave 37 F-966d9a73 assembly/cascade rows + admit defaults; F-fe345ff9 control_spec / retired_control_specs.",
+  "note": "Machine-readable operator index: experiment → builder → seeds → admission defaults → fetch profile → control_spec. Narrative lives in docs/experiments/; this file is what a session lists before spending. Wave 35 F-fb6e1577 / F-dfbc5d79; wave 37 F-966d9a73 assembly/cascade rows + admit defaults; F-fe345ff9 control_spec / retired_control_specs.",
   "fetch_profiles": "tools/fetch_run.py::ROUTE_FETCH_PROFILES",
   "dispatcher": "tools/build_routes_payload.py",
   "routes": [

@@ -143,7 +143,7 @@ def strays_beside(directory):
     difference as directory-versus-listing. The real difference is the one its next
     paragraph calls load-bearing: the sheet version RAISES on a stray, this one FILTERS it.
 
-    Both are right for their caller. A stray pasted into a sheet is shown to the Director
+    Both are right for their caller. A stray pasted into a sheet is shown to the maintainer
     as a frame of the run; a stray in a crop-strip's frames directory is the ordinary case,
     because this repo's own tools write contact strips there (`render_pose_sticks` writes
     `strip_every<N>.png` beside its frames) and refusing would refuse a normal input. What
@@ -265,7 +265,7 @@ def build(by_number, boxes, scale, title):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="named native-resolution crops across frames, in one strip, so "
-                    "structure is judged at the Director's zoom rather than from a "
+                    "structure is judged at full zoom rather than from a "
                     "contact sheet",
         epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True,

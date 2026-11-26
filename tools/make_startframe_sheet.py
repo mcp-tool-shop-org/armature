@@ -133,7 +133,7 @@ def build(start_path, frame_paths, indices, meta, prompt_id=None, measurements=N
     start = _rgb(start_path, plate)
     # ---- the family refusal (`sheet_compose.require_frames`): a requested index past the
     #      population was DROPPED, and only a total wipeout raised. A partial drop showed
-    #      the Director fewer frames than were asked for and said nothing.
+    #      the maintainer fewer frames than were asked for and said nothing.
     #      Bounded by the frames' own NUMBERS (wave 12): the positional bound admitted
     #      `--at=0` on a run numbered from 1 and drew that run's FIRST file under the
     #      caption `f000`, a frame the run does not hold, while refusing the number it

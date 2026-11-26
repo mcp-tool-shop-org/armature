@@ -2,14 +2,14 @@
   "experiment": "E08",
   "stage": "the first painted shot (the rewrite)",
   "registered_utc": "2026-08-12",
-  "registered_by": "executor seat, on E08-shot, before the first submission of any E08 graph",
+  "registered_by": "executor session, on E08-shot, before the first submission of any E08 graph",
   "gate": "S",
   "seeds": [
     2026081211,
     2026081212,
     2026081213
   ],
-  "how_these_were_chosen": "The date as a plain integer with a run index appended, continuing the rule specs/E09-seeds.json and specs/E09-A3-seeds.json use: 2026-08-12 runs 11, 12 and 13. The property that matters is that every number is fixed BEFORE any result is seen, and a date-derived seed is checkable against this file's own git timestamp. No seed here was drawn from a prior run, from any served template, or from anything this seat had already looked at.",
+  "how_these_were_chosen": "The date as a plain integer with a run index appended, continuing the rule specs/E09-seeds.json and specs/E09-A3-seeds.json use: 2026-08-12 runs 11, 12 and 13. The property that matters is that every number is fixed BEFORE any result is seen, and a date-derived seed is checkable against this file's own git timestamp. No seed here was drawn from a prior run, from any served template, or from anything this session had already looked at.",
   "allocation": {
     "2026081211": "the probe — the one generation this wave authorises up front",
     "2026081212": "reserve 1, spendable only on a named cause the probe surfaces",

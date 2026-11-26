@@ -39,7 +39,7 @@ pins it with a fixture whose two modes disagree by construction.
 
 A diagnostic. It says whether two clips move at the same *moments*; it says nothing about
 whether the figure is in the same *place*, and nothing about whether it is the same
-character. **It gates nothing**, and identity is the Director's by eye.
+character. **It gates nothing**, and identity is the maintainer's by eye.
 
 ## The control profile is polarity-blind, by construction and by measurement
 

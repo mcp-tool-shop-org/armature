@@ -187,7 +187,7 @@ def test_the_mask_bbox_is_inclusive_and_row_major():
 
 
 # ============================================================================ THE ALPHA LAW
-# The Director's ruling, 2026-08-12: authored image inputs carry alpha, never a baked void,
+# The maintainer's decision (2026-08-12): authored image inputs carry alpha, never a baked void,
 # and the RGB each route submits is a deliberate, recorded choice. Every fixture below is a
 # way the law reads as satisfied in a provenance file while being violated in the render.
 
@@ -328,7 +328,7 @@ class TestCoverFit:
 
     @pytest.mark.parametrize("anchor_y,oy", [(0.0, 0), (0.5, 53), (1.0, 107)])
     def test_the_anchor_places_the_crop_on_the_measured_plate(self, anchor_y, oy):
-        """The measured case: the Director's 1248x832 plate into E12's 1024x576 leaves 107
+        """The measured case: the maintainer's 1248x832 plate into E12's 1024x576 leaves 107
         rows of overhang, and where those rows come off decides which part of the picture is
         inside the band and which is discarded entirely."""
         g = SF.cover_fit(1248, 832, 1024, 576, anchor_y=anchor_y)

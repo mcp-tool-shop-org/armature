@@ -5,7 +5,7 @@ non-manifold shell**. Bone heat refuses it (E03), envelope tears it, and rigid p
 inner wall out into the open air (arm (c), twice). This stage attacks the geometry instead of
 the partition.
 
-**Licence, ruled by the Director 2026-08-11:** he ruled it not fit for the pipeline on
+**Licence, maintainer's decision (2026-08-11):** marked not fit for the pipeline on
 commercial-safety grounds. QuadRemesher (Exoside) is **struck** — not enabled, not measured, no
 licence row. The gate protects the **pipeline's** cleanliness and reproducibility, not one
 rig's right to run a tool. Everything here is Blender's own: ``voxel_remesh`` and
@@ -265,7 +265,7 @@ def deviation_from(reference_ob, ob, diagonal):
 
     Every vertex of the new mesh is measured to the nearest point on the ORIGINAL outer shell.
     This is the number that says whether the sculpted balls kept their curvature or were
-    smoothed into the limb -- but it is a **diagnostic**. It gates nothing. The Director's eye
+    smoothed into the limb -- but it is a **diagnostic**. It gates nothing. The maintainer's eye
     on the closeups decides whether the character survived.
     """
     from mathutils.bvhtree import BVHTree
@@ -626,12 +626,12 @@ def main():
         "variants_removed_before_the_sheet": removed,
         "source_sha256": rc.sha256_file(args["glb"]), "diagonal": diagonal,
         # The ruling, restated in neutral prose. MEASURED 2026-09-04: this field carried
-        # the Director's conversational sentence verbatim, copied into every
+        # the maintainer's conversational sentence verbatim, copied into every
         # retopo_manifest.json the tool writes -- against the standing rule that public
         # surfaces carry decisions and facts in neutral prose and never quotations from
         # chat. The date, the subject and the verdict are what a record needs.
         "licence": {
-            "ruling": ("Director ruling 2026-08-11: QuadRemesher (Exoside) is struck from "
+            "ruling": ("Maintainer's decision (2026-08-11): QuadRemesher (Exoside) is struck from "
                        "the pipeline on commercial-safety grounds"),
             "struck": "QuadRemesher (Exoside) — not enabled, not measured, no licence row",
             "used": ("Blender built-ins only (mesh.voxel_remesh, mesh.quadriflow_remesh) "

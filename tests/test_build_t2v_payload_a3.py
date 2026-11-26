@@ -135,7 +135,7 @@ def test_the_earlier_pin_reproduces_wans_own_negative_byte_for_byte():
 
 @needs_bank
 def test_the_later_pin_drifted_from_it_and_the_drift_is_recorded_not_inherited():
-    """This test FAILED first, on a claim this seat wrote from a glance rather than a
+    """This test FAILED first, on a claim this session wrote from a glance rather than a
     comparison: that both pinned revisions carried the same negative. They do not. The two
     agree on every sampling value and disagree here, `dcc00d29d79d` having appended two
     tokens. The graph keeps Wan's own upstream string; the difference stays in the tree so
@@ -237,7 +237,7 @@ def test_the_boundary_cross_check_is_reported_and_gates_nothing():
 
 def test_the_lossless_tap_survives_the_profile_change():
     """The review is at 0.5x from lossless. A profile switch that quietly dropped the PNG
-    tap would leave the Director judging an H.264 clip."""
+    tap would leave the maintainer judging an H.264 clip."""
     graph, _ = B.build_graph(A3_SEEDS["seeds"][0], profile="reference")
     save = [n for n in graph.values() if n["class_type"] == "SaveImage"]
     assert len(save) == 1 and save[0]["inputs"]["images"] == ["60", 0]

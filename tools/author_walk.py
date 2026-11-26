@@ -749,7 +749,7 @@ def gate_f_fk_agreement(fk, heads, performer, arm_obj, diagonal, tol_frac=None):
     makes *quieter* is not a check for that defect. The gait's own axes are held by
     `tests/test_walk.py` (the gesture must raise the right hand, out and forward; the knee
     must never bend forward; +X must carry a hanging limb toward +Y) and, last, by the
-    Director's eye on the preview. Gate F is a check on the *bridge*, not on the gait.
+    maintainer's eye on the preview. Gate F is a check on the *bridge*, not on the gait.
 
     The gate reports its own noise floor beside its reading — the rest-head disagreement
     between the manifest's float64 landmarks and the GLB's float32 bone matrices, which is

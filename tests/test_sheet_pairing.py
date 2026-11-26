@@ -1,4 +1,4 @@
-"""The panels the Director judges on: the frames they SHOW are the frames they NAME.
+"""The panels the maintainer judges on: the frames they SHOW are the frames they NAME.
 
 Two defects, one family, over five tools.
 
@@ -18,7 +18,7 @@ nothing on the panel or in the record saying so. Measured: a 3-frame control and
 output asked for `--frames=0,8,16,24` saved a ONE-column sheet, exit 0; when every requested
 index is dropped the sheet dies instead at `cols[0][1].width` with a bare `IndexError`.
 `make_identity_sheet` was given exactly this refusal in wave 3, because "dropping one
-silently shows the Director fewer angles than were asked for"; four siblings kept the
+silently shows the maintainer fewer angles than were asked for"; four siblings kept the
 `continue`.
 
 Both checks are ONE implementation each — `measure_lift.gate_listing_pairing` (which
@@ -577,13 +577,13 @@ def test_the_empty_population_refusal_survives_python_optimize(tmp_path):
 
 # ---------------------------------------- the plate a panel composites over is NAMED
 #
-# Five of the sheets the Director judges on flattened an RGBA source over a hard-coded,
+# Five of the sheets the maintainer judges on flattened an RGBA source over a hard-coded,
 # unrecorded black plate — `Image.new("RGB", im.size, (0, 0, 0))` and a paste through the
 # alpha, in five copies (`make_thesis_sheet._rgb`, `make_gate0_sheet._rgb`,
 # `make_identity_sheet._load_rgb`, `make_lift_sheet._rgb`, `make_startframe_sheet._rgb`).
 # Nothing in the sheet, its printed line or its sidecar said which plate was used.
 #
-# The Director's authored-RGBA ruling is that "the RGB composite each route actually
+# The maintainer's authored-RGBA decision is that "the RGB composite each route actually
 # submits is a deliberate, recorded choice", and `composite_reference` records exactly that
 # for the submitted plates (`plate_rgb_srgb` + `plate_why`), with
 # `SURVEY_PLATE = (154, 154, 157)` as the value his eye passed on the S03 kit. So the
@@ -773,7 +773,7 @@ def test_every_sheet_that_draws_an_rgba_tile_routes_through_the_one_helper():
 # Measured 2026-09-04 on cd2d941: `tools/make_gate0_sheet.py`'s parser (lines 226-238)
 # declares `--run --frames-dir --reference --meta --out --frames --captions`, and its `main`
 # reads `a.sheet_plate` at :250. Every command-line run of the Gate 0 sheet — the sheet the
-# Director reads the thesis off — dies with `AttributeError: 'Namespace' object has no
+# maintainer reads the thesis off — dies with `AttributeError: 'Namespace' object has no
 # attribute 'sheet_plate'` after opening `--meta`. The other four `--sheet-plate` sheets all
 # declare it. No test in the suite invoked `make_gate0_sheet.main`, so the loader census
 # reported the sheet compliant.

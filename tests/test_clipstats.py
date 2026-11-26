@@ -101,7 +101,7 @@ def test_the_byte_count_cannot_fail_on_a_decoded_clip_and_the_pixel_count_can():
     byte-identical frame to frame, so the byte count's failing direction is unreachable on
     its real input.
 
-    The panel the Director reads quotes this dict verbatim (`make_e13_sheet.py:304`,
+    The panel the maintainer reads quotes this dict verbatim (`make_e13_sheet.py:304`,
     `make_startframe_sheet.py:236`, both filled by `measure_clip.py`), so what it carries
     now is a MAGNITUDE the arm can move rather than a word.
     """

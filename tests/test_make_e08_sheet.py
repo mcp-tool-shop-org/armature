@@ -12,13 +12,13 @@ no reference at all printed `E08_SHEET_OK`, and the panel still asserted Gate L 
 named a reference letterbox that did not happen. `make_gate0_sheet` and
 `make_startframe_sheet` both record this exact defect class as fixed in their own docstrings;
 this file kept it while claiming otherwise. It is the repo's named "placeholder shaped like
-evidence", on the surface the Director reads a verdict off.
+evidence", on the surface the maintainer reads a verdict off.
 
 Second finding in the same file: five `cv2.imread(...)` results went straight into `fit()`
 with no None check, so an unreadable tile surfaced as
 `AttributeError: 'NoneType' object has no attribute 'shape'` naming none of the five inputs —
 while `--previz` defaulted to an absolute path inside a DIFFERENT working tree
-(`E:\AI\armature-E09\...`), which is where that AttributeError would come from on any other
+(`<worktree>\...`), which is where that AttributeError would come from on any other
 machine.
 
 Assertions here are on the rendered provenance LINES, not on the PNG: the question is what

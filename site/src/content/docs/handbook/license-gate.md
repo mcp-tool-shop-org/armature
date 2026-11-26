@@ -26,7 +26,7 @@ clause, and the date it was fetched.
    date.
 3. Rule `COMMERCIAL: YES / NO / CONDITIONAL(<condition>)`.
 4. `NO` → the dependency does not enter, and the spec names what replaces it.
-5. `CONDITIONAL` → **a Director decision**, surfaced with its condition stated. Never a quiet yes.
+5. `CONDITIONAL` → **a maintainer decision**, surfaced with its condition stated. Never a quiet yes.
 6. `UNVERIFIED` → **treated as NO** until retrieved.
 
 The check is recorded in the spec that introduces the dependency, and the row lands in the map.
@@ -87,7 +87,7 @@ unconditionally Apache 2.0 across base, VACE and Fun-Control, and it explicitly 
 in generated outputs. Mochi 1 preview is Apache 2.0. LTX-Video 0.9.x is open-weights with no
 revenue cap found.
 
-**Conditional, and therefore a Director decision rather than a default.** LTX-2 requires a paid
+**Conditional, and therefore a maintainer decision rather than a default.** LTX-2 requires a paid
 licence above $10M annual revenue. HunyuanVideo's community licence **excludes the European
 Union, the United Kingdom and South Korea by territory**, which makes it unusable for a game sold
 internationally. CogVideoX-5b requires registration and caps traffic at one million visits per
@@ -103,7 +103,7 @@ in outputs, and that inputs and outputs will not be used to train generative AI.
 
 **The wan2.x partner tier** (wan2.6/2.7 hosted, reference-to-video) was retrieved 2026-08-12 —
 the consumer terms via export where every fetcher got a JavaScript shell — and ruled
-**CONDITIONAL, accepted by the Director**: outputs are assigned to the user; published footage
+**CONDITIONAL, accepted by the maintainer**: outputs are assigned to the user; published footage
 carries a clear-and-conspicuous AI-generated disclosure duty; the consumer surface licenses
 everything uploaded broadly (training use included) while both vendor papers on the API chain —
 Comfy's contractual no-training clause and Alibaba's published API-tier posture — commit the
@@ -120,7 +120,7 @@ what still gates it is experimental, not legal.
 
 ## Per-route disclosure
 
-The condition attached to that ruling became standing law (Director, 2026-08-12): **any route
+The condition attached to that ruling became standing law (maintainer's decision, 2026-08-12): **any route
 through a third-party tier documents what a user of that route is exposed to** — the providers'
 data-use and training posture, AI-content disclosure duties, and watermark policy, each grounded
 in the licence map's fetched documents. Fully-local routes state that nothing leaves the rig.

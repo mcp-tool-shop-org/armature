@@ -63,7 +63,7 @@ from armature_core.errors import ArmatureError, GateFailure  # noqa: E402
 
 TOOL_VERSION = "E10.1"
 
-#: Bones whose step angles are reported by name. The limbs the Director's eye reads chop
+#: Bones whose step angles are reported by name. The limbs the maintainer's eye reads chop
 #: on — arms mid-swing — plus the root chain, so a report can say WHERE the driving signal
 #: changed rather than quoting one number for the whole body.
 DIAGNOSTIC_BONES = ("hips", "chest", "head",

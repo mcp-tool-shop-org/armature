@@ -372,7 +372,7 @@ def test_both_implementations_install_the_sdist_and_then_run_it():
 #
 # A grep for `distName`, `Remove-Item` and `dist/*` across `tests/*.py` on `81d6c07` found no
 # assertion on either. The consequence is the one `verify.ps1`'s own comment records as
-# MEASURED on this rig: `E:\AI\armature\dist` held an `armature_studio-0.2.1` pair beside the
+# MEASURED on this rig: `<repo>/dist` held an `armature_studio-0.2.1` pair beside the
 # 0.3.0 pair, and `twine check dist\*` issued its verdict over four files, two of them three
 # weeks old. The leg whose whole point is that it runs what CI runs diverges on WHICH artifact
 # it runs and on whether a stale one can be present — and the parity guard reported parity.

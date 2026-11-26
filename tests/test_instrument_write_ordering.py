@@ -778,7 +778,7 @@ def stranded_detail_by_tool(members=None, *, source=None):
     `{tool: {'first_write': (line, kind), 'refusals': [names],
              'refusal_sites': [(line, name), ...]}}`. `stranded_by_tool` keeps the
     `{tool: [names]}` shape the recorded table compares against; this carries the line and
-    kind a seat needs to move a refusal above, or to tell a false alarm from a real strand.
+    kind a session needs to move a refusal above, or to tell a false alarm from a real strand.
     """
     source = source or {}
     members = sorted(derive_population()) if members is None else members
@@ -818,7 +818,7 @@ def stranded_by_tool(members=None, *, source=None):
     expression over a mutated tool rather than re-implementing it beside it.
 
     WAVE 29, F-0d690499: the first-write line and kind ride `stranded_detail_by_tool`; the
-    failure message below names them so a seat is not told to move a refusal above an
+    failure message below names them so a session is not told to move a refusal above an
     unnamed 'it'.
     """
     return {n: v["refusals"] for n, v in stranded_detail_by_tool(members, source=source).items()}
@@ -969,7 +969,7 @@ def test_the_exemption_is_a_per_refusal_ratchet_and_not_a_module_wide_skip():
     # WAVE 16, F-9b4d01ef: the message used to name 72 — the tests branch's own measurement,
     # which the wave-14 merge overturned when it re-derived 27/51/69 on the merged tree and
     # updated the constants, the `==` targets and the comment above but not this f-string.
-    # A seat landing a move read "N sites; 72 were measured" beside an assertion demanding
+    # A session landing a move read "N sites; 72 were measured" beside an assertion demanding
     # 69 and had every reason to retype the wrong number. The message quotes the value it
     # ASSERTS; the overturned measurement stays in the comment above, where this file keeps
     # its corrections.
@@ -1007,7 +1007,7 @@ def test_no_assertion_message_in_the_suite_quotes_a_ceiling_it_does_not_assert()
     """F-9b4d01ef, as the POPULATION rather than as the two f-strings that carried it.
 
     The defect is not "these two messages are stale" — it is that a failure message is the
-    thing a seat reads when a ratchet fires, and nothing in the suite compared what a
+    thing a session reads when a ratchet fires, and nothing in the suite compared what a
     message CLAIMS was measured against what its own assertion demands. Walked over every
     `tests/test_*.py`, keyed narrowly on messages that claim a measurement ("N were
     measured", "N was the count"), so a date, a slice bound or an exit code in a message is
@@ -1019,7 +1019,7 @@ def test_no_assertion_message_in_the_suite_quotes_a_ceiling_it_does_not_assert()
     """
     stale = CN.messages_quoting_a_number_they_do_not_assert()
     assert stale == [], (
-        "an assertion message names a measurement that is not the value it asserts; a seat "
+        "an assertion message names a measurement that is not the value it asserts; a session "
         "landing a change reads the message as the current pin and retypes the wrong "
         f"number into the constant: {stale}")
 

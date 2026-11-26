@@ -45,7 +45,7 @@ def _gradient(w, h):
 def test_exactly_one_source_or_it_halts(tmp_path):
     """Both is a caller who has not decided; neither is a caller who forgot. Defaulting
     either way would pick a plate on the caller's behalf, which is the one decision this
-    experiment reserves for the Director."""
+    experiment reserves for the maintainer."""
     src = _write(tmp_path / "a.png", _gradient(20, 10))
     frames = tmp_path / "f"
     frames.mkdir()

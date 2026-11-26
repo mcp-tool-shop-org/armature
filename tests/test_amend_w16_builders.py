@@ -351,7 +351,7 @@ def test_the_one_reader_is_the_one_place_that_names_the_key():
 # transparency through a tRNS chunk read `alpha: False`, which this module's own
 # `_PNG_COLOR_TYPES` comment already said was possible.
 #
-# The law it makes machine-readable (the Director's ruling 2026-08-12) has two halves: the
+# The law it makes machine-readable (the maintainer's ruling 2026-08-12) has two halves: the
 # authored master carries alpha, and **the RGB composite each route submits is a deliberate,
 # recorded choice**, because video VAEs are RGB and raw transparency cannot reach the model.
 # `--start-frame` is the file this route UPLOADS, so the honest declaration on both i2v
@@ -441,7 +441,7 @@ def test_a_route_that_declares_nothing_about_alpha_is_REFUSED(tmp_path):
 
 
 def test_a_start_frame_carrying_alpha_where_the_route_records_a_COMPOSITE_refuses(tmp_path):
-    """The direction the Director's ruling names: raw transparency cannot reach an RGB
+    """The direction the maintainer's ruling names: raw transparency cannot reach an RGB
     video VAE, so a route that records a submitted composite may not submit a file that
     still carries the channel. Red on the base tree: `measured.alpha` was recorded as True
     and nothing refused."""
@@ -1185,7 +1185,7 @@ def test_a_declared_receipt_that_answers_neither_question_is_refused_by_name(tmp
 def test_no_raise_in_the_fetchers_is_caught_by_their_own_handler():
     """The readability half of F-dc32fa9d, and the reason it is not merely cosmetic: in a
     file where every refusal is a typed `FetchHalt`, a `raise ValueError` used as loop
-    control reads as an untyped refusal (three jury seats read it as one). The census is
+    control reads as an untyped refusal (three reviewers read it as one). The census is
     over both fetchers, not the one line: no `raise` inside a `try` whose own handler would
     swallow it."""
     offenders = []

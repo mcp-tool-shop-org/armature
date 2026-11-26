@@ -40,7 +40,7 @@ bottom over every cell on that sheet — so the eye can read how each figure sit
 fixed reference instead of against its neighbour's edge. They assert nothing about which
 projection is better; the rows are stated in the subtitle and in the manifest.
 
-Metrics on the labels are diagnostics. The Director's eye judges the cells.
+Metrics on the labels are diagnostics. The maintainer's eye judges the cells.
 
 Compensator (NAMED_COMPENSATORS): writes composited cells and one PNG under the `--out`
 directory. Compensator: delete that directory; owner: the executor session. The rendered
@@ -309,7 +309,7 @@ def main(argv=None):
                  "dir_a": ortho["dir"], "dir_b": second["dir"]})
         sets = [ortho, second]
         title = ("S05 — the same GLB at the same preset, one shared ortho_scale SOLVED "
-                 "above one PINNED   (diagnostics only; the Director's eye is the verdict)")
+                 "above one PINNED   (diagnostics only; the maintainer's eye is the verdict)")
         filename = "S05-solved-vs-pinned.png"
     elif a.mode == "compare":
         if not a.persp:
@@ -320,12 +320,12 @@ def main(argv=None):
         _refuse_across_elevations(ortho, persp, "projection")
         sets, tags = [ortho, persp], ["ORTHO", "PERSP"]
         title = ("S04 — the same GLB at the same elevation, parallel above perspective   "
-                 "(diagnostics only; the Director's eye is the verdict)")
+                 "(diagnostics only; the maintainer's eye is the verdict)")
         filename = "S04-ortho-vs-perspective.png"
     else:
         sets, tags = [ortho], ["ORTHO"]
         title = ("S04 — the orthographic sprite shot-set   "
-                 "(diagnostics only; the Director's eye is the verdict)")
+                 "(diagnostics only; the maintainer's eye is the verdict)")
         filename = "S04-shotset.png"
 
     rules = rule_rows(sets)

@@ -69,7 +69,7 @@ def test_a_directory_named_as_the_reference_takes_the_FIRST_clause(tmp_path):
     that exercised nothing the unguarded sibling did not, and since every job in
     `.github/workflows/` is `runs-on: ubuntu-latest`, in CI it ran zero probes.
 
-    The directory case is a real distinction worth keeping — it is the shape a seat reaches
+    The directory case is a real distinction worth keeping — it is the shape a session reaches
     for when trying to make a file unreadable — so it stays, under the clause it fires, and
     the second clause is driven for real below. No skip: a directory is a directory on
     every platform.

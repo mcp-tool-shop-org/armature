@@ -209,7 +209,7 @@ E03_NEGATIVE = (
 # a bare proper name; a bare proper name is not a canon element to a text encoder, which
 # resolves tokens and not lore. So this names the character AND the attributes E02's own
 # prompt named for the same subject (dark plate, horned helm, cloak) — the ones the
-# Director's canon ruling read off the identity sheet: horned helm, tattered cape,
+# maintainer's canon ruling read off the identity sheet: horned helm, tattered cape,
 # segmented pauldrons. Naming only "blackguard" would test whether one token means anything
 # to umt5, which is not the question E06 asks.
 #

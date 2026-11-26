@@ -1,6 +1,6 @@
 ---
 title: Method
-description: Three seats, spec to report to ruling, and why this repo runs under a discipline that looks excessive for its size.
+description: Three roles, spec to report to ruling, and why this repo runs under a discipline that looks excessive for its size.
 sidebar:
   order: 3
 ---
@@ -23,11 +23,11 @@ None of those were caught by being careful. They were caught by a structure that
 cheaper than assuming. The rules below are that structure, and every one of them has a specific
 failure behind it.
 
-## Three seats
+## Three roles
 
-| Seat | Does | Must not |
+| Role | Does | Must not |
 |---|---|---|
-| **Director** | Sets direction; judges every artifact by eye | — |
+| **Maintainer** | Sets direction; judges every artifact by eye | — |
 | **Advisor** | Writes specs, rules on reports, folds findings into the repo | Execute, or grade its own rulings |
 | **Executor** | Runs the spec, measures, reports evidence | Decide what results *mean*, or judge quality |
 
@@ -38,7 +38,7 @@ to conclude will conclude in favour of the thing it just built.
 That is enforced in the writing, not just in the intent: the words *verified, shipped, works,
 decisive, validated, proven* are not permitted in an executor's report, commit message or doc.
 Reports carry measurements and comparison sheets; the ruling is a separate document written by a
-separate seat, after the Director has seen the artifact.
+separate session, after the maintainer has seen the artifact.
 
 ## Spec, then work, then report, then ruling
 
@@ -132,7 +132,7 @@ skipped rather than discounted.
 **Licences.** Nothing enters the pipeline without a retrieved licence document, including in
 experiments. That has its own page: [the license gate](/armature/handbook/license-gate/).
 
-**Judgement.** Metrics are diagnostics; the Director's eye is the judge. Every generating
+**Judgement.** Metrics are diagnostics; the maintainer's eye is the judge. Every generating
 experiment produces a **control | output | reference | provenance** sheet *before* any metric is
 quoted, and artifacts are judged at full size rather than off a contact sheet. Video is judged
 in motion **and** as frames — a clip that reads well at speed can carry a melted hand in every

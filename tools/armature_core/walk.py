@@ -1056,7 +1056,7 @@ def foot_slip(fk, ground_margin_frac=0.25):
     reading a person can check by eye against the preview, which is why it survives despite
     needing a threshold.
 
-    Both gate nothing. The Director's eye on the preview is the judge; these say where to
+    Both gate nothing. The maintainer's eye on the preview is the judge; these say where to
     look.
     """
     report = {}

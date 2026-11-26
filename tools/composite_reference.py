@@ -4,7 +4,7 @@
     <venv-python> tools\\composite_reference.py --kit=<turn_rgba dir> \\
         --views=turn_0,turn_1,turn_2,turn_4 --out=<dir> [--plate=154,154,157]
 
-E13's re-arm, A1. The authored-RGBA law (the Director's ruling, 2026-08-12) says every
+E13's re-arm, A1. The authored-RGBA law (the maintainer's decision (2026-08-12)) says every
 reference render of the character is authored RGBA with a real alpha channel, and that the
 **RGB composite each route actually submits is a deliberate, recorded choice** — because
 video VAEs are RGB and raw transparency cannot reach the model. This tool is where that
@@ -12,7 +12,7 @@ choice is made explicit, recorded, and gated, instead of happening inside an ima
 nobody looked at.
 
 The plate is the survey's neutral mid-grey, sRGB (154, 154, 157) — `make_hole_survey`'s
-`OLD_VOID_RGB`, read off `turn_final`'s corner pixel, and the presentation the Director's
+`OLD_VOID_RGB`, read off `turn_final`'s corner pixel, and the presentation the maintainer's
 eye passed on the S03 kit. It is a parameter here because it is a choice, and a choice
 that cannot be named in the record is not one.
 
@@ -51,7 +51,7 @@ from armature_core.errors import GateFailure  # noqa: E402
 TOOL_VERSION = "E13.1"
 
 #: `make_hole_survey.OLD_VOID_RGB` — the old set's own measured background, and the plate
-#: the Director's eye read the kit against.
+#: the maintainer's eye read the kit against.
 SURVEY_PLATE = (154, 154, 157)
 
 
@@ -85,7 +85,7 @@ def composite_over(rgba, plate):
 
 def compose_over_named_plate(arr, plate, *, label, exc, extra_evidence=None,
                              channel_order="RGB"):
-    """The Director's authored-RGBA law (2026-08-12), in ONE place, for every producer.
+    """The maintainer's authored-RGBA law (2026-08-12), in ONE place, for every producer.
 
     `arr` is a decoded image array of 3 or 4 channels in whatever order the caller's
     decoder produced — `channel_order` names it for the RECORD only, because
@@ -112,7 +112,7 @@ def compose_over_named_plate(arr, plate, *, label, exc, extra_evidence=None,
             raise exc(
                 f"{label} carries an alpha channel (extrema {lo}, {hi}) and no plate was "
                 f"named. The RGB composite a route submits is a deliberate, recorded "
-                f"choice (the Director, 2026-08-12) — pass --alpha-over=R,G,B to make it "
+                f"choice (the maintainer, 2026-08-12) — pass --alpha-over=R,G,B to make it "
                 f"one. Dropping the channel would submit whatever RGB the author made "
                 f"invisible", ev)
         rgb = composite_over(a.astype(np.uint8), plate)
@@ -259,7 +259,7 @@ def main(argv=None):
     ap.add_argument("--plate", default=",".join(str(c) for c in SURVEY_PLATE),
                     help="R,G,B of the plate each RGBA view is composited over. The "
                          "composite a route submits is a deliberate, recorded choice under "
-                         "the Director's 2026-08-12 alpha law, never a default nobody "
+                         "the maintainer's 2026-08-12 alpha law, never a default nobody "
                          "stated")
     a = ap.parse_args(argv)
 
@@ -332,7 +332,7 @@ def main(argv=None):
         "kit_manifest_source_glb": manifest["source"],
         "plate_rgb_srgb": list(plate),
         "plate_why": ("make_hole_survey.OLD_VOID_RGB — the old set's own measured "
-                      "background and the presentation the Director's eye passed on the "
+                      "background and the presentation the maintainer's eye passed on the "
                       "S03 kit. The RGB composite a route submits is a deliberate, "
                       "recorded choice under the authored-RGBA law"),
         "composite_formula": "straight alpha: rgb*a + plate*(1-a), rounded, uint8",

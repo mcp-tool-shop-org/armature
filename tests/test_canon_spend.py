@@ -826,7 +826,7 @@ def test_a_textless_assembler_carries_no_text_for_a_canon_router_to_check(name, 
     # right and the TEST was the substring, which cannot tell a checkbox from a flag that
     # is read. MEASURED on `e8263a3` by grep over `tools/`: the key "subject" occurred in
     # NONE of the nine builder records, so the two records this repo writes for the artefact
-    # a Director opens — the assembled clip — could not say whose frames they held, while
+    # a reviewer opens — the assembled clip — could not say whose frames they held, while
     # the seven spend builders carry the subject through `gate_CANON`. These two arm no Gate
     # CANON (correctly: there is no generation to refuse, asserted above), so the subject
     # rides the RECORD instead, and `--subject` is optional with its absence recorded as a
@@ -846,7 +846,7 @@ def test_a_textless_assembler_carries_no_text_for_a_canon_router_to_check(name, 
                               encoding="utf-8"))
         assert "subject" in written, (
             f"{name} reads --subject and its record does not carry it; the record is the "
-            f"provenance of the clip a Director opens")
+            f"provenance of the clip a reviewer opens")
         assert written["subject"]["subject"] is None, written["subject"]
         assert written["subject"]["why_null"], written["subject"]
 
@@ -975,7 +975,7 @@ def test_the_ordering_check_goes_red_when_a_write_moves_above_the_gate(name):
 
 #: Builders whose `main()` can be driven to the gate without an input this repo cannot
 #: produce on a runner. The other five read an uploads map, a wave record or
-#: `E:/AI/facet/docs/experiments/E33-twin-prompts-r3.json` — an absolute path into a
+#: `<repo>/../facet/docs/experiments/E33-twin-prompts-r3.json` — an absolute path into a
 #: sibling repo — before they reach `gate_write`, so their ordering is checked by the AST
 #: test above and their refusal cannot be exercised here. That is a gap, and it is named
 #: rather than hidden: the ordering assertion is what stands in for it.

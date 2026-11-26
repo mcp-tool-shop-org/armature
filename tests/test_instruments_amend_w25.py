@@ -268,7 +268,7 @@ def test_every_clause_word_this_wave_named_is_in_the_module_it_was_named_for():
 # module: preview_glb 2/3/1, preview_walk 1/2/2, render_performer 2/3/3,
 # render_start_frame 6/7/7, render_turnaround 2/2/2 — and make_binding_sheet 1/0/0,
 # make_parts_sheet 1/0/0, make_skeleton_sheet 1/0/0. The three sheets are where the
-# Director approves the skeleton.
+# maintainer approves the skeleton.
 #
 # `armature_core/blender_scene.py` is in the population and satisfies the property under its
 # OWN spelling (`_channel_snapshot` per channel, refusing `stale_channel`), which is why the

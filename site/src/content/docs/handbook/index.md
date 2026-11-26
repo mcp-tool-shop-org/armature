@@ -23,7 +23,7 @@ The previz scene is ground truth. The video model paints life over it.
 ## Read this part first
 
 **The founding thesis is no longer untested.** Fourteen experiments have closed since 2026-08-10,
-and the arc has been through a repo-wide audit — called by the Director, recorded in
+and the arc has been through a repo-wide audit — called by the maintainer, recorded in
 [docs/audit-first-arc.md](https://github.com/mcp-tool-shop-org/armature/blob/main/docs/audit-first-arc.md) —
 whose finding is stated plainly rather than buried: the first arc bought clean measurements of
 the *mechanism* and zero frames of the *product*, and the work now runs under a binding
@@ -78,7 +78,7 @@ a threshold in a second language is how a threshold drifts.
 | Routes | the **driven route** (rig-rendered pose → Animate; proven at shot level, parked — licence-clear for its unpark) · the **free route** (authored start frame → camera tier at the 6.0 / uni_pc baseline; LoRA scene-lever measured live — E14) · the **composed route**, graduated by E13: identity-locked, model-decided cinematography from authored references, worlds steered by what the references carry |
 | What a control sequence governs | **where** the figure is, at what scale, **when** it moves, and **authored subject motion** — 85.0° against 0.062° |
 | The division of labour | **control owns the outline; the reference owns surface, material and costume** |
-| Identity | **holds at the Director's eye, three ways** — driven (E08), unanchored (E11 wave 1), and now through a hosted human-trained tier fed nothing but authored references (E13, both arms, both seeds) |
+| Identity | **holds at the maintainer's eye, three ways** — driven (E08), unanchored (E11 wave 1), and now through a hosted human-trained tier fed nothing but authored references (E13, both arms, both seeds) |
 | Worlds | **hold when handed** (E12) — and on the hosted tier, **the reference's own ground steers the model-decided world and dominates seed chaos** (E13; mechanism attribution honestly open at four generations) |
 
 Everything on this site is measured, cited to a numbered experiment, or explicitly marked
@@ -90,7 +90,7 @@ its own public surface has to survive it.
 
 Every generation on a cloud tier costs credits, and **spent credits have no compensator** —
 there is no undo, no refund, no rollback. Until v0.3.0 the bound on that was a line in each
-experiment's spec, honoured by whichever seat read it. That is a document discipline, and this
+experiment's spec, honoured by whichever session read it. That is a document discipline, and this
 repo's whole method exists because document disciplines fail quietly.
 
 **Gate CANON** makes it mechanical. A subject's canon is a machine-readable statement of what
@@ -114,7 +114,7 @@ Three details matter more than the feature:
   check that cannot fail is not a check.
 
 What it does **not** do is judge whether the figure is the right character. That is canon and the
-Director's to rule; no metric here approximates it. The gate checks that a spend can *name* its
+maintainer's to rule; no metric here approximates it. The gate checks that a spend can *name* its
 subject, which is a different and answerable question.
 
 ## Where armature sits
@@ -148,7 +148,7 @@ Named because each is a plausible-sounding drift that would eat the project:
 
 - [The thesis](/armature/handbook/the-thesis/) — why control sequences rendered from geometry,
   and what the measured evidence actually says.
-- [Method](/armature/handbook/method/) — three seats, spec → report → ruling, and why the
+- [Method](/armature/handbook/method/) — three roles, spec → report → ruling, and why the
   discipline exists.
 - [Reading a halt](/armature/handbook/reading-a-halt/) — exit codes, the six-key halt line,
   the three refusal families, `--help`, and how to run the suite.

@@ -548,7 +548,7 @@ def test_every_handler_carries_the_keysafe_helper(filename):
 # downstream consumer `make_cast_sheet` reads the stats JSON rather than the PNGs, so a run
 # that wrote zero images leaves no failing consumer anywhere) and the three sheet tools --
 # `make_skeleton_sheet`, whose 14 `shoot()` calls name 28 PNG paths that go straight into
-# `panels.json`, being the sheet the Director approves the skeleton on. `make_rig_sheet`
+# `panels.json`, being the sheet the maintainer approves the skeleton on. `make_rig_sheet`
 # imports `make_parts_sheet.shoot`, so it is a fifth caller of the same fix.
 
 

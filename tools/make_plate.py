@@ -16,7 +16,7 @@ render script and left no trace.
 
 **Cover, never contain — and that is a rule, not a default.** `armature_core.startframe
 .cover_fit` carries the reasoning; the short form is that the sibling fitter
-(`fit_reference`) pads on purpose because its subject is an identity reference the Director
+(`fit_reference`) pads on purpose because its subject is an identity reference the maintainer
 ruled must arrive whole, while a padded BACKDROP puts invented bands into the conditioning
 image. This repo has that disease on file twice. So the overhang is cropped, and what was
 cropped is in the provenance in both source and resized pixels.
@@ -180,7 +180,7 @@ def resolve_source(src, frames, index):
     """The one source file, or a halt naming which half of the choice is missing.
 
     Two ways in because the spec allows two plate origins — a still from a clip we generated
-    and own, or a photograph the Director owns. Neither is the default, and supplying both
+    and own, or a photograph the maintainer owns. Neither is the default, and supplying both
     is a caller who has not decided.
     """
     if bool(src) == bool(frames):

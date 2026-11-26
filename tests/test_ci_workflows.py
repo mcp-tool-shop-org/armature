@@ -4645,7 +4645,7 @@ def test_the_install_report_check_goes_red_on_the_line_the_clean_room_had():
 # gate lives downstream of the fork" landed, release.yml records that deletion in its own
 # words, and the citation in the file that HOLDS the only copy did not move with it. The
 # consequence is this repository's headline defect class sitting on a coverage claim: a later
-# seat trimming ci.yml's `launcher` job under the CI-minutes rule reads that sentence,
+# contributor trimming ci.yml's `launcher` job under the CI-minutes rule reads that sentence,
 # concludes release.yml still runs the self-test, and deletes the only checkout-level
 # launcher coverage in the repository.
 #

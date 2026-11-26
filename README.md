@@ -91,16 +91,16 @@ Founded **2026-08-10**. Thirteen experiments closed and the thesis has moved fro
 to **measured at product level**: the character has danced on screen driven from his own rig
 and free, a handed world holds to the last frame on two seeds (E12), and **identity now
 survives a hosted, human-trained tier fed nothing but authored references** (E13) — all
-judged by the Director's eye. The founding-arc audit is at
+judged by the maintainer's eye. The founding-arc audit is at
 [docs/audit-first-arc.md](docs/audit-first-arc.md); the posture since 2026-08-12 is a learning
 monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 
 | | |
 |---|---|
-| Experiments | **E01–E14 closed** (E05 withdrawn on a falsified premise) — the control arc (E01–E06) · rig repair + skeleton approval (E07) · **the first painted shot** (E08) · the clean-chain baseline (E09) · densified driving adopted (E10) · the no-control route, three waves to an instructive hard fail (E11) · **the free route gains a world** and the 6.0 / uni_pc baseline (E12) · **the composed route answers its question** (E13 — dispatched, halted at zero spend, repaired by a support arc, re-armed, run, and closed inside one date: identity holds at the Director's eye; reference grounds steer model-decided worlds) · **the LoRA scene-lever priced live** (E14 — the bake-off: both style LoRAs bind on the derivative weights; the character holds on `technically_color` and fails on the photo-real pair; the winner carries an unresolvable served-file tier and a credit obligation, both recorded) |
+| Experiments | **E01–E14 closed** (E05 withdrawn on a falsified premise) — the control arc (E01–E06) · rig repair + skeleton approval (E07) · **the first painted shot** (E08) · the clean-chain baseline (E09) · densified driving adopted (E10) · the no-control route, three waves to an instructive hard fail (E11) · **the free route gains a world** and the 6.0 / uni_pc baseline (E12) · **the composed route answers its question** (E13 — dispatched, halted at zero spend, repaired by a support arc, re-armed, run, and closed inside one date: identity holds at the maintainer's eye; reference grounds steer model-decided worlds) · **the LoRA scene-lever priced live** (E14 — the bake-off: both style LoRAs bind on the derivative weights; the character holds on `technically_color` and fails on the photo-real pair; the winner carries an unresolvable served-file tier and a credit obligation, both recorded) |
 | Routes | **three, measured** — the **driven route** (rig-rendered AAPose sticks → Animate; proven at shot level, parked, and licence-clear for its unpark) · the **free route** (GLB-authored start frame → camera tier at the 6.0 / uni_pc baseline; identity holds unanchored, a handed world holds on two seeds, and the LoRA scene-lever is measured live — E14) · the **composed route** (authored references into a hosted identity-lock tier — graduated by E13: identity-locked, model-decided cinematography with worlds steered by what the references carry; disclosure note in its spec) |
 | Spend | 22 probes in the founding arc at 4 credits each; the E08–E12 arc metered **0 credits** (GPU-hour billing) under per-experiment ceilings; **E13's four generations are the repo's first partner-credit spend, inside their pre-stated 424–844 bracket**; E14's two generations metered **0 partner credits** at a two-generation ceiling, reached exactly |
-| Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (Director-ruled 2026-08-12); the gate's stated purpose is publishing the studio's art |
+| Licence map | every adopted dependency carries a **retrieved licence document**; UNVERIFIED is treated as NO; routes through third-party tiers additionally carry **per-route disclosure** (maintainer's decision, 2026-08-12); the gate's stated purpose is publishing the studio's art |
 | Spend gates | **Gate CANON** refuses a paid submission whose subject cannot be named against a machine-readable canon — surface is the row, a null occupant is a **hole rather than an absence**, and both directions are checked (the prompt covers the canon; everything in the prompt *is* canon). It fires **before** the output directory is created, inside each of the seven payload builders, because the irreversible step this repo owns is writing a payload. The escape is census-backed: `--no-canon` on a subject that *has* canon is refused, not honoured — and since the first health pass it is **loud on every spend**: each builder prints `[canon] ARMED: <subject>`, and on the census escape `[canon] UNGATED: <subject> — <the census row's reason>`, so a build log distinguishes a ratified hole from a subject whose canon was never written; and records the verdict under `gates.CANON`, so no record can leave the question of whether canon was armed or escaped unanswered |
 | Tests | **8051 passing on the rig** (59 skips, measured 2026-09-07 after the feature-execute pin-fix — 7538 at v0.4.0, 7811 after Stage D), identical under `-O` on the rehearsal that recorded STATUS; CI exercises what a runner honestly can — rig-local assets **skip visibly** |
 | Status | **v0.5.0** — Stage D visual polish and a feature pass on top of the v0.4.0 health run. Sanctioned in-repo submitter (`build_submit_payload.py`, dry-run), installed CLI `canon` / `verify` / `spec` / `donor`, 8051 tests. Not 1.0.0: filled is still open. |
@@ -109,7 +109,7 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 
 - **Identity holds** — driven (E08: the face reads as the twin's through the shot) *and*
   unanchored (E11 wave 1: every feature to the last frame with no reference, no clip-vision,
-  no driving signal). The Director's eye is the verdict of record on both.
+  no driving signal). The maintainer's eye is the verdict of record on both.
 - **The camera obeys explicit control to one pixel** on the camera-tier weights (E11 wave 3) —
   and pushes in uncommanded without it (E11 wave 1).
 - **Density moves the signal, not the performance** (E10) — resampling smooths steps 41 %,
@@ -128,8 +128,8 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
   prompt is the promoted lever.
 - **Identity survives a hosted tier fed only authored references** (E13) — on wan2.7's
   reference-to-video, both arms, both seeds, the stylized wooden performer came through a
-  human-trained model as the same character at the Director's eye. Three blind predictions
-  across two seats expected the tier to overwrite non-human structure; none was right —
+  human-trained model as the same character at the maintainer's eye. Three blind predictions
+  across two sessions expected the tier to overwrite non-human structure; none was right —
   one-directional pessimism about these models is now written down as calibration doctrine.
 - **Reference grounds steer model-decided worlds, and dominate seed chaos on that tier**
   (E13) — grey plates begat a grey studio, a warm bar clip begat a warm interior, and both
@@ -145,7 +145,7 @@ monorepo — experiments prove paths, no route is canon by momentum (CLAUDE.md).
 
 - **Arms and hands at speed.** Still failing at f80 on both seeds at both settings (E12).
   The lever is re-scoped **presentation-first** — wrist and camera staging, from the
-  Director's own diagnosis on the GLB (the claw is a projection artifact, not mesh damage) —
+  maintainer's own diagnosis on the GLB (the claw is a projection artifact, not mesh damage) —
   with mesh surgery as the fallback, never the first move.
 - **The camera claim on photographic worlds.** 0/81 horizon detections across all four E12
   clips is a detector wanting a seam this world does not have — registered blind before
@@ -159,7 +159,7 @@ and the exact shape of the next work, and the roadmap said it would before any e
 
 ## How this repo works
 
-- [CLAUDE.md](CLAUDE.md) — how to work here: the three roles, the rules each seat runs under,
+- [CLAUDE.md](CLAUDE.md) — how to work here: the three roles, the rules each role runs under,
   and the non-negotiables (the license gate, bounded credits, identity is judged by eye).
 - [docs/ROADMAP.md](docs/ROADMAP.md) — the whole build, session by session, with the drift
   tripwires named in advance.
@@ -224,12 +224,15 @@ Three refusal families arrived with the Stage C pass (2026-09-06) and read the s
 ### Running the suite
 
 ```
-E:\AI\armature\.venv\Scripts\python.exe -m pytest -q            # from the repo root, on the repo venv — never the system Python
+.venv\Scripts\python.exe -m pytest -q                           # from the repo root, on the repo venv — never the system Python
 ```
 
-Three environment levers, all optional: `PYTHONPATH=E:/AI/record-index` (the sibling working copy the index tests
+Five environment levers, all optional: `PYTHONPATH=<repo>/../record-index` (or `ARMATURE_RECORD_INDEX`, the sibling working copy the index tests
 import; without it those tests skip by name), `ARMATURE_BLENDER` (the Blender executable the Blender-driving fixtures
-run; without it, or off this rig, those tests skip visibly), and `ARMATURE_GIT` (the git the packaging test invokes).
+run; without it, or off this rig, those tests skip visibly), `ARMATURE_GIT` (the git the packaging test invokes),
+`ARMATURE_TWIN_PROMPT_JSON` (path to facet's E33 twin-prompt JSON read by `build_animate_payload.identity_clause`;
+defaults to `<repo>/../facet/docs/experiments/E33-twin-prompts-r3.json`), and `ARMATURE_E09_PROVENANCE` (path to the
+E09 previz `render_provenance.json` fixture; defaults to `outputs/E09/b2-a3-render-lifted/render_provenance.json`).
 CI's exact recipe is the `python-tests` job in `.github/workflows/ci.yml`; `verify.ps1` runs the same suite twice
 (once under `-O`) and then builds the package and installs it into two clean rooms (wheel and sdist).
 
@@ -255,14 +258,14 @@ mean most instruments will not run unmodified on another machine.
 academic-only licenses are banned outright. A conclusion drawn on a banned model is a
 conclusion that has to be thrown away, so it never starts.
 
-**Metrics are diagnostics; the Director judges.** Whether the figure on screen is the same
+**Metrics are diagnostics; the maintainer judges.** Whether the figure on screen is the same
 character is canon, and no metric approximates it. Every generating experiment builds a
 **control | output | reference | provenance** sheet before a single number is quoted.
 
 **Cloud credits are bounded before they are spent.** Spent credits have no undo, so every spec
 states its ceiling per arm in advance.
 
-**Routes disclose what rides with them** (the Director's ruling, 2026-08-12). Any route
+**Routes disclose what rides with them** (the maintainer's decision, 2026-08-12). Any route
 through a third-party tier documents its providers' data-use and training posture, its
 AI-content disclosure duties and its watermark policy, grounded in the licence map's fetched
 documents. Fully-local routes state that nothing leaves the rig. A route without its

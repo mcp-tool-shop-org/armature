@@ -121,7 +121,7 @@ def measure(frames, label, band=None):
 def main(argv=None):
     ap = argparse.ArgumentParser(
         description="the numbers a generated clip can be quoted by — diagnostics, all of "
-                    "them, and the Director's eye is the judge",
+                    "them, and the maintainer's eye is the judge",
         epilog=HALT_EPILOG)
     ap.add_argument("--frames", required=True,
                     help="the lossless frame directory to measure")

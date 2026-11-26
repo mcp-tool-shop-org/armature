@@ -26,7 +26,7 @@ dropped a modal-background coverage measure for exactly the confound this one co
 non-flat background is counted as subject. So `segmentation` is reported beside every angle,
 and **an angle whose segmentation is implausible is reported as failed, not as a number.**
 
-The Director's eye on the sheet is the judge. This exists so the report can put a number
+The maintainer's eye on the sheet is the judge. This exists so the report can put a number
 beside the eye, not instead of it.
 Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt" and armature_core.parts.run_tool_main.
 """

@@ -28,7 +28,7 @@ this tool loaded against their decode, so anything that happened *while loading*
 to it — the corruption is on both sides of the comparison. Three such things are refused here
 instead, in `frame_population` and `read_frames`: a PNG the frame numbering does not name
 (the stick renderer's `strip_every{N}.png` contact sheet sorts last and becomes the final
-frame of the control), an alpha channel with no named plate (the Director's 2026-08-12 law —
+frame of the control), an alpha channel with no named plate (the maintainer's 2026-08-12 law —
 the RGB composite a route submits is a deliberate, recorded choice), and a non-uint8 dtype
 (the old cast wrapped 16-bit levels mod 256). The receipt records the modes, the dtype, and
 the alpha disposition, because the frame hash it carries is of the already-coerced array.
@@ -39,6 +39,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -96,10 +97,38 @@ from armature_core import gates, shotspec  # noqa: E402
 from composite_reference import compose_over_named_plate, parse_plate  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
-FFMPEG = os.environ.get(
-    "ARMATURE_FFMPEG",
-    r"E:\AI-Models\trellis2-env\Lib\site-packages\imageio_ffmpeg\binaries\ffmpeg-win-x86_64-v7.1.exe",
-)
+def _default_imageio_ffmpeg():
+    try:
+        import imageio_ffmpeg  # noqa: PLC0415
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except (ImportError, RuntimeError, OSError):
+        return None
+
+
+def _resolve_ffmpeg(env=None, imageio_getter=None, which_fn=None):
+    """Select ffmpeg in precedence order: ARMATURE_FFMPEG > imageio-ffmpeg > PATH."""
+    env_map = os.environ if env is None else env
+    if "ARMATURE_FFMPEG" in env_map:
+        return env_map["ARMATURE_FFMPEG"], "env"
+    getter = _default_imageio_ffmpeg if imageio_getter is None else imageio_getter
+    try:
+        pinned = getter()
+    except (ImportError, RuntimeError, OSError):
+        pinned = None
+    if pinned and os.path.isfile(pinned):
+        return pinned, "imageio_ffmpeg"
+    finder = shutil.which if which_fn is None else which_fn
+    found = finder("ffmpeg") or ""
+    if found:
+        return found, "path"
+    return "", "none"
+
+def ffmpeg_source():
+    """Return the active source tag ('env', 'imageio_ffmpeg', 'path', or 'none')."""
+    return "env" if "ARMATURE_FFMPEG" in os.environ else FFMPEG_SOURCE
+
+
+FFMPEG, FFMPEG_SOURCE = _resolve_ffmpeg()
 
 # Candidate bridges, in the order the spec prefers them. `container` matters as much as
 # the codec: FFV1 needs a container that will carry it, and mp4 will not.
@@ -315,7 +344,7 @@ def read_frames(frames_dir, invert=False, expect=None, alpha_over=None, progress
     gate. The sibling `invert_frames._read_u8_gray` already refuses exactly these two
     inputs; this path did not, and now does.
 
-    Alpha is the Director's law of 2026-08-12: the RGB composite a route submits is a
+    Alpha is the maintainer's law of 2026-08-12: the RGB composite a route submits is a
     **deliberate, recorded choice**. So an alpha channel raises unless `alpha_over`
     names the plate it is composited over, and `source` states what happened either
     way for the receipt to carry.
@@ -421,7 +450,7 @@ def gate_ffmpeg_binary():
     """ANDON — the encoder this tool is about to run exists, named by path and by source.
 
     F-e0f1f520, wave 22. `FFMPEG` is selected at import from `ARMATURE_FFMPEG` with a
-    hard-coded fallback under `E:/AI-Models`. Measured on `e8263a3` with that variable
+    hard-coded fallback under a local model-env path. Measured on `e8263a3` with that variable
     pointed at a path that does not exist: exit 1 and a bare
     `FileNotFoundError: [WinError 2] The system cannot find the file specified` — naming
     neither the variable, nor the path, nor ffmpeg.
@@ -849,6 +878,7 @@ def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
         "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        "ffmpeg_source": ffmpeg_source(),
         **runtime_provenance({"numpy": np, "Pillow": Image}),
         "channels": channels,
         "gate_R_all": {
@@ -1010,6 +1040,7 @@ def encode_stream_png_sequence(frames_dir, path, codec, fps=16, invert=False,
             "ffmpeg": FFMPEG,
             "ffmpeg_version": ffmpeg_version(),
             "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+            "ffmpeg_source": ffmpeg_source(),
             **runtime_provenance({"numpy": np, "Pillow": Image}),
             "video": path,
             "video_sha256": video_sha,
@@ -1075,6 +1106,7 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
         "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        "ffmpeg_source": ffmpeg_source(),
         # F-2ad4f715: the interpreter and imaging libs beside the ffmpeg key — a receipt
         # that names the encoder but not the Python cannot attribute a re-measured gap.
         **runtime_provenance({"numpy": np, "Pillow": Image}),
@@ -1176,6 +1208,7 @@ def main(argv=None):
             os.makedirs(os.path.dirname(os.path.abspath(args.survey_out)), exist_ok=True)
             with open(args.survey_out, "w", encoding="utf-8") as fh:
                 json.dump({"ffmpeg": FFMPEG,
+                           "ffmpeg_source": ffmpeg_source(),
                            "recommended_gray": table["recommended_gray"],
                            "recommended_rgb": table["recommended_rgb"],
                            "survey": rows,

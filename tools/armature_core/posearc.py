@@ -246,7 +246,7 @@ def arc_readout(arc, count, start_deg, end_deg):
 
     The readout used instead is the frame at which the arm passes the arc's **registered
     readout angle** (`POSE_ARCS[...]["readout_deg"]`, 45° for `arm_r_raise`): monotonic,
-    crossed exactly once, unambiguous by eye at the Director's zoom, and authored rather
+    crossed exactly once, unambiguous by eye at full zoom, and authored rather
     than measured. `leaves_start_frame` and `reaches_end_frame` are reported beside it so
     the whole profile is legible and the spec's original intent is still answerable from
     the record.

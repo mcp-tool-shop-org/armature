@@ -22,7 +22,7 @@ The input table, and why three sockets are deliberately empty
                   order, pixel-identical at 0/16/32/48/64. The
                   conditioning node then VAE-encodes the batch and sets `pose_video_latent`
                   on BOTH positive and negative conditioning (source read 2026-08-12).
-`reference_image` the Director-approved twin. **The node center-crops it to width x height**
+`reference_image` the maintainer-approved twin. **The node center-crops it to width x height**
                   via `common_upscale(..., "area", "center")` — see `--reference-fit`.
 `background_video` UNCONNECTED. With it absent the node builds the background plane as
                   `torch.ones(...) * 0.5`, a uniform mid-grey, and the concat mask stays all
@@ -131,8 +131,8 @@ SETTINGS_SOURCE = {
               "(two_expert_split.shift = 8.0); no Animate-specific document was retrieved"),
 }
 
-#: The identity clause, from facet E33's Director-approved twin entry.
-TWIN_PROMPT_JSON = r"E:\AI\facet\docs\experiments\E33-twin-prompts-r3.json"
+#: The identity clause, from facet E33's maintainer-approved twin entry.
+TWIN_PROMPT_JSON = os.environ.get("ARMATURE_TWIN_PROMPT_JSON") or os.path.normpath(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "..", "facet", "docs", "experiments", "E33-twin-prompts-r3.json"))
 
 #: Phrases removed from the identity clause for THIS shot, each with its reason. The clause
 #: was written for a studio plate and carries its backdrop and lighting inside it; carried
@@ -294,7 +294,7 @@ def parse_args(argv=None):
 def read_negative(path):
     """Wan's own `sample_neg_prompt`, read from the banked source. Never retyped.
 
-    E09's citation check fired on this very string when a seat described it from memory, so
+    E09's citation check fired on this very string when a session described it from memory, so
     it is parsed out of the file and the file's hash rides the record.
     """
     with open(path, encoding="utf-8") as fh:
@@ -310,16 +310,16 @@ def read_negative(path):
     return m.group(2)
 
 
-def identity_clause(path=TWIN_PROMPT_JSON):
+def identity_clause(path=None):
     """The twin's verbatim entry with this shot's drops applied, plus the change log."""
-    with open(path, encoding="utf-8") as fh:
-        doc = json.load(fh)
+    resolved, doc = _load_twin_prompt_json(path)
+    # Checked & loaded via _load_twin_prompt_json below main so :745 stays unmoved.
     text = doc.get("_entry_verbatim")
     if not isinstance(text, str) or not text.strip():
         raise PayloadError(
-            f"{path} carries no `_entry_verbatim` identity clause",
+            f"{resolved} carries no `_entry_verbatim` identity clause",
             {"gate": "PAYLOAD", "andon": "PayloadError",
-             "clause": "identity_clause_absent", "path": os.path.abspath(path)})
+             "clause": "identity_clause_absent", "path": resolved})
     original = text
     log = []
     for phrase, reason in IDENTITY_DROPS:
@@ -802,6 +802,27 @@ def main(argv=None):
         "gate_ROUTE_built": meta["gate_ROUTE_built"]["verdict"]},
         ensure_ascii=False))
     return 0
+
+
+def _load_twin_prompt_json(path=None):
+    """Resolve and load TWIN_PROMPT_JSON, raising PayloadError when absent."""
+    target = (
+        os.environ.get("ARMATURE_TWIN_PROMPT_JSON") or TWIN_PROMPT_JSON
+        if path is None
+        else path
+    )
+    resolved = os.path.abspath(target)
+    if not os.path.isfile(resolved):
+        raise PayloadError(
+            f"twin prompt JSON not found at '{resolved}'; set ARMATURE_TWIN_PROMPT_JSON "
+            f"to the E33 twin-prompts JSON path when running outside a sibling checkout",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "twin_prompt_json_missing",
+             "env_var": "ARMATURE_TWIN_PROMPT_JSON",
+             "from_env": "ARMATURE_TWIN_PROMPT_JSON" in os.environ,
+             "path": resolved})
+    with open(resolved, encoding="utf-8") as fh:
+        return resolved, json.load(fh)
 
 
 if __name__ == "__main__":

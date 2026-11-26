@@ -861,7 +861,7 @@ def returning_branch_spans(fn):
 #: In NO tool is the first-write line one of the 22: `make_hole_survey`'s real first write
 #: is `os.makedirs` at :282, 39 lines above its first false positive. Pins measured BOTH
 #: ways on the same population: 27 / 55 / 78 tail-keyed AND 27 / 55 / 78 strict. So the
-#: failure mode of a false positive is a false ALARM (a seat told to move a refusal already
+#: failure mode of a false positive is a false ALARM (a session told to move a refusal already
 #: above the real first write), never a missed strand — which is why WRITE_CALLS stays
 #: tail-keyed inside a CLI body. Do not re-open the pin; do not drop the 18 PIL saves from
 #: visibility. Same shape as the five helpers `_is_an_unambiguous_write` records above as
@@ -1554,7 +1554,7 @@ def messages_quoting_a_number_they_do_not_assert(trees=None):
     WAVE 16, F-9b4d01ef. Two assertions in `test_instrument_write_ordering.py` failed with
     "N sites; 72 were measured" beside `assert sites == 69` — the tests branch's own
     pre-merge numbers, left in the f-strings when the merge re-derived the constants, the
-    `==` targets and the comments. A seat landing a move reads the message as the current
+    `==` targets and the comments. A session landing a move reads the message as the current
     pin, because that is what a failure message is for, and retypes the wrong number into
     the constant.
 

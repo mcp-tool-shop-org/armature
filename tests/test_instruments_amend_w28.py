@@ -923,7 +923,7 @@ def test_the_skeleton_manifest_records_the_arguments_that_route_did_not_use():
 
 
 # =======================================================================================
-# F-e7d3303e (panel HIGH) — the caption under the panels the Director rules on
+# F-e7d3303e (panel HIGH) — the caption under the panels the maintainer decides on
 # =======================================================================================
 #
 # `"subtitle": ("17 rigid parts, bone-parented, no deformation anywhere ...")` was a

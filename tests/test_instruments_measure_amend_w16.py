@@ -372,7 +372,7 @@ def test_a_gap_in_an_arms_numbering_is_refused_before_the_timeline_is_built(tmp_
     is shown, once, for exactly its own duration") and the manifest's own `composite.rule`
     ("NEITHER arm is resampled or retimed") were both false on that input.
 
-    The Director then watches an A/B whose two arms are out of step by one frame-time and
+    The reviewer then watches an A/B whose two arms are out of step by one frame-time and
     reads the desynchronisation as a difference between the arms — the exact corruption the
     tool exists to prevent.
     """
@@ -464,7 +464,7 @@ def _pick_clip(tmp_path, n=6):
 ])
 def test_a_null_field_in_the_payload_record_prints_not_recorded(tmp_path, field, line):
     """THE OPERAND is the printed LINE, not `source_run`'s dict — the line is the surface
-    the Director reads.
+    the maintainer reads.
 
     Measured on the base tree: `prompt_id` was normalised with `or MISSING` and `seed` with
     `rec.get('seed', MISSING)` — a DEFAULT, not a null check — so a payload record carrying
@@ -778,7 +778,7 @@ def test_a_playback_rate_that_is_not_positive_is_refused_above_makedirs(tmp_path
     `os.makedirs(a.out)` had created the review directory, so a refused run left an empty
     directory a later reader takes for an attempt that produced nothing.
     `--source-fps=0` dies one line later, in the manifest's `a.fps / float(a.source_fps)`
-    and in `clip_name`, which is the FILENAME the Director opens.
+    and in `clip_name`, which is the FILENAME the maintainer opens.
 
     Both are the same clause as `resample_motion`'s `--fps-src`, one tool over.
     """
@@ -859,7 +859,7 @@ def test_an_explicit_run_flag_overrides_the_derivation(tmp_path):
 def test_a_frames_directory_with_no_run_root_records_that_it_derived_nothing(tmp_path):
     """The direction the derivation does NOT bound: a frames directory whose parent is not
     a run (here, the pytest tmp root). The record says `NOT DERIVED` rather than pasting a
-    plausible token onto the filename — a label on an artifact the Director opens is
+    plausible token onto the filename — a label on an artifact the maintainer opens is
     evidence, and it may not be a placeholder."""
     import make_review_clip as MRC
 

@@ -1085,7 +1085,7 @@ def subject_provenance(subject, census=None):
         raise AS.AssemblyGate(
             f"--subject {subject!r} is in no canon census this invocation can see "
             f"({sorted(table)}). The record this build writes is the provenance of the "
-            f"clip a Director opens, and a subject name it asserts that nothing backs is a "
+            f"clip a reviewer opens, and a subject name it asserts that nothing backs is a "
             f"placeholder shaped like evidence. Pass a name the census carries, or omit "
             f"the flag and let the record state `subject: null` with its reason",
             {"gate": "ASSEMBLY", "andon": "AssemblyGate",
@@ -1148,7 +1148,7 @@ def build_and_write(argv=None):
     build_opts.add_argument("--prefix", default="video/S03_assembly",
                        help="the server-side filename prefix for the saved video "
                             "(default: %(default)s)")
-    build_opts.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
+    build_opts.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a reviewer opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
@@ -1181,10 +1181,10 @@ def build_and_write(argv=None):
     # server-side upload names, `frame_order`, `frame_source_ids` and node contracts.
     # Nothing in either record named the character whose frames were assembled, so the
     # provenance chain from the CLIP back to a subject was broken at the assembly step —
-    # and the clip is the artefact a Director opens.
+    # and the clip is the artefact a reviewer opens.
     #
     # `--subject` is OPTIONAL and its absence is a RECORDED FACT with its reason, per the
-    # coordinator's 2026-09-04 ruling under the Director's delegation: this chain has no
+    # coordinator's 2026-09-04 ruling under the maintainer's delegation: this chain has no
     # generation to gate, so requiring a subject here would be a gate wearing a provenance
     # field's clothes. A subject the census does not know IS refused, because a name the
     # record asserts and nothing backs is the placeholder-shaped-like-evidence shape.

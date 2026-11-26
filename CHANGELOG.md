@@ -13,6 +13,10 @@ installs.
 
 ## [Unreleased]
 
+- **Public-repo hygiene:**
+  - Removed internal labels and local paths from public code and docs
+  - De-labelling `pinned_by` in `specs/E13-prompt.json` changes its `prompt_sha256` (`0ec902e0…` → `63a58097…`), so a rebuilt E13 record will not match the original run's digest
+
 - **Structured `CONDITIONAL` rulings, shot diagnostics lows, route-gate false-refusal fixes, pinned licence links, and CI coverage:**
   - `tools/armature_core/measure_weights.py`, `tools/armature_core/shotdiag.py`: replaced the
     old truthy ruling keyword with structured
@@ -91,7 +95,7 @@ installs.
 
 ## [0.5.0] — 2026-09-07
 
-**Stage D + feature pass on top of the health run.** Not 1.0.0: `filled` is still open (no Director-accepted shot used in a real project). SHIP_GATE keeps the v0.x target.
+**Stage D + feature pass on top of the health run.** Not 1.0.0: `filled` is still open (no maintainer-accepted shot used in a real project). SHIP_GATE keeps the v0.x target.
 
 - Operator-facing pages re-measured against the v0.4.0 registries and the wave 6–26
   DOC-IMPACT rows: publishing versions, SECURITY provenance (public-only), `requires-python`,
@@ -119,7 +123,7 @@ installs.
 A dogfood swarm ran 28 waves over four days — ten audit and ten amend waves for defects and safety (Stage A),
 two and four for proactive health (Stage B), one and one for what an operator reads and waits on (Stage C).
 Every wave: seven domains audited in isolated worktrees, a ten-family cross-model panel re-rated every
-finding, a five-seat local jury corroborated each case-file, and every approved finding was fixed with a test
+finding, a five-reviewer local panel corroborated each case-file, and every approved finding was fixed with a test
 seen red first and a family line naming the ground it stands on. Thirty Stage C findings are deferred as the
 visual-polish stage's ground; nothing else is open. The floor is law: the last receipt reads 7,538 passed /
 64 skipped, identical under `-O`, with the package build and two clean installs green. The first health pass's
@@ -305,18 +309,18 @@ approved finding with a test that was seen red first. The suite grew from 1359 t
   registry* three sections below `pip install armature-studio`.
 
 **The registry names, corrected before the first publish.** `v0.2.0` was tagged and pushed
-under the working names `armature-previz` / `@mcptoolshop/armature`; the Director's trusted
-publisher was registered for **`armature-studio`** with workflow **`release.yml`**, and a
-publisher that does not match the manifest and workflow filename byte-for-byte does not
+under the working names `armature-previz` / `@mcptoolshop/armature`; the maintainer's
+Trusted Publisher was registered for **`armature-studio`** with workflow **`release.yml`**, and a
+Trusted Publisher that does not match the manifest and workflow filename byte-for-byte does not
 publish at all. Renamed rather than force-moving a pushed tag: `v0.2.0` stands as a tag that
 was cut and never released, and **nothing was ever published under the old names.**
 
-- PyPI project: **`armature-studio`**, matching the registered pending publisher.
+- PyPI project: **`armature-studio`**, matching the registered pending Trusted Publisher.
 - npm package: **`@mcptoolshop/armature-studio`**, under the studio's existing scope rather
   than a new one — the org already exists, so no org has to be created for this package to
   have a home.
 - `.github/workflows/publish.yml` → **`.github/workflows/release.yml`**, matching the
-  registered publisher's workflow filename exactly.
+  registered Trusted Publisher's workflow filename exactly.
 
 ## [0.2.0] — 2026-08-15 (tagged, never released)
 
@@ -367,7 +371,7 @@ closed and the free route's LoRA scene-lever priced live.
 - **E14 closed — the LoRA scene-lever bake-off**
   ([spec](docs/experiments/E14-lora-scene-lever.md) →
   [report](docs/experiments/E14-report.md) →
-  [closing ruling](docs/experiments/E14-closing-ruling.md), with both seats' predictions
+  [closing ruling](docs/experiments/E14-closing-ruling.md), with both sessions' predictions
   committed before the first submission). Two arms against the byte-pinned E12 wave-3
   graph, two generations at a ceiling reached exactly, zero partner credits. The transfer
   premise — the experiment's central ASSUMED question — resolved live on both arms: a
@@ -403,12 +407,12 @@ closed and the free route's LoRA scene-lever priced live.
 
 ### Changed
 
-- The grading law gains its complement, written in the E14 closing ruling: no seat's
+- The grading law gains its complement, written in the E14 closing ruling: no session's
   frame-read approximates identity either — an identity prediction is graded only by the
   eye that holds the canon, and grading waits for the verdict.
-- The seat-boundary law gains its mechanical form after a disclosed, ruled deviation: an
+- The role-boundary law gains its mechanical form after a disclosed, ruled deviation: an
   executor who finds binding documents self-contradictory halts and reports, the way a
-  gate fires; seat identity comes from the dispatch mechanics, never a session's
+  gate fires; role identity comes from the dispatch mechanics, never a session's
   self-impression.
 - Front door, handbook and landing surfaces carry fourteen closed, three routes measured,
   and the winner's caveats. Suite at the close-merge: **1183 passed, 13 skipped** on the

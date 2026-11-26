@@ -176,7 +176,7 @@ def build_and_write(argv=None):
     build_opts.add_argument("--prefix", default="video/E13_cascade",
                        help="the server-side filename prefix for the saved video "
                             "(default: %(default)s)")
-    build_opts.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a Director opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
+    build_opts.add_argument("--subject", default=None, help="the character whose frames these are. This chain authors no generation, so Gate CANON is not armed here (see the note above `--out`) - but the record is the provenance of the artefact a reviewer opens, and until wave 22 it could not say whose frames it held. Optional: omitted, the record states `subject: null` and WHY, which is a recorded fact rather than a silence")
     a = ap.parse_args(argv)
 
     out = os.path.abspath(a.out)
@@ -195,7 +195,7 @@ def build_and_write(argv=None):
     # below the last in-tool gate.
 
     # ---- wave 22, F-27f76c43. See `build_assembly_payload.subject_provenance`: this
-    # record and its sibling's are the two this repo writes for the artefact a Director
+    # record and its sibling's are the two this repo writes for the artefact a maintainer
     # opens, and neither could say whose frames it held.
     subject_block = subject_provenance(a.subject)
 

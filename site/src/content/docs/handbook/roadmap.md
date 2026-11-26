@@ -19,7 +19,7 @@ records why.
 Two bars, in order. The second is the real one:
 
 1. **built** — the tool ships: repo public, quality gates pass, published, CI green.
-2. **filled** — **the Director has accepted a shot armature produced and used it in a real
+2. **filled** — **the maintainer has accepted a shot armature produced and used it in a real
    project.** *(Corrected 2026-08-11: this line used to say "a real game project." The game is
    one consumer — a cutscene, a film shot, or any footage counts the same.)*
 
@@ -52,7 +52,7 @@ Twelve experiments closed (E05 withdrawn un-run), and **v0.1.0 — the first mar
 the record — released 2026-08-13**. The phase letters below map loosely onto what actually
 ran: foundation, the exporter and first contact (A–C) held; control (D) became the control
 arc and the **driven route**, proven at shot level and parked for AI-animation buildout;
-identity (E) is measured at the Director's eye three ways — driven (E08), unanchored (E11
+identity (E) is measured at the maintainer's eye three ways — driven (E08), unanchored (E11
 wave 1), and through a held world (E12) — with reference-view mechanics now **E13's probe**
 on a hosted identity-lock tier: dispatched, halted at zero spend on two structural premise
 failures, repaired by a support arc that rebuilt the reference kit with true alpha, and
@@ -62,7 +62,7 @@ momentum, and three routes now stand where the plan imagined one.
 
 *Later the same day:* E13 ran its four generations — the repo's first partner-credit
 spend, inside its pre-stated bracket — and closed with the identity verdict at the
-Director's eye: **the character survives the hosted tier**, and the reference's own
+maintainer's eye: **the character survives the hosted tier**, and the reference's own
 ground steers the model-decided world. The composed route graduated from probe to
 measured route. E14, the LoRA scene-lever bake-off, closed behind it the same date:
 both T2V-trained style LoRAs bound on the camera tier's derivative weights at zero
@@ -96,14 +96,14 @@ Two structural notes carried from the spec:
 
 ## Drift tripwires
 
-Named in advance so they can be caught **by name**. Any session may call one; the Director rules.
+Named in advance so they can be caught **by name**. Any session may call one; the maintainer rules.
 
 1. **Building the tool before proving the thesis.** Product polish before the hinge rules is
    drift.
 2. **Chasing the newest model.** A new model is an arm in a future experiment, never a reason to
    restart. The arc outlives any model version.
 3. **A metric quietly becoming the judge.** The first time a number is cited to accept an artifact
-   the Director has not seen, this one has fired.
+   the maintainer has not seen, this one has fired.
 4. **Scope leaking toward an editor.** Assembly is not the job.
 5. **"Just for a test" non-commercial models.** The [licence gate](/armature/handbook/license-gate/)
    has no test exemption.

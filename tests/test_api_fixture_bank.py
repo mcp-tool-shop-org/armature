@@ -118,7 +118,7 @@ def test_every_round_trippable_banked_graph_survives_value_and_link_checks(relpa
     """gate_saved_graph round-trips over the bank wherever WIDGET_INDEX already covers it.
 
     lora_arm / payload currently load classes with no widget row (`LoraLoaderModelOnly`,
-    `WanVaceToVideo`) — that half is OUT-OF-DOMAIN for this seat (gate_saved_graph owns
+    `WanVaceToVideo`) — that half is OUT-OF-DOMAIN for this task (gate_saved_graph owns
     WIDGET_INDEX). Those two still resolve as API format above; the round-trip parametrize
     skips them by name rather than inventing a second widget table here.
     """

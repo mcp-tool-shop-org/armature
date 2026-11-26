@@ -893,7 +893,7 @@ def test_no_module_in_this_domain_still_cites_the_moved_constructor_by_line():
     Measured: the constructor is at `errors.py:59-61`; lines 40-42 are prose inside the
     class docstring, and specifically the middle of the paragraph recording that an EARLIER
     citation there was wrong — line 40 reads "`ArmatureError`, so a halt line printing
-    `\"evidence\": {}` satisfies every one of the 21". A seat re-checking the family's
+    `\"evidence\": {}` satisfies every one of the 21". A session re-checking the family's
     evidence contract followed the citation, landed on a paragraph asserting that a halt
     line printing `{}` satisfies the 21-tool census, and took the OPPOSITE of the contract
     from the file that is supposed to be its statement. The sibling citations of
@@ -991,7 +991,7 @@ def test_the_default_sample_over_a_three_frame_extraction_is_refused_by_name(tmp
     '...\\frames\\00037.png'` — untyped, no clause, naming neither the band nor the
     denominator, although `fr["n_frames"]` had been read four lines above and is quoted in
     the provenance panel eleven lines below. Wave 16 guarded the REFERENCES listing and
-    moved `os.makedirs` below the andons, and left the OUTPUT band — the panels the Director
+    moved `os.makedirs` below the andons, and left the OUTPUT band — the panels the maintainer
     judges — indexing an unchecked listing one screen down.
     """
     import make_e13_sheet as E13

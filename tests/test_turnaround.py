@@ -1,7 +1,7 @@
 """The turnaround set's andons — S03 Task A.
 
 The fixture question for Gate ALPHA is answerable from the rig rather than imagined: the
-set this gate exists to have caught is on disk. `E:\\AI\\training\\facet_E33\\turn_final\\`
+set this gate exists to have caught is on disk. `<repo>/../training/facet_E33/turn_final/`
 is eight RGBA PNGs, 352x1024, whose alpha extrema are **(255, 255) on all eight** with a
 flat grey void baked into the RGB. Those literal numbers are the first fixture below.
 
@@ -133,7 +133,7 @@ def test_a_fully_transparent_view_raises_on_the_opaque_clause():
 def test_the_opaque_fraction_is_reported_and_never_gated():
     """A magnitude with no calibrated threshold on this rig is a diagnostic, not a gate.
 
-    Four opaque pixels in a 352x1024 frame is a warning for the Director's eye; it is not
+    Four opaque pixels in a 352x1024 frame is a warning for the maintainer's eye; it is not
     a number this gate may invent a pass condition around.
     """
     ev = TA.gate_view_alpha(0, 0, 255, transparent_fraction=0.999989)

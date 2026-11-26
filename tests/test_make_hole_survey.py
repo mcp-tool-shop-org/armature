@@ -210,7 +210,7 @@ def test_the_wrong_reading_swallows_the_frame_in_EITHER_direction():
     that fails if `old_side_plan` ignores its argument.
 
     Written first with the second half asserting the two readings *agree* on a flat input.
-    That was this seat's wrong expectation and the code was right: on a flat-alpha set the
+    That was this session's wrong expectation and the code was right: on a flat-alpha set the
     alpha is 255 everywhere, so the alpha mask marks the whole frame — which is the entire
     reason `figure_mask_old` exists. The true fact is a symmetry, and it is the sharper
     assertion: **each reading swallows the frame on the input the other was built for**, so

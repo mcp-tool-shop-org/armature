@@ -172,7 +172,7 @@
           "path": ".github/dependabot.yml"
         },
         {
-          "hash": "dde302a3547e7fc176e20665aacd397e2add9d7c7a3ddaebef87b453ff26ed3d",
+          "hash": "c8320a8096d563c10b589ac20a61ac1ab713daee8dc6e613c15dd8259a1fdce9",
           "path": ".github/workflows/ci.yml"
         },
         {
@@ -180,7 +180,7 @@
           "path": ".github/workflows/pages.yml"
         },
         {
-          "hash": "03f65324896280460b196b9d2d06c3d371f4fb70f0230757ad3d4d9eb4c85bb9",
+          "hash": "bad8ff7450243d5c1914689606cc34e906f52484c087b6997a65fca79201e68b",
           "path": ".github/workflows/release.yml"
         }
       ],
@@ -214,7 +214,7 @@
       "externals": 0,
       "files": [
         {
-          "hash": "f0d5c0b462fd07ef8ed9a45f893627b72f8e55934d65025f6e01e48913e91b3e",
+          "hash": "8b73791550bab7999c011124b712f06bc689525d1998aacae818d9dda54941ed",
           "path": "docs/ROADMAP.md"
         },
         {
@@ -408,6 +408,10 @@
         {
           "hash": "9c1a66cb441c5a60912cc452e68cade53e36cc002eb3e3cfa7dfba95a2821fe2",
           "path": "docs/dispatches/attribution-repair.md"
+        },
+        {
+          "hash": "11cb9829cca50962ad30e45a67b41ce151f10dfc7bac393d7eda3a1251a73961",
+          "path": "docs/dispatches/shot-diagnostics-design.md"
         },
         {
           "hash": "ff1fca29010b16a2d4e99dc08aa6218a51d89c4be398299e150dc0eea99b55dd",
@@ -742,11 +746,11 @@
           "path": "docs/index/conventions.json"
         },
         {
-          "hash": "d5d11ddf46c8cfb2dfb9589412f894314dcdc991bc2e472c29f3d2737ac293d9",
+          "hash": "38939244ab2e4e171bb5ad7d859c98d266cb5683945d6fc90a3f9c3b44232ecc",
           "path": "docs/license-map.md"
         },
         {
-          "hash": "73469058e242ced0264e3ddab8ded9740ea2b5e35b8553666a3ff2f37cc7a639",
+          "hash": "e03388dd2563bce9821b3df88a456edbe32f3d9bbc9b1968e7acac55f79ecb0e",
           "path": "docs/publishing.md"
         },
         {
@@ -770,7 +774,7 @@
           "path": "docs/research-grounding.md"
         },
         {
-          "hash": "75aaf5e61ef1eb7e3d6919f93ada3ff5eb53d75f4c02ad86f4857dd501b4d31d",
+          "hash": "6a1ce8d2fbd988dda0dc4721b0230de36a9d63000179d1be3f43054f7b295f40",
           "path": "docs/tools.md"
         },
         {
@@ -872,15 +876,15 @@
       "externals": 0,
       "files": [
         {
-          "hash": "5911fab5ed89dd4ff283f5ed77fa5d19c405f7847e1fa2efbfe87a5128cdbfed",
+          "hash": "c0cfc00aeb7f88fb16c4bd2648f3f805ca56422c82f0bb078561a6b5ce06550a",
           "path": ".gitignore"
         },
         {
-          "hash": "c31e7538d3d167072bad35bfbc36bfb661a53cc90590b08a48b2e3d62bdee14b",
+          "hash": "d358a37b31f7b921a5726860c87e183715fb05e84478ad5ae718385b809e66ab",
           "path": "CHANGELOG.md"
         },
         {
-          "hash": "fbf60a3c81258dfc2fa7e6fc815c5693f2674191f62ddf56223683b379130adc",
+          "hash": "9b80e73af4a8399baf7a0f2cc842fc93d3b4d6b75f78b781106f7a5b019f4a07",
           "path": "CLAUDE.md"
         },
         {
@@ -896,39 +900,39 @@
           "path": "MANIFEST.in"
         },
         {
-          "hash": "3c56f14dcb9256511107b16a48499535f0e9c1e6c25d6aab12d3a6ae7adf3551",
+          "hash": "793ea361fba6e95aae66a1d0194e36c7262d819bbf3e8e1e1d35990aa261e251",
           "path": "README.es.md"
         },
         {
-          "hash": "0445ff7387c04736b06f1ebac95bed31d687fe7710fcbfbecc50b8617297c3cd",
+          "hash": "e1dae77165537b51a2dd92341bcd24bf454528766825957d121264073f6a372d",
           "path": "README.fr.md"
         },
         {
-          "hash": "a99acb2f8e6ee55ed0ba7dea5723efd5cee49be9256b98f0679283075b4f1cf0",
+          "hash": "f2d48f398aa33882cfaec539fe8e1528174d69622249f26b28300c137030ce89",
           "path": "README.hi.md"
         },
         {
-          "hash": "87ae82fdb4ab35b164b9079f98c5b66835be1f046eae0ac2f6bdfdbac2d30521",
+          "hash": "571858c546783ace756701e9b9b9950ee3409a2cebc30db87a79c262e3a7ba84",
           "path": "README.it.md"
         },
         {
-          "hash": "63c86561e23ef5186b1d21b6a15a11a783385378742334c72b2a935843f7d8a0",
+          "hash": "b089cc18f539d3d6b892e63e07e0387fdd058e2b90307d1a87087b2c4d868bf6",
           "path": "README.ja.md"
         },
         {
-          "hash": "4cf38b4949062e0c325cdcd508c7a82d756d97a65837e941dc9aac451c1be54e",
+          "hash": "eabfcf512d1aa8ea39443c100332d532bf71ce4fdff7d6bb7de90adfa75d182f",
           "path": "README.md"
         },
         {
-          "hash": "4d3113702cf115873f5f5f99194d3a856e8fa8af50c38913f924dd047041b807",
+          "hash": "003dd31fac3003ab3bdcdeecff6522ec95b65df6f69383f8e128caffc0da11a9",
           "path": "README.pt-BR.md"
         },
         {
-          "hash": "97491880b08d06797af23e731dd0d7cc75c178bcf0783ff7265d2a4a4362456c",
+          "hash": "605183143a22ea63baf545f1f022537e8048eb5e8e9c32996a937639dedc61af",
           "path": "README.pypi.md"
         },
         {
-          "hash": "6d8d34166a637efc8bc15eb65b4f58fb5376b20dfcce1df5cbb51870323bb6d4",
+          "hash": "8d51bfbf4ee20829d7e748bec525ddf4a4fe75e482b27e30371aea22e7301f82",
           "path": "README.zh.md"
         },
         {
@@ -936,19 +940,19 @@
           "path": "SCORECARD.md"
         },
         {
-          "hash": "963f1ff2fb6a8408e523619f3b53b5fbb17ebd2905e9505967cc19bc7e8183f3",
+          "hash": "5a9a7cf02c1822e8d27cd99ac4fe0de533ba44a3dd1b198484bb5cecc1d84f84",
           "path": "SECURITY.md"
         },
         {
-          "hash": "7aa1b30092754a12f58c00b2a1ec5f58acab1f2dd06e668f4830c4026821dc0c",
+          "hash": "efc89a981efb9701b683c11456eae163870c04509fb3a6e54e1042e5ffcc5f69",
           "path": "SHIP_GATE.md"
         },
         {
-          "hash": "bfe928b05c3dcb88a8cbac9e019ec8a5613506942a0dcde5b65c267e103696ec",
+          "hash": "506d01e139aafc4c5d0d51444b55136bdda547b3c5d8fbe4df5f362575763a15",
           "path": "pyproject.toml"
         },
         {
-          "hash": "6b11cecc25fd3bb8f2d32be40e07730b2af014945c8bdc1fc5027532401f2051",
+          "hash": "7ca4651ea84c018983e186d4479ae31b3007bb54df7393739bf4e1c4136a7546",
           "path": "verify.ps1"
         }
       ],
@@ -1016,15 +1020,15 @@
           "path": "site/src/content.config.ts"
         },
         {
-          "hash": "30d1150739d541a3515bed3ecce9e8de74265e99be332abab3c1a74852b91b4a",
+          "hash": "775f9247e090db1fc081ae00b64fd249edd67752fca1de093c28d0a7cade28a7",
           "path": "site/src/content/docs/handbook/index.md"
         },
         {
-          "hash": "c84bf726899e96ec2bdf17e1390f16bd1ab8bc830ee6ab344e2317391a3d8ce5",
+          "hash": "0c358699dff590ff7955191ebb027daeacb227560cdf0c7fcd76270c4c23e78d",
           "path": "site/src/content/docs/handbook/license-gate.md"
         },
         {
-          "hash": "e172719a78b730be2b4483d306475bea1b138efeddabeb2b083a3f8f382582fa",
+          "hash": "a0524c19aa963e55cad54d8d720353118d87be429e5cecc1b5386425f14fb680",
           "path": "site/src/content/docs/handbook/method.md"
         },
         {
@@ -1032,11 +1036,11 @@
           "path": "site/src/content/docs/handbook/reading-a-halt.md"
         },
         {
-          "hash": "c5013f0a6902462c5e155a0aaa92376a8f5d18cbdc1ae987e8e169758e770670",
+          "hash": "096a9e1715dee817084e195a3f17eb7713e72e091f74e33794c7ea4b18118cab",
           "path": "site/src/content/docs/handbook/roadmap.md"
         },
         {
-          "hash": "b2d9fd574e731e13531b2663981f485dbf4f8d6b1756c85fefd83e48415241d8",
+          "hash": "8db571d4098fe2bffc00f67b3f8624397a1a566b76012755f92efa76bdf5f9a1",
           "path": "site/src/content/docs/handbook/the-thesis.md"
         },
         {
@@ -1053,7 +1057,7 @@
         },
         {
           "constantOnly": true,
-          "hash": "25ca2a1006cd955fedd39f8e0aa9453518c07fd6e564ccd1e48f5b52226ace85",
+          "hash": "5ebb664610c5af81e8df27d26b5ec57c85ae774d444e7f45ad47718e3bf5ffd2",
           "path": "site/src/site-config.ts"
         },
         {
@@ -1088,15 +1092,15 @@
       "externals": 0,
       "files": [
         {
-          "hash": "180c521f444ba6e5868ce8dde595e0ab163b7a95db8360f09228b3a0cfb55b62",
+          "hash": "2e531f475caf46e870660a09ccbf377fdd2872344cb091059e0cc4afdb1836cb",
           "path": "specs/E01-anchor-blackguard.json"
         },
         {
-          "hash": "a7bac004345b2a027ed64a7235f8514ae29ed9a6fbb27ff7a0e9ac5b0f7f7d87",
+          "hash": "729cb0af1dcc5e7fdd9d7e97c6de7ba9f415784263813c53a1753a33e9bf73eb",
           "path": "specs/E01-anchor.json"
         },
         {
-          "hash": "bb7412f5c1712d66979afa8b49f2cf0df4e30367cb2ef27a988bfbcc7723333a",
+          "hash": "934a1a599546d47c87ec0f010fc542ea0026fd8478c5bf26951abca15f3b6af8",
           "path": "specs/E02-control-blackguard.json"
         },
         {
@@ -1108,39 +1112,39 @@
           "path": "specs/E03-static.json"
         },
         {
-          "hash": "5961dc43364c2e24406cb603cabd2e49c8fd38eae6062ad925b60e6da3e5c604",
+          "hash": "3553436317550570891a426d3580e45cc92f7eaf8cb5758429d3ff9f878766cd",
           "path": "specs/E08-seeds.json"
         },
         {
-          "hash": "0561b08067d9928631c24dd48c1d991461a85fecf4e8f5d4577d8ebdc47df322",
+          "hash": "8312e68737d1efaf9897aaa93640d93d746fa094cb7bd8f7d270ac92a85ebf97",
           "path": "specs/E09-A3-seeds.json"
         },
         {
-          "hash": "202554155f9d39817fa5b028dba950049c67d521cc56b412328a4f8696d4ec6f",
+          "hash": "0615c635f19c3cfe089192d78407e18a2b02eb01f2b38d28e5c997fa4095e840",
           "path": "specs/E09-seeds.json"
         },
         {
-          "hash": "78ba88513b055d32189b07d12c305a5947e4baf6e701cd50604490d1126a6eb4",
+          "hash": "c78cd4787fa05264dbb5178c3b0179643c579a13f0ffe6b7c5b186b7e2532eb6",
           "path": "specs/E10-seeds.json"
         },
         {
-          "hash": "545cd21714befaf157530771932d406487943d83b73e5a2cddf8c19980c1b64f",
+          "hash": "0988fdfe7cb56c3b568ea8518db7a65340cb3186de4ee486bc001d891cb909de",
           "path": "specs/E11-seeds.json"
         },
         {
-          "hash": "256d7c4790fdeea6172ac83b1013f5ec9b73034aa51b48f8b107b10848fbbcdf",
+          "hash": "993017c6d615bcf435619625eb795738b8a47643f4166586fde5053217b15d68",
           "path": "specs/E12-seeds.json"
         },
         {
-          "hash": "9774ae52068580ea609987c4e89f511f29997d07b4aa0def2be0dfeae291957e",
+          "hash": "ba9e94bead1bebbe643a6f0e85e06acb871b93822cbe8ff01cd8cfb1d9f44936",
           "path": "specs/E13-prompt.json"
         },
         {
-          "hash": "103242ced28e913e2fcbebff1121d05006335de58c95cfc1543b5145b833995f",
+          "hash": "a0a003e6a6ec0a093d260a8ba36dfec663280403739e1ec51ed5d2a0150327b8",
           "path": "specs/E13-seeds.json"
         },
         {
-          "hash": "729a4d4deddf270a5c082b580399b7876a49828a2815115b18f99c0cb7f85d13",
+          "hash": "db45ca6c922dad1b7c79d96e18e585473e8a5b3c4f1f62834e4848926c8250e0",
           "path": "specs/E14-seeds.json"
         },
         {
@@ -1148,7 +1152,7 @@
           "path": "specs/ceiling-why-machine-readable.md"
         },
         {
-          "hash": "4bc68ced500b0ff5f79e716d0d285d7c8a84b528d8c2a84595f40c8cdece8382",
+          "hash": "cebbf1f64112ac3861e6b1cefbe9025c2a197b7781703a1fb4e9c8a3128e98ef",
           "path": "specs/routes.json"
         }
       ],
@@ -1219,7 +1223,7 @@
             "visible_functions",
             "walk_scope"
           ],
-          "hash": "f6a2dfc2c9b168adebb1813511508a19e829db5bbc9ff3e23817e3dceab5cd54",
+          "hash": "e794d89670616756f2b9e95b9627d4a2e0179ffcc062d165e0c8e203390da092",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/errors.py"
@@ -1386,7 +1390,7 @@
             "upload_record_branch",
             "upload_record_paths"
           ],
-          "hash": "b88bdb91e83229b133cfab875ad72e7b1e25b78963b0eb53ad53975080eeaf17",
+          "hash": "4fd8cce98cc086f8cc63048c4a14f0fc1eafecda0f0c362fb1382d8760818620",
           "importOrder": [
             "tools/sheet_compose.py",
             "tools/render_turnaround.py",
@@ -1406,29 +1410,29 @@
             {
               "calls": [
                 {
-                  "line": 165,
+                  "line": 173,
                   "name": "SC",
                   "passed": true,
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  }
-                },
-                {
-                  "line": 169,
-                  "name": "clear_font_index",
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  }
-                },
-                {
-                  "line": 170,
-                  "name": "resolve_font_path",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   }
                 },
                 {
                   "line": 177,
+                  "name": "clear_font_index",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  }
+                },
+                {
+                  "line": 178,
+                  "name": "resolve_font_path",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  }
+                },
+                {
+                  "line": 185,
                   "name": "SC",
                   "passed": true,
                   "target": {
@@ -1436,7 +1440,7 @@
                   }
                 },
                 {
-                  "line": 178,
+                  "line": 186,
                   "name": "clear_font_index",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1451,25 +1455,9 @@
             {
               "calls": [
                 {
-                  "line": 165,
+                  "line": 173,
                   "name": "SC",
                   "passed": true,
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  },
-                  "via": "_permitted_face_present"
-                },
-                {
-                  "line": 169,
-                  "name": "clear_font_index",
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  },
-                  "via": "_permitted_face_present"
-                },
-                {
-                  "line": 170,
-                  "name": "resolve_font_path",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   },
@@ -1477,6 +1465,22 @@
                 },
                 {
                   "line": 177,
+                  "name": "clear_font_index",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  },
+                  "via": "_permitted_face_present"
+                },
+                {
+                  "line": 178,
+                  "name": "resolve_font_path",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  },
+                  "via": "_permitted_face_present"
+                },
+                {
+                  "line": 185,
                   "name": "SC",
                   "passed": true,
                   "target": {
@@ -1485,7 +1489,7 @@
                   "via": "_permitted_face_present"
                 },
                 {
-                  "line": 178,
+                  "line": 186,
                   "name": "clear_font_index",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1501,7 +1505,7 @@
             {
               "calls": [
                 {
-                  "line": 206,
+                  "line": 214,
                   "name": "splitlines",
                   "target": null
                 }
@@ -1514,7 +1518,7 @@
             {
               "calls": [
                 {
-                  "line": 605,
+                  "line": 613,
                   "name": "blender_stubbed",
                   "target": {
                     "file": "tests/blender_stub.py"
@@ -1529,7 +1533,7 @@
             {
               "calls": [
                 {
-                  "line": 605,
+                  "line": 613,
                   "name": "blender_stubbed",
                   "target": {
                     "file": "tests/blender_stub.py"
@@ -1545,7 +1549,7 @@
             {
               "calls": [
                 {
-                  "line": 729,
+                  "line": 737,
                   "name": "setattr",
                   "target": null
                 }
@@ -1558,14 +1562,14 @@
             {
               "calls": [
                 {
-                  "line": 756,
+                  "line": 764,
                   "name": "_font",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   }
                 },
                 {
-                  "line": 729,
+                  "line": 737,
                   "name": "setattr",
                   "target": null,
                   "via": "install_sheet_font_fallback"
@@ -1579,7 +1583,7 @@
             {
               "calls": [
                 {
-                  "line": 773,
+                  "line": 781,
                   "name": "_font",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1594,7 +1598,7 @@
             {
               "calls": [
                 {
-                  "line": 799,
+                  "line": 807,
                   "name": "addinivalue_line",
                   "target": null
                 }
@@ -1607,7 +1611,7 @@
             {
               "calls": [
                 {
-                  "line": 803,
+                  "line": 811,
                   "name": "addoption",
                   "target": null
                 }
@@ -1620,7 +1624,7 @@
             {
               "calls": [
                 {
-                  "line": 869,
+                  "line": 877,
                   "name": "getoption",
                   "target": null
                 }
@@ -1819,7 +1823,7 @@
             "test_the_readback_can_tell_the_plate_from_the_hidden_rgb",
             "test_the_shared_law_is_one_implementation"
           ],
-          "hash": "3ff89838ce4e496a818e12045b0365a2cdcce22af8ddde302f94b42190d9e599",
+          "hash": "ad16f4158e0fb9b6df8e9bbce8ee4f575f484e8846d7c227e7f74176d41b7213",
           "importOrder": [
             "tools/composite_reference.py",
             "tools/encode_control.py",
@@ -4347,7 +4351,7 @@
             "test_every_refusal_in_require_reference_file_names_a_clause",
             "test_the_unreadable_clause_also_fires_on_a_real_permission_bit"
           ],
-          "hash": "2f7ba447288d858971dc5e3fb7ca63623fbf56dc0f7c79886917e7dfe1a70481",
+          "hash": "68b0512bcae1e0e8e5757dec766b5b40ad418e13e8fdd708b168df9808e6f980",
           "importsFiles": [
             "tests/blender_stub.py"
           ],
@@ -4406,7 +4410,7 @@
             "test_the_unambiguous_save_still_passes_and_n_links_counts_what_the_file_declares",
             "test_the_unmapped_node_clause_is_named_in_both_planners"
           ],
-          "hash": "02461ccfe4ed60af150650eabf3f83fdd3af83bd17f8f48df9fe7765a3b3078d",
+          "hash": "e9713c3bd06c3ebaa64c63187e3b89b7ca95368744f18ebb2f860b7dfa40bbfa",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -4542,7 +4546,7 @@
             "test_the_verdict_is_quoted_over_the_pairs_it_compared",
             "test_the_verdict_states_the_ages_it_read_and_the_window_it_read_them_against"
           ],
-          "hash": "15be91b7f7c8f7d59eaa75c92722ef3d6902a33e5b68436d024d39acc8f9abdc",
+          "hash": "e42c6875fa583c7431325f738ab5fbc996c94023a178d5f456c45b70a4123477",
           "importsFiles": [
             "tests/blender_stub.py",
             "tools/armature_core/__init__.py",
@@ -4571,7 +4575,6 @@
             "tools/rig_character.py",
             "tools/rig_parts.py",
             "tools/rig_repair.py",
-            "tools/sheet_compose.py",
             "tools/stage_render.py"
           ],
           "path": "tests/test_amend_w16_core_solvers.py",
@@ -5199,7 +5202,7 @@
             "test_two_receipts_AGREEING_on_attribution_still_pass",
             "test_two_receipts_disagreeing_on_ATTRIBUTION_refuse_rather_than_union"
           ],
-          "hash": "7f87e4fa57505103a1fbed7c9434b27c832a17ed24af42cb19fbc370fad339e7",
+          "hash": "3e2e472e3784b5341967b041cc9307441fdc1bdd9013099f535a16f247f5cdfb",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -5590,7 +5593,7 @@
             "test_this_runs_OWN_tokened_clip_is_tolerated_and_recorded_as_run_bound",
             "test_with_no_local_path_the_record_says_DECLARED_not_measured"
           ],
-          "hash": "adc165698dcd72218235f19b734923afd45cea866d718e5a9b0985fc1a2b76f1",
+          "hash": "30a49e3a544e3067ca07445120801aef623758acaae4d8c0153b9feb8d5cdc5d",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -5941,7 +5944,7 @@
             "test_the_told_the_tier_and_found_no_hosted_node_direction_stays_green",
             "test_the_well_formed_control_still_returns_every_text"
           ],
-          "hash": "2ce13c76e120d002fd5f53476c1c25273a8e66bc2fe73da7b20cc5d30b3ad8bb",
+          "hash": "2340ca1e7b07216cb44b821c5300051782a16918516cd491ebf414705c37efa6",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/canon.py",
@@ -6028,7 +6031,7 @@
             "test_the_where_label_names_the_caller_and_decides_nothing",
             "test_the_writer_still_encodes_every_legal_plate_it_did_before"
           ],
-          "hash": "fc72474ae8224951e7c30422138e95c992a5b88ee86b7f1e0761ec672be56da4",
+          "hash": "8df44f946aa788895e29fe8d962f7293b98938da2304ac6a5e565bbce2b5d71a",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/binding.py",
@@ -6083,7 +6086,7 @@
             "test_the_duplicate_walk_census_has_a_population_worth_measuring",
             "test_the_red_proof_census_has_a_population_worth_measuring"
           ],
-          "hash": "314cd75cf89ed82c553c8bd1137c6f9e6b7b9fa1cbefd98b145e0d95a69c32db",
+          "hash": "ea49ffa4f1fcb3f7fde003f2f69b9b049bfcb7656c044b114db8f072d7793cc2",
           "importOrder": [
             "tests/_census_nodes.py",
             "tests/test_alpha_law.py",
@@ -6644,7 +6647,7 @@
             "test_f7f15fb7f_heading_rotates_path_and_foot_slip_lateral",
             "test_w37_new_clauses_are_spelled_for_the_vocabulary_census"
           ],
-          "hash": "dae4a9246ab2d534c9652eaf1b45c2c4413bd8ab9050f428da7c2c5b9824e4de",
+          "hash": "a4dde6fe13bb231beb276755fd4a35dbd7f7e97266f0c404078d3e3555e1e9b9",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/clipcompare.py",
@@ -6941,7 +6944,7 @@
             "test_the_evidences_gate_id_agrees_with_the_andon_that_raises",
             "test_the_resolver_sees_the_three_shapes_the_wave_six_census_was_blind_to"
           ],
-          "hash": "edd4532fc0c0f64094a7a70bba3f00873f8a342258c31542a8e08f1a7a708634",
+          "hash": "d1143489a2f1fa30577d5bcc2108ef7c61a70680dc0af6ed5812d3ee48b68f5b",
           "importsFiles": [
             "tests/conftest.py"
           ],
@@ -6968,7 +6971,7 @@
             "test_every_round_trippable_banked_graph_survives_value_and_link_checks",
             "test_the_api_graph_bank_covers_every_spend_builder_route"
           ],
-          "hash": "1e7a23922d52f36042a05247d580624a9b40cb9e07ed80dcd5be63e6a519de10",
+          "hash": "906b974bbfae4b22fbf83e0d522ccddfc2f8cda5946c126bca9657ce04807477",
           "importOrder": [
             "tests/conftest.py",
             "tools/gate_saved_graph.py",
@@ -8278,6 +8281,7 @@
             "test_gate_S_refuses_a_seed_the_committed_list_does_not_carry",
             "test_gate_S_refuses_any_chosen_seed_when_nothing_was_pre_registered",
             "test_main_names_the_file_beside_the_key",
+            "test_missing_twin_prompt_json_raises_typed_payload_error_naming_env_var_and_path",
             "test_omitting_the_seed_builds_on_the_first_registered_seed",
             "test_omitting_the_seed_with_no_registry_names_the_missing_flag",
             "test_only_the_declared_variables_move_between_the_two_shots",
@@ -8295,7 +8299,7 @@
             "test_the_prompt_and_the_sampler_are_byte_identical_across_the_two_shots",
             "test_the_zero_fallback_is_gone"
           ],
-          "hash": "55c0a7ac080877d2339eb718c16b6388ccff0fd171f9d21408e8220c476d3add",
+          "hash": "dce02d4e215c032f2de38ab12d6969df4fed1bf70c783e06eb90c530a8254a39",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_animate_payload.py",
@@ -8390,7 +8394,7 @@
             "w1_path",
             "w1_record"
           ],
-          "hash": "0cd9a6df6877b326f666ee44e1382373eca02f79c9df5288764ebae6789cf69a",
+          "hash": "972dc2ea9eb7cf2de3c324760d73bb271f5e3f311ed593d5816522d82c7fb722",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_camera_i2v_payload.py",
@@ -8461,7 +8465,7 @@
             "test_wiring_clip_vision_refuses_the_graph",
             "test_without_the_table_entry_gate_l_goes_indeterminate_and_raises"
           ],
-          "hash": "680675df868033154e95cf3b70810b563fe28c7bb52fc5fac76dd045ab146e24",
+          "hash": "e401c035b6778646dca083398e244f45677325f42be93a9e24f35e72e2b655bc",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_i2v_payload.py",
@@ -8530,7 +8534,7 @@
             "test_the_two_experts_reading_different_positives_raises",
             "test_tier_token_reads_the_served_names"
           ],
-          "hash": "046838ff9761feb0bbbea2e2aa8beaffe7ee328f3ee8eac6632170a33b06a00d",
+          "hash": "911a1560c53e43bcec941c98417061e135742833efbb6085e2c4bf05bcfe4b51",
           "importOrder": [
             "tools/build_lora_arm_payload.py",
             "tools/armature_core/__init__.py",
@@ -8683,7 +8687,7 @@
             "test_the_two_pinned_revisions_actually_carry_these_values",
             "test_the_two_profiles_actually_differ_where_the_delta_table_says_they_do"
           ],
-          "hash": "6686b646e1ca82d01477971223079cdbfad1b8eb0d7f1468cf684a26bebf552d",
+          "hash": "c502d200124042969b7f7774382904fbfd53d4442ba9bff2d84aeff206b7c1a7",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_t2v_payload.py",
@@ -8852,7 +8856,7 @@
             "test_the_record_check_goes_red_when_the_record_line_is_deleted",
             "test_the_spend_builder_set_is_the_seven_the_finding_names"
           ],
-          "hash": "8c0415f2bc16eb56fc525575c753d07d993648b046901fae44109ddf37f2842d",
+          "hash": "1e1e81f2da4252ba2bf9094cd67f78f946b48015b002511f1f9942a3e84346d3",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/canon.py",
@@ -10124,6 +10128,7 @@
             "test_no_ci_step_reads_an_answer_off_a_pipeline_that_can_be_signalled",
             "test_no_top_level_name_is_defined_twice_in_any_test_module",
             "test_npm_test_runs_only_where_it_is_measured_to_run",
+            "test_python_tests_measures_coverage_with_ratchet_floor_on_one_matrix_leg",
             "test_the_actions_cpython_population_is_the_directory_and_not_a_list",
             "test_the_artifact_selection_census_goes_red_on_the_leg_this_action_had",
             "test_the_backend_that_produces_the_artifact_is_in_the_toolchain_population",
@@ -10224,7 +10229,7 @@
             "uses_refs",
             "workflow_files"
           ],
-          "hash": "82b87899ded0bb49cf1ef02d060ef2b78f0e25043715af673ec706e3b51b4a4c",
+          "hash": "b2720b7436e2efab29f78536446093b3b9575ce0cd9ac278a45af6ecf3fb06f1",
           "importsFiles": [
             "tests/conftest.py",
             "tests/test_packaging.py"
@@ -14638,6 +14643,34 @@
               "invokedAtTopLevel": false,
               "isDefaultExport": false,
               "name": "test_the_gate_and_work_predicates_do_not_read_each_other"
+            },
+            {
+              "calls": [
+                {
+                  "line": 321,
+                  "name": "splitlines",
+                  "target": null,
+                  "via": "_job_lines"
+                },
+                {
+                  "branch": "line.rstrip() == head",
+                  "line": 56,
+                  "name": "lstrip",
+                  "over": "enumerate(lines)",
+                  "target": null,
+                  "via": "_indent"
+                },
+                {
+                  "line": 1291,
+                  "name": "splitlines",
+                  "target": null,
+                  "via": "_step_blocks"
+                }
+              ],
+              "exported": true,
+              "invokedAtTopLevel": false,
+              "isDefaultExport": false,
+              "name": "test_python_tests_measures_coverage_with_ratchet_floor_on_one_matrix_leg"
             }
           ],
           "testFramework": "pytest"
@@ -14727,7 +14760,7 @@
             "test_the_pixel_half_sees_the_repeat_the_byte_half_cannot",
             "test_the_segment_medians_expose_a_swing_a_single_median_would_hide"
           ],
-          "hash": "10e1a4fdd0ec31e6aa1bd10882c8b161bf03a556ac60e0332380d2bcd1f58e27",
+          "hash": "04d2d2bc8325f9e297c3d285699ce307ad47d3f2aa961d92af3d806c40c5d664",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/clipstats.py"
@@ -14742,7 +14775,7 @@
             "test_no_committed_shot_spec_carries_a_gates_row",
             "test_the_shot_specs_are_found_at_all"
           ],
-          "hash": "79c391867e743114bdeff8b36d2feefda9e65fc3b345132b5b4895f873d63ac6",
+          "hash": "40775154675fc2b981e84271826c433e79fca9f0622a5b27a85b511c2d788848",
           "importsFiles": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -14808,7 +14841,7 @@
             "test_the_parser_is_the_module_s_own_and_not_a_second_copy",
             "test_the_plate_is_a_parameter_and_lands_in_the_record"
           ],
-          "hash": "24592f7a61c26ed1ef1784ded7cf4de4ad572d0bcf8104cb2021bd8b660cdbfe",
+          "hash": "ae2ece80e2d28d2899909aec591499a6eabbff5c40a6ece030c2b41b0a4eafcc",
           "importsFiles": [
             "tools/composite_reference.py"
           ],
@@ -14829,7 +14862,7 @@
             "test_the_population_pin_and_the_one_evidence_judge_count_the_same_sites",
             "test_the_two_dual_based_andons_are_both_kinds_of_refusal_at_once"
           ],
-          "hash": "6a15b45260ab064207a3e68cf40d7415e7ae92837ec34d7fcc3fb965ad6bb735",
+          "hash": "cf8ba378afc285b6c93c21ee303bef883e6e22c0b4eeab9f7abfdec4b021f252",
           "importOrder": [
             "tests/conftest.py",
             "tests/blender_stub.py",
@@ -15617,7 +15650,7 @@
             "test_the_slot_binding_line_says_not_visible",
             "test_the_watermark_line_reports_the_flag_that_was_sent"
           ],
-          "hash": "3fa2cd02016c02879bee4de15b83d79094cb8f05bbe7c43794d3c2d4a1b2acc7",
+          "hash": "2c5818e40f42b0fbedcad8a2524947e0358b297b4166bbfcda78109462186041",
           "importsFiles": [
             "tools/make_e13_sheet.py"
           ],
@@ -15635,10 +15668,12 @@
             "test_a_stray_png_never_reaches_the_receipts_frame_names",
             "test_an_expected_count_pins_the_population_to_the_spec",
             "test_an_rgba_frame_directory_raises_rather_than_dropping_the_channel",
+            "test_receipt_records_which_ffmpeg_source_was_used",
+            "test_resolve_ffmpeg_prefers_env_then_imageio_then_path",
             "test_the_population_is_ordered_by_number_not_by_string",
             "test_the_receipt_states_the_alpha_and_dtype_of_what_it_read"
           ],
-          "hash": "83458aa2d2b317a9cdba18e4d9c43cc5aab4f3f01ea2a60d1e0c6fa16045277a",
+          "hash": "a478bc62884a82db3141ee22a89f9bcf343aab7f3dccea9ac38d314956968739",
           "importsFiles": [
             "tools/encode_control.py"
           ],
@@ -15882,7 +15917,7 @@
             "test_the_material_reads_no_image_and_the_file_holds_none",
             "test_the_measurement_is_taken_at_the_shot_camera"
           ],
-          "hash": "8d9709cc47c32f21b48a1592b0154b6010fbdcb7dc36d4dc6ed99aa2639556f1",
+          "hash": "8bda8b0a0c4709a9c3c15f2ef21dd7491963dc099cc5b4f8ab6833088dcd12b7",
           "importsFiles": [
             "tests/conftest.py"
           ],
@@ -15906,7 +15941,7 @@
             "test_the_skip_reason_is_a_machine_fact_this_file_measured",
             "test_this_machine_resolves_a_face_and_says_where_it_came_from"
           ],
-          "hash": "24a6c959f55fa74dc2da8eadd6507f707ef171f09fe6ff9234223bd54801d424",
+          "hash": "684262c5d542b462bdf3c52c6e2a6b0509ae2a48527527706a9718c4e78c5ee4",
           "importOrder": [
             "tools/sheet_compose.py",
             "tests/conftest.py",
@@ -16613,7 +16648,7 @@
             "test_wan_fun_control_profile_exists_and_binds_the_same_constraints",
             "test_wan_fun_control_rejects_the_same_near_misses_as_vace"
           ],
-          "hash": "7f7d322fc312770cf4cadd1cfe92866bdb1c2f82bb58e72b5baaaf0bac0e0ea0",
+          "hash": "ca70de080a7efad3f5de3126e8eb8886cf9a58a12ef154ca3d32602ba4cc484b",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
@@ -16685,7 +16720,7 @@
             "test_every_cpython_instrument_main_runs_end_to_end_from_argv",
             "test_the_instrument_success_population_is_the_sixteen_cpython_residuals"
           ],
-          "hash": "9720b90656b37d19524b5ea618383e9f78dd0e12c9a1ac2824c356ea70568e16",
+          "hash": "7a8e1a76f88389db1a45af181712a3bb9878d92f89517a3d796797888bb9f8d1",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_index.py",
@@ -16767,7 +16802,7 @@
             "test_the_sentinel_checker_names_each_shape_that_was_measured_here",
             "test_the_two_populations_partition_the_tools_directory"
           ],
-          "hash": "8c19ee3cfcf3cd46fce510d3243ca832772ec7bcf6a7d32054fab388095b2685",
+          "hash": "8eedff81bf31c122e7e22684c01ccec9e49127bc5cbf3642ec2d3fcc0506e3e6",
           "importsFiles": [
             "tests/blender_stub.py",
             "tools/armature_core/errors.py"
@@ -16830,6 +16865,7 @@
             "tools/measure_clip.py",
             "tools/measure_floor.py",
             "tools/measure_lift.py",
+            "tools/measure_shot.py",
             "tools/measure_smoothness.py",
             "tools/measure_tracking.py",
             "tools/pack_pose_pack.py",
@@ -16894,7 +16930,7 @@
             "test_the_write_predicate_sees_a_cv2_imwrite_above_a_refusal",
             "tools_naming"
           ],
-          "hash": "716b3e401f600605adaa3079fc02e98fc3aeb32170edf959a648da8c37755b22",
+          "hash": "4b75acb781f465d1402c35a02ca93476c942a0e1eb977204d4643530bb39b083",
           "importsFiles": [
             "tests/_census_nodes.py"
           ],
@@ -17104,14 +17140,14 @@
                   "via": "gate_and_write_lines"
                 },
                 {
-                  "line": 411,
+                  "line": 412,
                   "name": "cli_body",
                   "target": {
                     "file": "tests/_census_nodes.py"
                   }
                 },
                 {
-                  "line": 411,
+                  "line": 412,
                   "name": "returning_branch_spans",
                   "target": {
                     "file": "tests/_census_nodes.py"
@@ -17446,7 +17482,7 @@
             {
               "calls": [
                 {
-                  "line": 1019,
+                  "line": 1020,
                   "name": "messages_quoting_a_number_they_do_not_assert",
                   "target": {
                     "file": "tests/_census_nodes.py"
@@ -17881,7 +17917,7 @@
             "unfiltered_world_bounds_calls",
             "write_window"
           ],
-          "hash": "6543c4f213031f422bc85733358fbb767ef089b7a9b8c637260c74d5e8de0e5c",
+          "hash": "77955cb3d1179c55dae95d65b58d16498315e3eadca4027fbed736072adeb3b1",
           "importOrder": [
             "tests/test_instrument_exits.py",
             "tests/blender_stub.py",
@@ -18163,7 +18199,7 @@
             "test_the_stale_target_guard_does_not_test_before_for_truthiness",
             "test_the_subject_arg_refusal_is_in_the_family_so_the_halt_is_refused_not_failed"
           ],
-          "hash": "7157ab09f5ee48def62fb34c79bce92bcb848819f14aa950febe9ba2087c767c",
+          "hash": "ef079d70bd17b412a5c47cf4b8559cac3c6b3c1db0fbff40fafea0c783f6b608",
           "importsFiles": [
             "tests/blender_stub.py",
             "tests/test_sheet_sides.py",
@@ -18775,7 +18811,7 @@
             "test_the_voxel_refusal_reaches_the_retopo_halt_line",
             "test_there_is_one_require_openable_and_two_callers"
           ],
-          "hash": "943f4dbdfc4b974f6fbaf0991179ef21e74d46074d8494115cd69e59dda494d4",
+          "hash": "2b02ba5a7cc29e5d8e2992d7f33a66878a2f335f350b032bdb1077fbc7eed81b",
           "importOrder": [
             "tests/blender_stub.py",
             "tools/armature_core/__init__.py",
@@ -18905,7 +18941,7 @@
             "test_the_vacuity_clause_does_not_depend_on_the_ordering_fix",
             "test_the_walk_finds_a_clauseless_raise_when_there_is_one"
           ],
-          "hash": "b0b5820b28f0207962b275d85cf82b78da25ef76b1e249a14a8c74758eacc47f",
+          "hash": "a95c9140c81a31d93c72e9e898f3f2364006a73d4bedd89255b4f565a27c63c4",
           "importOrder": [
             "tests/_census_nodes.py",
             "tests/blender_stub.py",
@@ -18992,7 +19028,7 @@
             "test_the_usage_line_names_all_eight_arguments",
             "tree"
           ],
-          "hash": "f0254f8b7cb480ff7b862c8a75266b69f2c26b864c1f048c70cc9e3efd830e0c",
+          "hash": "653e0f1b0789ed30bd9a6ef771f76a050c085f1284395dee3728b19107a604c0",
           "importsFiles": [
             "tests/_census_nodes.py",
             "tests/blender_stub.py",
@@ -19074,7 +19110,7 @@
             "test_unmatched_label_reverted_red_was_long",
             "test_world_linear_home_unchanged"
           ],
-          "hash": "5c2d89854bc8ea8e7100819d74b01bed7d1ae92c049627b12f30332feef811de",
+          "hash": "829a58d87d6977c7b4f110073c4c8dbce9c079354a17823d0f7109fac81c111c",
           "importsFiles": [
             "tests/blender_stub.py"
           ],
@@ -19235,7 +19271,7 @@
             "tools_that_import_a_glb",
             "tools_with_an_engine_candidate_loop"
           ],
-          "hash": "7ac3e5bde1b111d801297b3c5be0ccc72d6689249e09bc90ab713fe55d2f3d4d",
+          "hash": "42dc784067c0e263fdae708ec2cb03bba216123c0263450b792bfb64805ac805",
           "importsFiles": [
             "tests/blender_stub.py",
             "tests/test_instrument_exits.py",
@@ -19362,7 +19398,7 @@
             "test_the_thesis_sheet_refuses_a_meta_path_that_is_not_there",
             "test_the_two_halves_partition_the_mask"
           ],
-          "hash": "d7b117f04be1a6f1519b250c35d97f3bc0ee34001d581cf2b653662f22527b81",
+          "hash": "166eae87c906d38147b8479cca0d5b91d398b84ebf128d170c332c76ee4e6a6b",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_core/errors.py",
@@ -19968,7 +20004,7 @@
             "test_three_frames_still_measure",
             "test_two_two_frame_records_are_refused_with_the_frame_count_in_the_evidence"
           ],
-          "hash": "0f0f17618b3374ff7a1faa1c2ddac8a2cab1631f4a252b768b8aaee83a31a56e",
+          "hash": "fd38c258b8d19004dd5ac3431a871af932710cd98d7f37267afc8d946fce631f",
           "importsFiles": [
             "tests/blender_stub.py",
             "tests/test_instrument_write_ordering.py",
@@ -20572,7 +20608,7 @@
             "test_the_stage_render_halt_line_carries_the_flag_of_a_mistyped_token",
             "test_the_zero_raise_site_base_is_gone"
           ],
-          "hash": "3d1302f9ad8be9a6376f201ff3ea4ac3f8ac83904f95322f93ead6e60fa09b96",
+          "hash": "dba0cdea71cf3e72f748843f5de268c4a4cf78f6c50d99046b50ae80ee93e48e",
           "importOrder": [
             "tests/conftest.py",
             "tools/armature_core/errors.py",
@@ -21104,7 +21140,7 @@
             "test_the_timeline_refusal_quotes_a_shift_that_depends_on_the_RATE",
             "test_the_two_documents_that_state_the_authoring_rate_cannot_drift"
           ],
-          "hash": "df0ca5284eea1071ff8b802980769025d40950b8598bbeb5fe23ce31f3815a27",
+          "hash": "9042c1d9a1eb8c857882bbc3c777742be38de16fccae946b8db40e7f9b5c96df",
           "importOrder": [
             "tests/conftest.py",
             "tools/make_ab_clip.py",
@@ -21198,7 +21234,7 @@
             "test_the_two_control_classes_declare_their_gate_id",
             "test_the_two_sentence_shaped_clauses_are_words_now_and_the_sentence_survives"
           ],
-          "hash": "050b54b98dc294ebc07d6c383d6c67b5be8d6d7b8a1235e755ff0046925f6910",
+          "hash": "e697d5c73d0b8e5519ecbe9d79c061b96a963894e7978c9dfd8a8375f85a40ea",
           "importOrder": [
             "tests/blender_stub.py",
             "tools/encode_control.py",
@@ -21489,7 +21525,7 @@
             "test_two_identical_offsets_still_read_as_the_instrument",
             "test_uniform_offsets_read_as_the_instrument"
           ],
-          "hash": "d087044847852e04f03b19270f11b7ba8e8d5780e3075cc4d74cddb59c6150dd",
+          "hash": "e9caa121499cf91855fde6f7682a5e4107e42191e5ddae6aeac2b36bfea2202b",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/joints.py",
@@ -23030,7 +23066,7 @@
             "test_the_union_of_two_rates_counts_the_shared_instants_once",
             "test_two_arms_at_the_same_rate_produce_a_frame_per_frame_composite"
           ],
-          "hash": "ce565007239e905401e5e99a6aa8ee41963441087b0f80778af24299f638e58c",
+          "hash": "55a52998da47eac70081358b336e7d28fbbe9db6805d988cf15052c46551f2f5",
           "importsFiles": [
             "tests/conftest.py",
             "tools/make_ab_clip.py"
@@ -23085,7 +23121,7 @@
             "test_the_reference_line_is_read_from_the_record",
             "test_the_route_gate_line_is_printed_verbatim_from_the_record"
           ],
-          "hash": "8598a2af9508762904c4de4b82a6b059ba27bc861b111ac07a50a720298459fd",
+          "hash": "9f7cf18331bd97fbb498f4ff1e892656af7b359765eacb7530af1d0cfd743529",
           "importsFiles": [
             "tools/make_e08_sheet.py"
           ],
@@ -23133,7 +23169,7 @@
             "test_the_wrong_reading_swallows_the_frame_in_EITHER_direction",
             "test_transparent_pixels_become_exactly_the_background"
           ],
-          "hash": "e5648b8b751a6ab40b460bcd9e9b9d1894da81ba2bf675912a1491865b629ad7",
+          "hash": "a14f4fc91038b84a86cb5cb3745699b4a7176710f4805545d696456755146f10",
           "importsFiles": [
             "tools/make_hole_survey.py"
           ],
@@ -23157,7 +23193,7 @@
             "test_the_orbit_length_in_the_label_is_the_runs_own",
             "test_the_tile_labelled_f001_is_cut_from_00001_png"
           ],
-          "hash": "e08dbf227adbc242ae8450c7c91243f82a9a6bab95c475865f300fed5654eb2a",
+          "hash": "26c3278f197a858d9e14354f1faa9e3ffd8303db2c972ec38109c90eb63a15b5",
           "importOrder": [
             "tools/make_identity_sheet.py",
             "tools/make_gate0_sheet.py"
@@ -23180,7 +23216,7 @@
             "test_the_sheet_shows_the_lifted_frame_that_belongs_to_the_row",
             "test_the_sidecar_records_the_file_each_column_actually_loaded"
           ],
-          "hash": "1b5a95785c2758e7e3a5e687205aaaf03913bdb2e8d9ad503d9250b8d5835e78",
+          "hash": "47e42669c70b30387d92e699933f49a3e5c3365010a81860ad4ca232205741d5",
           "importsFiles": [
             "tests/conftest.py",
             "tools/make_lift_sheet.py",
@@ -23207,7 +23243,7 @@
             "test_the_source_run_is_read_from_a_record_not_typed_in",
             "test_the_visible_band_maps_into_the_candidates_own_pixels"
           ],
-          "hash": "c4eaf98908dce95eec44d962d6308d9cea8bc6b2ae173a3df5c0f1769a462797",
+          "hash": "d4a1bac3325d9c645d03da40acb588e739add646fde19e002d2dd4b7e7b49fa6",
           "importOrder": [
             "tools/make_pick_sheet.py",
             "tools/armature_core/errors.py",
@@ -23241,7 +23277,7 @@
             "test_the_output_is_exactly_the_frame_and_none_of_it_is_invented",
             "test_the_source_file_is_never_written_to"
           ],
-          "hash": "a20f8f730fcbffbc83a38c230a599fc37a9f648ad396c83e8e54fe44ab979f0d",
+          "hash": "81727ff54eecea118fbdb8f04f88e10b3f17bc276a0165863cbcebbbbcc96942",
           "importOrder": [
             "tools/make_plate.py",
             "tools/armature_core/errors.py"
@@ -23264,7 +23300,7 @@
             "test_the_name_carries_the_rate_that_was_actually_used",
             "test_the_out_andon_survives_python_optimize"
           ],
-          "hash": "e039daadfa3b6d8cc1455ce5caa13953edd552bded851280db265cdc35fcf9cb",
+          "hash": "4792031d7c62f7405e611dfe0feb74b9ec0a2cedaceb74476d68c9ec0a527874",
           "importsFiles": [
             "tests/conftest.py",
             "tools/make_review_clip.py"
@@ -23288,7 +23324,7 @@
             "test_the_reference_is_the_mesh_the_reference_import_added",
             "test_the_sheet_takes_the_arcs_numbers_from_the_probe_constants"
           ],
-          "hash": "d8ee28078e614c81d02249a1c84f5d649f71702dced83d7e3e1d38c51b1d88e5",
+          "hash": "75ea1fc987718dec5094b097cfac2260a1c20205b145c05a85ff9614eee976ad",
           "importsFiles": [
             "tests/blender_stub.py"
           ],
@@ -23404,7 +23440,7 @@
             "test_every_measure_cli_main_runs_end_to_end_from_argv",
             "test_the_measure_success_population_is_the_seven_the_finding_names"
           ],
-          "hash": "4eae3a8a2d09199c979e18bb7d80fd8d3ace0169e83391659c05145bc08891b2",
+          "hash": "8c2f1ef55a995fe37f5ff8eebe067e9fc64f6d397cba33abcfb34f9017f922d0",
           "importOrder": [
             "tests/conftest.py",
             "tests/_census_nodes.py",
@@ -23416,6 +23452,7 @@
             "tools/measure_floor.py",
             "tests/test_measure_floor.py",
             "tools/measure_lift.py",
+            "tools/measure_shot.py",
             "tools/measure_smoothness.py",
             "tests/test_measure_smoothness.py",
             "tools/measure_tracking.py",
@@ -23434,6 +23471,7 @@
             "tools/measure_clip.py",
             "tools/measure_floor.py",
             "tools/measure_lift.py",
+            "tools/measure_shot.py",
             "tools/measure_smoothness.py",
             "tools/measure_tracking.py"
           ],
@@ -23630,6 +23668,29 @@
         },
         {
           "exports": [
+            "test_l1_model_safetensors_filename_collision_keys_on_bytes_not_filename",
+            "test_l2_distinctive_banned_stems_halt_while_commercial_vggt_filename_is_not_stem_banned",
+            "test_l3_gate_refuses_before_importing_any_ml_dependency_and_publishes_to_errors_catalog",
+            "test_l4_loading_pi3_and_pi3x_refuses_as_banned",
+            "test_m1_every_measurement_weight_row_carries_dated_fetch_and_mirrors_license_map",
+            "test_ruling_l1_receipt_keeps_only_four_string_normalised_fields",
+            "test_ruling_l2_mapping_is_snapshotted_once_before_validation",
+            "test_ruling_l3_date_before_2000_or_after_utc_today_refuses",
+            "test_ruling_l4_unexpected_keyword_raises_structured_measure_weight_gate",
+            "test_structured_ruling_required_for_conditional_weights_and_legacy_keyword_refused"
+          ],
+          "hash": "6359ffba1bf093638e4fd0a058a1dd37448f131b0844d5dc54a237d53d229ccf",
+          "importsFiles": [
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/errors.py",
+            "tools/armature_core/measure_weights.py",
+            "tools/armature_core/shotdiag.py"
+          ],
+          "path": "tests/test_measure_weight_gate.py",
+          "testFramework": "pytest"
+        },
+        {
+          "exports": [
             "test_a_hand_rolled_parser_without_import_is_visible_to_the_census",
             "test_every_ok_mention_imports_load_ok_payload_or_is_exempt",
             "test_load_ok_payload_reads_one_line_and_pretty_bodies",
@@ -23773,7 +23834,7 @@
             "test_todays_tree_still_reads_the_way_the_measurement_recorded_it",
             "third_party_roots"
           ],
-          "hash": "0a4c046e1d61f97e4e3dc9d4c7de735d30e9915d69ca2e989018266981fd3269",
+          "hash": "2c0c03c9d3aac80248b9205987cd3f01378bbb684bc21ce8346a93e2d4555e52",
           "importsFiles": [
             "tests/_census_nodes.py",
             "tests/conftest.py",
@@ -24708,6 +24769,7 @@
             "tests/test_measure_lift.py",
             "tests/test_measure_smoothness.py",
             "tests/test_measure_tracking.py",
+            "tests/test_measure_weight_gate.py",
             "tests/test_ok_payload_adoption.py",
             "tests/test_openpose_convention.py",
             "tests/test_ortho_convention.py",
@@ -24722,6 +24784,7 @@
             "tests/test_pose_arc_roundtrip.py",
             "tests/test_posearc.py",
             "tests/test_probe_glb.py",
+            "tests/test_public_hygiene.py",
             "tests/test_r2v_payload.py",
             "tests/test_record_index.py",
             "tests/test_record_index_binding.py",
@@ -24740,6 +24803,8 @@
             "tests/test_sheet_compose.py",
             "tests/test_sheet_pairing.py",
             "tests/test_sheet_sides.py",
+            "tests/test_shotdiag_camera.py",
+            "tests/test_shotdiag_identity.py",
             "tests/test_shotspec.py",
             "tests/test_sitelist.py",
             "tests/test_skip_lever_census.py",
@@ -24771,6 +24836,7 @@
             "tools/armature_core/joints.py",
             "tools/armature_core/landmarks.py",
             "tools/armature_core/lift_solve.py",
+            "tools/armature_core/measure_weights.py",
             "tools/armature_core/openpose.py",
             "tools/armature_core/parts.py",
             "tools/armature_core/pngio.py",
@@ -24778,6 +24844,7 @@
             "tools/armature_core/resample.py",
             "tools/armature_core/rig_gates.py",
             "tools/armature_core/route_gates.py",
+            "tools/armature_core/shotdiag.py",
             "tools/armature_core/shotspec.py",
             "tools/armature_core/sitelist.py",
             "tools/armature_core/startframe.py",
@@ -24841,6 +24908,7 @@
             "tools/measure_clip.py",
             "tools/measure_floor.py",
             "tools/measure_lift.py",
+            "tools/measure_shot.py",
             "tools/measure_smoothness.py",
             "tools/measure_tracking.py",
             "tools/pack_pose_pack.py",
@@ -25032,7 +25100,7 @@
             "test_there_is_no_escape_hatch_from_the_expectation",
             "write"
           ],
-          "hash": "3c0522d700b3d6f946b9e544976eb144d130a5bb389442e8c3c8a69f9ab4df4e",
+          "hash": "ccaf59b831d3e7c531fbaaccc8d67175ad42b21b59bb21d8e7f537a002125ea8",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/framing.py"
@@ -25223,6 +25291,23 @@
         },
         {
           "exports": [
+            "is_part_b",
+            "scan_lines",
+            "scan_tree",
+            "test_ci_path_filters_cover_every_guarded_hygiene_file",
+            "test_hygiene_scanner_catches_labels_paths_and_name_while_honouring_exclusions",
+            "test_part_a_has_no_internal_labels_local_paths_or_personal_names",
+            "tracked_repo_files"
+          ],
+          "hash": "d65f6683d36e8483940b332892217bc014f5a53663b4c3ac584cb6e3d9433f91",
+          "importsFiles": [
+            "tests/conftest.py",
+            "tests/test_ci_workflows.py"
+          ],
+          "path": "tests/test_public_hygiene.py"
+        },
+        {
+          "exports": [
             "test_a1_carries_no_video_slot_and_a2_carries_no_image_slot",
             "test_a1_end_to_end_writes_the_full_payload_and_the_slot_order",
             "test_a1_wires_four_reference_image_slots_in_order",
@@ -25303,7 +25388,7 @@
             "test_the_fts_mirror_cites_nothing_the_tables_do_not",
             "test_the_index_carries_every_table_the_pointer_check_walks"
           ],
-          "hash": "e4cbece6d684c2edaf82bc8279cacde9e875fae1be85021d04ddb80496af3dff",
+          "hash": "d506536078e88656e5268d31e94e9024f0c753a0a5df675b358eb53016fcb2ef",
           "names": [
             "tools/armature_index.py"
           ],
@@ -25326,7 +25411,7 @@
             "test_the_usage_line_advertises_a_form_the_dispatcher_accepts",
             "test_this_binding_offers_every_verb_the_shared_cli_offers"
           ],
-          "hash": "fa8be4149e60ab72efde145f90fa83e3423c7a3825fe41e822147e847bcc721d",
+          "hash": "476ae3a3bc17432f4483851b99e46cd5d5728ee09814409a68883b832c5e0602",
           "importsFiles": [
             "tools/armature_index.py"
           ],
@@ -25363,7 +25448,7 @@
             "test_the_policed_population_is_large_enough_for_the_census_to_mean_something",
             "test_two_policed_classes_do_not_descend_from_the_repo_root_error"
           ],
-          "hash": "bd7dc05f294a9456fba68685d1628d2484bb3b00a9a537d1afe6bc1f4fb06700",
+          "hash": "412dca0248fc0ac65816fe8544d66859aa6437053782ff8f86e2ea1da4bfeddf",
           "importOrder": [
             "tests/_census_nodes.py",
             "tools/make_ab_clip.py",
@@ -25454,7 +25539,7 @@
             "test_the_widened_population_is_a_superset_of_the_mesh_tool_one",
             "vis"
           ],
-          "hash": "dcf1e4a676c1cacd512da38edff61292a74384b5c7b45d374122c055b36adc67",
+          "hash": "c2ec770caa5c3d69651dfdd92ec2a8c9569170e92470589d5f56282e097888d1",
           "importOrder": [
             "tests/conftest.py",
             "tests/blender_stub.py",
@@ -26238,7 +26323,7 @@
             "test_isolation_refuses_to_hide_the_subject_itself",
             "test_neither_tool_asserts_a_blender_version_as_a_literal",
             "test_no_new_record_writer_omits_the_blender_it_ran_on",
-            "test_no_tool_writes_a_quoted_director_sentence_into_an_artifact",
+            "test_no_tool_writes_a_quoted_ruling_sentence_into_an_artifact",
             "test_render_comparison_isolates_through_the_one_function",
             "test_the_chosen_mesh_is_recorded_in_the_manifest",
             "test_the_import_gate_is_typed_and_carries_evidence",
@@ -26246,7 +26331,7 @@
             "test_the_ruling_is_still_recorded_as_a_ruling",
             "test_the_two_variants_are_disposed_of_symmetrically"
           ],
-          "hash": "3476a7d88865a24d84d27be880f27a99e9b87b0146f4f3421ff738605b06a2a6",
+          "hash": "1e5a95bb69f5d7eb313f0c91f97e0024ee0f98cc18e2ad3670c25dfb1e3c69ce",
           "importsFiles": [
             "tests/blender_stub.py"
           ],
@@ -26444,7 +26529,9 @@
             "test_a_zero_or_negative_frame_is_not_legal",
             "test_allow_cannot_wave_a_non_commercial_weight",
             "test_allow_still_reports_what_it_allowed",
+            "test_allowed_preprocessor_variants_are_not_refused_by_verify",
             "test_allowing_a_banned_key_is_refused_even_on_a_graph_that_does_not_load_it",
+            "test_ambiguous_da3_large_local_filename_refuses_while_1_1_repo_forms_pass",
             "test_an_agreeing_camera_passes_and_is_reported",
             "test_an_api_sampler_with_no_seed_input_is_not_pinned",
             "test_an_api_seed_arriving_over_a_link_is_not_pinned",
@@ -26458,18 +26545,31 @@
             "test_an_unruled_component_is_reported_not_silently_cleared",
             "test_an_unruled_node_class_is_not_invented_into_a_ruling",
             "test_api_format_is_detected_and_walked",
+            "test_bare_family_type_token_in_clip_loader_passes_while_weights_refuse",
             "test_camera_widget_order_evidence_catches_a_shifted_index",
             "test_camera_widget_order_evidence_is_honest_about_api_format",
             "test_camera_widget_order_is_confirmed_empirically_on_save_format",
+            "test_comfyui_ltxvideo_custom_node_classes_refuse_while_core_ltxv_stays_unruled",
             "test_controlnet_appliers_are_exempt_by_record_not_by_omission",
+            "test_each_banned_preprocessor_row_refuses_in_verify",
             "test_each_mapped_class_pairs_with_its_own_family_and_refuses_the_others",
+            "test_each_new_preprocessor_class_alias_refuses_in_verify",
             "test_every_alias_key_names_a_ruled_component_row",
             "test_every_map_kill_is_mirrored_or_named_with_its_reason",
             "test_every_mirror_row_names_something_the_map_names",
             "test_every_other_clause_still_passes_on_the_wave_2_graph",
             "test_every_ruled_row_is_matched_on_its_own_key_even_with_no_alias",
             "test_every_wrapper_key_the_tuple_names_is_unwrapped_by_the_one_loader",
+            "test_fix1_doc_records_matching_rules_without_role_labels",
+            "test_fix1_ha_cleared_token_does_not_clear_path_or_merged_name",
+            "test_fix1_hb_da3_large_1_1_requires_same_segment_version_suffix",
+            "test_fix1_hc_non_banned_row_hit_does_not_skip_gated_family_refusal",
+            "test_fix1_ma_det_500m_onnx_refuses_in_insightface_family",
+            "test_fix1_mb_ltx_0_9_clearance_narrows_to_pinned_2b_v0_9_5",
+            "test_fix2_hd_allow_on_excluded_row_does_not_bypass_gated_family",
+            "test_fix2_mc_neutral_family_parent_folders_pass_while_variant_parents_refuse",
             "test_frame_legality_derive_then_round",
+            "test_gate_alias_table_covers_all_five_preprocessor_alias_rows",
             "test_gate_pair_goes_RED_on_the_exact_wave_2_graph",
             "test_gate_pair_is_GREEN_on_the_corrected_pairing",
             "test_gate_pair_is_GREEN_on_the_wave_1_graph",
@@ -26482,14 +26582,37 @@
             "test_gate_s_refuses_the_unrecorded_seed_source_in_both_formats",
             "test_gate_s_registrations_evidence_names_the_andon_that_actually_raises",
             "test_gate_s_still_refuses_a_randomising_save_format_seed",
+            "test_gated_family_unmatched_names_refuse_and_out_of_family_stays_unchanged",
+            "test_h1_bare_family_tokens_outside_known_type_enum_slots_refuse",
+            "test_h1_da3_large_1_0_siblings_refuse_while_1_1_forms_pass",
+            "test_h2_m1_unruled_stems_under_neutral_family_folders_refuse",
             "test_is_api_format_refuses_an_unreadable_shape_instead_of_answering_false",
             "test_it_walks_into_subgraph_definitions",
+            "test_l1_smpl_row_matches_basicmodel_and_smpl_patterns",
+            "test_l2_ltx_underscore_and_no_hyphen_names_match_ltx_rows",
+            "test_l3_da3_giant_safetensors_receipt_cites_1_0_and_1_1_sources",
+            "test_license_map_records_ltx_hold_rows_sources_and_six_one_line_conditions",
             "test_load_graph_names_the_file_it_could_not_parse",
             "test_load_graph_refuses_an_empty_file_by_name_rather_than_parsing_nothing",
             "test_load_graph_still_reads_a_good_file",
             "test_load_graph_unwraps_the_submission_envelope_and_refuses_by_name",
+            "test_ltx_hold_rows_refuse_in_verify_and_cannot_be_waived_or_credited",
+            "test_m1_glintr100_row_refuses_with_pinned_source",
+            "test_m1_inswapper_128_fp16_row_refuses_with_pinned_source",
+            "test_m1_pkl_and_onnx_suffixes_reach_verify_receipt",
+            "test_m1_scrfd_10g_bnkps_row_refuses_with_pinned_source",
+            "test_m1_smpl_v1_1_0_row_refuses_neutral_male_and_female_pkls",
+            "test_m1_w600k_mbf_row_refuses_with_pinned_source",
+            "test_m2_depth_anything_v2_base_hf_row_refuses_with_pinned_card",
+            "test_m2_depth_anything_v2_large_hf_row_refuses_with_pinned_card",
+            "test_m2_depth_anything_v2_metric_indoor_large_hf_row_refuses_as_unverified",
+            "test_m2_depth_anything_v2_metric_outdoor_large_hf_row_refuses_as_unverified",
+            "test_neutral_family_parent_folder_judges_non_family_stem_by_own_rows",
             "test_no_graph_this_repo_builds_is_caught_by_the_widened_api_clause",
+            "test_no_unpinned_github_or_huggingface_licence_links",
             "test_one_graph_two_formats_gets_one_verdict_on_an_unrecorded_hosted_node",
+            "test_plain_wording_replaces_role_labels_in_license_map",
+            "test_refreshed_openpose_row_is_in_date_on_2026_11_11_while_dwpose_stays_advisory",
             "test_save_format_is_still_detected",
             "test_skipping_the_seed_clause_is_said_in_the_verdict_not_hidden_by_it",
             "test_the_alias_table_is_checked_at_import_too",
@@ -26507,6 +26630,7 @@
             "test_the_known_classes_are_still_not_reported_as_unknown",
             "test_the_licence_clause_records_every_match_the_way_families_of_already_does",
             "test_the_map_kill_population_is_the_one_measured_today",
+            "test_the_map_names_all_five_allowed_da3_repos_with_revisions",
             "test_the_mirror_census_goes_red_when_a_row_is_retired",
             "test_the_nested_walk_terminates_on_a_cycle",
             "test_the_no_sampler_assertion_is_refused_when_the_graph_carries_one",
@@ -26527,17 +26651,23 @@
             "test_wan_animate_illegal_width_raises",
             "test_wan_animate_latent_is_read_in_save_format_too",
             "test_wan_animate_latent_is_seen_at_all",
-            "test_wan_animate_over_the_trained_horizon_raises"
+            "test_wan_animate_over_the_trained_horizon_raises",
+            "test_widget_selected_depth_node_classes_pass_on_small_and_refuse_on_banned_tiers"
           ],
-          "hash": "bb99b62c14d5657b57fcb4aebbef46a637c26d2db97f23b23af9ae888e97efb2",
+          "hash": "9e1711e2240d6a26605993474b40b3a640f7552c637490f763aa181c535d3f31",
+          "importOrder": [
+            "tests/conftest.py",
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/canon.py",
+            "tools/armature_core/route_gates.py",
+            "tools/armature_core/measure_weights.py"
+          ],
           "importsFiles": [
             "tests/conftest.py",
             "tools/armature_core/__init__.py",
             "tools/armature_core/canon.py",
+            "tools/armature_core/measure_weights.py",
             "tools/armature_core/route_gates.py"
-          ],
-          "names": [
-            "tools/armature_core/channels.py"
           ],
           "path": "tests/test_route_gates.py",
           "testFramework": "pytest"
@@ -26640,7 +26770,7 @@
             "test_the_two_walks_are_literally_the_same_function",
             "test_the_widened_walk_sees_a_flag_the_old_one_could_not_and_the_old_one_is_shown_blind"
           ],
-          "hash": "8d4a234335d7c06d6b3e407eda4c9ad1fe89b9413cf040f8a3027d2118280dee",
+          "hash": "051e77174556bb31f280497ec28850de2530dbfb5ef6a54093fe6b74b37f266b",
           "importOrder": [
             "tests/_census_nodes.py",
             "tests/conftest.py",
@@ -26695,7 +26825,7 @@
             "test_the_output_line_names_the_typeface_it_used",
             "test_the_rig_sheet_is_as_wide_as_its_own_parameter_line"
           ],
-          "hash": "5a3ec2d6cd9805f7a6190d9c0eba6a4bd1d4ea67797c5172b8bbbeccaea455b0",
+          "hash": "ce0942c277b9cf740a773269b8ef6ff42f0f5cbb23e33b37da950b9a5c97d390",
           "importOrder": [
             "tools/sheet_compose.py",
             "tests/conftest.py",
@@ -26748,7 +26878,7 @@
             "test_the_three_wave_ten_builders_are_policed_where_their_parsers_actually_live",
             "test_two_empty_populations_raise_the_pairing_gate_not_an_indexerror"
           ],
-          "hash": "4903ed19e6a900d98a393a77cd5bcae4c5a65d55edbaf607e9a17d4c64ac9f82",
+          "hash": "a0f1106360a0994594ac445ba0a66f94d0e43aafbe416aeaee96e153e443e272",
           "importOrder": [
             "tests/_census_nodes.py",
             "tools/make_gate0_sheet.py",
@@ -26801,6 +26931,71 @@
             "tools/make_skeleton_sheet.py"
           ],
           "path": "tests/test_sheet_sides.py",
+          "testFramework": "pytest"
+        },
+        {
+          "exports": [
+            "test_c10_static_request_detects_push_in_parallax_and_reads_zero_on_pure_hold",
+            "test_c11_input_refusals_and_same_aspect_intrinsics_scaling",
+            "test_c12_followed_field_is_no_threshold_string_and_carries_no_verdict_boolean",
+            "test_c1_noiseless_orbit_recovers_zero_rotation_and_direction_error",
+            "test_c2_orbit_scored_against_static_gt_reports_true_angular_departure",
+            "test_c3_c4_small_and_antipodal_angle_conditioning",
+            "test_c3_scale_invariance_of_direction_errors_and_ate_not_computable",
+            "test_c4_blender_to_opencv_axis_convention_flip",
+            "test_c5_world_gauge_offset_cancels_while_per_frame_drift_is_not_absorbed",
+            "test_c6_pure_rotation_selects_homography_and_marks_translation_unobservable",
+            "test_c7_too_few_correspondences_or_all_masked_reports_not_fired_with_null_metrics",
+            "test_c8_character_mask_excludes_moving_performer_in_core_and_cli",
+            "test_c9_end_to_end_image_sequence_separates_true_orbit_from_reversed_gt",
+            "test_non_finite_direction_refuses_cleanly_without_json_crash",
+            "test_non_finite_parallax_and_gric_refuse_with_non_finite_direction"
+          ],
+          "hash": "ae4918272150f0d9cd388af147c073cc5d3fb6da6105e3ddf33972f11076ce7d",
+          "importsFiles": [
+            "tests/conftest.py",
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/framing.py",
+            "tools/armature_core/pngio.py",
+            "tools/armature_core/shotdiag.py",
+            "tools/measure_shot.py",
+            "tools/sheet_compose.py"
+          ],
+          "path": "tests/test_shotdiag_camera.py",
+          "testFramework": "pytest"
+        },
+        {
+          "exports": [
+            "test_i1_changing_background_moves_whole_frame_cosine_but_leaves_masked_score_unchanged",
+            "test_i2_changing_subject_inside_identical_background_drops_masked_score",
+            "test_i3_sub_patch_mask_and_floor_dominated_crop_report_not_fired_with_null_score",
+            "test_i4_decoy_self_comparison_and_missing_reference_refusals",
+            "test_i5_catastrophically_low_identity_score_returns_normally_and_module_defines_no_gate",
+            "test_i6_record_shape_refusal_and_camera_first_ordering_in_json_and_sheet_lines",
+            "test_i7_identity_provenance_records_weight_receipt_and_labels_stand_in",
+            "test_load_dinov2_state_dict_missing_or_unexpected_keys_refuses",
+            "test_weights_not_present_and_dinov2_loader_handoff_refusals"
+          ],
+          "hash": "1d5336bcc4514651632e0f9f393947946d369c6fd770d05895ac41b1d6942dac",
+          "importOrder": [
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/measure_weights.py",
+            "tools/armature_core/pngio.py",
+            "tools/armature_core/shotdiag.py",
+            "tools/armature_core/errors.py",
+            "tools/measure_shot.py",
+            "tools/sheet_compose.py"
+          ],
+          "importsFiles": [
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/errors.py",
+            "tools/armature_core/measure_weights.py",
+            "tools/armature_core/pngio.py",
+            "tools/armature_core/shotdiag.py",
+            "tools/measure_shot.py",
+            "tools/sheet_compose.py"
+          ],
+          "path": "tests/test_shotdiag_identity.py",
           "testFramework": "pytest"
         },
         {
@@ -26921,7 +27116,7 @@
             "test_the_reduction_is_deterministic",
             "test_the_reduction_keeps_every_axis_extreme_a_stride_would_drop"
           ],
-          "hash": "87cf3bf42b0004dc162f5ae20a685cd9af8e0a7fe141c777e26a3629f9bef31e",
+          "hash": "8c198667b895fb0d011c5242f87c96bfd65c8b52484bf90709a096588ce2a374",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/framing.py",
@@ -26985,7 +27180,7 @@
             "test_the_turnaround_andon_is_a_gate_failure_that_names_itself",
             "test_two_views_identical_in_pixels_at_a_NON_ADJACENT_distance_are_refused"
           ],
-          "hash": "ba8d8ca3bb8b4980bbd6f2d5fe3d14786aad674b930fd1f80835dfd34838251f",
+          "hash": "a39f7fcf6eaa122cea82b990b40e59e9fd7d8cc3df1956466cca3e65acb57e04",
           "importsFiles": [
             "tests/blender_stub.py",
             "tests/conftest.py",
@@ -27638,7 +27833,7 @@
             "test_verify_runs_the_package_from_a_clean_install_the_way_ci_does",
             "test_verify_selects_its_artifacts_by_a_derived_name_not_a_glob"
           ],
-          "hash": "8bc282eb233d50f9fe48fc6ce12d748ce8c9c4a077bbd787c07ce0a6647864dc",
+          "hash": "0fbd3745dfac3bc20686087427f8e386294c18157e15c2330a29294fbfc4fdb6",
           "importsFiles": [
             "tests/conftest.py",
             "tests/test_ci_workflows.py"
@@ -27780,7 +27975,7 @@
       "dynamicReads": 75,
       "dynamicSpawns": 0,
       "dynamicSpawnsInTests": 0,
-      "dynamicWrites": 116,
+      "dynamicWrites": 118,
       "entryPoints": [
         "tools/armature_core/cli.py"
       ],
@@ -27805,7 +28000,7 @@
               "line": 78
             }
           ],
-          "hash": "f721fbe67b71cc39c24e034ab8273021463803c6b92c81e2c1e390cbf24a5d7e",
+          "hash": "19848817c8850030e358c774749039cb3ed2bfc2624e54b6b451d21344548c0d",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -28353,7 +28548,7 @@
               "line": 1125
             }
           ],
-          "hash": "d33544864c5afee202b3efe6eb5b1405454105dd1dff97885c1b54884461d5e9",
+          "hash": "2cd152573bcd6f3895f7bbf76e263a0c2376c0557af1b3f1e818fc6707e40d10",
           "importsFiles": [
             "tools/armature_core/errors.py"
           ],
@@ -28404,7 +28599,7 @@
               "line": 1079
             }
           ],
-          "hash": "7a1df45c29329c7486775448f7c43bc4b279ac7dd0a2b74e06a6f7ce4840109d",
+          "hash": "61240d75de0b00cedb8040d260a26bf60a9f35bd92ddb55240df5dca852f4890",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/canon_census.py",
@@ -28433,7 +28628,7 @@
               "line": 132
             }
           ],
-          "hash": "7094db122bee58feb9ec38f7eb1267ea7b566a088ae3398555ae3dcf676fc45e",
+          "hash": "16277be3a15901d036dbffc7a9a93b8c96321c6d450819781b458582d8c6187b",
           "importsFiles": [
             "tools/armature_core/errors.py"
           ],
@@ -28563,55 +28758,55 @@
             {
               "in": "_version",
               "kind": "except",
-              "line": 354
+              "line": 356
             },
             {
               "in": "_gates_carried",
               "kind": "except",
-              "line": 374
+              "line": 376
             },
             {
               "in": "_gates_carried",
               "kind": "except",
-              "line": 383
+              "line": 385
             },
             {
               "in": "_function_local_dependencies",
               "kind": "except",
-              "line": 484
+              "line": 486
             },
             {
               "in": "_resolvable",
               "kind": "except",
-              "line": 502
+              "line": 504
             },
             {
               "in": "_probe",
               "kind": "except",
-              "line": 547
+              "line": 549
             },
             {
               "in": "main",
               "kind": "except",
-              "line": 798
+              "line": 800
             },
             {
               "in": "main",
               "kind": "except",
-              "line": 805
+              "line": 807
             },
             {
               "in": "main",
               "kind": "except",
-              "line": 812
+              "line": 814
             },
             {
               "in": "main",
               "kind": "except",
-              "line": 819
+              "line": 821
             }
           ],
-          "hash": "8499172e40da189100de0fb0998dd42f9abbd64e5feddaf3387729845d05f2ad",
+          "hash": "1d4ce09dbf0ce917f1d8e1bc37cd56dc55d0b272c7782211fe27dcf3a6bd22f2",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/canon.py",
@@ -28791,7 +28986,7 @@
             {
               "calls": [
                 {
-                  "line": 392,
+                  "line": 394,
                   "name": "GateFailure",
                   "passed": true,
                   "target": {
@@ -28808,7 +29003,7 @@
             {
               "calls": [
                 {
-                  "line": 392,
+                  "line": 394,
                   "name": "GateFailure",
                   "passed": true,
                   "target": {
@@ -28884,7 +29079,7 @@
             {
               "calls": [
                 {
-                  "line": 392,
+                  "line": 394,
                   "name": "GateFailure",
                   "passed": true,
                   "target": {
@@ -28900,14 +29095,14 @@
             {
               "calls": [
                 {
-                  "line": 631,
+                  "line": 633,
                   "name": "add_spend_flags",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
                   }
                 },
                 {
-                  "line": 661,
+                  "line": 663,
                   "name": "known_hosted_tiers",
                   "target": {
                     "file": "tools/armature_core/route_gates.py"
@@ -28915,7 +29110,7 @@
                 },
                 {
                   "branch": "a.cmd == \"modules\"",
-                  "line": 392,
+                  "line": 394,
                   "name": "GateFailure",
                   "passed": true,
                   "target": {
@@ -29117,7 +29312,7 @@
               "line": 535
             }
           ],
-          "hash": "bea3dbb22b1f4ee02dfe6c0f23a32fd099d2f5ab36b0ce3643284b28b49b9bf7",
+          "hash": "f6c17ed0b102985ccfbad2ba84c7f3ce1aa8d4d333ae507206d60ca2681571bf",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/armature_core/__init__.py",
@@ -29253,20 +29448,20 @@
             {
               "in": "_bind_reexports",
               "kind": "except",
-              "line": 356
+              "line": 357
             },
             {
               "in": "refresh_gate_by_id",
               "kind": "except",
-              "line": 400
+              "line": 401
             },
             {
               "in": "__getattr__",
               "kind": "raise",
-              "line": 413
+              "line": 414
             }
           ],
-          "hash": "7237a65581b47d33a3d4f708b19371f1d2bb3b9ead3eff80a749ab4afde8c017",
+          "hash": "4c77af38e84a718ae2c08c7ffba521dbb540c4f9e1216d5ec21058ec242d1ac9",
           "path": "tools/armature_core/errors.py",
           "sequences": []
         },
@@ -29480,7 +29675,7 @@
               "line": 929
             }
           ],
-          "hash": "ab782aab18f1427af1586b91b017577faac75b380cdbdfc402470bfc821c688b",
+          "hash": "0e026862583fcf14b200c775db404435dc9f7363c2b47566f54510ce3c88467e",
           "importsFiles": [
             "tools/armature_core/errors.py"
           ],
@@ -30257,7 +30452,7 @@
               "line": 162
             }
           ],
-          "hash": "a9ee50e5e8444fde6c75f1945c399333a5197b685a5053f7b50ec6d2b1ff1541",
+          "hash": "3838eb0bc5c7c56e4338792194b2f8dc59ed702f780418ccc19c4d86cf4c3e84",
           "importsFiles": [
             "tools/armature_core/errors.py"
           ],
@@ -30406,7 +30601,7 @@
               "line": 872
             }
           ],
-          "hash": "c3212df0fbd0195c901fc3b13378d6285d933f9297e140897182a6164baf5484",
+          "hash": "e14702268d854190e18111abd03e32f7590eda4df6999f31bc596a5c118e80d9",
           "importsFiles": [
             "tools/armature_core/errors.py"
           ],
@@ -30609,6 +30804,113 @@
             "tools/armature_core/sitelist.py"
           ],
           "path": "tools/armature_core/lift_solve.py"
+        },
+        {
+          "exports": [
+            "classify_weight_stem",
+            "gate_measurement_weight",
+            "licence_advisory_after",
+            "licence_age_reading",
+            "sha256_file_bytes",
+            "validate_ruling"
+          ],
+          "failurePaths": [
+            {
+              "in": "licence_advisory_after",
+              "kind": "except",
+              "line": 295
+            },
+            {
+              "in": "_inspect_today",
+              "kind": "except",
+              "line": 392
+            },
+            {
+              "in": "_inspect_ruling",
+              "kind": "except",
+              "line": 462
+            },
+            {
+              "in": "validate_ruling",
+              "kind": "raise",
+              "line": 499
+            },
+            {
+              "in": "validate_ruling",
+              "kind": "except",
+              "line": 519
+            },
+            {
+              "in": "validate_ruling",
+              "kind": "except",
+              "line": 521
+            },
+            {
+              "in": "validate_ruling",
+              "kind": "raise",
+              "line": 542
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 601
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 617
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 642
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 646
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 658
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 674
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 710
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 726
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 753
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 784
+            },
+            {
+              "in": "gate_measurement_weight",
+              "kind": "raise",
+              "line": 818
+            }
+          ],
+          "hash": "b1dde4e757b13aa8818bb81d1d3678e81a32ca5bdc74bf89bff0c846b672a07a",
+          "importsFiles": [
+            "tools/armature_core/errors.py"
+          ],
+          "path": "tools/armature_core/measure_weights.py"
         },
         {
           "exports": [
@@ -30846,7 +31148,7 @@
               "line": 1146
             }
           ],
-          "hash": "61fdb41d9a5d51b27028b7f5863666e2345c19b47eadcf0c2a3543c1aa8b89b5",
+          "hash": "0d012efbd12545152b91ae24b8ef5aefd556110141817c9f970e8d76ec849c3b",
           "importsFiles": [
             "tools/armature_core/binding.py",
             "tools/armature_core/errors.py"
@@ -31181,7 +31483,7 @@
               "line": 285
             }
           ],
-          "hash": "a4df850c0e94a942e1f4347f373c5944a7d3a10cb3826b440aaf33be0a994b5f",
+          "hash": "3d46fe75857ec96559b91407b345f0fc9f88a84e8e1971598e725ee27db80e85",
           "importsFiles": [
             "tools/armature_core/errors.py"
           ],
@@ -31447,6 +31749,7 @@
             "frame_legality",
             "gate_alias_table",
             "gate_s_registration",
+            "gated_families_of",
             "generator_families_of",
             "generator_family_reading",
             "graph_digest",
@@ -31470,6 +31773,7 @@
             "rulings_for",
             "rulings_for_class",
             "seeds",
+            "unclassified_gated_families_of",
             "uncredited_conditional_components",
             "unmatched_attribution_entries",
             "unrecorded_seed_sources",
@@ -31479,320 +31783,325 @@
             {
               "in": "_assert_hosted_tier_table",
               "kind": "raise",
-              "line": 287
+              "line": 885
             },
             {
               "in": "_assert_hosted_tier_table",
               "kind": "raise",
-              "line": 292
+              "line": 890
             },
             {
               "in": "hosted_tier_string_literals",
               "kind": "except",
-              "line": 322
+              "line": 920
             },
             {
               "in": "hosted_tier_string_literals",
               "kind": "except",
-              "line": 326
+              "line": 924
             },
             {
               "in": "pairing",
               "kind": "raise",
-              "line": 734
+              "line": 1412
             },
             {
               "in": "pairing",
               "kind": "raise",
-              "line": 746
+              "line": 1424
             },
             {
               "in": "pairing",
               "kind": "raise",
-              "line": 756
+              "line": 1434
             },
             {
               "in": "_one_graph_declaration",
               "kind": "raise",
-              "line": 821
+              "line": 1499
             },
             {
               "in": "normalise_graph",
               "kind": "raise",
-              "line": 888
+              "line": 1566
             },
             {
               "in": "_api_entry_kind",
               "kind": "raise",
-              "line": 1066
+              "line": 1744
             },
             {
               "in": "_readable_node",
               "kind": "raise",
-              "line": 1161
+              "line": 1839
             },
             {
               "in": "_readable_containers",
               "kind": "raise",
-              "line": 1226
+              "line": 1904
             },
             {
               "in": "_unreadable_level",
               "kind": "raise",
-              "line": 1254
+              "line": 1932
             },
             {
               "in": "_iter_definitions",
               "kind": "raise",
-              "line": 1417
+              "line": 2095
             },
             {
               "in": "_iter_definitions",
               "kind": "raise",
-              "line": 1437
+              "line": 2115
             },
             {
               "in": "licence_age_days",
               "kind": "except",
-              "line": 1512
+              "line": 2190
             },
             {
               "in": "licence_advisory_after",
               "kind": "except",
-              "line": 1523
+              "line": 2201
             },
             {
               "in": "attribution_entry_for",
               "kind": "raise",
-              "line": 1635
+              "line": 2313
             },
             {
               "in": "gate_alias_table",
               "kind": "raise",
-              "line": 1835
+              "line": 2547
             },
             {
               "in": "_seed_population_andon",
               "kind": "raise",
-              "line": 2226
+              "line": 3156
             },
             {
               "in": "_seed_population_andon",
               "kind": "raise",
-              "line": 2237
+              "line": 3167
             },
             {
               "in": "_seed_population_andon",
               "kind": "raise",
-              "line": 2246
+              "line": 3176
             },
             {
               "in": "_frame_triple",
               "kind": "except",
-              "line": 2534
+              "line": 3464
             },
             {
               "in": "_frame_triple",
               "kind": "raise",
-              "line": 2535
+              "line": 3465
             },
             {
               "in": "_frame_triple",
               "kind": "raise",
-              "line": 2542
+              "line": 3472
             },
             {
               "in": "_frame_form",
               "kind": "except",
-              "line": 2563
+              "line": 3493
             },
             {
               "in": "_frame_form",
               "kind": "raise",
-              "line": 2564
+              "line": 3494
             },
             {
               "in": "_family_rules",
               "kind": "raise",
-              "line": 2589
+              "line": 3519
             },
             {
               "in": "frame_legality",
               "kind": "raise",
-              "line": 2615
+              "line": 3545
             },
             {
               "in": "_converted_widget_shift_andon",
               "kind": "raise",
-              "line": 2768
+              "line": 3698
             },
             {
               "in": "_hosted_enum_shift_andon",
               "kind": "raise",
-              "line": 2825
+              "line": 3755
             },
             {
               "in": "_hosted_enum_shift_andon",
               "kind": "raise",
-              "line": 2841
+              "line": 3771
             },
             {
               "in": "hosted_frame_legality",
               "kind": "raise",
-              "line": 2868
+              "line": 3798
             },
             {
               "in": "gate_s_registration",
               "kind": "raise",
-              "line": 2928
+              "line": 3858
             },
             {
               "in": "gate_s_registration",
               "kind": "raise",
-              "line": 2934
+              "line": 3864
             },
             {
               "in": "gate_s_registration",
               "kind": "raise",
-              "line": 2978
+              "line": 3908
             },
             {
               "in": "gate_s_registration",
               "kind": "raise",
-              "line": 3052
+              "line": 3982
             },
             {
               "in": "gate_s_registration",
               "kind": "raise",
-              "line": 3063
+              "line": 3993
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3150
+              "line": 4082
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3273
+              "line": 4205
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3287
+              "line": 4219
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3317
+              "line": 4246
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3343
+              "line": 4270
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3371
+              "line": 4296
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3435
+              "line": 4324
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3461
+              "line": 4388
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3482
+              "line": 4414
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3493
+              "line": 4435
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3506
+              "line": 4446
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3532
+              "line": 4459
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3541
+              "line": 4485
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3551
+              "line": 4494
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3628
+              "line": 4504
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3648
+              "line": 4581
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3656
+              "line": 4601
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3679
+              "line": 4609
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3689
+              "line": 4632
             },
             {
               "in": "verify",
               "kind": "raise",
-              "line": 3708
+              "line": 4642
+            },
+            {
+              "in": "verify",
+              "kind": "raise",
+              "line": 4661
             },
             {
               "in": "load_graph",
               "kind": "raise",
-              "line": 3753
-            },
-            {
-              "in": "load_graph",
-              "kind": "except",
-              "line": 3761
-            },
-            {
-              "in": "load_graph",
-              "kind": "raise",
-              "line": 3762
+              "line": 4706
             },
             {
               "in": "load_graph",
               "kind": "except",
-              "line": 3769
+              "line": 4714
             },
             {
               "in": "load_graph",
               "kind": "raise",
-              "line": 3770
+              "line": 4715
+            },
+            {
+              "in": "load_graph",
+              "kind": "except",
+              "line": 4722
+            },
+            {
+              "in": "load_graph",
+              "kind": "raise",
+              "line": 4723
             }
           ],
-          "hash": "6fabcd2078d5c611aaf522c286a0e44f799cd36db17856aa754321f47663f37e",
+          "hash": "5c1bf8e3d21b7f44fd01b572c597db2811a31079cad5857f37d46b4787b18d9c",
           "importsFiles": [
             "tools/armature_core/canon.py",
             "tools/armature_core/errors.py"
@@ -31802,7 +32111,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31812,7 +32121,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31821,7 +32130,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31838,7 +32147,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31848,7 +32157,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31857,7 +32166,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31874,7 +32183,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31884,7 +32193,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31893,7 +32202,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31911,7 +32220,7 @@
               "calls": [
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31927,7 +32236,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31936,7 +32245,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31945,7 +32254,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31961,7 +32270,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31971,7 +32280,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31980,7 +32289,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -31997,7 +32306,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32007,7 +32316,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32016,7 +32325,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32033,7 +32342,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32043,7 +32352,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32052,7 +32361,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32069,7 +32378,7 @@
             {
               "calls": [
                 {
-                  "line": 1568,
+                  "line": 2246,
                   "name": "isoformat",
                   "target": null
                 }
@@ -32082,7 +32391,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32092,7 +32401,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32101,7 +32410,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32118,7 +32427,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32128,7 +32437,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32137,7 +32446,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32154,7 +32463,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32164,7 +32473,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32173,7 +32482,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32190,7 +32499,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32200,7 +32509,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32209,7 +32518,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32226,7 +32535,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32236,7 +32545,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32245,7 +32554,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32262,7 +32571,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32272,7 +32581,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32281,7 +32590,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32298,7 +32607,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32308,7 +32617,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32317,7 +32626,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32334,7 +32643,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32344,7 +32653,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32353,7 +32662,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32370,7 +32679,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32380,7 +32689,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32389,7 +32698,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32406,7 +32715,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32416,7 +32725,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32425,7 +32734,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32442,7 +32751,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32452,7 +32761,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32461,7 +32770,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32478,7 +32787,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32488,7 +32797,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32497,7 +32806,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32514,7 +32823,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32524,7 +32833,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32533,7 +32842,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32550,7 +32859,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32560,7 +32869,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32569,7 +32878,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32578,7 +32887,7 @@
                   "via": "normalise_graph"
                 },
                 {
-                  "line": 1568,
+                  "line": 2246,
                   "name": "isoformat",
                   "target": null,
                   "via": "licence_fetch_reading"
@@ -32592,7 +32901,7 @@
             {
               "calls": [
                 {
-                  "line": 874,
+                  "line": 1552,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32602,7 +32911,7 @@
                 },
                 {
                   "branch": "len(declaring) > 1",
-                  "line": 824,
+                  "line": 1502,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32611,7 +32920,7 @@
                   "via": "_one_graph_declaration"
                 },
                 {
-                  "line": 892,
+                  "line": 1570,
                   "name": "GRAPH_WRAPPER_KEYS",
                   "passed": true,
                   "target": {
@@ -32626,6 +32935,359 @@
               "name": "load_graph"
             }
           ]
+        },
+        {
+          "exports": [
+            "blender_to_opencv_pose",
+            "build_shot_record",
+            "crop_masked_frame",
+            "crop_rgba_reference",
+            "dilate_mask_proportional",
+            "direction_angle_deg",
+            "estimate_pair_pose",
+            "filter_correspondences_by_masks",
+            "geodesic_angle_deg",
+            "intrinsics_from_spec",
+            "load_dinov2_vitb14_embedder",
+            "load_numbered_rgb_frames",
+            "load_rgba_references",
+            "load_stage_render_run",
+            "measure_camera_from_frames",
+            "measure_masked_identity",
+            "score_camera_trajectory",
+            "whole_frame_cosine_series"
+          ],
+          "failurePaths": [
+            {
+              "in": "blender_to_opencv_pose",
+              "kind": "except",
+              "line": 115
+            },
+            {
+              "in": "blender_to_opencv_pose",
+              "kind": "raise",
+              "line": 116
+            },
+            {
+              "in": "blender_to_opencv_pose",
+              "kind": "raise",
+              "line": 126
+            },
+            {
+              "in": "blender_to_opencv_pose",
+              "kind": "raise",
+              "line": 140
+            },
+            {
+              "in": "geodesic_angle_deg",
+              "kind": "except",
+              "line": 163
+            },
+            {
+              "in": "geodesic_angle_deg",
+              "kind": "raise",
+              "line": 164
+            },
+            {
+              "in": "geodesic_angle_deg",
+              "kind": "raise",
+              "line": 173
+            },
+            {
+              "in": "direction_angle_deg",
+              "kind": "except",
+              "line": 200
+            },
+            {
+              "in": "direction_angle_deg",
+              "kind": "raise",
+              "line": 201
+            },
+            {
+              "in": "direction_angle_deg",
+              "kind": "raise",
+              "line": 215
+            },
+            {
+              "in": "intrinsics_from_spec",
+              "kind": "raise",
+              "line": 257
+            },
+            {
+              "in": "intrinsics_from_spec",
+              "kind": "raise",
+              "line": 280
+            },
+            {
+              "in": "intrinsics_from_spec",
+              "kind": "raise",
+              "line": 294
+            },
+            {
+              "in": "dilate_mask_proportional",
+              "kind": "raise",
+              "line": 341
+            },
+            {
+              "in": "filter_correspondences_by_masks",
+              "kind": "raise",
+              "line": 376
+            },
+            {
+              "in": "estimate_pair_pose",
+              "kind": "raise",
+              "line": 551
+            },
+            {
+              "in": "estimate_pair_pose",
+              "kind": "except",
+              "line": 603
+            },
+            {
+              "in": "estimate_pair_pose",
+              "kind": "except",
+              "line": 648
+            },
+            {
+              "in": "score_camera_trajectory",
+              "kind": "raise",
+              "line": 740
+            },
+            {
+              "in": "score_camera_trajectory",
+              "kind": "raise",
+              "line": 756
+            },
+            {
+              "in": "score_camera_trajectory",
+              "kind": "raise",
+              "line": 780
+            },
+            {
+              "in": "score_camera_trajectory",
+              "kind": "except",
+              "line": 808
+            },
+            {
+              "in": "score_camera_trajectory",
+              "kind": "raise",
+              "line": 811
+            },
+            {
+              "in": "score_camera_trajectory",
+              "kind": "except",
+              "line": 862
+            },
+            {
+              "in": "score_camera_trajectory",
+              "kind": "raise",
+              "line": 863
+            },
+            {
+              "in": "score_camera_trajectory",
+              "kind": "raise",
+              "line": 873
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1041
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1046
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1058
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1072
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1083
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1103
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1115
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1127
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1139
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1156
+            },
+            {
+              "in": "measure_camera_from_frames",
+              "kind": "raise",
+              "line": 1168
+            },
+            {
+              "in": "crop_rgba_reference",
+              "kind": "raise",
+              "line": 1282
+            },
+            {
+              "in": "crop_rgba_reference",
+              "kind": "raise",
+              "line": 1293
+            },
+            {
+              "in": "load_dinov2_vitb14_embedder",
+              "kind": "raise",
+              "line": 1458
+            },
+            {
+              "in": "load_dinov2_vitb14_embedder",
+              "kind": "except",
+              "line": 1484
+            },
+            {
+              "in": "load_dinov2_vitb14_embedder",
+              "kind": "raise",
+              "line": 1485
+            },
+            {
+              "in": "load_dinov2_vitb14_embedder",
+              "kind": "raise",
+              "line": 1517
+            },
+            {
+              "in": "measure_masked_identity",
+              "kind": "raise",
+              "line": 1589
+            },
+            {
+              "in": "measure_masked_identity",
+              "kind": "raise",
+              "line": 1596
+            },
+            {
+              "in": "measure_masked_identity",
+              "kind": "raise",
+              "line": 1603
+            },
+            {
+              "in": "measure_masked_identity",
+              "kind": "raise",
+              "line": 1614
+            },
+            {
+              "in": "measure_masked_identity",
+              "kind": "raise",
+              "line": 1626
+            },
+            {
+              "in": "measure_masked_identity",
+              "kind": "raise",
+              "line": 1639
+            },
+            {
+              "in": "measure_masked_identity",
+              "kind": "raise",
+              "line": 1653
+            },
+            {
+              "in": "measure_masked_identity",
+              "kind": "raise",
+              "line": 1664
+            },
+            {
+              "in": "measure_masked_identity",
+              "kind": "raise",
+              "line": 1687
+            },
+            {
+              "in": "build_shot_record",
+              "kind": "raise",
+              "line": 1875
+            },
+            {
+              "in": "build_shot_record",
+              "kind": "raise",
+              "line": 1885
+            },
+            {
+              "in": "load_numbered_rgb_frames",
+              "kind": "raise",
+              "line": 1910
+            },
+            {
+              "in": "load_numbered_rgb_frames",
+              "kind": "raise",
+              "line": 1922
+            },
+            {
+              "in": "load_numbered_rgb_frames",
+              "kind": "raise",
+              "line": 1932
+            },
+            {
+              "in": "load_stage_render_run",
+              "kind": "raise",
+              "line": 1956
+            },
+            {
+              "in": "load_stage_render_run",
+              "kind": "raise",
+              "line": 1970
+            },
+            {
+              "in": "load_stage_render_run",
+              "kind": "raise",
+              "line": 1982
+            },
+            {
+              "in": "load_rgba_references",
+              "kind": "raise",
+              "line": 2044
+            },
+            {
+              "in": "load_rgba_references",
+              "kind": "raise",
+              "line": 2061
+            },
+            {
+              "in": "load_rgba_references",
+              "kind": "raise",
+              "line": 2074
+            }
+          ],
+          "hash": "0a5fea7b8e0844fb29de291d1b4e5a0886ef6da80d9d47cb0570c8ede5463874",
+          "importOrder": [
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/framing.py",
+            "tools/armature_core/measure_weights.py",
+            "tools/armature_core/errors.py"
+          ],
+          "importsFiles": [
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/errors.py",
+            "tools/armature_core/framing.py",
+            "tools/armature_core/measure_weights.py"
+          ],
+          "path": "tools/armature_core/shotdiag.py"
         },
         {
           "exports": [
@@ -32846,7 +33508,7 @@
               "line": 695
             }
           ],
-          "hash": "d94b75bc00d46522f967c419373e661952d454d06edad95e76c5f6c3f2c1ca8f",
+          "hash": "b8be463d4d50f6772800ff919bad198943382e93ab60da975e1ff23e7f7f4312",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/framing.py",
@@ -32892,7 +33554,7 @@
               "line": 107
             }
           ],
-          "hash": "48576e07c722222f7fc7caa43c54fbb90916fa0da192b2cb71522f8f9c4234ae",
+          "hash": "13bbb5a8a139cfe740dd8befd482296fd6224f3df6a419bf2806facebfabb3ae",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py"
@@ -33056,7 +33718,7 @@
               "line": 852
             }
           ],
-          "hash": "29ed2dfcc128c5a647a1b48a3f1ec3f8ea2827877f76f11b408fab5a42966cc2",
+          "hash": "37ba024485df1476fba1307c72b59000bec2233fc07a9173b4e4a98309dc0901",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py"
@@ -33178,7 +33840,7 @@
               "line": 734
             }
           ],
-          "hash": "64d41e4ab8fa70c75b7229a2f1a6321b8edc86bf2ec75752a39df803a2ae4659",
+          "hash": "91115403f0f3792034fff40ef7b9ffe1b4303bd1b6aff9ffe5b4aeb8b0be6b81",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py"
@@ -33367,7 +34029,7 @@
               "line": 1314
             }
           ],
-          "hash": "da0fa52872f8cf077bd9af10e3e8a2c37ba9cb54b0edfb2a96870d6710110527",
+          "hash": "e385649b0e2c34c27adbb3a39a12848640bb3944090ad23d770df09c774006e9",
           "importOrder": [
             "tools/rig_character.py",
             "tools/lift_solve.py",
@@ -33466,9 +34128,14 @@
               "in": "main",
               "kind": "raise",
               "line": 749
+            },
+            {
+              "in": "_load_twin_prompt_json",
+              "kind": "raise",
+              "line": 816
             }
           ],
-          "hash": "e0571188ee9efa01cf26bdb28cef313fa34599febfaf9206f5531c3602130dc0",
+          "hash": "c41c540e9124b99f9e0d7c0f4f7aad4d67a445e78202371005b571715e4c55a9",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -33638,7 +34305,7 @@
               "line": 1198
             }
           ],
-          "hash": "6585f9c7bc5bc7b2f920d47b515c0c93630692e60054d8e565f14aca33dde613",
+          "hash": "be3ced9ec4544a6f42c9918ab3fa625924c538e2e40c7f8ca39bc8452c49cb9a",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/assembly.py",
@@ -34183,7 +34850,7 @@
               "line": 1301
             }
           ],
-          "hash": "a5fc2232446db98ad84bd58ff6c31f166d6d0095a559c0015e73386cfef7b221",
+          "hash": "96ada240734872161524249477782e91512b7a6a1f04ab83a2be52f8dbb704d3",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -34225,7 +34892,7 @@
               "line": 207
             }
           ],
-          "hash": "5c8c6778e1455610d6591e3761820ba7d88f8001d74fe7688a3b8e0c7655d4f9",
+          "hash": "45a8aa35c387a6e13f22b28ccfefe930e31ea4fbfa823ad93eae1bf25ef20594",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/assembly.py",
@@ -34652,7 +35319,7 @@
               "line": 903
             }
           ],
-          "hash": "f4b72de1856ff6b424da143f975cc51932cbaffe5df5e3222ded1d292642a1d6",
+          "hash": "3eeec20da81b517e03d7cb659c83528bf0b92f61867caf5ba5f00d5bf8696313",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -34810,7 +35477,7 @@
               "line": 937
             }
           ],
-          "hash": "06e97909556fb25bcca1303ec909497cc203dcb92a6b2e7ec03f311fcac77c64",
+          "hash": "cd7a3de7abd7c340ff66bd7f6c9e39ac57f81f85c9280e22ff7f5402c97e71e9",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -34909,7 +35576,7 @@
               "line": 935
             }
           ],
-          "hash": "6ab2aff52d9a80dcfa84a7ece45de9e1ff140dd07037fe4e4683a43565a820ce",
+          "hash": "c5b04120d3b8f046082c65d3d65eaba5d6370bcb18d336ef618311aa9897e67e",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/assembly.py",
@@ -35179,7 +35846,7 @@
               "line": 429
             }
           ],
-          "hash": "f409c2fa92b674a092334f80a3051ce9384a1e447fbe7c533a1d1614898d46eb",
+          "hash": "dd085c080efcc78e3d50ddb633760041ced454a74f660aa103cbca7f8264bb94",
           "importOrder": [
             "tools/build_cascade_payload.py",
             "tools/build_assembly_payload.py",
@@ -35529,7 +36196,7 @@
               "line": 581
             }
           ],
-          "hash": "4b7f3b2fc60e4e35fdea081d9f93bcb7b24b4c2436cce4867baa804c23be4912",
+          "hash": "9d76599e17be5aa458ab9618a9128ca0329eed6d7ffb7e5b4753231821943a8c",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/route_gates.py",
@@ -35916,7 +36583,7 @@
               "line": 300
             }
           ],
-          "hash": "6a37765c88906b2439cf945655b6707bce73184474da191d196ac202df5cf62f",
+          "hash": "ca019ab16951e1958a1c2edb7b23280e4b2783cbe276f9ad643bcfd768426f4b",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/encode_control.py",
@@ -35978,7 +36645,7 @@
               "line": 566
             }
           ],
-          "hash": "1c12a1b67081e3bbb702230fccc70a27fec8e8889b11454a82add45e97adc08d",
+          "hash": "75b70c27afd2e91c25b45f761bd085d006fb8fe8b36b7965714f7c06855456f3",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/landmarks.py",
@@ -35998,8 +36665,8 @@
           "path": "tools/diagnose_bone_heat.py"
         },
         {
-          "entry": "main",
-          "entryRule": 3,
+          "entry": "_resolve_ffmpeg",
+          "entryRule": 1,
           "exports": [
             "build",
             "build_control_pack",
@@ -36008,6 +36675,7 @@
             "decode",
             "encode",
             "encode_stream_png_sequence",
+            "ffmpeg_source",
             "ffmpeg_version",
             "frame_population",
             "gate_codec_safe_for_mode",
@@ -36029,164 +36697,154 @@
           ],
           "failurePaths": [
             {
+              "in": "_default_imageio_ffmpeg",
+              "kind": "except",
+              "line": 104
+            },
+            {
+              "in": "_resolve_ffmpeg",
+              "kind": "except",
+              "line": 116
+            },
+            {
               "in": "run_ffmpeg",
               "kind": "except",
-              "line": 217
+              "line": 246
             },
             {
               "in": "run_ffmpeg",
               "kind": "raise",
-              "line": 222
+              "line": 251
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 257
+              "line": 286
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 266
+              "line": 295
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 275
+              "line": 304
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 284
+              "line": 313
             },
             {
               "in": "read_frames",
               "kind": "raise",
-              "line": 331
+              "line": 360
             },
             {
               "in": "read_frames",
               "kind": "raise",
-              "line": 345
+              "line": 374
             },
             {
               "in": "read_frames",
               "kind": "raise",
-              "line": 369
+              "line": 398
             },
             {
               "in": "gate_encode_rate",
               "kind": "raise",
-              "line": 410
+              "line": 439
             },
             {
               "in": "gate_ffmpeg_binary",
               "kind": "raise",
-              "line": 430
+              "line": 459
             },
             {
               "in": "ffmpeg_version",
               "kind": "except",
-              "line": 458
+              "line": 487
             },
             {
               "in": "ffmpeg_version",
               "kind": "except",
-              "line": 460
+              "line": 489
             },
             {
               "in": "encode",
               "kind": "raise",
-              "line": 471
+              "line": 500
             },
             {
               "in": "encode",
               "kind": "raise",
-              "line": 491
+              "line": 520
             },
             {
               "in": "decode",
               "kind": "raise",
-              "line": 515
+              "line": 544
             },
             {
               "in": "decode",
               "kind": "raise",
-              "line": 525
+              "line": 554
             },
             {
               "in": "decode",
               "kind": "raise",
-              "line": 537
+              "line": 566
             },
             {
               "in": "survey_codecs",
               "kind": "except",
-              "line": 612
+              "line": 641
             },
             {
               "in": "load_survey_table",
               "kind": "except",
-              "line": 629
+              "line": 658
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 630
+              "line": 659
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 636
+              "line": 665
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 642
+              "line": 671
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 650
+              "line": 679
             },
             {
               "in": "codec_for_mode",
               "kind": "raise",
-              "line": 667
+              "line": 696
             },
             {
               "in": "survey_row_for",
               "kind": "raise",
-              "line": 694
+              "line": 723
             },
             {
               "in": "gate_codec_safe_for_mode",
               "kind": "raise",
-              "line": 712
+              "line": 741
             },
             {
               "in": "gate_codec_safe_for_mode",
               "kind": "raise",
-              "line": 720
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "raise",
-              "line": 737
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "except",
-              "line": 746
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "raise",
-              "line": 747
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "raise",
-              "line": 755
+              "line": 749
             },
             {
               "in": "read_stage_render_channel_dirs",
@@ -36194,77 +36852,105 @@
               "line": 766
             },
             {
-              "in": "build_control_pack",
+              "in": "read_stage_render_channel_dirs",
+              "kind": "except",
+              "line": 775
+            },
+            {
+              "in": "read_stage_render_channel_dirs",
+              "kind": "raise",
+              "line": 776
+            },
+            {
+              "in": "read_stage_render_channel_dirs",
+              "kind": "raise",
+              "line": 784
+            },
+            {
+              "in": "read_stage_render_channel_dirs",
               "kind": "raise",
               "line": 795
             },
             {
               "in": "build_control_pack",
               "kind": "raise",
-              "line": 801
+              "line": 824
+            },
+            {
+              "in": "build_control_pack",
+              "kind": "raise",
+              "line": 830
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 879
+              "line": 909
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 887
+              "line": 917
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 899
+              "line": 929
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 912
+              "line": 942
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 928
+              "line": 958
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 953
+              "line": 983
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 964
+              "line": 994
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1187
+              "line": 1220
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1193
+              "line": 1226
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1210
+              "line": 1243
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1221
+              "line": 1254
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1233
+              "line": 1266
             }
           ],
-          "hash": "840f9a71bbf429b02f31eece847eef9f13929f152180d3920ad9ab43ba0db4fb",
+          "hash": "7f25d628e12739496fec62158e4277eba3a2056198956d6bc105fce6e04be074",
+          "importOrder": [
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/gates.py",
+            "tools/armature_core/shotspec.py",
+            "tools/composite_reference.py",
+            "tools/armature_core/errors.py",
+            "tools/armature_core/parts.py"
+          ],
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/errors.py",
@@ -36278,7 +36964,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36293,7 +36979,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36301,7 +36987,7 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36316,7 +37002,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36324,7 +37010,7 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36340,7 +37026,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36356,7 +37042,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36365,7 +37051,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 919,
+                  "line": 949,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36374,7 +37060,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 981,
+                  "line": 1011,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36382,7 +37068,7 @@
                   "via": "encode_stream_png_sequence"
                 },
                 {
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36390,7 +37076,7 @@
                   "via": "read_frames"
                 },
                 {
-                  "line": 1049,
+                  "line": 1080,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36406,7 +37092,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36414,14 +37100,14 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 919,
+                  "line": 949,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
                   }
                 },
                 {
-                  "line": 981,
+                  "line": 1011,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36437,7 +37123,7 @@
               "calls": [
                 {
                   "branch": "stream",
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36446,7 +37132,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 919,
+                  "line": 949,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36455,7 +37141,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 981,
+                  "line": 1011,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36463,7 +37149,7 @@
                   "via": "encode_stream_png_sequence"
                 },
                 {
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36471,7 +37157,7 @@
                   "via": "read_frames"
                 },
                 {
-                  "line": 1049,
+                  "line": 1080,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36486,7 +37172,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36494,7 +37180,7 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 1258,
+                  "line": 1291,
                   "name": "parse_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36502,7 +37188,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 919,
+                  "line": 949,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36511,7 +37197,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 981,
+                  "line": 1011,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36520,7 +37206,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36529,7 +37215,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 1049,
+                  "line": 1080,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36568,7 +37254,7 @@
               "line": 172
             }
           ],
-          "hash": "704652decd7dac7e4b02258a543656290bd859ef8fd66f6935d51a74726bb26b",
+          "hash": "947030aeadb7df7fb949aa161659c6f3bc5c81f310242075c8506e12809a4181",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -36953,7 +37639,7 @@
               "line": 1387
             }
           ],
-          "hash": "e99ab0967fb58e33f1697ff2bbba019bb16af130e35cafd86eb3d3bbe0bd7b89",
+          "hash": "a3ef0c120991fcf84db1ba296836c2c2c25cb0f4fb32709eb66e40ed854b1cdc",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py"
@@ -37051,7 +37737,7 @@
               "line": 300
             }
           ],
-          "hash": "f65f480ecb14cfb0760bef30cee6abdd0b7199f6fb2264ddd7ea083f719a6b44",
+          "hash": "3dc4cec1942c1043d483fb0f4c3b2a3a9726568acb9b9f8aaa25db35a74100ba",
           "importOrder": [
             "tools/encode_control.py",
             "tools/armature_core/errors.py",
@@ -37701,7 +38387,7 @@
               "line": 434
             }
           ],
-          "hash": "5f8353b568ab18c59126b57452fecb10e312eec9de44bf59556ae48b819e449c",
+          "hash": "b4b6971cb5bbc748d838f7b12487fdb85cecc28f1b8f7265070df5300a660338",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -37789,7 +38475,7 @@
               "line": 532
             }
           ],
-          "hash": "fbc8d26688a220c78ff75ad851a49a06ee128c7e63cd8ed130bd0d336c82d41f",
+          "hash": "0d2ffa63163b020740395a53f863a298ccfc84e2a79f7deadc0e8d26738f04b9",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -37834,7 +38520,7 @@
               "line": 136
             }
           ],
-          "hash": "b6ba5fd9bed05be758ca56cc7b7e887f434241e12ded8177e55b198d3d48f7a0",
+          "hash": "aec65c001a73562fc60786efda2ee431e6d87752de68a2ca47f520df826f54fc",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/sheet_compose.py",
@@ -37922,7 +38608,7 @@
               "line": 289
             }
           ],
-          "hash": "4582d9dfe974cd488f560b54ccb64d4c33b837b17b68ed061462bce94d32fe1e",
+          "hash": "2934605e52fcbb62bf61b6eaa4b60018a98c52ee300dd8811b8e9f0ac16b61f7",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -37998,7 +38684,7 @@
               "line": 247
             }
           ],
-          "hash": "a4132c41b3b9b7565c522197a3e21b99934497a096d40f775df36654e8ed5b6d",
+          "hash": "75d34299e61148f5c40a7944a255c1d077edde1e8b285d4e1546059b956574dc",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py"
@@ -38039,7 +38725,7 @@
               "line": 319
             }
           ],
-          "hash": "16aa165ea08ecd2f11f7ecc37dac8139a8f18e0b5a8e8d8478304634070b5e63",
+          "hash": "290b5b7b7826e5d9ae59c154d8e07efc300546dee093954797a4619bd8149f9c",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/sheet_compose.py",
@@ -38067,7 +38753,7 @@
             "reference_absent_lines",
             "reference_display"
           ],
-          "hash": "9187c02b0c987b8374ef93f0e40cac901d14ebe334c12c6fd56b054caa255bd4",
+          "hash": "ce156cfc4301c75624ec7fa67c039c9e80e3372d7ffb79944bf26f6853d8c7e6",
           "importsFiles": [
             "tools/armature_core/parts.py",
             "tools/composite_reference.py",
@@ -38306,7 +38992,7 @@
               "line": 286
             }
           ],
-          "hash": "26f02460ecfa9d18a63a1f4bc0d054e3a098bdb95081c0fdd5a34253d4956333",
+          "hash": "db44ab787cf6549bd08ab7a4fd82dbcce5ab6e0f8aa05d4977a69ffe19cff8bc",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py"
@@ -38424,7 +39110,7 @@
               "line": 108
             }
           ],
-          "hash": "d41f7acd41532c5edbf3a39d7aa8faa50bb971aa505c7b8f0c1dabac9fde4ce5",
+          "hash": "f9c72551d39786203c24b1e6ff3f577708582041d2154d161bbd9b0fbaeeb73f",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/composite_reference.py",
@@ -38456,7 +39142,7 @@
               "line": 135
             }
           ],
-          "hash": "2f27a55b7b2ff38f09df5e246e55e98330c88668e6fac9db3765226f038682ee",
+          "hash": "f3d6cac885b4822e66e8315b49521f1430f8e93033ba3ab1b18769321e154bad",
           "importsFiles": [
             "tools/armature_core/parts.py",
             "tools/composite_reference.py",
@@ -38748,7 +39434,7 @@
               "line": 760
             }
           ],
-          "hash": "d04e3274d3971c76d7b971642e212076a4225af1395bda1b4494a7c2522f157b",
+          "hash": "f5b8df6144f0332fcac60e342fb147a1071fce49fe0416ce097fd2b39256a3c6",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -38817,7 +39503,7 @@
               "line": 394
             }
           ],
-          "hash": "3870fe9648769e7920373b9a2c21284d31f0847467b6bc3c88dc4cf6bca04397",
+          "hash": "0abae686635ed59bc72ddefaa94d6b686652caee08c275238f485ecd5e26dbb0",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/startframe.py",
@@ -38919,7 +39605,7 @@
               "line": 318
             }
           ],
-          "hash": "784158af7cb856c62298099652b5b817ead1297a1a08091fd6ba6bd39b10b0e4",
+          "hash": "c39cbe5e25beb9bb5337325ab2c03089cb57b649cbc650ca4a877312312c78b0",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/startframe.py",
@@ -38988,7 +39674,7 @@
               "line": 366
             }
           ],
-          "hash": "be54ddbb7e59bc9d449ca271eda7e1a38c7c9e98cb1887c05653fe68aa55a81f",
+          "hash": "d2591e2bab74fe9207cb7a287a9ad57c2cb912532d631e6d0afa75b017a78e5a",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -39125,7 +39811,7 @@
               "line": 506
             }
           ],
-          "hash": "390d29e76cbbd64024064559b30dc377906cc6c714abe793800c126dfe168112",
+          "hash": "88791fb910f38a90625c6d7937077122b31daa7ca444aec895a3b267938cb988",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -39230,7 +39916,7 @@
               "line": 341
             }
           ],
-          "hash": "dba54e638ffeead7288d50fd003afe9cc85cdd510129bb528a118e758865ebd7",
+          "hash": "4d0a66b48071bc29240d10e6fa40c7e8e15cc2999252a95ab5c9649818f1890f",
           "importOrder": [
             "tools/armature_core/errors.py",
             "tools/sheet_compose.py",
@@ -39303,7 +39989,7 @@
               "line": 316
             }
           ],
-          "hash": "434a9f8837b41acaf37fe8ef3f5e2eaa7e9cdddc2f57c66b524f634c6c092cf0",
+          "hash": "e5439a9c39ace956ac8e50ca5736fbd48c1a2510698ca79c081f3c1564ad98be",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -39432,7 +40118,7 @@
               "line": 647
             }
           ],
-          "hash": "4857d0486a749cb98ca10b555567503a44613a1405d56f3882b79fe9b436e858",
+          "hash": "1bb099716e29eedfb08cb9636caf975e397eed90fa91b4fcfdc06895835190b2",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -39465,7 +40151,7 @@
             "main",
             "provenance_lines"
           ],
-          "hash": "74e9bc6b91aca1700a3e781812abfd5ff48ae59e816f9e9548aefc398f685092",
+          "hash": "86095d51b849968ce739bbcb4de2de3d984d19918892098f793359d8a99b0c66",
           "importsFiles": [
             "tools/armature_core/parts.py",
             "tools/composite_reference.py",
@@ -39658,7 +40344,7 @@
               "line": 759
             }
           ],
-          "hash": "b15ef1b6e811938b2038ba799f815d0c4e65af423caa9a4924446332e8e77ea2",
+          "hash": "700b3323573ac195b7ddd0f2260853590b79c2941f96b6c179f4f7942a502630",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -39688,7 +40374,7 @@
               "line": 152
             }
           ],
-          "hash": "b79d5e9e3e555aa1cf674c4cccc2129d7a410a5acd22a6e19b62a65973b3b5a0",
+          "hash": "72505d645cf522047df3751438f83569b212b60561e5a3debb8a8749657ace73",
           "importsFiles": [
             "tools/armature_core/parts.py",
             "tools/composite_reference.py",
@@ -39908,7 +40594,7 @@
               "line": 377
             }
           ],
-          "hash": "9b7841a0b0701535e92025d8b388f194fcfb58815c2d0ba029df5d0a45d969f5",
+          "hash": "065d46f35b2e884db88faa1c0dbf4cb5931a132cf513a5e96ae7f4bd503eaf9a",
           "importOrder": [
             "tools/encode_control.py",
             "tools/armature_core/errors.py",
@@ -40221,7 +40907,7 @@
               "line": 145
             }
           ],
-          "hash": "f6a289e8247d121c7e79411e7a0e6c5d6f1b0f96e08ce9824f3c8b2a38e277de",
+          "hash": "6ec0a6597058644233eb1ef9276b42ac81889cd37b4c2fb14324ecb49dd9acb4",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/clipstats.py",
@@ -40669,7 +41355,7 @@
               "line": 781
             }
           ],
-          "hash": "4511e127c19080514c72b5862b0571f01f748d0b8c1d3c4a8bd02f18acb1c39b",
+          "hash": "21372d8608ab275dd47306a55abe379ceede67708e9bf4ae3c9cc3fb1f767608",
           "importOrder": [
             "tools/encode_control.py",
             "tools/armature_core/__init__.py",
@@ -40687,6 +41373,49 @@
             "tools/encode_control.py"
           ],
           "path": "tools/measure_lift.py"
+        },
+        {
+          "exports": [
+            "main"
+          ],
+          "failurePaths": [
+            {
+              "in": "main",
+              "kind": "raise",
+              "line": 153
+            },
+            {
+              "in": "main",
+              "kind": "raise",
+              "line": 163
+            },
+            {
+              "in": "main",
+              "kind": "raise",
+              "line": 173
+            },
+            {
+              "in": "main",
+              "kind": "raise",
+              "line": 213
+            }
+          ],
+          "hash": "50523c17d26590dc266c1d293258fdab47b78a0ca89274f1acfd15294ae5d7da",
+          "importOrder": [
+            "tools/encode_control.py",
+            "tools/measure_clip.py",
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/shotdiag.py",
+            "tools/armature_core/parts.py"
+          ],
+          "importsFiles": [
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/parts.py",
+            "tools/armature_core/shotdiag.py",
+            "tools/encode_control.py",
+            "tools/measure_clip.py"
+          ],
+          "path": "tools/measure_shot.py"
         },
         {
           "entry": "main",
@@ -40744,7 +41473,7 @@
               "line": 279
             }
           ],
-          "hash": "226382bbdeecb5a784befb82136a4b616fdd128dff6983cfb2ab047113c32ffe",
+          "hash": "a45ca9a834abcf45400005f1d583fd6e5a79bb522f20223d873562fab0c8a78c",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -40831,7 +41560,7 @@
               "line": 386
             }
           ],
-          "hash": "55dc92a81378fa1526fa3cfce12d6bdeab46f5bd10d9bb7fb9b05e2e580cdf0d",
+          "hash": "5fbaf1e6a27d1879a8ae941d549b14ade8dc874890dcd146224275a1fd80b32a",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -41169,7 +41898,7 @@
               "line": 632
             }
           ],
-          "hash": "29e764e37bcd7d039d178f7c6a956181a37aa4c9eac3927469c7e237b1293867",
+          "hash": "d57300258073d3a1d0b68e37bd8ec0af65d759f5679e2539acb412f710c50637",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -41439,7 +42168,7 @@
               "line": 403
             }
           ],
-          "hash": "66a44d8ad8581227386f070ae074fb97aef6c20ec5a1b0664b90e5096eac4c18",
+          "hash": "175c5877e7661ee6278a63cc1271eded8e887dfd63db084caea5d0f4d256153e",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -41944,7 +42673,7 @@
               "line": 1447
             }
           ],
-          "hash": "ec4d8b0a0cd173900e8bff0fa38930e8a12a95401640c06cd13e5e1e31174686",
+          "hash": "c8bc29e1d509a36c568d72c52fe02a0fb800a78d8d18a5dc0ab62d87332a5251",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -42098,7 +42827,7 @@
               "line": 1501
             }
           ],
-          "hash": "eedce0ba6994ea85cb4743d895fb90b880ff01c56094759cfbbf180aabb68d4c",
+          "hash": "5e7b1fb798a9201da895ce9401a593c7befeae1f8690d6e66c4c60822c87f4ac",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -42170,7 +42899,7 @@
               "line": 218
             }
           ],
-          "hash": "fb7b8e35bc6f47334e07118fcfea8f3c9e35ef642bea0aaca007cae053239b95",
+          "hash": "1e23f03e155d1af47a90fec7cead32c654c4726d5c8a3af179e9790aefe32557",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/errors.py",
@@ -42373,7 +43102,7 @@
               "line": 628
             }
           ],
-          "hash": "656f64a910878bb80fd3e2c507aa53b135363be46e8e354a3b77882c45a46c0d",
+          "hash": "97b857e14529124eeeba2a72e393abf5e4de6fda1f72c9cc6f725cd0d1d6a672",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -42620,7 +43349,7 @@
               "line": 2396
             }
           ],
-          "hash": "dec8b844a7d04163e87a99e4483c1661af5d1b7585db37c86953ba365370b16c",
+          "hash": "74519d8df3a9537a68c877e78613efc15426134fe373e8a690e36c17291670fc",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/binding.py",
@@ -42717,7 +43446,7 @@
               "line": 807
             }
           ],
-          "hash": "82a9b4cb3f00bb175b0c99ac0fd4879528dde70b07ec1e5e3ae6e6ed2c967dfd",
+          "hash": "36232e53633429dfb0740f34893a5f583e3a6dcba7796fb86d9dcb486e513cf7",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -42895,7 +43624,7 @@
               "line": 824
             }
           ],
-          "hash": "2bf321f0c381e36ced4ac3dfe52dae8ad90913095a559241855555ea9ec9f610",
+          "hash": "1ec057bb9738e6829cb0be81eed4888607941b077cae37757e2770cdb26e0371",
           "importOrder": [
             "tools/rig_character.py",
             "tools/rig_parts.py",
@@ -42987,28 +43716,39 @@
             {
               "in": "_round_or_none",
               "kind": "except",
-              "line": 93
+              "line": 99
+            },
+            {
+              "in": "_shot_diagnostic_lines",
+              "kind": "raise",
+              "line": 108
             },
             {
               "in": "frames_by_number",
               "kind": "raise",
-              "line": 232
+              "line": 365
             },
             {
               "in": "require_frames",
               "kind": "raise",
-              "line": 269
+              "line": 402
             },
             {
               "in": "resolve_font_path",
               "kind": "raise",
-              "line": 374
+              "line": 507
             }
           ],
-          "hash": "e635a24706077d8375b514e8de481c4eb7b9de1ca481d9aad9355caab6e9b3bf",
+          "hash": "3bba127d441c1bd96f6ad490dceef5abe6788b03d3d31e506bde1839d0f8f206",
+          "importOrder": [
+            "tools/armature_core/errors.py",
+            "tools/armature_core/shotdiag.py",
+            "tools/armature_core/parts.py"
+          ],
           "importsFiles": [
             "tools/armature_core/errors.py",
-            "tools/armature_core/parts.py"
+            "tools/armature_core/parts.py",
+            "tools/armature_core/shotdiag.py"
           ],
           "path": "tools/sheet_compose.py"
         },
@@ -43107,7 +43847,7 @@
               "line": 850
             }
           ],
-          "hash": "bdb26cd36ea3aa9efaf29ada22a3e3dcd19ed1bfc314d6da71504f8530334942",
+          "hash": "5005e0a50606e77b5f74de0182e8e603ab287e2b49204506f0518db5e90c34b6",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/blender_scene.py",
@@ -43547,19 +44287,19 @@
           ]
         },
         {
-          "hash": "1d79f238af6404f73fed3e46d647ba61d7f6782e8ff794d42eb430b6cb2dc6b5",
+          "hash": "abf4faf57052e86bcdd28df2d1508e0babc4a51d3bbcc98662289e51df322c08",
           "path": "tools/superseded/E08-bar-approach.az205.json"
         },
         {
-          "hash": "946a9925aadeebe6d1f887e9cdc2f1266373fe9e44c8a50eb4e9e34ad5f7ec39",
+          "hash": "129ee58a9d927b863d241ee2c7e9b8587d644cc3a6bcd4c6552b678714dde25f",
           "path": "tools/superseded/E08-bar-approach.framing.az205.json"
         },
         {
-          "hash": "15d79631004f4e602b948fa04f96f86924227b78e7354f527b28a47c119ef74c",
+          "hash": "3199a0892c31d15edf06d2cff8eb721612697ee443df2ed576f6566aac3468f8",
           "path": "tools/superseded/E08-bar-approach.framing.json"
         },
         {
-          "hash": "6645e3f56cc7bb16bdfa9093f3215d9b77b58207bbc857803eb343b358de2900",
+          "hash": "acaac8bb6ca52e2728af9732f86d812a124ed50bd2e1f60254e517cc184ac480",
           "path": "tools/superseded/E08-bar-approach.json"
         },
         {
@@ -43587,7 +44327,7 @@
               "line": 189
             }
           ],
-          "hash": "e8257410c5fe2628d0847f6cc18c69298c857ab29e00a77cdf2dc900c37a781b",
+          "hash": "27976d1b24cabf4340c9555e2e304df38c42f41131e49de679d1759c3a28dadb",
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/framing.py",
@@ -43748,7 +44488,7 @@
               "line": 382
             }
           ],
-          "hash": "bad8d230382c6f563c631ac93f440fc2b13e5a7315657ee07b8b517dd6b128b5",
+          "hash": "0405734ce4d9d9ad226ab04e9073eca614605316039eebb27144f9bc451d147b",
           "importOrder": [
             "tools/rig_character.py",
             "tools/armature_core/__init__.py",
@@ -43774,7 +44514,7 @@
       "origin": "authored",
       "outsidePlaces": [
         {
-          "reads": 155,
+          "reads": 161,
           "where": [
             "caller"
           ],
@@ -43788,13 +44528,13 @@
           "writes": 3
         }
       ],
-      "outsideReads": 155,
+      "outsideReads": 161,
       "outsideWrites": 82,
       "role": "code",
       "testRunners": [
         "pytest"
       ],
-      "testedBy": 191,
+      "testedBy": 195,
       "unresolvedNamed": [
         {
           "path": "tools/armature_core/cli.py",
@@ -43886,6 +44626,14 @@
             "python"
           ],
           "step": "run tests"
+        },
+        {
+          "dir": "",
+          "job": "python-tests",
+          "programs": [
+            "python"
+          ],
+          "step": "run tests with coverage"
         },
         {
           "dir": "",
@@ -44094,12 +44842,12 @@
         {
           "boundary": "tests",
           "depth": 0,
-          "files": 203
+          "files": 207
         },
         {
           "boundary": "tools",
           "depth": 0,
-          "files": 114
+          "files": 117
         }
       ],
       "readers": [],
@@ -44254,10 +45002,18 @@
       "tests": [
         {
           "config": "pyproject.toml",
-          "files": 203,
+          "files": 207,
           "job": "python-tests",
           "runner": "pytest",
           "step": "run tests"
+        },
+        {
+          "config": "pyproject.toml",
+          "coverage": true,
+          "files": 207,
+          "job": "python-tests",
+          "runner": "pytest",
+          "step": "run tests with coverage"
         },
         {
           "config": "pyproject.toml",
@@ -44280,19 +45036,35 @@
           "event": "pull_request",
           "paths": [
             ".github/actions/**",
+            ".github/dependabot.yml",
             ".github/workflows/**",
             ".gitignore",
+            "CHANGELOG.md",
+            "CLAUDE.md",
             "HANDOFF.md",
             "LICENSE",
             "MANIFEST.in",
+            "README.es.md",
+            "README.fr.md",
+            "README.hi.md",
+            "README.it.md",
+            "README.ja.md",
             "README.md",
+            "README.pt-BR.md",
             "README.pypi.md",
+            "README.zh.md",
+            "SCORECARD.md",
+            "SECURITY.md",
+            "SHIP_GATE.md",
             "atlas/**",
+            "docs/ROADMAP.md",
             "docs/assets/**",
             "docs/experiments/**",
             "docs/index/**",
             "docs/license-map.md",
+            "docs/publishing.md",
             "docs/research-grounding.md",
+            "docs/tools.md",
             "npm/**",
             "pyproject.toml",
             "site/**",
@@ -44306,19 +45078,35 @@
           "event": "push",
           "paths": [
             ".github/actions/**",
+            ".github/dependabot.yml",
             ".github/workflows/**",
             ".gitignore",
+            "CHANGELOG.md",
+            "CLAUDE.md",
             "HANDOFF.md",
             "LICENSE",
             "MANIFEST.in",
+            "README.es.md",
+            "README.fr.md",
+            "README.hi.md",
+            "README.it.md",
+            "README.ja.md",
             "README.md",
+            "README.pt-BR.md",
             "README.pypi.md",
+            "README.zh.md",
+            "SCORECARD.md",
+            "SECURITY.md",
+            "SHIP_GATE.md",
             "atlas/**",
+            "docs/ROADMAP.md",
             "docs/assets/**",
             "docs/experiments/**",
             "docs/index/**",
             "docs/license-map.md",
+            "docs/publishing.md",
             "docs/research-grounding.md",
+            "docs/tools.md",
             "npm/**",
             "pyproject.toml",
             "site/**",
@@ -44775,12 +45563,12 @@
         {
           "boundary": "tests",
           "depth": 0,
-          "files": 203
+          "files": 207
         },
         {
           "boundary": "tools",
           "depth": 0,
-          "files": 114
+          "files": 117
         }
       ],
       "readers": [],
@@ -44822,14 +45610,14 @@
       "tests": [
         {
           "config": "pyproject.toml",
-          "files": 203,
+          "files": 207,
           "job": "verify",
           "runner": "pytest",
           "step": "Suite"
         },
         {
           "config": "pyproject.toml",
-          "files": 203,
+          "files": 207,
           "job": "verify",
           "runner": "pytest",
           "step": "Suite under -O"
@@ -44956,8 +45744,8 @@
   ],
   "engine": "1.26.0",
   "generatedFrom": {
-    "commit": "52f401166d954bd4c1e365e2635d93c35662fa1a",
-    "tracked": 558
+    "commit": "efc656b269c67f9c39a8b40ec2d37ba3143d31cd",
+    "tracked": 566
   },
   "landings": [
     {
@@ -45187,6 +45975,18 @@
     {
       "readers": [
         {
+          "by": "tests/test_public_hygiene.py",
+          "call": "literal",
+          "confidence": "ast",
+          "fromTests": true
+        }
+      ],
+      "target": "CHANGELOG.md",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
           "by": "docs/index/armature.db.cert.json",
           "call": "literal",
           "confidence": "text"
@@ -45195,6 +45995,12 @@
           "by": "docs/index/conventions.json",
           "call": "literal",
           "confidence": "text"
+        },
+        {
+          "by": "tests/test_public_hygiene.py",
+          "call": "literal",
+          "confidence": "ast",
+          "fromTests": true
         }
       ],
       "target": "CLAUDE.md",
@@ -45211,6 +46017,12 @@
           "by": "docs/index/conventions.json",
           "call": "literal",
           "confidence": "text"
+        },
+        {
+          "by": "tests/test_public_hygiene.py",
+          "call": "literal",
+          "confidence": "ast",
+          "fromTests": true
         },
         {
           "by": "tests/test_record_index_binding.py",
@@ -45240,6 +46052,48 @@
           "call": "literal",
           "confidence": "ast",
           "fromTests": true
+        },
+        {
+          "by": "tools/armature_core/measure_weights.py",
+          "call": "raw-url",
+          "confidence": "ast",
+          "ref": "3d10cf7a3016",
+          "repo": "facebookresearch/map-anything"
+        },
+        {
+          "by": "tools/armature_core/measure_weights.py",
+          "call": "raw-url",
+          "confidence": "ast",
+          "ref": "4c24a6ebf048",
+          "repo": "naver/dust3r"
+        },
+        {
+          "by": "tools/armature_core/measure_weights.py",
+          "call": "raw-url",
+          "confidence": "ast",
+          "ref": "574cc77ad278",
+          "repo": "Junyi42/monst3r"
+        },
+        {
+          "by": "tools/armature_core/measure_weights.py",
+          "call": "raw-url",
+          "confidence": "ast",
+          "ref": "7764ea0f912e",
+          "repo": "facebookresearch/dinov2"
+        },
+        {
+          "by": "tools/armature_core/measure_weights.py",
+          "call": "raw-url",
+          "confidence": "ast",
+          "ref": "8bc15dc92a6d",
+          "repo": "CUT3R/CUT3R"
+        },
+        {
+          "by": "tools/armature_core/measure_weights.py",
+          "call": "raw-url",
+          "confidence": "ast",
+          "ref": "f5209afc300c",
+          "repo": "naver/mast3r"
         }
       ],
       "target": "LICENSE",
@@ -45268,6 +46122,18 @@
     {
       "readers": [
         {
+          "by": "tests/test_public_hygiene.py",
+          "call": "literal",
+          "confidence": "ast",
+          "fromTests": true
+        }
+      ],
+      "target": "README.es.md",
+      "writers": []
+    },
+    {
+      "readers": [
+        {
           "by": "docs/index/armature.db.cert.json",
           "call": "literal",
           "confidence": "text"
@@ -45278,10 +46144,23 @@
           "confidence": "text"
         },
         {
+          "by": "tests/test_public_hygiene.py",
+          "call": "literal",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
           "by": "tests/test_record_index_binding.py",
           "call": "literal",
           "confidence": "ast",
           "fromTests": true
+        },
+        {
+          "by": "tools/armature_core/measure_weights.py",
+          "call": "raw-url",
+          "confidence": "ast",
+          "ref": "c6c3af7bd2d0",
+          "repo": "deepinsight/insightface"
         }
       ],
       "target": "README.md",
@@ -45314,6 +46193,12 @@
       "readers": [
         {
           "by": "tests/test_ci_workflows.py",
+          "call": "literal",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_public_hygiene.py",
           "call": "literal",
           "confidence": "ast",
           "fromTests": true
@@ -46894,6 +47779,18 @@
           "call": "literal",
           "confidence": "ast",
           "fromTests": true
+        },
+        {
+          "by": "tests/test_measure_weight_gate.py",
+          "call": "open",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_route_gates.py",
+          "call": "literal",
+          "confidence": "ast",
+          "fromTests": true
         }
       ],
       "target": "docs/license-map.md",
@@ -47516,6 +48413,12 @@
         },
         {
           "by": "tests/test_ci_workflows.py",
+          "call": "literal",
+          "confidence": "ast",
+          "fromTests": true
+        },
+        {
+          "by": "tests/test_e13_sheet.py",
           "call": "literal",
           "confidence": "ast",
           "fromTests": true
@@ -49384,6 +50287,6 @@
   "overlaps": [],
   "submodules": [],
   "symlinks": [],
-  "testFiles": 223,
+  "testFiles": 227,
   "unassigned": []
 }

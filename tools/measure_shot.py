@@ -76,7 +76,7 @@ def main(argv=None):
         prog="measure_shot",
         description=(
             "camera error (Tier A) and masked identity diagnostics for a generated "
-            "shot — report-only diagnostics; the Director's eye is the judge"
+            "shot — report-only diagnostics; the maintainer's eye is the judge"
         ),
         epilog=HALT_EPILOG,
     )

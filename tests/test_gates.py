@@ -1436,7 +1436,7 @@ def test_every_family_class_stores_the_evidence_it_is_passed():
 # arithmetically right: `PayloadError` was already defined four times. Nothing asserted any
 # of them, because the tests below pin the DERIVATION (`==` on sets), which is exactly why
 # the drift was invisible — and this comment is the only statement anywhere of what the
-# widened population IS, so a seat sizing a change against it was short by four classes and
+# widened population IS, so a session sizing a change against it was short by four classes and
 # four whole modules.
 #
 # RE-MEASURED on this branch, 2026-09-05, with the file's own helpers:

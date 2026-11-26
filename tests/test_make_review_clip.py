@@ -1,4 +1,4 @@
-"""The review clip's own label. A filename the Director opens is evidence.
+"""The review clip's own label. A filename the maintainer opens is evidence.
 
 The tool wrote `review_0.5x_8fps.webp` whatever the flags said. That literal was true only
 while every source ran at 16 fps; against E10's 20 fps source the same file is 0.40x at

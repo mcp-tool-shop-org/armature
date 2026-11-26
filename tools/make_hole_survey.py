@@ -5,9 +5,9 @@
 
 S03 Task B. The survey **documents**; it fixes nothing. The white unpainted patches on
 these views live in the texture atlas, and texture repair is facet's projection-coverage
-arc — `E:\\AI\\training` and `E:\\AI\\facet` are read-only law here. What this produces is
+arc — `<repo>/../training` and `<repo>/../facet` are read-only law here. What this produces is
 evidence: eight full-size old-beside-new panels, one contact sheet, and per-view numbers.
-Which views are usable is the Director's ruling, not this tool's and not this session's.
+Which views are usable is the maintainer's ruling, not this tool's and not this session's.
 
 Runs outside Blender (Pillow + numpy), like every other sheet tool here.
 
@@ -21,7 +21,7 @@ pixel. That choice is what makes the comparison a comparison: put the new figure
 other ground and every difference between the two panels includes a difference of backdrop.
 
 The composite exists ONLY in this survey. The deliverable masters in `turn_rgba/` stay
-RGBA and are never overwritten — per the Director's ruling of 2026-08-12, the RGB each
+RGBA and are never overwritten — per the maintainer's decision of 2026-08-12, the RGB each
 consuming route submits is that route's own recorded choice, not this one.
 
 Alpha is **straight**, not premultiplied — measured on the render rather than assumed:

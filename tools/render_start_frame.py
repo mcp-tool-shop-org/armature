@@ -18,7 +18,7 @@ matched FLF2V first/last pair under one lighting, framing, composite and provena
 
 **Why native size, stated as a decision.** E08 handed `WanAnimateToVideo` a 352x1024
 portrait reference and measured what the node did to it: `common_upscale(..., "area",
-"center")` kept 204 of its 1024 rows — hips and thighs, no head. The Director ruled
+"center")` kept 204 of its 1024 rows — hips and thighs, no head. The maintainer ruled
 letterbox, and E08's own report named the fix this tool implements: a native 832x480 frame
 with the figure filling it. Authoring the frame at the model's size removes the whole class
 of failure rather than compensating for it.
@@ -615,7 +615,7 @@ def build_wood_material(spec=WOOD):
 
     The colours are linear and dark on purpose. The plate this floor sits under is a dim bar;
     a floor lit to studio brightness would read as a lit stage in front of a photograph,
-    which is the thing the Director's eye rejected in the band-only composite.
+    which is the thing the maintainer's eye rejected in the band-only composite.
     """
     mat = bpy.data.materials.new("previz_floor_wood")
     mat.use_nodes = True
@@ -1181,7 +1181,7 @@ def main():
                 "with --hdri the suns are omitted and the environment texture lights "
                 "the plate")},
         "alpha": {
-            "law": ("CLAUDE.md, the Director's ruling 2026-08-12 — authored image inputs "
+            "law": ("CLAUDE.md, the maintainer's ruling 2026-08-12 — authored image inputs "
                     "carry alpha, never a baked void"),
             "authored_master": {"path": first["rgba_path"],
                                 "sha256": _sha256(first["rgba_path"]),

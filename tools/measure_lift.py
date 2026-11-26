@@ -54,7 +54,7 @@ gap and the detector gap together; the second carries only the model gap. Quotin
 number for both would make a detector look bad for a torso the model cannot represent, or
 a model look bad for a detector's noise.
 
-Nothing here judges whether any of it is good. That is the Director's, at the sheet.
+Nothing here judges whether any of it is good. That is the maintainer's, at the sheet.
 Halt contract: exit 0 on success, 2 on a deliberate refusal (one <TOOL>_HALT JSON line; evidence.clause is the branch word), 1 on a crash. See README §"Reading a halt".
 """
 
