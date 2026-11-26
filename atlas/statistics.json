@@ -113,7 +113,7 @@
       "confidence": "full",
       "highWater": 1,
       "name": "tests",
-      "qualifyingSourceCommits": 512,
+      "qualifyingSourceCommits": 513,
       "rebaseline": null
     },
     {
@@ -132,7 +132,7 @@
       "confidence": "full",
       "highWater": 1,
       "name": "tools",
-      "qualifyingSourceCommits": 372,
+      "qualifyingSourceCommits": 373,
       "rebaseline": null
     }
   ],
@@ -200,8 +200,8 @@
         "path": ".gitignore"
       },
       {
-        "commits": 17,
-        "lines": 636,
+        "commits": 18,
+        "lines": 637,
         "path": "CHANGELOG.md"
       },
       {
@@ -250,8 +250,8 @@
         "path": "README.ja.md"
       },
       {
-        "commits": 35,
-        "lines": 677,
+        "commits": 36,
+        "lines": 684,
         "path": "README.md"
       },
       {
@@ -275,8 +275,8 @@
         "path": "SCORECARD.md"
       },
       {
-        "commits": 8,
-        "lines": 344,
+        "commits": 9,
+        "lines": 348,
         "path": "SECURITY.md"
       },
       {
@@ -285,8 +285,8 @@
         "path": "SHIP_GATE.md"
       },
       {
-        "commits": 5,
-        "lines": 282,
+        "commits": 6,
+        "lines": 294,
         "path": "atlas/README.md"
       },
       {
@@ -295,18 +295,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 5,
-        "lines": 1470,
+        "commits": 6,
+        "lines": 1531,
         "path": "atlas/page.json"
       },
       {
-        "commits": 5,
-        "lines": 3779,
+        "commits": 6,
+        "lines": 4516,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 5,
-        "lines": 119885,
+        "commits": 6,
+        "lines": 120152,
         "path": "atlas/structure.json"
       },
       {
@@ -985,8 +985,8 @@
         "path": "docs/index/conventions.json"
       },
       {
-        "commits": 36,
-        "lines": 639,
+        "commits": 37,
+        "lines": 641,
         "path": "docs/license-map.md"
       },
       {
@@ -1340,8 +1340,8 @@
         "path": "tests/blender_stub.py"
       },
       {
-        "commits": 34,
-        "lines": 2054,
+        "commits": 35,
+        "lines": 2064,
         "path": "tests/conftest.py"
       },
       {
@@ -1650,8 +1650,8 @@
         "path": "tests/test_amend_w37_builders.py"
       },
       {
-        "commits": 1,
-        "lines": 399,
+        "commits": 2,
+        "lines": 400,
         "path": "tests/test_amend_w37_core_solvers.py"
       },
       {
@@ -1695,13 +1695,13 @@
         "path": "tests/test_blender_scene_pure.py"
       },
       {
-        "commits": 16,
-        "lines": 817,
+        "commits": 17,
+        "lines": 845,
         "path": "tests/test_build_animate_payload.py"
       },
       {
-        "commits": 26,
-        "lines": 2014,
+        "commits": 27,
+        "lines": 2020,
         "path": "tests/test_build_camera_i2v_payload.py"
       },
       {
@@ -1805,8 +1805,8 @@
         "path": "tests/test_e13_sheet.py"
       },
       {
-        "commits": 7,
-        "lines": 434,
+        "commits": 8,
+        "lines": 488,
         "path": "tests/test_encode_control.py"
       },
       {
@@ -2275,8 +2275,8 @@
         "path": "tests/test_probe_glb.py"
       },
       {
-        "commits": 1,
-        "lines": 175,
+        "commits": 2,
+        "lines": 225,
         "path": "tests/test_public_hygiene.py"
       },
       {
@@ -2295,8 +2295,8 @@
         "path": "tests/test_record_index_binding.py"
       },
       {
-        "commits": 114,
-        "lines": 8011,
+        "commits": 115,
+        "lines": 8012,
         "path": "tests/test_refusal_clauses.py"
       },
       {
@@ -2560,8 +2560,8 @@
         "path": "tools/armature_core/pngio.py"
       },
       {
-        "commits": 14,
-        "lines": 725,
+        "commits": 15,
+        "lines": 729,
         "path": "tools/armature_core/posearc.py"
       },
       {
@@ -2625,8 +2625,8 @@
         "path": "tools/author_walk.py"
       },
       {
-        "commits": 39,
-        "lines": 2127,
+        "commits": 40,
+        "lines": 2150,
         "path": "tools/build_animate_payload.py"
       },
       {
@@ -2710,13 +2710,13 @@
         "path": "tools/diagnose_bone_heat.py"
       },
       {
-        "commits": 29,
-        "lines": 2682,
+        "commits": 30,
+        "lines": 2723,
         "path": "tools/encode_control.py"
       },
       {
-        "commits": 17,
-        "lines": 664,
+        "commits": 18,
+        "lines": 670,
         "path": "tools/extract_clip_frames.py"
       },
       {
@@ -3070,9 +3070,9 @@
     "level": "full",
     "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
   },
-  "generatedAt": "2026-11-26T01:13:28.233Z",
+  "generatedAt": "2026-11-26T01:46:07.586Z",
   "generatedFrom": {
-    "commit": "6994e0c0df04692d03c91f336f7db14a9aece89d"
+    "commit": "efc656b269c67f9c39a8b40ec2d37ba3143d31cd"
   },
   "pairs": [
     {
@@ -3302,16 +3302,16 @@
     {
       "a": "tools/build_animate_payload.py",
       "b": "tools/build_camera_i2v_payload.py",
-      "either": 31,
+      "either": 32,
       "shared": 18,
-      "strength": 0.580645
+      "strength": 0.5625
     },
     {
       "a": "tools/build_animate_payload.py",
       "b": "tools/build_i2v_payload.py",
-      "either": 29,
+      "either": 30,
       "shared": 18,
-      "strength": 0.62069
+      "strength": 0.6
     },
     {
       "a": "tools/build_assembly_payload.py",
@@ -3499,16 +3499,16 @@
     "floor": "strong",
     "floorHeld": false,
     "floorTrigger": null,
-    "headDate": "2026-11-25T18:58:15-05:00",
+    "headDate": "2026-11-25T20:13:57-05:00",
     "inScopeFiles": 571,
     "pinnedStart": null,
     "priorFloor": "strong",
-    "qualifyingCommits": 774,
+    "qualifyingCommits": 775,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 10,
-    "since": "2026-05-29T23:58:15.000Z",
+    "since": "2026-05-30T01:13:57.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",
@@ -3524,7 +3524,7 @@
     ],
     "sourceFileReach": 20,
     "sourceFileRise": 25,
-    "sourceFilesReachingStrongFloor": 102,
+    "sourceFilesReachingStrongFloor": 103,
     "strength": 0.5,
     "windowDays": 180
   },

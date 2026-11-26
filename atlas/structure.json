@@ -34082,60 +34082,60 @@
             {
               "in": "identity_clause",
               "kind": "raise",
-              "line": 322
+              "line": 319
             },
             {
               "in": "identity_clause",
               "kind": "raise",
-              "line": 334
-            },
-            {
-              "in": "identity_clause",
-              "kind": "raise",
-              "line": 356
+              "line": 341
             },
             {
               "in": "gate_reference_fit",
               "kind": "raise",
-              "line": 415
+              "line": 400
             },
             {
               "in": "gate_reference_fit",
               "kind": "raise",
-              "line": 439
+              "line": 424
             },
             {
               "in": "gate_reference_fit",
               "kind": "raise",
-              "line": 461
+              "line": 446
             },
             {
               "in": "gate_reference_fit",
               "kind": "raise",
-              "line": 471
+              "line": 456
             },
             {
               "in": "build",
               "kind": "raise",
-              "line": 527
+              "line": 512
             },
             {
               "in": "build",
               "kind": "raise",
-              "line": 546
+              "line": 531
             },
             {
               "in": "verify_topology",
               "kind": "raise",
-              "line": 717
+              "line": 702
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 764
+              "line": 749
+            },
+            {
+              "in": "_load_twin_prompt_json",
+              "kind": "raise",
+              "line": 816
             }
           ],
-          "hash": "da22b3acd5d884ec9ef7670ba03b1b78b0a7ce7a51caac1a1493d8b3b8412c41",
+          "hash": "c41c540e9124b99f9e0d7c0f4f7aad4d67a445e78202371005b571715e4c55a9",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -45744,7 +45744,7 @@
   ],
   "engine": "1.26.0",
   "generatedFrom": {
-    "commit": "6994e0c0df04692d03c91f336f7db14a9aece89d",
+    "commit": "efc656b269c67f9c39a8b40ec2d37ba3143d31cd",
     "tracked": 566
   },
   "landings": [

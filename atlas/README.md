@@ -1,14 +1,14 @@
 # armature: how it works
 
-Mapped at 2026-11-26 from commit 6994e0c by Atlas 1.26.0.
+Mapped at 2026-11-26 from commit efc656b by Atlas 1.26.0.
 
 ## What this is
 
 8 parts, mostly Python (327 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.
 
-## What changed since 2026-11-25 (c5ad010)
+## What changed since 2026-11-26 (6994e0c)
 
-Nothing structural changed since 2026-11-25; 15 files changed content.
+Nothing structural changed since 2026-11-26; 1 file changed content.
 
 ## What comes in
 
@@ -59,7 +59,7 @@ ci writes nothing this map can see.
 - **tools/preview_walk.py** and **tools/render_performer.py** changed together in 16 of 22 commits, inside the tools part.
 - **tools/rig_bake.py** and **tools/rig_repair.py** changed together in 13 of 19 commits, inside the tools part.
 
-Window: 180 days; a pair counts from 10 shared commits, since 102 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
+Window: 180 days; a pair counts from 10 shared commits, since 103 source files reach 10 revisions; the floor falls to 3 when fewer than 20 do.
 
 ## What no test touches
 

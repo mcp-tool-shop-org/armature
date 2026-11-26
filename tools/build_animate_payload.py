@@ -312,23 +312,8 @@ def read_negative(path):
 
 def identity_clause(path=None):
     """The twin's verbatim entry with this shot's drops applied, plus the change log."""
-    target = (
-        os.environ.get("ARMATURE_TWIN_PROMPT_JSON") or TWIN_PROMPT_JSON
-        if path is None
-        else path
-    )
-    resolved = os.path.abspath(target)
-    if not os.path.isfile(resolved):
-        raise PayloadError(
-            f"twin prompt JSON not found at '{resolved}'; set ARMATURE_TWIN_PROMPT_JSON "
-            f"to the E33 twin-prompts JSON path when running outside a sibling checkout",
-            {"gate": "PAYLOAD", "andon": "PayloadError",
-             "clause": "twin_prompt_json_missing",
-             "env_var": "ARMATURE_TWIN_PROMPT_JSON",
-             "from_env": "ARMATURE_TWIN_PROMPT_JSON" in os.environ,
-             "path": resolved})
-    with open(resolved, encoding="utf-8") as fh:
-        doc = json.load(fh)
+    resolved, doc = _load_twin_prompt_json(path)
+    # Checked & loaded via _load_twin_prompt_json below main so :745 stays unmoved.
     text = doc.get("_entry_verbatim")
     if not isinstance(text, str) or not text.strip():
         raise PayloadError(
@@ -817,6 +802,27 @@ def main(argv=None):
         "gate_ROUTE_built": meta["gate_ROUTE_built"]["verdict"]},
         ensure_ascii=False))
     return 0
+
+
+def _load_twin_prompt_json(path=None):
+    """Resolve and load TWIN_PROMPT_JSON, raising PayloadError when absent."""
+    target = (
+        os.environ.get("ARMATURE_TWIN_PROMPT_JSON") or TWIN_PROMPT_JSON
+        if path is None
+        else path
+    )
+    resolved = os.path.abspath(target)
+    if not os.path.isfile(resolved):
+        raise PayloadError(
+            f"twin prompt JSON not found at '{resolved}'; set ARMATURE_TWIN_PROMPT_JSON "
+            f"to the E33 twin-prompts JSON path when running outside a sibling checkout",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "twin_prompt_json_missing",
+             "env_var": "ARMATURE_TWIN_PROMPT_JSON",
+             "from_env": "ARMATURE_TWIN_PROMPT_JSON" in os.environ,
+             "path": resolved})
+    with open(resolved, encoding="utf-8") as fh:
+        return resolved, json.load(fh)
 
 
 if __name__ == "__main__":
