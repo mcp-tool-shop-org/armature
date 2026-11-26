@@ -1,17 +1,14 @@
 # armature: how it works
 
-Mapped at 2026-11-26 from commit 3a3fd4b by Atlas 1.26.0.
+Mapped at 2026-11-26 from commit 9a802d3 by Atlas 1.26.0.
 
 ## What this is
 
 8 parts, mostly Python (327 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.
 
-## What changed since 2026-11-26 (efc656b)
+## What changed since 2026-11-26 (3a3fd4b)
 
-- ci's pull request trigger now also names `docs/audit-first-arc.md`, `docs/comfy-consult-brief-01.md`, `docs/engineering-rules.md`, `docs/random-routes.md`, `docs/research-grounding-e08.md`, `docs/research-grounding-movement-library.md`, `docs/research-grounding-verification-gates.md`, `docs/video-provider-field-notes.md`, `docs/wan-video-prompt-guide-notes.md`, `docs/wan21-prompt-guide-notes.md` and `docs/wan26-image-guide-notes.md` and no longer names `CLAUDE.md` and `HANDOFF.md`.
-- ci's push trigger now also names `docs/audit-first-arc.md`, `docs/comfy-consult-brief-01.md`, `docs/engineering-rules.md`, `docs/random-routes.md`, `docs/research-grounding-e08.md`, `docs/research-grounding-movement-library.md`, `docs/research-grounding-verification-gates.md`, `docs/video-provider-field-notes.md`, `docs/wan-video-prompt-guide-notes.md`, `docs/wan21-prompt-guide-notes.md` and `docs/wan26-image-guide-notes.md` and no longer names `CLAUDE.md` and `HANDOFF.md`.
-- docs/engineering-rules.md is now read by docs/index/armature.db.cert.json and docs/index/conventions.json.
-- 1 file added, 50 removed and 208 changed content, across 7 parts.
+Nothing structural changed since 2026-11-26; 41 files changed content.
 
 ## What comes in
 

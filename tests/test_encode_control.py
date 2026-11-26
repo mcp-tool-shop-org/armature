@@ -222,13 +222,17 @@ def test_resolve_ffmpeg_prefers_env_then_imageio_then_path(tmp_path, monkeypatch
         env={"ARMATURE_FFMPEG": "/custom/ffmpeg"},
         imageio_getter=lambda: str(pinned),
         which_fn=lambda _n: on_path,
-    ) == ("/custom/ffmpeg", "env")
+        sys_platform="win32",
+        machine="AMD64",
+    ) == ("/custom/ffmpeg", "env", None)
 
     assert EC._resolve_ffmpeg(
         env={},
         imageio_getter=lambda: str(pinned),
         which_fn=lambda _n: on_path,
-    ) == (str(pinned), "imageio_ffmpeg")
+        sys_platform="win32",
+        machine="AMD64",
+    ) == (str(pinned), "imageio_ffmpeg", None)
 
     def _missing_mod():
         raise ImportError("no imageio_ffmpeg")
@@ -237,13 +241,107 @@ def test_resolve_ffmpeg_prefers_env_then_imageio_then_path(tmp_path, monkeypatch
         env={},
         imageio_getter=_missing_mod,
         which_fn=lambda _n: on_path,
-    ) == (on_path, "path")
+        sys_platform="win32",
+        machine="AMD64",
+    ) == (on_path, "path", None)
 
     assert EC._resolve_ffmpeg(
         env={},
         imageio_getter=lambda: str(tmp_path / "absent.exe"),
         which_fn=lambda _n: "",
-    ) == ("", "none")
+        sys_platform="win32",
+        machine="AMD64",
+    ) == ("", "none", None)
+
+
+def test_resolve_ffmpeg_skips_imageio_on_intel_macos_and_keeps_arm64_and_env(tmp_path):
+    """FIX-2: Intel macOS skips imageio-ffmpeg (nonfree build) and falls back to PATH."""
+    pinned = tmp_path / "pinned-ffmpeg"
+    pinned.write_bytes(b"stub")
+    on_path = str(tmp_path / "system-ffmpeg")
+    calls = []
+
+    def _spy_getter():
+        calls.append("called")
+        return str(pinned)
+
+    # Intel macOS with imageio present and ffmpeg on PATH -> skips getter and picks PATH
+    assert EC._resolve_ffmpeg(
+        env={},
+        imageio_getter=_spy_getter,
+        which_fn=lambda _n: on_path,
+        sys_platform="darwin",
+        machine="x86_64",
+    ) == (on_path, "path", EC.IMAGEIO_FFMPEG_SKIP_MACOS_X86_64)
+    assert calls == []
+
+    # Intel macOS with imageio present and nothing on PATH -> ("", "none", skip_reason)
+    assert EC._resolve_ffmpeg(
+        env={},
+        imageio_getter=_spy_getter,
+        which_fn=lambda _n: "",
+        sys_platform="darwin",
+        machine="X86_64",
+    ) == ("", "none", EC.IMAGEIO_FFMPEG_SKIP_MACOS_X86_64)
+    assert calls == []
+
+    # Apple Silicon macOS (arm64) still prefers imageio-ffmpeg over PATH
+    assert EC._resolve_ffmpeg(
+        env={},
+        imageio_getter=_spy_getter,
+        which_fn=lambda _n: on_path,
+        sys_platform="darwin",
+        machine="arm64",
+    ) == (str(pinned), "imageio_ffmpeg", None)
+    assert calls == ["called"]
+
+    # ARMATURE_FFMPEG still wins everywhere
+    for plat, arch in (
+        ("darwin", "x86_64"),
+        ("darwin", "arm64"),
+        ("linux", "x86_64"),
+        ("win32", "AMD64"),
+    ):
+        assert EC._resolve_ffmpeg(
+            env={"ARMATURE_FFMPEG": "/custom/ffmpeg"},
+            imageio_getter=_spy_getter,
+            which_fn=lambda _n: on_path,
+            sys_platform=plat,
+            machine=arch,
+        ) == ("/custom/ffmpeg", "env", None)
+
+
+def test_receipt_and_gate_record_imageio_ffmpeg_skipped_on_intel_macos(tmp_path, monkeypatch):
+    """FIX-2: receipts and missing-binary evidence record imageio_ffmpeg_skipped when bypassed."""
+    _stub_bridge(monkeypatch)
+    monkeypatch.setattr(EC, "ffmpeg_version", lambda: "ffmpeg version test")
+    d = _frames_dir(tmp_path, n=2)
+
+    on_path = str(tmp_path / "path-ffmpeg")
+    monkeypatch.delenv("ARMATURE_FFMPEG", raising=False)
+    monkeypatch.setattr(EC, "_IMPORT_FFMPEG", on_path)
+    monkeypatch.setattr(EC, "FFMPEG", on_path)
+    monkeypatch.setattr(EC, "FFMPEG_SOURCE", "path")
+    monkeypatch.setattr(EC, "IMAGEIO_FFMPEG_SKIPPED", EC.IMAGEIO_FFMPEG_SKIP_MACOS_X86_64)
+
+    r_path = EC.build(str(d), str(tmp_path / "out_mac" / "c.mkv"), "ffv1-gbrp")
+    assert r_path["ffmpeg_source"] == "path"
+    assert r_path["imageio_ffmpeg_skipped"] == EC.IMAGEIO_FFMPEG_SKIP_MACOS_X86_64
+
+    override = str(tmp_path / "override-ffmpeg")
+    monkeypatch.setenv("ARMATURE_FFMPEG", override)
+    monkeypatch.setattr(EC, "FFMPEG", override)
+    r_env = EC.build(str(d), str(tmp_path / "out_env" / "c.mkv"), "ffv1-gbrp")
+    assert r_env["ffmpeg_source"] == "env"
+    assert "imageio_ffmpeg_skipped" not in r_env
+
+    monkeypatch.delenv("ARMATURE_FFMPEG", raising=False)
+    monkeypatch.setattr(EC, "_IMPORT_FFMPEG", "")
+    monkeypatch.setattr(EC, "FFMPEG", "")
+    monkeypatch.setattr(EC, "FFMPEG_SOURCE", "none")
+    with pytest.raises(EC.EncodeFailure) as exc:
+        EC.gate_ffmpeg_binary()
+    assert exc.value.evidence["imageio_ffmpeg_skipped"] == EC.IMAGEIO_FFMPEG_SKIP_MACOS_X86_64
 
 
 def test_receipt_records_which_ffmpeg_source_was_used(tmp_path, monkeypatch):
@@ -295,6 +393,8 @@ def test_default_imageio_ffmpeg_getter_returns_existing_binary_when_installed():
     """Part 6: exercise the real _default_imageio_ffmpeg getter when media extra is present."""
     import importlib.util
 
+    if EC._is_intel_macos():
+        pytest.skip("imageio-ffmpeg is skipped on Intel macOS (nonfree build)")
     if importlib.util.find_spec("imageio_ffmpeg") is None:
         pytest.skip("optional extra armature-studio[media] (imageio-ffmpeg==0.6.0) is not installed")
     exe = EC._default_imageio_ffmpeg()

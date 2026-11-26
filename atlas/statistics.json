@@ -113,7 +113,7 @@
       "confidence": "full",
       "highWater": 1,
       "name": "tests",
-      "qualifyingSourceCommits": 512,
+      "qualifyingSourceCommits": 513,
       "rebaseline": null
     },
     {
@@ -175,13 +175,13 @@
         "path": ".github/dependabot.yml"
       },
       {
-        "commits": 54,
-        "lines": 1315,
+        "commits": 55,
+        "lines": 1363,
         "path": ".github/workflows/ci.yml"
       },
       {
-        "commits": 14,
-        "lines": 287,
+        "commits": 15,
+        "lines": 289,
         "path": ".github/workflows/pages.yml"
       },
       {
@@ -190,28 +190,28 @@
         "path": ".github/workflows/publish.yml"
       },
       {
-        "commits": 42,
-        "lines": 1876,
+        "commits": 43,
+        "lines": 1878,
         "path": ".github/workflows/release.yml"
       },
       {
-        "commits": 18,
-        "lines": 272,
+        "commits": 19,
+        "lines": 276,
         "path": ".gitignore"
       },
       {
-        "commits": 17,
-        "lines": 637,
+        "commits": 19,
+        "lines": 650,
         "path": "CHANGELOG.md"
       },
       {
-        "commits": 17,
-        "lines": 356,
+        "commits": 18,
+        "lines": 665,
         "path": "CLAUDE.md"
       },
       {
-        "commits": 39,
-        "lines": 3436,
+        "commits": 40,
+        "lines": 3636,
         "path": "HANDOFF.md"
       },
       {
@@ -225,38 +225,38 @@
         "path": "MANIFEST.in"
       },
       {
-        "commits": 10,
-        "lines": 762,
+        "commits": 12,
+        "lines": 770,
         "path": "README.es.md"
       },
       {
-        "commits": 10,
-        "lines": 737,
+        "commits": 12,
+        "lines": 743,
         "path": "README.fr.md"
       },
       {
-        "commits": 10,
-        "lines": 809,
+        "commits": 12,
+        "lines": 815,
         "path": "README.hi.md"
       },
       {
-        "commits": 10,
-        "lines": 785,
+        "commits": 12,
+        "lines": 791,
         "path": "README.it.md"
       },
       {
-        "commits": 10,
-        "lines": 806,
+        "commits": 12,
+        "lines": 812,
         "path": "README.ja.md"
       },
       {
-        "commits": 35,
-        "lines": 682,
+        "commits": 37,
+        "lines": 690,
         "path": "README.md"
       },
       {
-        "commits": 10,
-        "lines": 742,
+        "commits": 12,
+        "lines": 750,
         "path": "README.pt-BR.md"
       },
       {
@@ -265,8 +265,8 @@
         "path": "README.pypi.md"
       },
       {
-        "commits": 10,
-        "lines": 774,
+        "commits": 12,
+        "lines": 780,
         "path": "README.zh.md"
       },
       {
@@ -275,8 +275,8 @@
         "path": "SCORECARD.md"
       },
       {
-        "commits": 8,
-        "lines": 342,
+        "commits": 9,
+        "lines": 344,
         "path": "SECURITY.md"
       },
       {
@@ -285,8 +285,8 @@
         "path": "SHIP_GATE.md"
       },
       {
-        "commits": 5,
-        "lines": 278,
+        "commits": 6,
+        "lines": 291,
         "path": "atlas/README.md"
       },
       {
@@ -295,18 +295,18 @@
         "path": "atlas/boundaries.yaml"
       },
       {
-        "commits": 5,
-        "lines": 1425,
+        "commits": 6,
+        "lines": 1474,
         "path": "atlas/page.json"
       },
       {
-        "commits": 5,
-        "lines": 4444,
+        "commits": 6,
+        "lines": 4526,
         "path": "atlas/statistics.json"
       },
       {
-        "commits": 5,
-        "lines": 120106,
+        "commits": 6,
+        "lines": 121540,
         "path": "atlas/structure.json"
       },
       {
@@ -320,8 +320,8 @@
         "path": "build_uploads_payload.py}"
       },
       {
-        "commits": 4,
-        "lines": 230,
+        "commits": 6,
+        "lines": 238,
         "path": "docs/ROADMAP.md"
       },
       {
@@ -340,83 +340,83 @@
         "path": "docs/assets/mark-figure.png"
       },
       {
-        "commits": 3,
-        "lines": 265,
+        "commits": 5,
+        "lines": 315,
         "path": "docs/audit-first-arc.md"
       },
       {
-        "commits": 1,
-        "lines": 76,
+        "commits": 2,
+        "lines": 152,
         "path": "docs/comfy-consult-10-brief.md"
       },
       {
-        "commits": 1,
-        "lines": 90,
+        "commits": 2,
+        "lines": 180,
         "path": "docs/comfy-consult-10.md"
       },
       {
-        "commits": 1,
-        "lines": 115,
+        "commits": 2,
+        "lines": 230,
         "path": "docs/comfy-consult-11.md"
       },
       {
-        "commits": 1,
-        "lines": 84,
+        "commits": 2,
+        "lines": 168,
         "path": "docs/comfy-consult-12-brief.md"
       },
       {
-        "commits": 6,
-        "lines": 516,
+        "commits": 7,
+        "lines": 1030,
         "path": "docs/comfy-consult-3.md"
       },
       {
-        "commits": 2,
-        "lines": 90,
+        "commits": 3,
+        "lines": 178,
         "path": "docs/comfy-consult-5-brief.md"
       },
       {
-        "commits": 2,
-        "lines": 54,
+        "commits": 3,
+        "lines": 106,
         "path": "docs/comfy-consult-5.md"
       },
       {
-        "commits": 2,
-        "lines": 126,
+        "commits": 3,
+        "lines": 242,
         "path": "docs/comfy-consult-6-brief.md"
       },
       {
-        "commits": 1,
-        "lines": 91,
+        "commits": 2,
+        "lines": 182,
         "path": "docs/comfy-consult-6.md"
       },
       {
-        "commits": 2,
-        "lines": 206,
+        "commits": 3,
+        "lines": 309,
         "path": "docs/comfy-consult-7-brief.md"
       },
       {
-        "commits": 2,
-        "lines": 170,
+        "commits": 3,
+        "lines": 255,
         "path": "docs/comfy-consult-7.md"
       },
       {
-        "commits": 1,
-        "lines": 73,
+        "commits": 2,
+        "lines": 146,
         "path": "docs/comfy-consult-8-brief.md"
       },
       {
-        "commits": 1,
-        "lines": 114,
+        "commits": 2,
+        "lines": 228,
         "path": "docs/comfy-consult-8.md"
       },
       {
-        "commits": 1,
-        "lines": 90,
+        "commits": 2,
+        "lines": 180,
         "path": "docs/comfy-consult-9-brief.md"
       },
       {
-        "commits": 3,
-        "lines": 278,
+        "commits": 4,
+        "lines": 417,
         "path": "docs/comfy-consult-9.md"
       },
       {
@@ -425,568 +425,573 @@
         "path": "docs/comfy-consult-brief-01.md"
       },
       {
-        "commits": 6,
-        "lines": 115,
+        "commits": 7,
+        "lines": 214,
         "path": "docs/dispatches/F01-the-first-performer.md"
       },
       {
-        "commits": 1,
-        "lines": 165,
+        "commits": 2,
+        "lines": 330,
         "path": "docs/dispatches/S01-public-surfaces.md"
       },
       {
-        "commits": 1,
-        "lines": 252,
+        "commits": 2,
+        "lines": 504,
         "path": "docs/dispatches/S01-report.md"
       },
       {
-        "commits": 1,
-        "lines": 126,
+        "commits": 2,
+        "lines": 252,
         "path": "docs/dispatches/S01-ruling.md"
       },
       {
-        "commits": 1,
-        "lines": 45,
+        "commits": 2,
+        "lines": 90,
         "path": "docs/dispatches/S02-closing-ruling.md"
       },
       {
-        "commits": 2,
-        "lines": 176,
+        "commits": 3,
+        "lines": 340,
         "path": "docs/dispatches/S02-record-index-extraction.md"
       },
       {
-        "commits": 2,
-        "lines": 362,
+        "commits": 3,
+        "lines": 543,
         "path": "docs/dispatches/S02-report.md"
       },
       {
-        "commits": 2,
-        "lines": 556,
+        "commits": 3,
+        "lines": 834,
         "path": "docs/dispatches/S02-step2-classification.md"
       },
       {
-        "commits": 1,
-        "lines": 180,
+        "commits": 2,
+        "lines": 360,
         "path": "docs/dispatches/S02-step2-ruling.md"
       },
       {
-        "commits": 3,
-        "lines": 368,
+        "commits": 4,
+        "lines": 549,
         "path": "docs/dispatches/S02-step3-halt.md"
-      },
-      {
-        "commits": 1,
-        "lines": 127,
-        "path": "docs/dispatches/S02-step3-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 198,
-        "path": "docs/dispatches/S03-performer-reference-kit.md"
-      },
-      {
-        "commits": 3,
-        "lines": 330,
-        "path": "docs/dispatches/S03-predictions.md"
-      },
-      {
-        "commits": 3,
-        "lines": 1335,
-        "path": "docs/dispatches/S03-report.md"
-      },
-      {
-        "commits": 2,
-        "lines": 186,
-        "path": "docs/dispatches/S03-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 162,
-        "path": "docs/dispatches/S04-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 588,
-        "path": "docs/dispatches/S04-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 96,
-        "path": "docs/dispatches/S04-ruling.md"
-      },
-      {
-        "commits": 1,
-        "lines": 126,
-        "path": "docs/dispatches/S04-sprite-shotset.md"
-      },
-      {
-        "commits": 2,
-        "lines": 222,
-        "path": "docs/dispatches/S05-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 684,
-        "path": "docs/dispatches/S05-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 138,
-        "path": "docs/dispatches/S05-roster-pin.md"
-      },
-      {
-        "commits": 1,
-        "lines": 109,
-        "path": "docs/dispatches/S05-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 200,
-        "path": "docs/dispatches/S06-predictions.md"
-      },
-      {
-        "commits": 1,
-        "lines": 141,
-        "path": "docs/dispatches/S06-repaired-performer-resurvey.md"
-      },
-      {
-        "commits": 2,
-        "lines": 872,
-        "path": "docs/dispatches/S06-report.md"
-      },
-      {
-        "commits": 4,
-        "lines": 165,
-        "path": "docs/dispatches/S06-ruling.md"
-      },
-      {
-        "commits": 3,
-        "lines": 285,
-        "path": "docs/dispatches/attribution-repair.md"
-      },
-      {
-        "commits": 2,
-        "lines": 579,
-        "path": "docs/dispatches/shot-diagnostics-design.md"
-      },
-      {
-        "commits": 1,
-        "lines": 194,
-        "path": "docs/experiments/E01-control-sequence-exporter.md"
-      },
-      {
-        "commits": 3,
-        "lines": 730,
-        "path": "docs/experiments/E01-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 154,
-        "path": "docs/experiments/E01-ruling.md"
-      },
-      {
-        "commits": 4,
-        "lines": 65,
-        "path": "docs/experiments/E02-CORRECTION-not-a-turnaround-tool.md"
-      },
-      {
-        "commits": 3,
-        "lines": 33,
-        "path": "docs/experiments/E02-STATUS.md"
-      },
-      {
-        "commits": 3,
-        "lines": 163,
-        "path": "docs/experiments/E02-bridge-ruling.md"
-      },
-      {
-        "commits": 4,
-        "lines": 69,
-        "path": "docs/experiments/E02-canon-ruling.md"
-      },
-      {
-        "commits": 1,
-        "lines": 198,
-        "path": "docs/experiments/E02-closing-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 184,
-        "path": "docs/experiments/E02-first-contact.md"
-      },
-      {
-        "commits": 3,
-        "lines": 126,
-        "path": "docs/experiments/E02-floor-and-thesis-notes.md"
-      },
-      {
-        "commits": 3,
-        "lines": 120,
-        "path": "docs/experiments/E02-gateC-and-noise-floor.md"
-      },
-      {
-        "commits": 4,
-        "lines": 150,
-        "path": "docs/experiments/E02-halt-ruling.md"
-      },
-      {
-        "commits": 3,
-        "lines": 422,
-        "path": "docs/experiments/E02-predictions.md"
-      },
-      {
-        "commits": 7,
-        "lines": 1480,
-        "path": "docs/experiments/E02-report.md"
-      },
-      {
-        "commits": 2,
-        "lines": 162,
-        "path": "docs/experiments/E03-authored-motion.md"
-      },
-      {
-        "commits": 3,
-        "lines": 241,
-        "path": "docs/experiments/E03-closing-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 314,
-        "path": "docs/experiments/E03-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 508,
-        "path": "docs/experiments/E03-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 173,
-        "path": "docs/experiments/E04-closing-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 334,
-        "path": "docs/experiments/E04-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 500,
-        "path": "docs/experiments/E04-report.md"
-      },
-      {
-        "commits": 6,
-        "lines": 371,
-        "path": "docs/experiments/E04-the-between-generation-floor.md"
-      },
-      {
-        "commits": 2,
-        "lines": 172,
-        "path": "docs/experiments/E05-control-strength.md"
-      },
-      {
-        "commits": 2,
-        "lines": 152,
-        "path": "docs/experiments/E06-closing-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 298,
-        "path": "docs/experiments/E06-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 350,
-        "path": "docs/experiments/E06-reference-onto-schematic.md"
-      },
-      {
-        "commits": 2,
-        "lines": 626,
-        "path": "docs/experiments/E06-report.md"
-      },
-      {
-        "commits": 2,
-        "lines": 97,
-        "path": "docs/experiments/E07-closing-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 294,
-        "path": "docs/experiments/E07-predictions.md"
-      },
-      {
-        "commits": 11,
-        "lines": 2427,
-        "path": "docs/experiments/E07-report.md"
-      },
-      {
-        "commits": 2,
-        "lines": 272,
-        "path": "docs/experiments/E07-site-list.md"
-      },
-      {
-        "commits": 11,
-        "lines": 786,
-        "path": "docs/experiments/E07-the-skeleton.md"
-      },
-      {
-        "commits": 1,
-        "lines": 88,
-        "path": "docs/experiments/E08-closing-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 198,
-        "path": "docs/experiments/E08-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 814,
-        "path": "docs/experiments/E08-report.md"
-      },
-      {
-        "commits": 12,
-        "lines": 342,
-        "path": "docs/experiments/E08-the-first-shot.md"
-      },
-      {
-        "commits": 3,
-        "lines": 253,
-        "path": "docs/experiments/E09-calibration-ruling.md"
-      },
-      {
-        "commits": 6,
-        "lines": 255,
-        "path": "docs/experiments/E09-clean-chain-calibration.md"
-      },
-      {
-        "commits": 1,
-        "lines": 60,
-        "path": "docs/experiments/E09-closing-ruling.md"
-      },
-      {
-        "commits": 3,
-        "lines": 330,
-        "path": "docs/experiments/E09-predictions.md"
-      },
-      {
-        "commits": 4,
-        "lines": 1764,
-        "path": "docs/experiments/E09-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 29,
-        "path": "docs/experiments/E10-closing-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 116,
-        "path": "docs/experiments/E10-densified-driving.md"
-      },
-      {
-        "commits": 2,
-        "lines": 218,
-        "path": "docs/experiments/E10-predictions.md"
-      },
-      {
-        "commits": 1,
-        "lines": 80,
-        "path": "docs/experiments/E10-probe-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 924,
-        "path": "docs/experiments/E10-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 61,
-        "path": "docs/experiments/E11-closing-ruling.md"
-      },
-      {
-        "commits": 5,
-        "lines": 192,
-        "path": "docs/experiments/E11-no-control-route.md"
-      },
-      {
-        "commits": 2,
-        "lines": 246,
-        "path": "docs/experiments/E11-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 136,
-        "path": "docs/experiments/E11-probe-ruling.md"
-      },
-      {
-        "commits": 3,
-        "lines": 1162,
-        "path": "docs/experiments/E11-report.md"
       },
       {
         "commits": 2,
         "lines": 254,
-        "path": "docs/experiments/E11-w2-predictions.md"
+        "path": "docs/dispatches/S02-step3-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 297,
+        "path": "docs/dispatches/S03-performer-reference-kit.md"
+      },
+      {
+        "commits": 4,
+        "lines": 440,
+        "path": "docs/dispatches/S03-predictions.md"
+      },
+      {
+        "commits": 4,
+        "lines": 1780,
+        "path": "docs/dispatches/S03-report.md"
+      },
+      {
+        "commits": 3,
+        "lines": 279,
+        "path": "docs/dispatches/S03-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 243,
+        "path": "docs/dispatches/S04-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 882,
+        "path": "docs/dispatches/S04-report.md"
       },
       {
         "commits": 2,
-        "lines": 638,
-        "path": "docs/experiments/E11-w2-report.md"
+        "lines": 192,
+        "path": "docs/dispatches/S04-ruling.md"
+      },
+      {
+        "commits": 2,
+        "lines": 252,
+        "path": "docs/dispatches/S04-sprite-shotset.md"
+      },
+      {
+        "commits": 3,
+        "lines": 333,
+        "path": "docs/dispatches/S05-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 1026,
+        "path": "docs/dispatches/S05-report.md"
+      },
+      {
+        "commits": 2,
+        "lines": 276,
+        "path": "docs/dispatches/S05-roster-pin.md"
+      },
+      {
+        "commits": 2,
+        "lines": 218,
+        "path": "docs/dispatches/S05-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 300,
+        "path": "docs/dispatches/S06-predictions.md"
+      },
+      {
+        "commits": 2,
+        "lines": 282,
+        "path": "docs/dispatches/S06-repaired-performer-resurvey.md"
+      },
+      {
+        "commits": 3,
+        "lines": 1308,
+        "path": "docs/dispatches/S06-report.md"
+      },
+      {
+        "commits": 5,
+        "lines": 330,
+        "path": "docs/dispatches/S06-ruling.md"
+      },
+      {
+        "commits": 4,
+        "lines": 570,
+        "path": "docs/dispatches/attribution-repair.md"
+      },
+      {
+        "commits": 3,
+        "lines": 1154,
+        "path": "docs/dispatches/shot-diagnostics-design.md"
+      },
+      {
+        "commits": 2,
+        "lines": 142,
+        "path": "docs/engineering-rules.md"
+      },
+      {
+        "commits": 3,
+        "lines": 230,
+        "path": "docs/experiments/E01-control-sequence-exporter.md"
+      },
+      {
+        "commits": 5,
+        "lines": 752,
+        "path": "docs/experiments/E01-report.md"
       },
       {
         "commits": 2,
         "lines": 170,
-        "path": "docs/experiments/E11-w2-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 258,
-        "path": "docs/experiments/E11-w3-predictions.md"
-      },
-      {
-        "commits": 3,
-        "lines": 471,
-        "path": "docs/experiments/E11-w3-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 71,
-        "path": "docs/experiments/E11-w3-ruling.md"
-      },
-      {
-        "commits": 1,
-        "lines": 88,
-        "path": "docs/experiments/E12-closing-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 156,
-        "path": "docs/experiments/E12-relift-check.md"
+        "path": "docs/experiments/E01-ruling.md"
       },
       {
         "commits": 5,
-        "lines": 219,
+        "lines": 67,
+        "path": "docs/experiments/E02-CORRECTION-not-a-turnaround-tool.md"
+      },
+      {
+        "commits": 5,
+        "lines": 41,
+        "path": "docs/experiments/E02-STATUS.md"
+      },
+      {
+        "commits": 4,
+        "lines": 169,
+        "path": "docs/experiments/E02-bridge-ruling.md"
+      },
+      {
+        "commits": 5,
+        "lines": 75,
+        "path": "docs/experiments/E02-canon-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 236,
+        "path": "docs/experiments/E02-closing-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 196,
+        "path": "docs/experiments/E02-first-contact.md"
+      },
+      {
+        "commits": 4,
+        "lines": 132,
+        "path": "docs/experiments/E02-floor-and-thesis-notes.md"
+      },
+      {
+        "commits": 4,
+        "lines": 130,
+        "path": "docs/experiments/E02-gateC-and-noise-floor.md"
+      },
+      {
+        "commits": 5,
+        "lines": 160,
+        "path": "docs/experiments/E02-halt-ruling.md"
+      },
+      {
+        "commits": 4,
+        "lines": 428,
+        "path": "docs/experiments/E02-predictions.md"
+      },
+      {
+        "commits": 9,
+        "lines": 1512,
+        "path": "docs/experiments/E02-report.md"
+      },
+      {
+        "commits": 3,
+        "lines": 168,
+        "path": "docs/experiments/E03-authored-motion.md"
+      },
+      {
+        "commits": 5,
+        "lines": 281,
+        "path": "docs/experiments/E03-closing-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 318,
+        "path": "docs/experiments/E03-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 514,
+        "path": "docs/experiments/E03-report.md"
+      },
+      {
+        "commits": 2,
+        "lines": 183,
+        "path": "docs/experiments/E04-closing-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 338,
+        "path": "docs/experiments/E04-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 512,
+        "path": "docs/experiments/E04-report.md"
+      },
+      {
+        "commits": 7,
+        "lines": 399,
+        "path": "docs/experiments/E04-the-between-generation-floor.md"
+      },
+      {
+        "commits": 3,
+        "lines": 190,
+        "path": "docs/experiments/E05-control-strength.md"
+      },
+      {
+        "commits": 3,
+        "lines": 176,
+        "path": "docs/experiments/E06-closing-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 304,
+        "path": "docs/experiments/E06-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 376,
+        "path": "docs/experiments/E06-reference-onto-schematic.md"
+      },
+      {
+        "commits": 3,
+        "lines": 648,
+        "path": "docs/experiments/E06-report.md"
+      },
+      {
+        "commits": 4,
+        "lines": 121,
+        "path": "docs/experiments/E07-closing-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 306,
+        "path": "docs/experiments/E07-predictions.md"
+      },
+      {
+        "commits": 12,
+        "lines": 2513,
+        "path": "docs/experiments/E07-report.md"
+      },
+      {
+        "commits": 3,
+        "lines": 276,
+        "path": "docs/experiments/E07-site-list.md"
+      },
+      {
+        "commits": 12,
+        "lines": 864,
+        "path": "docs/experiments/E07-the-skeleton.md"
+      },
+      {
+        "commits": 2,
+        "lines": 102,
+        "path": "docs/experiments/E08-closing-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 202,
+        "path": "docs/experiments/E08-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 834,
+        "path": "docs/experiments/E08-report.md"
+      },
+      {
+        "commits": 13,
+        "lines": 420,
+        "path": "docs/experiments/E08-the-first-shot.md"
+      },
+      {
+        "commits": 5,
+        "lines": 269,
+        "path": "docs/experiments/E09-calibration-ruling.md"
+      },
+      {
+        "commits": 7,
+        "lines": 291,
+        "path": "docs/experiments/E09-clean-chain-calibration.md"
+      },
+      {
+        "commits": 3,
+        "lines": 70,
+        "path": "docs/experiments/E09-closing-ruling.md"
+      },
+      {
+        "commits": 4,
+        "lines": 340,
+        "path": "docs/experiments/E09-predictions.md"
+      },
+      {
+        "commits": 6,
+        "lines": 1814,
+        "path": "docs/experiments/E09-report.md"
+      },
+      {
+        "commits": 2,
+        "lines": 33,
+        "path": "docs/experiments/E10-closing-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 132,
+        "path": "docs/experiments/E10-densified-driving.md"
+      },
+      {
+        "commits": 3,
+        "lines": 230,
+        "path": "docs/experiments/E10-predictions.md"
+      },
+      {
+        "commits": 2,
+        "lines": 90,
+        "path": "docs/experiments/E10-probe-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 956,
+        "path": "docs/experiments/E10-report.md"
+      },
+      {
+        "commits": 2,
+        "lines": 73,
+        "path": "docs/experiments/E11-closing-ruling.md"
+      },
+      {
+        "commits": 7,
+        "lines": 226,
+        "path": "docs/experiments/E11-no-control-route.md"
+      },
+      {
+        "commits": 4,
+        "lines": 272,
+        "path": "docs/experiments/E11-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 146,
+        "path": "docs/experiments/E11-probe-ruling.md"
+      },
+      {
+        "commits": 5,
+        "lines": 1192,
+        "path": "docs/experiments/E11-report.md"
+      },
+      {
+        "commits": 3,
+        "lines": 268,
+        "path": "docs/experiments/E11-w2-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 660,
+        "path": "docs/experiments/E11-w2-report.md"
+      },
+      {
+        "commits": 4,
+        "lines": 186,
+        "path": "docs/experiments/E11-w2-ruling.md"
+      },
+      {
+        "commits": 3,
+        "lines": 266,
+        "path": "docs/experiments/E11-w3-predictions.md"
+      },
+      {
+        "commits": 4,
+        "lines": 493,
+        "path": "docs/experiments/E11-w3-report.md"
+      },
+      {
+        "commits": 2,
+        "lines": 81,
+        "path": "docs/experiments/E11-w3-ruling.md"
+      },
+      {
+        "commits": 2,
+        "lines": 106,
+        "path": "docs/experiments/E12-closing-ruling.md"
+      },
+      {
+        "commits": 4,
+        "lines": 164,
+        "path": "docs/experiments/E12-relift-check.md"
+      },
+      {
+        "commits": 6,
+        "lines": 277,
         "path": "docs/experiments/E12-scene-bearing-start-frame.md"
       },
       {
-        "commits": 2,
-        "lines": 414,
+        "commits": 3,
+        "lines": 428,
         "path": "docs/experiments/E12-w1-report.md"
       },
       {
-        "commits": 2,
-        "lines": 204,
+        "commits": 3,
+        "lines": 228,
         "path": "docs/experiments/E12-w2-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 422,
+        "path": "docs/experiments/E12-w2-report.md"
+      },
+      {
+        "commits": 3,
+        "lines": 154,
+        "path": "docs/experiments/E12-w3-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 354,
+        "path": "docs/experiments/E12-w3-report.md"
+      },
+      {
+        "commits": 2,
+        "lines": 139,
+        "path": "docs/experiments/E13-closing-ruling.md"
+      },
+      {
+        "commits": 10,
+        "lines": 435,
+        "path": "docs/experiments/E13-composed-route-probe.md"
+      },
+      {
+        "commits": 3,
+        "lines": 248,
+        "path": "docs/experiments/E13-halt-ruling.md"
+      },
+      {
+        "commits": 4,
+        "lines": 106,
+        "path": "docs/experiments/E13-predictions.md"
+      },
+      {
+        "commits": 4,
+        "lines": 576,
+        "path": "docs/experiments/E13-report.md"
+      },
+      {
+        "commits": 3,
+        "lines": 218,
+        "path": "docs/experiments/E13-rerun-predictions.md"
+      },
+      {
+        "commits": 5,
+        "lines": 952,
+        "path": "docs/experiments/E13-run-report.md"
+      },
+      {
+        "commits": 2,
+        "lines": 218,
+        "path": "docs/experiments/E14-closing-ruling.md"
+      },
+      {
+        "commits": 4,
+        "lines": 228,
+        "path": "docs/experiments/E14-lora-scene-lever.md"
+      },
+      {
+        "commits": 3,
+        "lines": 156,
+        "path": "docs/experiments/E14-predictions.md"
+      },
+      {
+        "commits": 3,
+        "lines": 418,
+        "path": "docs/experiments/E14-report.md"
+      },
+      {
+        "commits": 2,
+        "lines": 750,
+        "path": "docs/grok-consult-1-brief.md"
+      },
+      {
+        "commits": 2,
+        "lines": 460,
+        "path": "docs/grok-consult-2-brief.md"
       },
       {
         "commits": 2,
         "lines": 398,
-        "path": "docs/experiments/E12-w2-report.md"
-      },
-      {
-        "commits": 2,
-        "lines": 144,
-        "path": "docs/experiments/E12-w3-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 334,
-        "path": "docs/experiments/E12-w3-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 117,
-        "path": "docs/experiments/E13-closing-ruling.md"
-      },
-      {
-        "commits": 8,
-        "lines": 357,
-        "path": "docs/experiments/E13-composed-route-probe.md"
-      },
-      {
-        "commits": 2,
-        "lines": 236,
-        "path": "docs/experiments/E13-halt-ruling.md"
-      },
-      {
-        "commits": 2,
-        "lines": 98,
-        "path": "docs/experiments/E13-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 532,
-        "path": "docs/experiments/E13-report.md"
-      },
-      {
-        "commits": 2,
-        "lines": 210,
-        "path": "docs/experiments/E13-rerun-predictions.md"
-      },
-      {
-        "commits": 3,
-        "lines": 926,
-        "path": "docs/experiments/E13-run-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 170,
-        "path": "docs/experiments/E14-closing-ruling.md"
-      },
-      {
-        "commits": 3,
-        "lines": 198,
-        "path": "docs/experiments/E14-lora-scene-lever.md"
-      },
-      {
-        "commits": 2,
-        "lines": 148,
-        "path": "docs/experiments/E14-predictions.md"
-      },
-      {
-        "commits": 2,
-        "lines": 406,
-        "path": "docs/experiments/E14-report.md"
-      },
-      {
-        "commits": 1,
-        "lines": 375,
-        "path": "docs/grok-consult-1-brief.md"
-      },
-      {
-        "commits": 1,
-        "lines": 230,
-        "path": "docs/grok-consult-2-brief.md"
-      },
-      {
-        "commits": 1,
-        "lines": 199,
         "path": "docs/grok-consult-3-brief.md"
       },
       {
-        "commits": 1,
-        "lines": 157,
+        "commits": 2,
+        "lines": 314,
         "path": "docs/grok-consult-4-brief.md"
       },
       {
-        "commits": 5,
+        "commits": 7,
         "lines": 0,
         "path": "docs/index/armature.db"
       },
       {
-        "commits": 5,
-        "lines": 524,
+        "commits": 7,
+        "lines": 982,
         "path": "docs/index/armature.db.cert.json"
       },
       {
-        "commits": 2,
-        "lines": 912,
+        "commits": 3,
+        "lines": 939,
         "path": "docs/index/conventions.json"
       },
       {
-        "commits": 36,
-        "lines": 639,
+        "commits": 38,
+        "lines": 646,
         "path": "docs/license-map.md"
       },
       {
@@ -995,28 +1000,28 @@
         "path": "docs/publishing.md"
       },
       {
-        "commits": 2,
-        "lines": 115,
+        "commits": 3,
+        "lines": 123,
         "path": "docs/random-routes.md"
       },
       {
-        "commits": 2,
-        "lines": 238,
+        "commits": 3,
+        "lines": 252,
         "path": "docs/research-grounding-e08.md"
       },
       {
-        "commits": 1,
-        "lines": 157,
+        "commits": 3,
+        "lines": 163,
         "path": "docs/research-grounding-movement-library.md"
       },
       {
-        "commits": 1,
-        "lines": 192,
+        "commits": 3,
+        "lines": 210,
         "path": "docs/research-grounding-verification-gates.md"
       },
       {
-        "commits": 1,
-        "lines": 231,
+        "commits": 3,
+        "lines": 239,
         "path": "docs/research-grounding.md"
       },
       {
@@ -1025,23 +1030,23 @@
         "path": "docs/tools.md"
       },
       {
-        "commits": 1,
-        "lines": 72,
+        "commits": 2,
+        "lines": 78,
         "path": "docs/video-provider-field-notes.md"
       },
       {
-        "commits": 1,
-        "lines": 71,
+        "commits": 2,
+        "lines": 77,
         "path": "docs/wan-video-prompt-guide-notes.md"
       },
       {
-        "commits": 2,
-        "lines": 65,
+        "commits": 3,
+        "lines": 67,
         "path": "docs/wan21-prompt-guide-notes.md"
       },
       {
-        "commits": 1,
-        "lines": 74,
+        "commits": 2,
+        "lines": 82,
         "path": "docs/wan26-image-guide-notes.md"
       },
       {
@@ -1070,8 +1075,8 @@
         "path": "npm/package.json"
       },
       {
-        "commits": 30,
-        "lines": 619,
+        "commits": 31,
+        "lines": 623,
         "path": "pyproject.toml"
       },
       {
@@ -1135,8 +1140,8 @@
         "path": "site/src/content.config.ts"
       },
       {
-        "commits": 15,
-        "lines": 308,
+        "commits": 16,
+        "lines": 310,
         "path": "site/src/content/docs/handbook/index.md"
       },
       {
@@ -1145,8 +1150,8 @@
         "path": "site/src/content/docs/handbook/license-gate.md"
       },
       {
-        "commits": 2,
-        "lines": 151,
+        "commits": 3,
+        "lines": 155,
         "path": "site/src/content/docs/handbook/method.md"
       },
       {
@@ -1245,13 +1250,13 @@
         "path": "specs/E12-seeds.json"
       },
       {
-        "commits": 3,
-        "lines": 30,
+        "commits": 4,
+        "lines": 32,
         "path": "specs/E13-prompt.json"
       },
       {
-        "commits": 32,
-        "lines": 120,
+        "commits": 33,
+        "lines": 122,
         "path": "specs/E13-seeds.json"
       },
       {
@@ -1260,8 +1265,8 @@
         "path": "specs/E14-seeds.json"
       },
       {
-        "commits": 7,
-        "lines": 48,
+        "commits": 8,
+        "lines": 50,
         "path": "specs/ceiling-why-machine-readable.md"
       },
       {
@@ -1315,13 +1320,13 @@
         "path": "tests/blender/check_plate_composite.py"
       },
       {
-        "commits": 4,
-        "lines": 568,
+        "commits": 5,
+        "lines": 570,
         "path": "tests/blender/check_pose_arc_roundtrip.py"
       },
       {
-        "commits": 4,
-        "lines": 168,
+        "commits": 5,
+        "lines": 170,
         "path": "tests/blender/check_visibility.py"
       },
       {
@@ -1340,8 +1345,8 @@
         "path": "tests/blender_stub.py"
       },
       {
-        "commits": 34,
-        "lines": 2064,
+        "commits": 35,
+        "lines": 2065,
         "path": "tests/conftest.py"
       },
       {
@@ -1470,8 +1475,8 @@
         "path": "tests/test_amend_inventory.py"
       },
       {
-        "commits": 8,
-        "lines": 1152,
+        "commits": 9,
+        "lines": 1154,
         "path": "tests/test_amend_w10_builders.py"
       },
       {
@@ -1480,13 +1485,13 @@
         "path": "tests/test_amend_w12_core_gates.py"
       },
       {
-        "commits": 5,
-        "lines": 1712,
+        "commits": 6,
+        "lines": 1714,
         "path": "tests/test_amend_w12_core_solvers.py"
       },
       {
-        "commits": 14,
-        "lines": 1684,
+        "commits": 15,
+        "lines": 1686,
         "path": "tests/test_amend_w14_builders.py"
       },
       {
@@ -1495,8 +1500,8 @@
         "path": "tests/test_amend_w14_core_gates.py"
       },
       {
-        "commits": 5,
-        "lines": 1034,
+        "commits": 6,
+        "lines": 1036,
         "path": "tests/test_amend_w14_core_solvers.py"
       },
       {
@@ -1515,13 +1520,13 @@
         "path": "tests/test_amend_w16_core_gates.py"
       },
       {
-        "commits": 44,
-        "lines": 3452,
+        "commits": 45,
+        "lines": 3454,
         "path": "tests/test_amend_w16_core_solvers.py"
       },
       {
-        "commits": 15,
-        "lines": 1989,
+        "commits": 16,
+        "lines": 1991,
         "path": "tests/test_amend_w18_builders.py"
       },
       {
@@ -1550,8 +1555,8 @@
         "path": "tests/test_amend_w20_core_gates.py"
       },
       {
-        "commits": 21,
-        "lines": 3599,
+        "commits": 22,
+        "lines": 3601,
         "path": "tests/test_amend_w22_builders.py"
       },
       {
@@ -1585,8 +1590,8 @@
         "path": "tests/test_amend_w26_suite.py"
       },
       {
-        "commits": 10,
-        "lines": 2086,
+        "commits": 11,
+        "lines": 2092,
         "path": "tests/test_amend_w28_builders.py"
       },
       {
@@ -1595,8 +1600,8 @@
         "path": "tests/test_amend_w28_coordinator.py"
       },
       {
-        "commits": 3,
-        "lines": 1482,
+        "commits": 4,
+        "lines": 1486,
         "path": "tests/test_amend_w28_core_gates.py"
       },
       {
@@ -1655,13 +1660,13 @@
         "path": "tests/test_amend_w37_core_solvers.py"
       },
       {
-        "commits": 9,
-        "lines": 380,
+        "commits": 10,
+        "lines": 382,
         "path": "tests/test_amend_w3_andons.py"
       },
       {
-        "commits": 12,
-        "lines": 788,
+        "commits": 13,
+        "lines": 792,
         "path": "tests/test_amend_w6_andons.py"
       },
       {
@@ -1695,18 +1700,18 @@
         "path": "tests/test_blender_scene_pure.py"
       },
       {
-        "commits": 17,
-        "lines": 845,
+        "commits": 18,
+        "lines": 896,
         "path": "tests/test_build_animate_payload.py"
       },
       {
-        "commits": 27,
-        "lines": 2020,
+        "commits": 28,
+        "lines": 2039,
         "path": "tests/test_build_camera_i2v_payload.py"
       },
       {
-        "commits": 15,
-        "lines": 1278,
+        "commits": 16,
+        "lines": 1324,
         "path": "tests/test_build_i2v_payload.py"
       },
       {
@@ -1720,13 +1725,13 @@
         "path": "tests/test_build_payload.py"
       },
       {
-        "commits": 5,
-        "lines": 382,
+        "commits": 6,
+        "lines": 386,
         "path": "tests/test_build_t2v_payload.py"
       },
       {
-        "commits": 13,
-        "lines": 804,
+        "commits": 14,
+        "lines": 806,
         "path": "tests/test_build_t2v_payload_a3.py"
       },
       {
@@ -1740,8 +1745,8 @@
         "path": "tests/test_canon_spend.py"
       },
       {
-        "commits": 22,
-        "lines": 1894,
+        "commits": 23,
+        "lines": 1896,
         "path": "tests/test_cascade.py"
       },
       {
@@ -1755,8 +1760,8 @@
         "path": "tests/test_check_relift.py"
       },
       {
-        "commits": 94,
-        "lines": 12641,
+        "commits": 95,
+        "lines": 12649,
         "path": "tests/test_ci_workflows.py"
       },
       {
@@ -1770,8 +1775,8 @@
         "path": "tests/test_clipcompare.py"
       },
       {
-        "commits": 7,
-        "lines": 508,
+        "commits": 8,
+        "lines": 512,
         "path": "tests/test_clipstats.py"
       },
       {
@@ -1780,8 +1785,8 @@
         "path": "tests/test_committed_shot_specs.py"
       },
       {
-        "commits": 12,
-        "lines": 832,
+        "commits": 13,
+        "lines": 834,
         "path": "tests/test_compare_runs.py"
       },
       {
@@ -1795,18 +1800,18 @@
         "path": "tests/test_core_solver_evidence.py"
       },
       {
-        "commits": 13,
-        "lines": 1004,
+        "commits": 14,
+        "lines": 1008,
         "path": "tests/test_donor_gate.py"
       },
       {
-        "commits": 3,
-        "lines": 186,
+        "commits": 4,
+        "lines": 188,
         "path": "tests/test_e13_sheet.py"
       },
       {
-        "commits": 7,
-        "lines": 488,
+        "commits": 8,
+        "lines": 527,
         "path": "tests/test_encode_control.py"
       },
       {
@@ -1830,8 +1835,8 @@
         "path": "tests/test_fetch_run.py"
       },
       {
-        "commits": 24,
-        "lines": 1557,
+        "commits": 25,
+        "lines": 1561,
         "path": "tests/test_fetch_t2v_run.py"
       },
       {
@@ -1875,8 +1880,8 @@
         "path": "tests/test_gate_g6.py"
       },
       {
-        "commits": 6,
-        "lines": 396,
+        "commits": 7,
+        "lines": 400,
         "path": "tests/test_gate_r.py"
       },
       {
@@ -1895,8 +1900,8 @@
         "path": "tests/test_gate_survives_optimize.py"
       },
       {
-        "commits": 85,
-        "lines": 5958,
+        "commits": 86,
+        "lines": 5960,
         "path": "tests/test_gates.py"
       },
       {
@@ -1935,13 +1940,13 @@
         "path": "tests/test_instruments_amend_w14.py"
       },
       {
-        "commits": 14,
-        "lines": 2666,
+        "commits": 15,
+        "lines": 2668,
         "path": "tests/test_instruments_amend_w16.py"
       },
       {
-        "commits": 6,
-        "lines": 888,
+        "commits": 7,
+        "lines": 890,
         "path": "tests/test_instruments_amend_w18.py"
       },
       {
@@ -1950,8 +1955,8 @@
         "path": "tests/test_instruments_amend_w18_optics.py"
       },
       {
-        "commits": 13,
-        "lines": 3238,
+        "commits": 14,
+        "lines": 3240,
         "path": "tests/test_instruments_amend_w22.py"
       },
       {
@@ -1960,13 +1965,13 @@
         "path": "tests/test_instruments_amend_w22_optics.py"
       },
       {
-        "commits": 6,
-        "lines": 1704,
+        "commits": 7,
+        "lines": 1710,
         "path": "tests/test_instruments_amend_w25.py"
       },
       {
-        "commits": 4,
-        "lines": 1994,
+        "commits": 5,
+        "lines": 1996,
         "path": "tests/test_instruments_amend_w28.py"
       },
       {
@@ -2035,8 +2040,8 @@
         "path": "tests/test_instruments_measure_amend_w25.py"
       },
       {
-        "commits": 6,
-        "lines": 1296,
+        "commits": 7,
+        "lines": 1300,
         "path": "tests/test_instruments_measure_amend_w28.py"
       },
       {
@@ -2080,8 +2085,8 @@
         "path": "tests/test_launcher.py"
       },
       {
-        "commits": 16,
-        "lines": 2028,
+        "commits": 17,
+        "lines": 2030,
         "path": "tests/test_lift_solve.py"
       },
       {
@@ -2200,8 +2205,8 @@
         "path": "tests/test_measure_tracking.py"
       },
       {
-        "commits": 2,
-        "lines": 681,
+        "commits": 3,
+        "lines": 683,
         "path": "tests/test_measure_weight_gate.py"
       },
       {
@@ -2260,8 +2265,8 @@
         "path": "tests/test_pngio.py"
       },
       {
-        "commits": 8,
-        "lines": 428,
+        "commits": 9,
+        "lines": 430,
         "path": "tests/test_pose_arc_roundtrip.py"
       },
       {
@@ -2275,8 +2280,8 @@
         "path": "tests/test_probe_glb.py"
       },
       {
-        "commits": 1,
-        "lines": 199,
+        "commits": 3,
+        "lines": 388,
         "path": "tests/test_public_hygiene.py"
       },
       {
@@ -2285,8 +2290,8 @@
         "path": "tests/test_r2v_payload.py"
       },
       {
-        "commits": 2,
-        "lines": 235,
+        "commits": 3,
+        "lines": 237,
         "path": "tests/test_record_index.py"
       },
       {
@@ -2305,8 +2310,8 @@
         "path": "tests/test_render_pose_sticks.py"
       },
       {
-        "commits": 29,
-        "lines": 1861,
+        "commits": 30,
+        "lines": 1863,
         "path": "tests/test_render_visibility.py"
       },
       {
@@ -2315,8 +2320,8 @@
         "path": "tests/test_resample.py"
       },
       {
-        "commits": 16,
-        "lines": 960,
+        "commits": 17,
+        "lines": 962,
         "path": "tests/test_retopo_and_bake.py"
       },
       {
@@ -2335,8 +2340,8 @@
         "path": "tests/test_rig_sheet_compose.py"
       },
       {
-        "commits": 37,
-        "lines": 5364,
+        "commits": 38,
+        "lines": 5368,
         "path": "tests/test_route_gates.py"
       },
       {
@@ -2345,8 +2350,8 @@
         "path": "tests/test_run_export.py"
       },
       {
-        "commits": 21,
-        "lines": 1901,
+        "commits": 22,
+        "lines": 1903,
         "path": "tests/test_seeds_specs.py"
       },
       {
@@ -2370,13 +2375,13 @@
         "path": "tests/test_sheet_sides.py"
       },
       {
-        "commits": 2,
-        "lines": 1018,
+        "commits": 3,
+        "lines": 1020,
         "path": "tests/test_shotdiag_camera.py"
       },
       {
-        "commits": 2,
-        "lines": 677,
+        "commits": 3,
+        "lines": 679,
         "path": "tests/test_shotdiag_identity.py"
       },
       {
@@ -2415,8 +2420,8 @@
         "path": "tests/test_turnaround_ortho.py"
       },
       {
-        "commits": 8,
-        "lines": 746,
+        "commits": 9,
+        "lines": 748,
         "path": "tests/test_turnaround_pin.py"
       },
       {
@@ -2430,8 +2435,8 @@
         "path": "tests/test_version_agreement.py"
       },
       {
-        "commits": 18,
-        "lines": 2509,
+        "commits": 19,
+        "lines": 2515,
         "path": "tests/test_walk.py"
       },
       {
@@ -2450,8 +2455,8 @@
         "path": "tools/armature_core/aapose.py"
       },
       {
-        "commits": 25,
-        "lines": 2815,
+        "commits": 26,
+        "lines": 2819,
         "path": "tools/armature_core/assembly.py"
       },
       {
@@ -2465,8 +2470,8 @@
         "path": "tools/armature_core/blender_scene.py"
       },
       {
-        "commits": 25,
-        "lines": 2272,
+        "commits": 26,
+        "lines": 2274,
         "path": "tools/armature_core/canon.py"
       },
       {
@@ -2495,28 +2500,28 @@
         "path": "tools/armature_core/clipcompare.py"
       },
       {
-        "commits": 15,
-        "lines": 1126,
+        "commits": 16,
+        "lines": 1128,
         "path": "tools/armature_core/clipstats.py"
       },
       {
-        "commits": 22,
-        "lines": 1321,
+        "commits": 23,
+        "lines": 1323,
         "path": "tools/armature_core/donor_gate.py"
       },
       {
-        "commits": 21,
-        "lines": 809,
+        "commits": 22,
+        "lines": 811,
         "path": "tools/armature_core/errors.py"
       },
       {
-        "commits": 28,
-        "lines": 2020,
+        "commits": 29,
+        "lines": 2024,
         "path": "tools/armature_core/framing.py"
       },
       {
-        "commits": 34,
-        "lines": 2294,
+        "commits": 35,
+        "lines": 2296,
         "path": "tools/armature_core/gates.py"
       },
       {
@@ -2540,8 +2545,8 @@
         "path": "tools/armature_core/lift_solve.py"
       },
       {
-        "commits": 2,
-        "lines": 969,
+        "commits": 3,
+        "lines": 973,
         "path": "tools/armature_core/measure_weights.py"
       },
       {
@@ -2575,13 +2580,13 @@
         "path": "tools/armature_core/rig_gates.py"
       },
       {
-        "commits": 62,
-        "lines": 9684,
+        "commits": 63,
+        "lines": 9704,
         "path": "tools/armature_core/route_gates.py"
       },
       {
-        "commits": 2,
-        "lines": 2126,
+        "commits": 3,
+        "lines": 2130,
         "path": "tools/armature_core/shotdiag.py"
       },
       {
@@ -2605,38 +2610,38 @@
         "path": "tools/armature_core/subject.py"
       },
       {
-        "commits": 33,
-        "lines": 2221,
+        "commits": 34,
+        "lines": 2223,
         "path": "tools/armature_core/turnaround.py"
       },
       {
-        "commits": 28,
-        "lines": 3179,
+        "commits": 29,
+        "lines": 3181,
         "path": "tools/armature_core/walk.py"
       },
       {
-        "commits": 11,
-        "lines": 454,
+        "commits": 12,
+        "lines": 456,
         "path": "tools/armature_index.py"
       },
       {
-        "commits": 32,
-        "lines": 3318,
+        "commits": 33,
+        "lines": 3320,
         "path": "tools/author_walk.py"
       },
       {
-        "commits": 39,
-        "lines": 2158,
+        "commits": 40,
+        "lines": 2196,
         "path": "tools/build_animate_payload.py"
       },
       {
-        "commits": 42,
-        "lines": 3328,
+        "commits": 43,
+        "lines": 3334,
         "path": "tools/build_assembly_payload.py"
       },
       {
-        "commits": 42,
-        "lines": 3470,
+        "commits": 43,
+        "lines": 3480,
         "path": "tools/build_camera_i2v_payload.py"
       },
       {
@@ -2645,23 +2650,23 @@
         "path": "tools/build_cascade_payload.py"
       },
       {
-        "commits": 40,
-        "lines": 2430,
+        "commits": 41,
+        "lines": 2436,
         "path": "tools/build_i2v_payload.py"
       },
       {
-        "commits": 35,
-        "lines": 2601,
+        "commits": 36,
+        "lines": 2605,
         "path": "tools/build_lora_arm_payload.py"
       },
       {
-        "commits": 46,
-        "lines": 2734,
+        "commits": 47,
+        "lines": 2736,
         "path": "tools/build_payload.py"
       },
       {
-        "commits": 33,
-        "lines": 1978,
+        "commits": 34,
+        "lines": 1988,
         "path": "tools/build_r2v_payload.py"
       },
       {
@@ -2670,13 +2675,13 @@
         "path": "tools/build_routes_payload.py"
       },
       {
-        "commits": 2,
-        "lines": 816,
+        "commits": 3,
+        "lines": 818,
         "path": "tools/build_submit_payload.py"
       },
       {
-        "commits": 32,
-        "lines": 1922,
+        "commits": 33,
+        "lines": 1926,
         "path": "tools/build_t2v_payload.py"
       },
       {
@@ -2690,8 +2695,8 @@
         "path": "tools/canon_gate.py"
       },
       {
-        "commits": 20,
-        "lines": 1483,
+        "commits": 21,
+        "lines": 1485,
         "path": "tools/check_relift.py"
       },
       {
@@ -2705,33 +2710,33 @@
         "path": "tools/composite_reference.py"
       },
       {
-        "commits": 27,
-        "lines": 1297,
+        "commits": 28,
+        "lines": 1299,
         "path": "tools/diagnose_bone_heat.py"
       },
       {
-        "commits": 29,
-        "lines": 2721,
+        "commits": 30,
+        "lines": 2743,
         "path": "tools/encode_control.py"
       },
       {
-        "commits": 17,
-        "lines": 668,
+        "commits": 18,
+        "lines": 670,
         "path": "tools/extract_clip_frames.py"
       },
       {
-        "commits": 43,
-        "lines": 3792,
+        "commits": 44,
+        "lines": 3798,
         "path": "tools/fetch_run.py"
       },
       {
-        "commits": 33,
-        "lines": 1556,
+        "commits": 34,
+        "lines": 1558,
         "path": "tools/fetch_t2v_run.py"
       },
       {
-        "commits": 19,
-        "lines": 822,
+        "commits": 20,
+        "lines": 826,
         "path": "tools/fit_reference.py"
       },
       {
@@ -2740,8 +2745,8 @@
         "path": "tools/gate_b_frames.py"
       },
       {
-        "commits": 47,
-        "lines": 3781,
+        "commits": 48,
+        "lines": 3783,
         "path": "tools/gate_saved_graph.py"
       },
       {
@@ -2765,8 +2770,8 @@
         "path": "tools/make_ab_clip.py"
       },
       {
-        "commits": 30,
-        "lines": 1346,
+        "commits": 31,
+        "lines": 1348,
         "path": "tools/make_binding_sheet.py"
       },
       {
@@ -2785,8 +2790,8 @@
         "path": "tools/make_e08_sheet.py"
       },
       {
-        "commits": 18,
-        "lines": 860,
+        "commits": 19,
+        "lines": 862,
         "path": "tools/make_e13_sheet.py"
       },
       {
@@ -2815,8 +2820,8 @@
         "path": "tools/make_overlay_sheet.py"
       },
       {
-        "commits": 32,
-        "lines": 1870,
+        "commits": 33,
+        "lines": 1876,
         "path": "tools/make_parts_sheet.py"
       },
       {
@@ -2835,8 +2840,8 @@
         "path": "tools/make_review_clip.py"
       },
       {
-        "commits": 36,
-        "lines": 1804,
+        "commits": 37,
+        "lines": 1806,
         "path": "tools/make_rig_sheet.py"
       },
       {
@@ -2850,8 +2855,8 @@
         "path": "tools/make_shotset_sheet.py"
       },
       {
-        "commits": 32,
-        "lines": 1580,
+        "commits": 33,
+        "lines": 1582,
         "path": "tools/make_skeleton_sheet.py"
       },
       {
@@ -2860,8 +2865,8 @@
         "path": "tools/make_startframe_sheet.py"
       },
       {
-        "commits": 29,
-        "lines": 1564,
+        "commits": 30,
+        "lines": 1566,
         "path": "tools/make_test_armature.py"
       },
       {
@@ -2900,8 +2905,8 @@
         "path": "tools/measure_lift.py"
       },
       {
-        "commits": 2,
-        "lines": 307,
+        "commits": 3,
+        "lines": 309,
         "path": "tools/measure_shot.py"
       },
       {
@@ -2925,18 +2930,18 @@
         "path": "tools/preview_glb.py"
       },
       {
-        "commits": 29,
-        "lines": 1435,
+        "commits": 30,
+        "lines": 1437,
         "path": "tools/preview_walk.py"
       },
       {
-        "commits": 21,
-        "lines": 1293,
+        "commits": 22,
+        "lines": 1295,
         "path": "tools/probe_glb.py"
       },
       {
-        "commits": 23,
-        "lines": 1040,
+        "commits": 24,
+        "lines": 1042,
         "path": "tools/probe_subject.py"
       },
       {
@@ -2945,8 +2950,8 @@
         "path": "tools/project_pose_keypoints.py"
       },
       {
-        "commits": 31,
-        "lines": 2182,
+        "commits": 32,
+        "lines": 2184,
         "path": "tools/render_performer.py"
       },
       {
@@ -2955,13 +2960,13 @@
         "path": "tools/render_pose_sticks.py"
       },
       {
-        "commits": 36,
-        "lines": 4889,
+        "commits": 37,
+        "lines": 4893,
         "path": "tools/render_start_frame.py"
       },
       {
-        "commits": 41,
-        "lines": 4025,
+        "commits": 42,
+        "lines": 4027,
         "path": "tools/render_turnaround.py"
       },
       {
@@ -2970,28 +2975,28 @@
         "path": "tools/resample_motion.py"
       },
       {
-        "commits": 27,
-        "lines": 1562,
+        "commits": 28,
+        "lines": 1564,
         "path": "tools/rig_bake.py"
       },
       {
-        "commits": 43,
-        "lines": 5582,
+        "commits": 44,
+        "lines": 5586,
         "path": "tools/rig_character.py"
       },
       {
-        "commits": 28,
-        "lines": 1950,
+        "commits": 29,
+        "lines": 1956,
         "path": "tools/rig_parts.py"
       },
       {
-        "commits": 26,
-        "lines": 1294,
+        "commits": 27,
+        "lines": 1298,
         "path": "tools/rig_repair.py"
       },
       {
-        "commits": 31,
-        "lines": 2078,
+        "commits": 32,
+        "lines": 2080,
         "path": "tools/rig_retopo.py"
       },
       {
@@ -3070,9 +3075,9 @@
     "level": "full",
     "reason": "at least 30 qualifying commits, and at least 20 source files reach 10 revisions"
   },
-  "generatedAt": "2026-11-26T03:57:47.750Z",
+  "generatedAt": "2026-11-26T06:23:41.331Z",
   "generatedFrom": {
-    "commit": "3a3fd4bd94fb62ba521d2a59686445c94a951f15"
+    "commit": "9a802d39eebeca670cc76e0a50b95cbd8a1c1ae4"
   },
   "pairs": [
     {
@@ -3499,16 +3504,16 @@
     "floor": "strong",
     "floorHeld": false,
     "floorTrigger": null,
-    "headDate": "2026-11-25T22:00:14-05:00",
+    "headDate": "2026-11-26T00:24:35-05:00",
     "inScopeFiles": 522,
     "pinnedStart": null,
     "priorFloor": "strong",
-    "qualifyingCommits": 774,
+    "qualifyingCommits": 775,
     "qualifyingMinimum": 30,
     "revisions": 5,
     "shared": 10,
     "sharedFloorUsed": 10,
-    "since": "2026-05-30T03:00:14.000Z",
+    "since": "2026-05-30T05:24:35.000Z",
     "sourceExtensions": [
       ".js",
       ".mjs",

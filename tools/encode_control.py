@@ -39,6 +39,7 @@ import argparse
 import hashlib
 import json
 import os
+import platform
 import shutil
 import subprocess
 import sys
@@ -105,23 +106,49 @@ def _default_imageio_ffmpeg():
         return None
 
 
-def _resolve_ffmpeg(env=None, imageio_getter=None, which_fn=None):
-    """Select ffmpeg in precedence order: ARMATURE_FFMPEG > imageio-ffmpeg > PATH."""
+IMAGEIO_FFMPEG_SKIP_MACOS_X86_64 = "nonfree build on macOS x86_64"
+
+
+def _is_intel_macos(sys_platform=None, machine=None):
+    """Return True on Intel macOS (darwin + x86_64/amd64), where 0.6.0's wheel is nonfree."""
+    plat = sys.platform if sys_platform is None else sys_platform
+    arch = (platform.machine() if machine is None else machine).strip().lower()
+    return plat == "darwin" and arch in ("x86_64", "amd64")
+
+
+def _resolve_ffmpeg(
+    env=None,
+    imageio_getter=None,
+    which_fn=None,
+    sys_platform=None,
+    machine=None,
+):
+    """Select ffmpeg in precedence order: ARMATURE_FFMPEG > imageio-ffmpeg > PATH.
+
+    On Intel macOS (darwin / x86_64), imageio-ffmpeg 0.6.0's bundled binary is built with
+    --enable-nonfree, so the imageio-ffmpeg candidate is skipped without invoking it
+    (order becomes ARMATURE_FFMPEG > PATH > none).
+    """
     env_map = os.environ if env is None else env
     if "ARMATURE_FFMPEG" in env_map:
-        return env_map["ARMATURE_FFMPEG"], "env"
-    getter = _default_imageio_ffmpeg if imageio_getter is None else imageio_getter
-    try:
-        pinned = getter()
-    except (ImportError, RuntimeError, OSError):
-        pinned = None
-    if pinned and os.path.isfile(pinned):
-        return pinned, "imageio_ffmpeg"
+        return env_map["ARMATURE_FFMPEG"], "env", None
+    skipped = None
+    if _is_intel_macos(sys_platform=sys_platform, machine=machine):
+        skipped = IMAGEIO_FFMPEG_SKIP_MACOS_X86_64
+    else:
+        getter = _default_imageio_ffmpeg if imageio_getter is None else imageio_getter
+        try:
+            pinned = getter()
+        except (ImportError, RuntimeError, OSError):
+            pinned = None
+        if pinned and os.path.isfile(pinned):
+            return pinned, "imageio_ffmpeg", None
     finder = shutil.which if which_fn is None else which_fn
     found = finder("ffmpeg") or ""
     if found:
-        return found, "path"
-    return "", "none"
+        return found, "path", skipped
+    return "", "none", skipped
+
 
 def ffmpeg_source():
     """Return the active source tag ('env', 'imageio_ffmpeg', 'path', or 'none')."""
@@ -135,7 +162,20 @@ def ffmpeg_source():
     return FFMPEG_SOURCE if FFMPEG_SOURCE != "env" else "path"
 
 
-FFMPEG, FFMPEG_SOURCE = _resolve_ffmpeg()
+def imageio_ffmpeg_skipped():
+    """Return the skip reason when imageio-ffmpeg was bypassed, else None."""
+    if ffmpeg_source() in ("env", "imageio_ffmpeg"):
+        return None
+    return IMAGEIO_FFMPEG_SKIPPED
+
+
+def _ffmpeg_skip_fields():
+    """Optional receipt field recording why imageio-ffmpeg was bypassed."""
+    skipped = imageio_ffmpeg_skipped()
+    return {"imageio_ffmpeg_skipped": skipped} if skipped is not None else {}
+
+
+FFMPEG, FFMPEG_SOURCE, IMAGEIO_FFMPEG_SKIPPED = _resolve_ffmpeg()
 _IMPORT_FFMPEG = FFMPEG
 
 # Candidate bridges, in the order the spec prefers them. `container` matters as much as
@@ -471,7 +511,8 @@ def gate_ffmpeg_binary():
             {"gate": "ARGS", "andon": "EncodeFailure",
              "clause": "ffmpeg_binary_not_found", "ffmpeg": FFMPEG,
              "from_env": ffmpeg_source() == "env",
-             "env_var": "ARMATURE_FFMPEG"})
+             "env_var": "ARMATURE_FFMPEG",
+             **_ffmpeg_skip_fields()})
     return FFMPEG
 
 
@@ -887,6 +928,7 @@ def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
         "ffmpeg_version": ffmpeg_version(),
         "ffmpeg_from_env": ffmpeg_source() == "env",
         "ffmpeg_source": ffmpeg_source(),
+        **_ffmpeg_skip_fields(),
         **runtime_provenance({"numpy": np, "Pillow": Image}),
         "channels": channels,
         "gate_R_all": {
@@ -1049,6 +1091,7 @@ def encode_stream_png_sequence(frames_dir, path, codec, fps=16, invert=False,
             "ffmpeg_version": ffmpeg_version(),
             "ffmpeg_from_env": ffmpeg_source() == "env",
             "ffmpeg_source": ffmpeg_source(),
+            **_ffmpeg_skip_fields(),
             **runtime_provenance({"numpy": np, "Pillow": Image}),
             "video": path,
             "video_sha256": video_sha,
@@ -1115,6 +1158,7 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
         "ffmpeg_version": ffmpeg_version(),
         "ffmpeg_from_env": ffmpeg_source() == "env",
         "ffmpeg_source": ffmpeg_source(),
+        **_ffmpeg_skip_fields(),
         # F-2ad4f715: the interpreter and imaging libs beside the ffmpeg key — a receipt
         # that names the encoder but not the Python cannot attribute a re-measured gap.
         **runtime_provenance({"numpy": np, "Pillow": Image}),
@@ -1217,6 +1261,7 @@ def main(argv=None):
             with open(args.survey_out, "w", encoding="utf-8") as fh:
                 json.dump({"ffmpeg": FFMPEG,
                            "ffmpeg_source": ffmpeg_source(),
+                           **_ffmpeg_skip_fields(),
                            "recommended_gray": table["recommended_gray"],
                            "recommended_rgb": table["recommended_rgb"],
                            "survey": rows,

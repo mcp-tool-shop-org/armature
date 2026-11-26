@@ -1,7 +1,7 @@
 {
   "corpus": {
     "files": 93,
-    "id": "f0a77dc4dfc6540aefdb5567beddb80db8f5e0c0b02dc44df55a07b45ec8677b",
+    "id": "e05f99da276bb56ef829e726fd4b9d2732a1c0a8977caba7dd3f12668a925656",
     "manifest": {
       "README.md": "990d3b6c1cbb488b17d9d60d12bdfd07ec444f389050e5b1f7c5cb847cc3eebe",
       "docs/ROADMAP.md": "39a65d64580b8fed5a71b9ea2f7d1f29d15ef0929edad86cc29c0e0799585afb",
@@ -84,7 +84,7 @@
       "docs/experiments/E14-lora-scene-lever.md": "952dfa41000ceaf90fa98d66f64a932cdad005f2289ac7ee3d2a446198e5a199",
       "docs/experiments/E14-predictions.md": "33a7c266c828c6e5942774c4a71abda9fabf359c7e1743df02a3149dea0cb11b",
       "docs/experiments/E14-report.md": "4b093b5d90928939a03f20774dcde68d67839daedb0c884683d230463886c943",
-      "docs/license-map.md": "af68c70af354206bb07e6d8adce3c9678a32c29bfac1c0c83079e3fc8862ce8f",
+      "docs/license-map.md": "a4f344ade57b86645813b4a83db4a8161c15895e30cc0b981d8c1546cddf86f8",
       "docs/publishing.md": "8829a931c81f3068d05ad74276140c503833a41575cf34d8cc5f1b3191af49e4",
       "docs/random-routes.md": "2b16d3e310320388ac2a4971574a3dfa72466096e90fe3d4b9751472600fff56",
       "docs/research-grounding-e08.md": "48f47ef08c18a225d4bd3f3218e0dbd33cf099a489bf32685709ed61938e49d9",
@@ -101,7 +101,7 @@
   "db": {
     "bytes": 2768896,
     "path": "armature.db",
-    "sha256": "c6089641593bd84ab9cc5bd0e5a9bfcdd0e6c8c3bef40610eac6d2a373eb26fb"
+    "sha256": "cd7753b3766074c4d5220c4cd0f5cc17da53f387345e36d6aa677b35c4366650"
   },
   "repo": "armature",
   "schema": "record-index-certificate/1",
@@ -191,7 +191,7 @@
     "",
     "[vocabulary] what each declared vocabulary did not recognise",
     "             REPORT ONLY - this section never fails the run",
-    "  artifact kinds         recognised  1314   unrecognised    0",
+    "  artifact kinds         recognised  1312   unrecognised    0",
     "  law paid_for_by        recognised     0   unrecognised    0",
     "  ruling headers         recognised    90   unrecognised   38",
     "      not recognised: ## 1. CORRECTION — \"lossless by construction\" is withdra, ## 3. Gate C — the observation is the maintainer's, not , ## 3. My third falsified premise, and the pattern is now, ## 4. The finding that changes the roadmap: the pose cha, ## 5. Accepted without change, and worth keeping, ## 6. The blindness corroboration — produced by my own e, ## 7. And I did it again — second cross-session contamin, ## 8. Awaiting the maintainer  (+30 more occurrence(s))",
@@ -205,7 +205,7 @@
     ""
   ],
   "verb": "build_and_certify",
-  "verified_utc": "2026-11-26T05:06:03Z",
+  "verified_utc": "2026-11-26T06:23:02Z",
   "verify_exit_code": 0,
   "written_by": "record_index.certificate"
 }
