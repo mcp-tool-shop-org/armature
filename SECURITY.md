@@ -122,9 +122,7 @@ stages.
   confinement — a tool writes wherever its arguments say. Treat these as research
   instruments you are running deliberately, not as a hardened CLI. Point them at scratch
   trees.
-- **Sibling asset paths appear in dated experiment specs** (82 historical occurrences across
-  36 tracked files on initial audit). They are not secrets, and operational surfaces use
-  repo-relative paths or environment variables instead.
+- **Local paths remain in historical records and tools assume sibling checkouts** (`167` drive-path occurrences across `50` files in `docs/experiments/`, `docs/dispatches/`, `HANDOFF.md`, `CLAUDE.md`, `docs/audit-first-arc.md`, and `docs/grok-consult-*-brief.md`, plus `157` indexed occurrences across `97` rows in `docs/index/armature.db` — `324` total across `51` tracked files). They are not secrets, but they disclose the originating machine's directory layout. Operational tools still assume sibling checkouts (`facet`, `training`, `record-index`), and `ARMATURE_BLENDER` defaults to a Windows program path (`C:\Program Files\Blender Foundation\Blender 5.2\blender.exe`), so most tools will not run unmodified on another machine.
 - **Unexpected failures surface as Python tracebacks.** Deliberate refusals do not: every
   gate raises a typed `ArmatureError` subclass carrying the measurement that fired it
   (`tools/armature_core/errors.py`), and **none of them is an `assert`** — an `assert` is

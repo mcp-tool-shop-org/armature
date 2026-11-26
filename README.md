@@ -227,9 +227,12 @@ Three refusal families arrived with the Stage C pass (2026-09-06) and read the s
 .venv\Scripts\python.exe -m pytest -q                           # from the repo root, on the repo venv — never the system Python
 ```
 
-Three environment levers, all optional: `PYTHONPATH=<repo>/../record-index` (the sibling working copy the index tests
+Five environment levers, all optional: `PYTHONPATH=<repo>/../record-index` (or `ARMATURE_RECORD_INDEX`, the sibling working copy the index tests
 import; without it those tests skip by name), `ARMATURE_BLENDER` (the Blender executable the Blender-driving fixtures
-run; without it, or off this rig, those tests skip visibly), and `ARMATURE_GIT` (the git the packaging test invokes).
+run; without it, or off this rig, those tests skip visibly), `ARMATURE_GIT` (the git the packaging test invokes),
+`ARMATURE_TWIN_PROMPT_JSON` (path to facet's E33 twin-prompt JSON read by `build_animate_payload.identity_clause`;
+defaults to `<repo>/../facet/docs/experiments/E33-twin-prompts-r3.json`), and `ARMATURE_E09_PROVENANCE` (path to the
+E09 previz `render_provenance.json` fixture; defaults to `outputs/E09/b2-a3-render-lifted/render_provenance.json`).
 CI's exact recipe is the `python-tests` job in `.github/workflows/ci.yml`; `verify.ps1` runs the same suite twice
 (once under `-O`) and then builds the package and installs it into two clean rooms (wheel and sdist).
 

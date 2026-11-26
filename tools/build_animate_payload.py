@@ -310,16 +310,31 @@ def read_negative(path):
     return m.group(2)
 
 
-def identity_clause(path=TWIN_PROMPT_JSON):
+def identity_clause(path=None):
     """The twin's verbatim entry with this shot's drops applied, plus the change log."""
-    with open(path, encoding="utf-8") as fh:
+    target = (
+        os.environ.get("ARMATURE_TWIN_PROMPT_JSON") or TWIN_PROMPT_JSON
+        if path is None
+        else path
+    )
+    resolved = os.path.abspath(target)
+    if not os.path.isfile(resolved):
+        raise PayloadError(
+            f"twin prompt JSON not found at '{resolved}'; set ARMATURE_TWIN_PROMPT_JSON "
+            f"to the E33 twin-prompts JSON path when running outside a sibling checkout",
+            {"gate": "PAYLOAD", "andon": "PayloadError",
+             "clause": "twin_prompt_json_missing",
+             "env_var": "ARMATURE_TWIN_PROMPT_JSON",
+             "from_env": "ARMATURE_TWIN_PROMPT_JSON" in os.environ,
+             "path": resolved})
+    with open(resolved, encoding="utf-8") as fh:
         doc = json.load(fh)
     text = doc.get("_entry_verbatim")
     if not isinstance(text, str) or not text.strip():
         raise PayloadError(
-            f"{path} carries no `_entry_verbatim` identity clause",
+            f"{resolved} carries no `_entry_verbatim` identity clause",
             {"gate": "PAYLOAD", "andon": "PayloadError",
-             "clause": "identity_clause_absent", "path": os.path.abspath(path)})
+             "clause": "identity_clause_absent", "path": resolved})
     original = text
     log = []
     for phrase, reason in IDENTITY_DROPS:

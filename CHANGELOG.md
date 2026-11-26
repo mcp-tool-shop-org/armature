@@ -15,6 +15,7 @@ installs.
 
 - **Public-repo hygiene:**
   - Removed internal labels and local paths from public code and docs
+  - De-labelling `pinned_by` in `specs/E13-prompt.json` changes its `prompt_sha256` (`0ec902e0…` → `63a58097…`), so a rebuilt E13 record will not match the original run's digest
 
 - **Structured `CONDITIONAL` rulings, shot diagnostics lows, route-gate false-refusal fixes, pinned licence links, and CI coverage:**
   - `tools/armature_core/measure_weights.py`, `tools/armature_core/shotdiag.py`: replaced the

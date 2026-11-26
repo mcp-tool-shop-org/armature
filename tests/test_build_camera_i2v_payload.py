@@ -500,7 +500,11 @@ import build_animate_payload as E08_SRC
 
 requires_facet_tree = pytest.mark.skipif(
     not os.path.isfile(E08_SRC.TWIN_PROMPT_JSON),
-    reason="rig-local facet asset (E33 twin prompt JSON) not present on this runner",
+    reason=(
+        f"twin prompt JSON not found at {E08_SRC.TWIN_PROMPT_JSON}; "
+        "sibling facet checkout absent from this worktree/runner "
+        "(set ARMATURE_TWIN_PROMPT_JSON to run these)"
+    ),
 )
 
 

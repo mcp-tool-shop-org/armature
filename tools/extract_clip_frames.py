@@ -9,8 +9,8 @@ judged or sheeted. This writes them losslessly and records what the container ac
 rather than what the request asked for — a 720P request and a 1280x720 stream are two
 different facts, and only the second one is measured.
 
-`encode_control.FFMPEG` is the repo's pinned binary; the dimensions are read off the stream
-rather than supplied, because supplying them is how a decode silently reshapes.
+`encode_control.FFMPEG` prefers `ARMATURE_FFMPEG`, then `imageio_ffmpeg.get_ffmpeg_exe()`,
+falling back to `ffmpeg` on `PATH`; dimensions are read off the stream rather than supplied, because supplying them is how a decode silently reshapes.
 
 Compensator (NAMED_COMPENSATORS): writes PNGs + JSON under `outputs/`. Compensator: delete
 the directory; owner: the executor session. The clip is read-only.
@@ -89,7 +89,7 @@ def probe(path, out_dir=None):
     refusal and holds no frames.
 
     **The encoder is GATED before it is run** (F-a19ebe73, wave 25). `FFMPEG` is selected at
-    import from `ARMATURE_FFMPEG` with a hard-coded a local model-env path fallback, and this module
+    import from `ARMATURE_FFMPEG` with an `imageio-ffmpeg` then `PATH` fallback, and this module
     imported the constant and ran it without arming the gate that was written for exactly
     that. Measured on `580af47` with the repo venv and `ARMATURE_FFMPEG` pointed at a path
     that does not exist: `tools/encode_control.py` exited 2 with an `ENCODE_CONTROL_HALT`

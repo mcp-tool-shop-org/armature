@@ -352,6 +352,7 @@ def test_f71579a7f_knee_and_hip_arcs_resolve():
     assert knee["readout_deg"] == 45.0
     hip = posearc.resolve_arc("hip_sit")
     assert hip["pivot"] == "hip_r"
+    assert "seated posture" in hip["description"]
     joints = {
         "hip_r": (0.1, 0.0, 0.9), "knee_r": (0.1, 0.0, 0.5),
         "ankle_r": (0.1, 0.0, 0.1), "toe_r": (0.1, 0.05, 0.05),

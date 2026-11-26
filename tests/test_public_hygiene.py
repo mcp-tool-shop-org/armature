@@ -45,28 +45,39 @@ _LBL_5 = "anti" + "gravity"
 _PNAME = "mi" + "ke"
 
 _TRUSTED = "trusted"
+_DRV_C = "C" + ":"
 _DRV_E = "E" + ":"
-_DRV_F = "F" + ":"
-_C_USERS = "C" + ":" + r"(?:/|\\\\|\\)Users"
+_C_SYSTEM = rf"{_DRV_C}(?:/|\\\\|\\)(?:Windows|Program Files)(?:[/\\\"'`\s]|$)"
+_C_SYNTH = rf"{_DRV_C}(?:/|\\\\|\\)(?:tmp|elsewhere|clips|abs)(?:[/\\\"'`\s]|$)"
 _HOME_PFX = "/" + "home/"
 _MAC_PFX = "/" + "Users/"
 _MODELS_TAG = "AI" + "-Models"
 
 RX_1 = re.compile(_LBL_1 + r"(?!y|ies|io|ios)", re.I)
-RX_2 = re.compile(_LBL_2, re.I)
+RX_2 = re.compile(rf"\b{_LBL_2}s?\b", re.I)
 RX_3 = re.compile(rf"(?<!{_TRUSTED} )(?<!{_TRUSTED}-)" + _LBL_3, re.I)
 RX_4 = re.compile(re.escape(_LBL_4), re.I)
 RX_5 = re.compile(_LBL_5, re.I)
 RX_PNAME = re.compile(rf"\b{_PNAME}\b", re.I)
-RX_LPATH = re.compile(
-    rf"(?<![A-Za-z0-9])(?:{_DRV_E}(?:/|\\\\|\\(?![nrt\"'`]))"
-    rf"|{_DRV_F}(?:/|\\\\|\\(?![nrt\"'`]))"
-    rf"|[A-Za-z]:(?:/|\\\\|\\)AI(?:[/\\]|$)"
-    rf"|{_C_USERS}"
-    rf"|{_HOME_PFX}|{_MAC_PFX}"
-    rf"|{re.escape(_MODELS_TAG)})",
+RX_E_BS_LETTER = re.compile(rf"(?<![A-Za-z0-9_]){_DRV_E}(?:\\\\|\\)[A-Za-z]")
+RX_DRIVE_ANY = re.compile(
+    rf"(?<![A-Za-z0-9_])(?!{_C_SYSTEM})(?!{_C_SYNTH})"
+    rf"[A-Za-z]:(?:/|\\\\|\\(?![nrt\"'`]))(?=[A-Za-z0-9_.-])",
     re.I,
 )
+RX_LPATH_OTHER = re.compile(
+    rf"(?:{_HOME_PFX}|{_MAC_PFX}|{re.escape(_MODELS_TAG)})",
+    re.I,
+)
+
+
+def _match_local_path(line: str) -> bool:
+    """Return True when a line contains a local machine drive or home path."""
+    return bool(
+        RX_E_BS_LETTER.search(line)
+        or RX_DRIVE_ANY.search(line)
+        or RX_LPATH_OTHER.search(line)
+    )
 
 
 def is_part_b(rel: str) -> bool:
@@ -97,10 +108,11 @@ def scan_lines(rel: str, text: str, include_labels_and_paths: bool = True) -> li
                 ("role-label", RX_3),
                 ("team-label", RX_4),
                 ("tool-label", RX_5),
-                ("local-path", RX_LPATH),
             ):
                 if rx.search(line):
                     hits.append(f"{rel}:{lineno} [{kind}] {line.strip()[:120]}")
+            if _match_local_path(line):
+                hits.append(f"{rel}:{lineno} [local-path] {line.strip()[:120]}")
         if RX_PNAME.search(line):
             hits.append(f"{rel}:{lineno} [personal-name] {line.strip()[:120]}")
     return hits
@@ -154,11 +166,18 @@ def test_hygiene_scanner_catches_labels_paths_and_name_while_honouring_exclusion
     assert scan_lines("README.md", f"Approved by the {_LBL_1.title()} yesterday.")
     assert scan_lines("tests/x.py", f"def test_{_LBL_1}_mode(): pass")
     assert scan_lines("notes/x.md", f"Next {_LBL_2} picks it up.")
+    assert scan_lines("notes/x.md", f"Three {_LBL_2}s agreed.")
+    assert scan_lines("notes/x.md", f"A five-{_LBL_2} panel.")
     assert scan_lines("CHANGELOG.md", f"The registered {_LBL_3} failed.")
     assert scan_lines("notes/x.md", f"Via {_LBL_4} and {_LBL_5.title()}.")
     assert scan_lines("tools/x.py", f"P = r'{_DRV_E}\\AI\\repo'")
+    assert scan_lines("tools/x.py", f"P = r'{_DRV_E}\\training\\asset.glb'")
+    assert scan_lines("tools/x.py", f"P = r'{_DRV_E}\\t'")
+    assert scan_lines("tools/x.py", "P = 'D" + ":/work/repo'")
+    assert scan_lines("tools/x.py", "P = r'Z" + ":\\models\\clip.mp4'")
+    assert scan_lines("tools/x.py", f"P = '{_DRV_C}/dev/checkout'")
     assert scan_lines("README.md", f"cd {_HOME_PFX}dev/armature")
-    assert scan_lines("README.md", r"C" + ":\\Users\\dev\\armature")
+    assert scan_lines("README.md", f"{_DRV_C}\\Users\\dev\\armature")
     assert scan_lines(
         "CLAUDE.md",
         f"| **Role** ({_PNAME.title()}) |",
@@ -170,6 +189,11 @@ def test_hygiene_scanner_catches_labels_paths_and_name_while_honouring_exclusion
         "el directorio de salida",
         f"PyPI {_TRUSTED.title()} {_LBL_3.title()} OIDC",
         "smikeline non_matching_token",
-        'if "else:\\n" in src:',
+        "a seated posture and seating arrangement",
+        'except Exception as e:' + chr(92) + 'n pass',
+        'if "else:' + chr(92) + 'n" in src:',
+        rf"{_DRV_C}\Program Files\Blender Foundation\Blender 5.2\blender.exe",
+        rf"{_DRV_C}\Windows\Fonts\arial.ttf",
+        f"{_DRV_C}/elsewhere/x",
     ]
     assert scan_lines("README.es.md", "\n".join(clean_lines)) == []

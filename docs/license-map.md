@@ -316,7 +316,7 @@ bundled fonts, matcaps or asset library, each carrying its own licence in the sa
 
 | Tool | Pipeline-fit | Note |
 |---|---|---|
-| **QuadRemesher (Exoside)** | **NO — RULED OUT** | ⛔ **Decided 2026-08-11:** ruled not commercially safe for the pipeline. A proprietary paid addon cannot be a canonical route stage regardless of who owns a session licence — the gate protects the **pipeline's** cleanliness and reproducibility, not one rig's right to run a tool. The advisor's same-day "owned-commercial YES" is corrected in place: it graded the wrong axis. |
+| **QuadRemesher (Exoside)** | **NO — RULED OUT** | ⛔ **Decided 2026-08-11:** ruled not commercially safe for the pipeline. A proprietary paid addon cannot be a canonical route stage regardless of who owns a per-user licence — the gate protects the **pipeline's** cleanliness and reproducibility, not one rig's right to run a tool. The advisor's same-day "owned-commercial YES" is corrected in place: it graded the wrong axis. |
 | **Blender built-in remeshers** (Voxel, QuadriFlow) | **YES** | Ship inside Blender — covered by the Blender 5.2.0 LTS row above; headless-scriptable; zero new dependency. The E07 arm-(d) route uses these. |
 | **Instant Meshes or any other external retopo** | **UNVERIFIED — treated as NO** | Enters only through a retrieved licence document ruled through this gate before first use. |
 

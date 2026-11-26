@@ -392,3 +392,31 @@ def test_the_phrase_matcher_is_canons_and_not_a_second_one():
 
     assert BAP.C is C
     assert BAP.C._find_phrase is C._find_phrase
+
+
+def test_missing_twin_prompt_json_raises_typed_payload_error_naming_env_var_and_path(
+    tmp_path, monkeypatch
+):
+    """Item 3: missing twin-prompt JSON raises PayloadError naming ARMATURE_TWIN_PROMPT_JSON."""
+    import os
+
+    missing_explicit = tmp_path / "missing_explicit_twin.json"
+    with pytest.raises(BAP.PayloadError) as exc_explicit:
+        BAP.identity_clause(str(missing_explicit))
+    msg_e = str(exc_explicit.value)
+    assert "ARMATURE_TWIN_PROMPT_JSON" in msg_e
+    assert str(missing_explicit) in msg_e
+    assert exc_explicit.value.evidence["clause"] == "twin_prompt_json_missing"
+    assert exc_explicit.value.evidence["env_var"] == "ARMATURE_TWIN_PROMPT_JSON"
+    assert exc_explicit.value.evidence["path"] == os.path.abspath(str(missing_explicit))
+
+    missing_env = tmp_path / "missing_env_twin.json"
+    monkeypatch.setenv("ARMATURE_TWIN_PROMPT_JSON", str(missing_env))
+    with pytest.raises(BAP.PayloadError) as exc_env:
+        BAP.identity_clause()
+    msg_v = str(exc_env.value)
+    assert "ARMATURE_TWIN_PROMPT_JSON" in msg_v
+    assert str(missing_env) in msg_v
+    assert exc_env.value.evidence["clause"] == "twin_prompt_json_missing"
+    assert exc_env.value.evidence["from_env"] is True
+    assert exc_env.value.evidence["path"] == os.path.abspath(str(missing_env))

@@ -2569,6 +2569,7 @@ RECORDED_CLAUSES = [
     'trap_codec_requires_allow_trap',
     'trunk_column_too_short',
     'trunk_holds_no_clusters',
+    'twin_prompt_json_missing',
     'twist_datum_collapsed',
     'two_answers',
     'two_frames_share_one_server_name',

@@ -1,20 +1,14 @@
 # armature: how it works
 
-Mapped at 2026-11-25 from commit c5ad010 by Atlas 1.26.0.
+Mapped at 2026-11-26 from commit 6994e0c by Atlas 1.26.0.
 
 ## What this is
 
 8 parts, mostly Python (327 files), CSS (2), JavaScript (2), TypeScript (2), Astro (1) and PowerShell (1). Work enters through 5 doors; the busiest is ci, which reaches 4 parts. It publishes to PyPI and @mcptoolshop/armature-studio to npm. It deploys a site to GitHub Pages. People run armature.
 
-## What changed since 2026-11-12 (52f4011)
+## What changed since 2026-11-25 (c5ad010)
 
-- ci's pull request trigger now also names `.github/dependabot.yml`, `CHANGELOG.md`, `CLAUDE.md`, `README.es.md`, `README.fr.md`, `README.hi.md`, `README.it.md`, `README.ja.md`, `README.pt-BR.md`, `README.zh.md`, `SCORECARD.md`, `SECURITY.md`, `SHIP_GATE.md`, `docs/ROADMAP.md`, `docs/publishing.md` and `docs/tools.md`.
-- ci's push trigger now also names `.github/dependabot.yml`, `CHANGELOG.md`, `CLAUDE.md`, `README.es.md`, `README.fr.md`, `README.hi.md`, `README.it.md`, `README.ja.md`, `README.pt-BR.md`, `README.zh.md`, `SCORECARD.md`, `SECURITY.md`, `SHIP_GATE.md`, `docs/ROADMAP.md`, `docs/publishing.md` and `docs/tools.md`.
-- CHANGELOG.md is now read by tests/test_public_hygiene.py.
-- CLAUDE.md is now also read by tests/test_public_hygiene.py.
-- HANDOFF.md is now also read by tests/test_public_hygiene.py.
-- And 6 more new writers and readers of places.
-- 8 files added and 184 changed content, across 7 parts.
+Nothing structural changed since 2026-11-25; 15 files changed content.
 
 ## What comes in
 

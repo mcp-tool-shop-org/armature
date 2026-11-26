@@ -746,7 +746,7 @@
           "path": "docs/index/conventions.json"
         },
         {
-          "hash": "0d08ba71cc8ce8b64b22622ddb1a43f86fb7165dd63cbf623ebfde6353ee31e1",
+          "hash": "38939244ab2e4e171bb5ad7d859c98d266cb5683945d6fc90a3f9c3b44232ecc",
           "path": "docs/license-map.md"
         },
         {
@@ -880,7 +880,7 @@
           "path": ".gitignore"
         },
         {
-          "hash": "2d3c764bc01aa355316dae5dcf06c1fb79d692d480c1a64eba2e1fdba97c1cfa",
+          "hash": "d358a37b31f7b921a5726860c87e183715fb05e84478ad5ae718385b809e66ab",
           "path": "CHANGELOG.md"
         },
         {
@@ -920,7 +920,7 @@
           "path": "README.ja.md"
         },
         {
-          "hash": "115bed3490957717d2ec965ad24f7483b24cffc2197349c4cf7594848cfaa716",
+          "hash": "eabfcf512d1aa8ea39443c100332d532bf71ce4fdff7d6bb7de90adfa75d182f",
           "path": "README.md"
         },
         {
@@ -940,7 +940,7 @@
           "path": "SCORECARD.md"
         },
         {
-          "hash": "a9b77a4e5ecf63c325f2a240bfe361e7204ec3f315cbfe932a693ba984ac94fb",
+          "hash": "5a9a7cf02c1822e8d27cd99ac4fe0de533ba44a3dd1b198484bb5cecc1d84f84",
           "path": "SECURITY.md"
         },
         {
@@ -1390,7 +1390,7 @@
             "upload_record_branch",
             "upload_record_paths"
           ],
-          "hash": "4ea655472bc5e2c9628974f248dc7dd0afcb771db008fdf5e484d0693dd79c2e",
+          "hash": "4fd8cce98cc086f8cc63048c4a14f0fc1eafecda0f0c362fb1382d8760818620",
           "importOrder": [
             "tools/sheet_compose.py",
             "tools/render_turnaround.py",
@@ -1410,29 +1410,29 @@
             {
               "calls": [
                 {
-                  "line": 165,
+                  "line": 173,
                   "name": "SC",
                   "passed": true,
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  }
-                },
-                {
-                  "line": 169,
-                  "name": "clear_font_index",
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  }
-                },
-                {
-                  "line": 170,
-                  "name": "resolve_font_path",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   }
                 },
                 {
                   "line": 177,
+                  "name": "clear_font_index",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  }
+                },
+                {
+                  "line": 178,
+                  "name": "resolve_font_path",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  }
+                },
+                {
+                  "line": 185,
                   "name": "SC",
                   "passed": true,
                   "target": {
@@ -1440,7 +1440,7 @@
                   }
                 },
                 {
-                  "line": 178,
+                  "line": 186,
                   "name": "clear_font_index",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1455,25 +1455,9 @@
             {
               "calls": [
                 {
-                  "line": 165,
+                  "line": 173,
                   "name": "SC",
                   "passed": true,
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  },
-                  "via": "_permitted_face_present"
-                },
-                {
-                  "line": 169,
-                  "name": "clear_font_index",
-                  "target": {
-                    "file": "tools/sheet_compose.py"
-                  },
-                  "via": "_permitted_face_present"
-                },
-                {
-                  "line": 170,
-                  "name": "resolve_font_path",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   },
@@ -1481,6 +1465,22 @@
                 },
                 {
                   "line": 177,
+                  "name": "clear_font_index",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  },
+                  "via": "_permitted_face_present"
+                },
+                {
+                  "line": 178,
+                  "name": "resolve_font_path",
+                  "target": {
+                    "file": "tools/sheet_compose.py"
+                  },
+                  "via": "_permitted_face_present"
+                },
+                {
+                  "line": 185,
                   "name": "SC",
                   "passed": true,
                   "target": {
@@ -1489,7 +1489,7 @@
                   "via": "_permitted_face_present"
                 },
                 {
-                  "line": 178,
+                  "line": 186,
                   "name": "clear_font_index",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1505,7 +1505,7 @@
             {
               "calls": [
                 {
-                  "line": 206,
+                  "line": 214,
                   "name": "splitlines",
                   "target": null
                 }
@@ -1518,7 +1518,7 @@
             {
               "calls": [
                 {
-                  "line": 605,
+                  "line": 613,
                   "name": "blender_stubbed",
                   "target": {
                     "file": "tests/blender_stub.py"
@@ -1533,7 +1533,7 @@
             {
               "calls": [
                 {
-                  "line": 605,
+                  "line": 613,
                   "name": "blender_stubbed",
                   "target": {
                     "file": "tests/blender_stub.py"
@@ -1549,7 +1549,7 @@
             {
               "calls": [
                 {
-                  "line": 729,
+                  "line": 737,
                   "name": "setattr",
                   "target": null
                 }
@@ -1562,14 +1562,14 @@
             {
               "calls": [
                 {
-                  "line": 756,
+                  "line": 764,
                   "name": "_font",
                   "target": {
                     "file": "tools/sheet_compose.py"
                   }
                 },
                 {
-                  "line": 729,
+                  "line": 737,
                   "name": "setattr",
                   "target": null,
                   "via": "install_sheet_font_fallback"
@@ -1583,7 +1583,7 @@
             {
               "calls": [
                 {
-                  "line": 773,
+                  "line": 781,
                   "name": "_font",
                   "target": {
                     "file": "tools/sheet_compose.py"
@@ -1598,7 +1598,7 @@
             {
               "calls": [
                 {
-                  "line": 799,
+                  "line": 807,
                   "name": "addinivalue_line",
                   "target": null
                 }
@@ -1611,7 +1611,7 @@
             {
               "calls": [
                 {
-                  "line": 803,
+                  "line": 811,
                   "name": "addoption",
                   "target": null
                 }
@@ -1624,7 +1624,7 @@
             {
               "calls": [
                 {
-                  "line": 869,
+                  "line": 877,
                   "name": "getoption",
                   "target": null
                 }
@@ -6647,7 +6647,7 @@
             "test_f7f15fb7f_heading_rotates_path_and_foot_slip_lateral",
             "test_w37_new_clauses_are_spelled_for_the_vocabulary_census"
           ],
-          "hash": "dae4a9246ab2d534c9652eaf1b45c2c4413bd8ab9050f428da7c2c5b9824e4de",
+          "hash": "a4dde6fe13bb231beb276755fd4a35dbd7f7e97266f0c404078d3e3555e1e9b9",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/clipcompare.py",
@@ -8281,6 +8281,7 @@
             "test_gate_S_refuses_a_seed_the_committed_list_does_not_carry",
             "test_gate_S_refuses_any_chosen_seed_when_nothing_was_pre_registered",
             "test_main_names_the_file_beside_the_key",
+            "test_missing_twin_prompt_json_raises_typed_payload_error_naming_env_var_and_path",
             "test_omitting_the_seed_builds_on_the_first_registered_seed",
             "test_omitting_the_seed_with_no_registry_names_the_missing_flag",
             "test_only_the_declared_variables_move_between_the_two_shots",
@@ -8298,7 +8299,7 @@
             "test_the_prompt_and_the_sampler_are_byte_identical_across_the_two_shots",
             "test_the_zero_fallback_is_gone"
           ],
-          "hash": "55c0a7ac080877d2339eb718c16b6388ccff0fd171f9d21408e8220c476d3add",
+          "hash": "dce02d4e215c032f2de38ab12d6969df4fed1bf70c783e06eb90c530a8254a39",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_animate_payload.py",
@@ -8393,7 +8394,7 @@
             "w1_path",
             "w1_record"
           ],
-          "hash": "0cd9a6df6877b326f666ee44e1382373eca02f79c9df5288764ebae6789cf69a",
+          "hash": "972dc2ea9eb7cf2de3c324760d73bb271f5e3f311ed593d5816522d82c7fb722",
           "importOrder": [
             "tests/conftest.py",
             "tools/build_camera_i2v_payload.py",
@@ -15667,10 +15668,12 @@
             "test_a_stray_png_never_reaches_the_receipts_frame_names",
             "test_an_expected_count_pins_the_population_to_the_spec",
             "test_an_rgba_frame_directory_raises_rather_than_dropping_the_channel",
+            "test_receipt_records_which_ffmpeg_source_was_used",
+            "test_resolve_ffmpeg_prefers_env_then_imageio_then_path",
             "test_the_population_is_ordered_by_number_not_by_string",
             "test_the_receipt_states_the_alpha_and_dtype_of_what_it_read"
           ],
-          "hash": "101870d36aa4d0eee3d005c6d9faf073ca35655a64a57575408e42009694fea5",
+          "hash": "a478bc62884a82db3141ee22a89f9bcf343aab7f3dccea9ac38d314956968739",
           "importsFiles": [
             "tools/encode_control.py"
           ],
@@ -25296,7 +25299,7 @@
             "test_part_a_has_no_internal_labels_local_paths_or_personal_names",
             "tracked_repo_files"
           ],
-          "hash": "0f81e144f9d0416574d1ebd913f588bb0f637727f04feac0e995f7e1faa2cf7b",
+          "hash": "d65f6683d36e8483940b332892217bc014f5a53663b4c3ac584cb6e3d9433f91",
           "importsFiles": [
             "tests/conftest.py",
             "tests/test_ci_workflows.py"
@@ -25445,7 +25448,7 @@
             "test_the_policed_population_is_large_enough_for_the_census_to_mean_something",
             "test_two_policed_classes_do_not_descend_from_the_repo_root_error"
           ],
-          "hash": "b79deb21c86334ccd872990ab50a9b29269bdfe03fefdbc5fc535570b228d090",
+          "hash": "412dca0248fc0ac65816fe8544d66859aa6437053782ff8f86e2ea1da4bfeddf",
           "importOrder": [
             "tests/_census_nodes.py",
             "tools/make_ab_clip.py",
@@ -31480,7 +31483,7 @@
               "line": 285
             }
           ],
-          "hash": "e04b6b640f1c8992d5de0b79d917f9d83e81327fc8bca119b2a436a28c807351",
+          "hash": "3d46fe75857ec96559b91407b345f0fc9f88a84e8e1971598e725ee27db80e85",
           "importsFiles": [
             "tools/armature_core/errors.py"
           ],
@@ -34079,55 +34082,60 @@
             {
               "in": "identity_clause",
               "kind": "raise",
-              "line": 319
+              "line": 322
             },
             {
               "in": "identity_clause",
               "kind": "raise",
-              "line": 341
+              "line": 334
+            },
+            {
+              "in": "identity_clause",
+              "kind": "raise",
+              "line": 356
             },
             {
               "in": "gate_reference_fit",
               "kind": "raise",
-              "line": 400
+              "line": 415
             },
             {
               "in": "gate_reference_fit",
               "kind": "raise",
-              "line": 424
+              "line": 439
             },
             {
               "in": "gate_reference_fit",
               "kind": "raise",
-              "line": 446
+              "line": 461
             },
             {
               "in": "gate_reference_fit",
               "kind": "raise",
-              "line": 456
+              "line": 471
             },
             {
               "in": "build",
               "kind": "raise",
-              "line": 512
+              "line": 527
             },
             {
               "in": "build",
               "kind": "raise",
-              "line": 531
+              "line": 546
             },
             {
               "in": "verify_topology",
               "kind": "raise",
-              "line": 702
+              "line": 717
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 749
+              "line": 764
             }
           ],
-          "hash": "56bcb1db54436ff5dd91cd02b29054de60cfb944c15ee1f87687821f25c038b2",
+          "hash": "da22b3acd5d884ec9ef7670ba03b1b78b0a7ce7a51caac1a1493d8b3b8412c41",
           "importOrder": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/gates.py",
@@ -36657,8 +36665,8 @@
           "path": "tools/diagnose_bone_heat.py"
         },
         {
-          "entry": "main",
-          "entryRule": 3,
+          "entry": "_resolve_ffmpeg",
+          "entryRule": 1,
           "exports": [
             "build",
             "build_control_pack",
@@ -36667,6 +36675,7 @@
             "decode",
             "encode",
             "encode_stream_png_sequence",
+            "ffmpeg_source",
             "ffmpeg_version",
             "frame_population",
             "gate_codec_safe_for_mode",
@@ -36688,164 +36697,154 @@
           ],
           "failurePaths": [
             {
+              "in": "_default_imageio_ffmpeg",
+              "kind": "except",
+              "line": 104
+            },
+            {
+              "in": "_resolve_ffmpeg",
+              "kind": "except",
+              "line": 116
+            },
+            {
               "in": "run_ffmpeg",
               "kind": "except",
-              "line": 217
+              "line": 246
             },
             {
               "in": "run_ffmpeg",
               "kind": "raise",
-              "line": 222
+              "line": 251
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 257
+              "line": 286
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 266
+              "line": 295
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 275
+              "line": 304
             },
             {
               "in": "frame_population",
               "kind": "raise",
-              "line": 284
+              "line": 313
             },
             {
               "in": "read_frames",
               "kind": "raise",
-              "line": 331
+              "line": 360
             },
             {
               "in": "read_frames",
               "kind": "raise",
-              "line": 345
+              "line": 374
             },
             {
               "in": "read_frames",
               "kind": "raise",
-              "line": 369
+              "line": 398
             },
             {
               "in": "gate_encode_rate",
               "kind": "raise",
-              "line": 410
+              "line": 439
             },
             {
               "in": "gate_ffmpeg_binary",
               "kind": "raise",
-              "line": 430
+              "line": 459
             },
             {
               "in": "ffmpeg_version",
               "kind": "except",
-              "line": 458
+              "line": 487
             },
             {
               "in": "ffmpeg_version",
               "kind": "except",
-              "line": 460
+              "line": 489
             },
             {
               "in": "encode",
               "kind": "raise",
-              "line": 471
+              "line": 500
             },
             {
               "in": "encode",
               "kind": "raise",
-              "line": 491
+              "line": 520
             },
             {
               "in": "decode",
               "kind": "raise",
-              "line": 515
+              "line": 544
             },
             {
               "in": "decode",
               "kind": "raise",
-              "line": 525
+              "line": 554
             },
             {
               "in": "decode",
               "kind": "raise",
-              "line": 537
+              "line": 566
             },
             {
               "in": "survey_codecs",
               "kind": "except",
-              "line": 612
+              "line": 641
             },
             {
               "in": "load_survey_table",
               "kind": "except",
-              "line": 629
+              "line": 658
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 630
+              "line": 659
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 636
+              "line": 665
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 642
+              "line": 671
             },
             {
               "in": "load_survey_table",
               "kind": "raise",
-              "line": 650
+              "line": 679
             },
             {
               "in": "codec_for_mode",
               "kind": "raise",
-              "line": 667
+              "line": 696
             },
             {
               "in": "survey_row_for",
               "kind": "raise",
-              "line": 694
+              "line": 723
             },
             {
               "in": "gate_codec_safe_for_mode",
               "kind": "raise",
-              "line": 712
+              "line": 741
             },
             {
               "in": "gate_codec_safe_for_mode",
               "kind": "raise",
-              "line": 720
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "raise",
-              "line": 737
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "except",
-              "line": 746
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "raise",
-              "line": 747
-            },
-            {
-              "in": "read_stage_render_channel_dirs",
-              "kind": "raise",
-              "line": 755
+              "line": 749
             },
             {
               "in": "read_stage_render_channel_dirs",
@@ -36853,77 +36852,105 @@
               "line": 766
             },
             {
-              "in": "build_control_pack",
+              "in": "read_stage_render_channel_dirs",
+              "kind": "except",
+              "line": 775
+            },
+            {
+              "in": "read_stage_render_channel_dirs",
+              "kind": "raise",
+              "line": 776
+            },
+            {
+              "in": "read_stage_render_channel_dirs",
+              "kind": "raise",
+              "line": 784
+            },
+            {
+              "in": "read_stage_render_channel_dirs",
               "kind": "raise",
               "line": 795
             },
             {
               "in": "build_control_pack",
               "kind": "raise",
-              "line": 801
+              "line": 824
+            },
+            {
+              "in": "build_control_pack",
+              "kind": "raise",
+              "line": 830
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 879
+              "line": 909
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 887
+              "line": 917
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 899
+              "line": 929
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 912
+              "line": 942
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 928
+              "line": 958
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 953
+              "line": 983
             },
             {
               "in": "encode_stream_png_sequence",
               "kind": "raise",
-              "line": 964
+              "line": 994
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1187
+              "line": 1220
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1193
+              "line": 1226
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1210
+              "line": 1243
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1221
+              "line": 1254
             },
             {
               "in": "main",
               "kind": "raise",
-              "line": 1233
+              "line": 1266
             }
           ],
-          "hash": "7d903a6e24a264e55fb6a386123425ad517326d509b76716af4958060e96aadd",
+          "hash": "7f25d628e12739496fec62158e4277eba3a2056198956d6bc105fce6e04be074",
+          "importOrder": [
+            "tools/armature_core/__init__.py",
+            "tools/armature_core/gates.py",
+            "tools/armature_core/shotspec.py",
+            "tools/composite_reference.py",
+            "tools/armature_core/errors.py",
+            "tools/armature_core/parts.py"
+          ],
           "importsFiles": [
             "tools/armature_core/__init__.py",
             "tools/armature_core/errors.py",
@@ -36937,7 +36964,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36952,7 +36979,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36960,7 +36987,7 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36975,7 +37002,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -36983,7 +37010,7 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -36999,7 +37026,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37015,7 +37042,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37024,7 +37051,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 919,
+                  "line": 949,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37033,7 +37060,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 981,
+                  "line": 1011,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37041,7 +37068,7 @@
                   "via": "encode_stream_png_sequence"
                 },
                 {
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37049,7 +37076,7 @@
                   "via": "read_frames"
                 },
                 {
-                  "line": 1049,
+                  "line": 1080,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37065,7 +37092,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37073,14 +37100,14 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 919,
+                  "line": 949,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
                   }
                 },
                 {
-                  "line": 981,
+                  "line": 1011,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37096,7 +37123,7 @@
               "calls": [
                 {
                   "branch": "stream",
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37105,7 +37132,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 919,
+                  "line": 949,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37114,7 +37141,7 @@
                 },
                 {
                   "branch": "stream",
-                  "line": 981,
+                  "line": 1011,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37122,7 +37149,7 @@
                   "via": "encode_stream_png_sequence"
                 },
                 {
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37130,7 +37157,7 @@
                   "via": "read_frames"
                 },
                 {
-                  "line": 1049,
+                  "line": 1080,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37145,7 +37172,7 @@
             {
               "calls": [
                 {
-                  "line": 282,
+                  "line": 311,
                   "name": "frame_names",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37153,7 +37180,7 @@
                   "via": "frame_population"
                 },
                 {
-                  "line": 1258,
+                  "line": 1291,
                   "name": "parse_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37161,7 +37188,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 919,
+                  "line": 949,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37170,7 +37197,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 981,
+                  "line": 1011,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37179,7 +37206,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 359,
+                  "line": 388,
                   "name": "compose_over_named_plate",
                   "target": {
                     "file": "tools/composite_reference.py"
@@ -37188,7 +37215,7 @@
                 },
                 {
                   "branch": "args.run",
-                  "line": 1049,
+                  "line": 1080,
                   "name": "gate_r_round_trip",
                   "target": {
                     "file": "tools/armature_core/__init__.py"
@@ -37227,7 +37254,7 @@
               "line": 172
             }
           ],
-          "hash": "43e9fb95af54db0ac1730bc55df1507f9875426addaa20009a2f6d52a2c177ac",
+          "hash": "947030aeadb7df7fb949aa161659c6f3bc5c81f310242075c8506e12809a4181",
           "importsFiles": [
             "tools/armature_core/errors.py",
             "tools/armature_core/parts.py",
@@ -45717,7 +45744,7 @@
   ],
   "engine": "1.26.0",
   "generatedFrom": {
-    "commit": "c5ad0102b94e39e7820aaacc067d4aa352144e6f",
+    "commit": "6994e0c0df04692d03c91f336f7db14a9aece89d",
     "tracked": 566
   },
   "landings": [

@@ -39,6 +39,7 @@ import argparse
 import hashlib
 import json
 import os
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -96,10 +97,38 @@ from armature_core import gates, shotspec  # noqa: E402
 from composite_reference import compose_over_named_plate, parse_plate  # noqa: E402
 from armature_core.errors import ArmatureError  # noqa: E402
 
-FFMPEG = os.environ.get(
-    "ARMATURE_FFMPEG",
-    __import__("shutil").which("ffmpeg") or "",
-)
+def _default_imageio_ffmpeg():
+    try:
+        import imageio_ffmpeg  # noqa: PLC0415
+        return imageio_ffmpeg.get_ffmpeg_exe()
+    except (ImportError, RuntimeError, OSError):
+        return None
+
+
+def _resolve_ffmpeg(env=None, imageio_getter=None, which_fn=None):
+    """Select ffmpeg in precedence order: ARMATURE_FFMPEG > imageio-ffmpeg > PATH."""
+    env_map = os.environ if env is None else env
+    if "ARMATURE_FFMPEG" in env_map:
+        return env_map["ARMATURE_FFMPEG"], "env"
+    getter = _default_imageio_ffmpeg if imageio_getter is None else imageio_getter
+    try:
+        pinned = getter()
+    except (ImportError, RuntimeError, OSError):
+        pinned = None
+    if pinned and os.path.isfile(pinned):
+        return pinned, "imageio_ffmpeg"
+    finder = shutil.which if which_fn is None else which_fn
+    found = finder("ffmpeg") or ""
+    if found:
+        return found, "path"
+    return "", "none"
+
+def ffmpeg_source():
+    """Return the active source tag ('env', 'imageio_ffmpeg', 'path', or 'none')."""
+    return "env" if "ARMATURE_FFMPEG" in os.environ else FFMPEG_SOURCE
+
+
+FFMPEG, FFMPEG_SOURCE = _resolve_ffmpeg()
 
 # Candidate bridges, in the order the spec prefers them. `container` matters as much as
 # the codec: FFV1 needs a container that will carry it, and mp4 will not.
@@ -849,6 +878,7 @@ def build_control_pack(run_dir, codec, invert=False, fps=16, expect=None,
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
         "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        "ffmpeg_source": ffmpeg_source(),
         **runtime_provenance({"numpy": np, "Pillow": Image}),
         "channels": channels,
         "gate_R_all": {
@@ -1010,6 +1040,7 @@ def encode_stream_png_sequence(frames_dir, path, codec, fps=16, invert=False,
             "ffmpeg": FFMPEG,
             "ffmpeg_version": ffmpeg_version(),
             "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+            "ffmpeg_source": ffmpeg_source(),
             **runtime_provenance({"numpy": np, "Pillow": Image}),
             "video": path,
             "video_sha256": video_sha,
@@ -1075,6 +1106,7 @@ def build(frames_dir, out_path, codec, invert=False, fps=16, expect=None,
         "ffmpeg": FFMPEG,
         "ffmpeg_version": ffmpeg_version(),
         "ffmpeg_from_env": "ARMATURE_FFMPEG" in os.environ,
+        "ffmpeg_source": ffmpeg_source(),
         # F-2ad4f715: the interpreter and imaging libs beside the ffmpeg key — a receipt
         # that names the encoder but not the Python cannot attribute a re-measured gap.
         **runtime_provenance({"numpy": np, "Pillow": Image}),
@@ -1176,6 +1208,7 @@ def main(argv=None):
             os.makedirs(os.path.dirname(os.path.abspath(args.survey_out)), exist_ok=True)
             with open(args.survey_out, "w", encoding="utf-8") as fh:
                 json.dump({"ffmpeg": FFMPEG,
+                           "ffmpeg_source": ffmpeg_source(),
                            "recommended_gray": table["recommended_gray"],
                            "recommended_rgb": table["recommended_rgb"],
                            "survey": rows,

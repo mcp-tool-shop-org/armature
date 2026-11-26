@@ -40,6 +40,11 @@ Operator levers (defaults are this rig's paths; set them on any other machine):
 - `ARMATURE_FONT_DIR` — optional extra font directory for sheet/label tests
 - `ARMATURE_RECORD_INDEX` — sibling `record-index` checkout; default `<repo>/../record-index`
   when that directory exists (prepended to `sys.path` before collection)
+- `ARMATURE_TWIN_PROMPT_JSON` — path to facet's E33 twin-prompt JSON read by
+  `build_animate_payload.identity_clause`; default
+  `<repo>/../facet/docs/experiments/E33-twin-prompts-r3.json`
+- `ARMATURE_E09_PROVENANCE` — path to the E09 previz `render_provenance.json` fixture read
+  by `test_pinned_camera.py`; default `outputs/E09/b2-a3-render-lifted/render_provenance.json`
 
 Skip families, one sentence each:
 
@@ -51,7 +56,8 @@ Skip families, one sentence each:
 - record_index absent — `test_record_index_binding.py` skips unless `ARMATURE_RECORD_INDEX`
   (or the default sibling) resolves and imports.
 - banked / sibling trees — tests that read gitignored `outputs/` banks or a sibling
-  facet tree skip when those paths are not present.
+  facet tree skip when those paths are not present (set `ARMATURE_E09_PROVENANCE` or
+  `ARMATURE_TWIN_PROMPT_JSON`).
 - fonts — label/sheet tests skip when no permitted face is in `ARMATURE_FONT_DIR` or a
   platform font directory.
 - platform — a few signal/posix-only cases skip on Windows.
@@ -104,6 +110,8 @@ SKIP_LEVER_VOCABULARY = (
     "ARMATURE_GIT",
     "ARMATURE_FONT_DIR",
     "ARMATURE_RECORD_INDEX",
+    "ARMATURE_TWIN_PROMPT_JSON",
+    "ARMATURE_E09_PROVENANCE",
     "bash",
     "node",
     "record-index",

@@ -97,7 +97,7 @@ POSE_ARCS = {
         ),
     },
     # Lower-body arcs (F-71579a7f). Wave-35 covered upper arcs only; knee bend and a
-    # sitting hip hinge are the calibration fixtures procedural wire subjects still needed.
+    # seated hip hinge are the calibration fixtures procedural wire subjects still needed.
     "knee_r_bend": {
         "pivot": "knee_r",
         "axis": "X",
@@ -125,7 +125,7 @@ POSE_ARCS = {
         ),
         "readout_deg": 60.0,
         "description": (
-            "the right hip hinges toward a sessioned posture about +X; the whole lower limb "
+            "the right hip hinges toward a seated posture about +X; the whole lower limb "
             "moves as a rigid group from the hip so sit/stand fixtures need no hand edit"
         ),
     },
